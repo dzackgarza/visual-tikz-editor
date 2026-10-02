@@ -209,14 +209,17 @@ onBeforeUnmount(() => {
 
 <style scoped lang="less">
 .tikz-live-preview {
+  --surface: #eef0ea;
+  --text: #1c2430;
+  --accent: #9e2a2b;
   width: 100%;
   min-width: 0;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #f7f7f7;
-  color: inherit;
+  background: #fbfaf6;
+  color: var(--text);
 
   &.fullscreen {
     position: fixed;
@@ -230,14 +233,15 @@ onBeforeUnmount(() => {
 
 .tikz-live-preview-header {
   flex: 0 0 auto;
-  min-height: 32px;
+  min-height: 52px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 4px 8px 4px 12px;
-  border-bottom: 1px solid #dedede;
-  font-size: 0.8rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+  background: var(--surface);
+  font-size: 0.9rem;
   user-select: none;
 }
 
@@ -249,20 +253,22 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex-wrap: wrap;
   padding: 2px;
-  border-radius: 5px;
-  background: color-mix(in srgb, currentColor 7%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 
   button {
     border: 0;
-    border-radius: 4px;
-    padding: 3px 9px;
+    min-height: 44px;
+    border-radius: 8px;
+    padding: 6px 12px;
     background: transparent;
     color: inherit;
     font: inherit;
     cursor: pointer;
 
     &.active {
-      background: color-mix(in srgb, currentColor 12%, transparent);
+      background: var(--accent);
+      color: #fff;
       font-weight: 600;
     }
 
@@ -295,7 +301,9 @@ onBeforeUnmount(() => {
 
 .tikz-live-preview-action {
   border: 0;
-  border-radius: 3px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   padding: 3px 5px;
@@ -335,8 +343,9 @@ onBeforeUnmount(() => {
 }
 
 .tikz-live-preview.dark {
-  background: #252526;
-
-  .tikz-live-preview-header { border-bottom-color: #444; }
+  --surface: #313b45;
+  --text: #f3f2ed;
+  --accent: #b44243;
+  background: #1d242b;
 }
 </style>
