@@ -2,7 +2,10 @@
   <div class="tikz-standalone" :class="theme">
     <header>
       <strong>{{ fileName }}</strong>
+      <button type="button" :disabled="document === null" @click="newDocument">New</button>
+      <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
       <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
+      <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
     </header>
     <main v-if="document !== null && target !== null" :class="{ 'visual-mode': mode === 'visual' }">
@@ -14,6 +17,7 @@
         @change="source = $event"
       />
       <TikzWorkbench
+        :key="documentKey"
         class="tikz-standalone-workbench"
         :target="target"
         :host="host"
@@ -28,10 +32,9 @@
 
 <script setup lang="ts">
 /**
- * The standalone TikZ workbench for one .tikz or .tikzcd file. The file is one
- * TikZ block: the source pane and the workbench edit the same text, and the
- * local server (standalone/server.ts) stores it, compiles it and serves the
- * pinned editor pages.
+ * The standalone TikZ workbench for one diagram. The source pane and the
+ * workbench edit the same text; the local server owns file operations and
+ * serves the pinned editor pages.
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
@@ -47,9 +50,11 @@ import SourceEditor from "./SourceEditor.vue";
 interface StandaloneDocument {
   path: string;
   revision: string;
+  saved: boolean;
 }
 
 const document = shallowRef<StandaloneDocument | null>(null);
+const documentKey = ref(0);
 const source = ref("");
 const savedSource = ref("");
 const loadError = ref("");
@@ -59,11 +64,15 @@ const mode = ref<TikzPreviewModeId>("visual");
 const darkScheme = window.matchMedia("(prefers-color-scheme: dark)");
 const theme = ref<TikzWorkbenchTheme>(darkScheme.matches ? "dark" : "light");
 
-const dirty = computed(() => source.value !== savedSource.value);
+const dirty = computed(
+  () => document.value !== null && (!document.value.saved || source.value !== savedSource.value),
+);
 const fileName = computed(() => document.value?.path.split("/").pop() ?? "TikZ workbench");
 const status = computed(() => {
   if (hostError.value !== "") return hostError.value;
   if (document.value === null) return loadError.value === "" ? "Loading…" : "Load failed";
+  if (!document.value.saved)
+    return source.value === savedSource.value ? "New diagram" : "Unsaved changes";
   return dirty.value ? "Unsaved changes" : "Saved";
 });
 
@@ -114,26 +123,74 @@ const host: TikzWorkbenchHost = {
   },
 };
 
+function metadata(response: Response): StandaloneDocument {
+  const revision = response.headers.get("etag");
+  const path = response.headers.get("x-document-path");
+  const saved = response.headers.get("x-document-saved");
+  if (revision === null || path === null || (saved !== "true" && saved !== "false")) {
+    throw new Error("The server answered without document metadata");
+  }
+  return { path, revision, saved: saved === "true" };
+}
+
+async function applyDocument(response: Response): Promise<void> {
+  if (response.status === 204) return;
+  const text = await responseText(response);
+  document.value = metadata(response);
+  source.value = text;
+  savedSource.value = text;
+  documentKey.value++;
+  hostError.value = "";
+}
+
 async function load(): Promise<void> {
   try {
-    const response = await fetch("/api/document");
-    const text = await responseText(response);
-    const revision = response.headers.get("etag");
-    const path = response.headers.get("x-document-path");
-    if (revision === null || path === null) {
-      throw new Error("The server answered without the document revision or path");
-    }
-    source.value = text;
-    savedSource.value = text;
-    document.value = { path, revision };
+    await applyDocument(await fetch("/api/document"));
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+function mayReplaceDocument(): boolean {
+  return source.value === savedSource.value || window.confirm("Discard unsaved changes?");
+}
+
+async function newDocument(): Promise<void> {
+  if (!mayReplaceDocument()) return;
+  try {
+    await applyDocument(await fetch("/api/new", { method: "POST" }));
+  } catch (error) {
+    host.reportError("Could not create a diagram", error);
+  }
+}
+
+async function openDocument(): Promise<void> {
+  if (!mayReplaceDocument()) return;
+  try {
+    await applyDocument(await fetch("/api/open", { method: "POST" }));
+  } catch (error) {
+    host.reportError("Could not open a diagram", error);
+  }
+}
+
+async function saveAs(): Promise<void> {
+  const text = source.value;
+  try {
+    const response = await fetch("/api/save-as", { method: "POST", body: text });
+    if (response.status === 204) return;
+    await responseText(response);
+    document.value = metadata(response);
+    savedSource.value = text;
+    hostError.value = "";
+  } catch (error) {
+    host.reportError("Could not save the diagram", error);
   }
 }
 
 async function save(): Promise<void> {
   const current = document.value;
   if (current === null) return;
+  if (!current.saved) return await saveAs();
   const text = source.value;
   try {
     const response = await fetch("/api/document", {
@@ -159,18 +216,25 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+function onBeforeUnload(event: BeforeUnloadEvent): void {
+  if (source.value === savedSource.value) return;
+  event.preventDefault();
+}
+
 function onSchemeChange(event: MediaQueryListEvent): void {
   theme.value = event.matches ? "dark" : "light";
 }
 
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("beforeunload", onBeforeUnload);
   darkScheme.addEventListener("change", onSchemeChange);
   void load();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("beforeunload", onBeforeUnload);
   darkScheme.removeEventListener("change", onSchemeChange);
 });
 </script>
@@ -201,6 +265,7 @@ body,
 
 header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
   padding: 0.4rem 1rem;

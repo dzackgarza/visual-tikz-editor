@@ -6,14 +6,14 @@ This repository was extracted from [`zettlr-pandoc/packages/tikz-workbench`](htt
 
 ## Run the standalone app
 
-Install [Bun](https://bun.sh/) and [just](https://github.com/casey/just). The test suite also uses Node.js. Then run:
+Install [Bun](https://bun.sh/), [just](https://github.com/casey/just), and Zenity for the native Open and Save As dialogs. The test suite also uses Node.js. Then run:
 
 ```sh
 bun install --frozen-lockfile
-just run path/to/figure.tikz
+just run
 ```
 
-The file must exist and have a `.tikz` or `.tikzcd` extension. Open the local URL printed by `just run`. The page starts in the visual editor for a `tikzpicture` or in Quiver for a `tikzcd` diagram. Save or Ctrl+S writes the file. A disk change since the last load stops the save and reports a conflict. Image paths resolve from the file directory.
+Open the local URL printed by `just run`. The app starts with a new `tikzpicture` in the visual editor. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. The toolbar also opens an existing `.tikz` or `.tikzcd` file and starts another new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
 
 The workbench also offers **Compiled preview**. That command uses the local `pandoc`, `pdflatex`, and `pdf2svg` tools with the Pandoc filter and standalone template under `~/.pandoc`. It is separate from the visual editing surface. The standalone Quiver view starts with standard KaTeX macros; an embedding host supplies its document's macro definitions through the host interface.
 

@@ -5,9 +5,9 @@
 default:
     @just --list
 
-# Open a TikZ or tikz-cd file in the standalone editor.
+# Start a new diagram, or open an existing TikZ file.
 [no-cd]
-run file:
+run file="":
     bun run "{{justfile_directory()}}/standalone/server.ts" "{{file}}"
 
 # Build the standalone browser page.
