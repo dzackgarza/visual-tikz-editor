@@ -1214,3 +1214,137 @@ index ba28ddb..0af3f4b 100644
    try {
      return Model.fromJson(json);
    } catch {
+diff --git a/packages/app/src/ui/ToolbarToolPopup.module.css b/packages/app/src/ui/ToolbarToolPopup.module.css
+index b12fedb..d4f1f6b 100644
+--- a/packages/app/src/ui/ToolbarToolPopup.module.css
++++ b/packages/app/src/ui/ToolbarToolPopup.module.css
+@@ -11,7 +11,7 @@
+   min-width: 170px;
+   padding: 8px;
+   border: 1px solid var(--border);
+-  border-radius: 4px;
++  border-radius: 12px;
+   background: var(--bg-pane);
+   box-shadow: 0 6px 16px color-mix(in srgb, black 24%, transparent);
+ }
+@@ -35,10 +35,10 @@
+ }
+ 
+ .matrixPickerCell {
+-  width: 20px;
+-  height: 20px;
++  width: 44px;
++  height: 44px;
+   border: 1px solid var(--border);
+-  border-radius: 2px;
++  border-radius: 6px;
+   background: color-mix(in srgb, var(--bg-pane) 82%, var(--bg-app));
+   cursor: pointer;
+   padding: 0;
+@@ -63,7 +63,7 @@
+ }
+ 
+ .sectionTitle {
+-  font-size: calc(var(--app-ui-scale, 1) * 11px);
++  font-size: calc(var(--app-ui-scale, 1) * 14px);
+   color: var(--text-faint);
+ }
+ 
+@@ -75,15 +75,15 @@
+ 
+ .choiceButton {
+   width: 100%;
+-  min-height: 24px;
++  min-height: 44px;
+   display: flex;
+   align-items: center;
+   border: 1px solid transparent;
+-  border-radius: 2px;
++  border-radius: 8px;
+   background: transparent;
+   color: var(--text);
+   font-family: inherit;
+-  font-size: calc(var(--app-ui-scale, 1) * 11px);
++  font-size: calc(var(--app-ui-scale, 1) * 14px);
+   text-align: left;
+   cursor: pointer;
+   padding: 2px 6px;
+@@ -159,7 +159,7 @@
+ }
+ 
+ .visualChoiceLabel {
+-  font-size: calc(var(--app-ui-scale, 1) * 10px);
++  font-size: calc(var(--app-ui-scale, 1) * 12px);
+   line-height: 1.2;
+   text-align: center;
+ }
+diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
+index 8aeb413..baa3a6f 100644
+--- a/packages/app/src/ui/ToolbarToolPopup.tsx
++++ b/packages/app/src/ui/ToolbarToolPopup.tsx
+@@ -1,4 +1,5 @@
+-import { useEffect, useRef, type ReactNode } from "react";
++import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
++import { createPortal } from "react-dom";
+ import css from "./ToolbarToolPopup.module.css";
+ 
+ export function ToolbarToolPopup({
+@@ -17,6 +18,28 @@ export function ToolbarToolPopup({
+   popupClassName?: string;
+ }) {
+   const rootRef = useRef<HTMLDivElement | null>(null);
++  const popupRef = useRef<HTMLDivElement | null>(null);
++  const [popupPosition, setPopupPosition] = useState({ left: 0, top: 0 });
++
++  useLayoutEffect(() => {
++    if (!open) return;
++    function positionPopup(): void {
++      const anchor = rootRef.current?.getBoundingClientRect();
++      const popup = popupRef.current;
++      if (!anchor || !popup) return;
++      setPopupPosition({
++        left: Math.max(8, Math.min(anchor.left, window.innerWidth - popup.offsetWidth - 8)),
++        top: anchor.bottom + 4
++      });
++    }
++    positionPopup();
++    window.addEventListener("resize", positionPopup);
++    window.addEventListener("scroll", positionPopup, true);
++    return () => {
++      window.removeEventListener("resize", positionPopup);
++      window.removeEventListener("scroll", positionPopup, true);
++    };
++  }, [open]);
+ 
+   useEffect(() => {
+     if (!open) {
+@@ -28,7 +51,7 @@ export function ToolbarToolPopup({
+       if (!target) {
+         return;
+       }
+-      if (!rootRef.current?.contains(target)) {
++      if (!rootRef.current?.contains(target) && !popupRef.current?.contains(target)) {
+         onClose();
+       }
+     }
+@@ -55,15 +78,18 @@ export function ToolbarToolPopup({
+   return (
+     <div className={css.root} ref={rootRef}>
+       {children}
+-      {open ? (
++      {open ? createPortal(
+         <div
++          ref={popupRef}
+           className={[css.popup, popupClassName ?? ""].filter(Boolean).join(" ")}
+           role="dialog"
+           aria-label="Tool options"
+           data-testid={popupTestId}
++          style={{ position: "fixed", ...popupPosition, maxHeight: `calc(100dvh - ${popupPosition.top + 8}px)`, overflowY: "auto" }}
+         >
+           {popup}
+-        </div>
++        </div>,
++        document.body
+       ) : null}
+     </div>
+   );
