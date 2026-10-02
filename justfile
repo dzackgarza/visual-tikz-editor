@@ -20,11 +20,11 @@ test-commit:
 
 # Run the workbench tests.
 test-push:
-    bun test test
+    bun run test
 
 # Run the workbench tests.
 test:
-    bun test test
+    bun run test
 
 # Rebuild the pinned TikZ Editor assets.
 update-tikz-editor-vendor:
