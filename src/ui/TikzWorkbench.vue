@@ -115,7 +115,9 @@ const emit = defineEmits<{
 }>();
 
 const fullscreen = ref(false);
-const requestedMode = ref<TikzPreviewModeId>(props.initialMode ?? defaultTikzPreviewMode(props.target));
+const requestedMode = ref<TikzPreviewModeId>(
+  props.initialMode ?? defaultTikzPreviewMode(props.target),
+);
 const activeStatus = ref("");
 const activeBusy = ref(false);
 const copyError = ref("");
