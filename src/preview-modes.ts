@@ -79,5 +79,5 @@ export const TIKZ_PREVIEW_MODES: readonly TikzPreviewModeDescriptor[] = [
 ];
 
 export function defaultTikzPreviewMode(target: TikzLivePreviewTarget): TikzPreviewModeId {
-  return target.language === "tikzcd" ? "quiver" : "visual";
+  return target.language === "tikzcd" ? "quiver" : "tikz";
 }

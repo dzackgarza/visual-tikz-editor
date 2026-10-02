@@ -18,6 +18,7 @@
         :target="target"
         :host="host"
         :theme="theme"
+        :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
         @mode="mode = $event"
       />
     </main>

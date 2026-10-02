@@ -105,6 +105,7 @@ const props = defineProps<{
   target: TikzLivePreviewTarget;
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
+  initialMode?: TikzPreviewModeId;
 }>();
 
 // The host may lay itself out around the active mode; the visual editor, for
@@ -114,7 +115,7 @@ const emit = defineEmits<{
 }>();
 
 const fullscreen = ref(false);
-const requestedMode = ref<TikzPreviewModeId>(defaultTikzPreviewMode(props.target));
+const requestedMode = ref<TikzPreviewModeId>(props.initialMode ?? defaultTikzPreviewMode(props.target));
 const activeStatus = ref("");
 const activeBusy = ref(false);
 const copyError = ref("");
@@ -159,7 +160,7 @@ function targetIdentity(target: TikzLivePreviewTarget): string {
 watch(
   () => targetIdentity(props.target),
   () => {
-    requestedMode.value = defaultTikzPreviewMode(props.target);
+    requestedMode.value = props.initialMode ?? defaultTikzPreviewMode(props.target);
     fullscreen.value = false;
   },
 );
