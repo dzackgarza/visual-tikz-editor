@@ -1,16 +1,28 @@
 <template>
   <div class="tikz-standalone" :class="theme">
-    <header>
+    <header class="document-bar">
       <strong>{{ fileName }}</strong>
-      <button type="button" :disabled="document === null" @click="newDocument">New</button>
-      <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
-      <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
-      <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
+      <details class="file-menu">
+        <summary>File</summary>
+        <div class="file-menu-items">
+          <button type="button" :disabled="document === null" @click="newDocument">New diagram</button>
+          <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
+          <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
+          <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
+        </div>
+      </details>
+      <button type="button" :aria-pressed="sourceOpen" @click="toggleSource">
+        {{ sourceOpen ? 'Hide code' : 'Show code' }}
+      </button>
+      <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
+        {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
+      </button>
+      <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
     </header>
-    <main v-if="document !== null && target !== null" :class="{ 'visual-mode': mode === 'visual' }">
+    <main v-if="document !== null && target !== null" :class="{ 'with-source': sourceOpen }">
       <SourceEditor
-        v-show="mode !== 'visual'"
+        v-show="sourceOpen"
         class="tikz-standalone-source"
         :source="source"
         :theme="theme"
@@ -22,8 +34,8 @@
         :target="target"
         :host="host"
         :theme="theme"
+        :show-inspector="inspectorOpen"
         :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
-        @mode="mode = $event"
       />
     </main>
     <pre v-else-if="loadError !== ''" class="tikz-standalone-error" role="alert">{{ loadError }}</pre>
@@ -40,7 +52,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
-import type { TikzPreviewModeId } from "../src/preview-modes";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
@@ -59,10 +70,11 @@ const source = ref("");
 const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
-// The visual editor has its own source pane, so the page hides its own in that mode.
-const mode = ref<TikzPreviewModeId>("visual");
-const darkScheme = window.matchMedia("(prefers-color-scheme: dark)");
-const theme = ref<TikzWorkbenchTheme>(darkScheme.matches ? "dark" : "light");
+const sourceOpen = ref(window.innerWidth > 900);
+const inspectorOpen = ref(false);
+const theme = ref<TikzWorkbenchTheme>(
+  window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
+);
 
 const dirty = computed(
   () => document.value !== null && (!document.value.saved || source.value !== savedSource.value),
@@ -221,21 +233,30 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
   event.preventDefault();
 }
 
-function onSchemeChange(event: MediaQueryListEvent): void {
-  theme.value = event.matches ? "dark" : "light";
+function toggleTheme(): void {
+  theme.value = theme.value === "light" ? "dark" : "light";
+  window.localStorage.setItem("visual-tikz-editor:theme", theme.value);
+}
+
+function toggleSource(): void {
+  sourceOpen.value = !sourceOpen.value;
+  if (sourceOpen.value && window.innerWidth <= 900) inspectorOpen.value = false;
+}
+
+function toggleInspector(): void {
+  inspectorOpen.value = !inspectorOpen.value;
+  if (inspectorOpen.value && window.innerWidth <= 900) sourceOpen.value = false;
 }
 
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("beforeunload", onBeforeUnload);
-  darkScheme.addEventListener("change", onSchemeChange);
   void load();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("beforeunload", onBeforeUnload);
-  darkScheme.removeEventListener("change", onSchemeChange);
 });
 </script>
 
@@ -250,30 +271,105 @@ body,
 
 <style scoped>
 .tikz-standalone {
+  --board: #daddd5;
+  --leaf: #eef0ea;
+  --ink: #1c2430;
+  --graphite: #555d67;
+  --ribbon: #9e2a2b;
+  --paper: #fbfaf6;
   display: flex;
   flex-direction: column;
   height: 100%;
-  font: 14px system-ui, sans-serif;
-  color: #222;
-  background: #fff;
+  font: 16px system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--board);
 }
 
 .tikz-standalone.dark {
-  color: #eee;
-  background: #1e1e1e;
+  --board: #252c34;
+  --leaf: #313b45;
+  --ink: #f3f2ed;
+  --graphite: #d1d5d8;
+  --ribbon: #ef9b9c;
+  --paper: #1d242b;
 }
 
-header {
+.document-bar {
+  position: relative;
+  z-index: 20;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 1rem;
-  padding: 0.4rem 1rem;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  gap: 8px;
+  margin: 8px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  border-radius: 14px;
+  background: var(--leaf);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--ink) 15%, transparent);
+}
+
+.document-bar strong {
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-bar button,
+.file-menu summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+
+.file-menu summary {
+  list-style: none;
+}
+
+.file-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.file-menu-items {
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 12px;
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  border-radius: 12px;
+  background: var(--leaf);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 20%, transparent);
+}
+
+.file-menu-items button {
+  justify-content: flex-start;
+}
+
+.document-bar button[aria-pressed="true"] {
+  border-color: var(--ribbon);
+  color: var(--ribbon);
+}
+
+.document-bar button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .tikz-standalone-status {
-  opacity: 0.7;
+  flex: 0 1 auto;
+  color: var(--graphite);
   overflow-wrap: anywhere;
 }
 
@@ -281,16 +377,16 @@ main {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
-main.visual-mode {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+main.with-source {
+  grid-template-columns: minmax(240px, 35%) minmax(0, 1fr);
 }
 
 .tikz-standalone-source {
   border-right: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  background: var(--paper);
 }
 
 .tikz-standalone-error {
@@ -299,10 +395,40 @@ main.visual-mode {
   color: #c0392b;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
+  .document-bar {
+    gap: 6px;
+  }
+
+  .document-bar strong {
+    max-width: 25vw;
+    font-size: 14px;
+  }
+
+  .document-bar button,
+  .file-menu summary {
+    padding: 0 8px;
+    font-size: 14px;
+  }
+
+  .tikz-standalone-status {
+    display: none;
+  }
+
   main {
+    position: relative;
+  }
+
+  main.with-source {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  main.with-source .tikz-standalone-source {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 10;
+    width: min(75vw, 440px);
+    box-shadow: 5px 0 20px color-mix(in srgb, var(--ink) 20%, transparent);
   }
 }
 </style>

@@ -6,11 +6,11 @@
     :data-tikz-language="props.target.language"
   >
     <header class="tikz-live-preview-header">
-      <span class="tikz-live-preview-label">TikZ:</span>
+      <span class="tikz-live-preview-label">View:</span>
       <div
         class="tikz-live-preview-modes"
         role="group"
-        aria-label="TikZ mode"
+        aria-label="Diagram view"
       >
         <button
           v-for="provider in providers"
@@ -70,6 +70,7 @@
         :host="props.host"
         :theme="props.theme"
         :fullscreen="fullscreen"
+        :show-inspector="props.showInspector"
         @exit-fullscreen="fullscreen = false"
         @status="activeStatus = $event"
         @busy="activeBusy = $event"
@@ -106,6 +107,7 @@ const props = defineProps<{
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
   initialMode?: TikzPreviewModeId;
+  showInspector?: boolean;
 }>();
 
 // The host may lay itself out around the active mode; the visual editor, for

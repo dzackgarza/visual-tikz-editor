@@ -1169,3 +1169,48 @@ index 1be8c49a..cfe86d66 100644
    | {
        mode: "mathjax";
        cacheKey: string;
+diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
+index ba28ddb..0af3f4b 100644
+--- a/packages/app/src/ui/DockLayout.tsx
++++ b/packages/app/src/ui/DockLayout.tsx
+@@ -91,6 +91,7 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
+ }
+ 
+ function buildDefaultLayout(): IJsonModel {
++  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
+   const rightTabs: Array<{ type: "tab"; id: string; name: string; component: string; enableClose?: boolean }> = [
+     { type: "tab", id: PANEL_IDS.inspector, name: "Inspector", component: "inspector" },
+     { type: "tab", id: PANEL_IDS.objects, name: "Objects", component: "objects" },
+@@ -100,7 +101,7 @@ function buildDefaultLayout(): IJsonModel {
+     rightTabs.push({ type: "tab", id: PANEL_IDS.assistant, name: "Assistant", component: "assistant" });
+   }
+ 
+-  return {
++  const layout: IJsonModel = {
+     global: {
+       tabEnableClose: true,
+       tabEnableRename: false,
+@@ -143,6 +144,10 @@ function buildDefaultLayout(): IJsonModel {
+       ],
+     },
+   };
++  if (embedded) {
++    layout.layout.children.shift();
++  }
++  return layout;
+ }
+ 
+ /** Strip assistant tabs if assistant is not available on this platform,
+@@ -396,7 +401,11 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
+ 
+ function createInitialModel(): Model {
+   const persisted = loadDockLayout();
+-  const json = persisted ? sanitizeLayout(persisted) : buildDefaultLayout();
++  const json = persisted
++    ? sanitizeLayout(persisted)
++    : getActiveEditorPlatform().id === "zettlr-embed"
++      ? buildCanvasOnlyLayout()
++      : buildDefaultLayout();
+   try {
+     return Model.fromJson(json);
+   } catch {

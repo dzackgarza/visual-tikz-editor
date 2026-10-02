@@ -32,6 +32,7 @@ type HostMessage = {
 	fullscreen?: boolean;
 	settings?: HostSettingsPatch;
 	imageBaseUrl?: string;
+	workspace?: 'default' | 'canvasOnly';
 };
 
 type PendingEditorMessage = {
@@ -413,6 +414,9 @@ function HostBridge() {
 				const nextFullscreen = message.fullscreen === true;
 				fullscreenRef.current = nextFullscreen;
 				setFullscreen(nextFullscreen);
+			} else if (action === 'workspace' && message.workspace) {
+				const workspace = message.workspace;
+				void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => applyWorkspace(workspace));
 			} else if (action === 'save') {
 				flushPendingEditorMessages();
 				const source = useEditorStore.getState().source;

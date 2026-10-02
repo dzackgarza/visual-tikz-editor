@@ -13,9 +13,9 @@ bun install --frozen-lockfile
 just run
 ```
 
-Open the local URL printed by `just run`. The app starts with a new `tikzpicture` in the visual editor. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. The toolbar also opens an existing `.tikz` or `.tikzcd` file and starts another new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
+Open the local URL printed by `just run`. The app starts with a new `tikzpicture` in the drawing canvas. The **File** menu holds New, Open, Save, and Save As. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
 
-The workbench also offers **Compiled preview**. That command uses the local `pandoc`, `pdflatex`, and `pdf2svg` tools with the Pandoc filter and standalone template under `~/.pandoc`. It is separate from the visual editing surface. The standalone Quiver view starts with standard KaTeX macros; an embedding host supplies its document's macro definitions through the host interface.
+The workbench offers a **TeX render** view of the same source. It uses the local `pandoc`, `pdflatex`, and `pdf2svg` tools with the Pandoc filter and standalone template under `~/.pandoc`. The standalone Quiver canvas starts with standard KaTeX macros; an embedding host supplies its document's macro definitions through the host interface. The standalone app keeps one source pane across drawing and render views. **Show code** opens that pane on a narrow screen. **Properties** opens the visual editor's inspector. On narrow screens, opening either panel closes the other. The light theme is the default; the theme button saves the chosen appearance locally.
 
 ## Embed the workbench
 

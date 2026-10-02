@@ -64,6 +64,7 @@ const props = defineProps<{
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
   fullscreen: boolean;
+  showInspector?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -117,6 +118,7 @@ function sendFullLoad(): void {
     },
   });
   postToEditor({ action: "display", fullscreen: props.fullscreen });
+  postToEditor({ action: "workspace", workspace: props.showInspector ? "default" : "canvasOnly" });
 }
 
 function sendTheme(): void {
@@ -156,6 +158,15 @@ watch(
 );
 
 watch(() => props.theme, sendTheme);
+
+watch(
+  () => props.showInspector,
+  (visible) => {
+    if (hostReady.value) {
+      postToEditor({ action: "workspace", workspace: visible ? "default" : "canvasOnly" });
+    }
+  },
+);
 
 watch(
   () => props.fullscreen,
