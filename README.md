@@ -19,7 +19,7 @@ The workbench also offers **Compiled preview**. That command uses the local `pan
 
 ## Embed the workbench
 
-Mount `src/ui/TikzWorkbench.vue` with `target`, `host`, and `theme`. `target` names the source bytes, their document range, the diagram language, and the document path. `host` implements `TikzWorkbenchHost` in `src/host.ts`:
+Mount `src/ui/TikzWorkbench.vue` with `target`, `host`, and `theme`. Set `initialMode` when the host needs a different opening view. The standalone host opens `tikzpicture` in its visual editor; Zettlr opens it in compiled preview. `target` names the source bytes, their document range, the diagram language, and the document path. `host` implements `TikzWorkbenchHost` in `src/host.ts`:
 
 | Service | Host responsibility |
 | --- | --- |
