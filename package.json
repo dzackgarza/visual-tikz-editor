@@ -1,5 +1,5 @@
 {
-  "name": "visual-tikz-editor",
+  "name": "tikz-workbench",
   "version": "0.1.0",
   "private": true,
   "description": "Standalone visual editor for mathematical diagrams with editable TikZ source.",
