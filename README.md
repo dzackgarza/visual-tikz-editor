@@ -6,7 +6,7 @@ This repository was extracted from [`zettlr-pandoc/packages/tikz-workbench`](htt
 
 ## Run the standalone app
 
-Install [Bun](https://bun.sh/) and [just](https://github.com/casey/just). Then run:
+Install [Bun](https://bun.sh/) and [just](https://github.com/casey/just). The test suite also uses Node.js. Then run:
 
 ```sh
 bun install --frozen-lockfile
@@ -34,6 +34,6 @@ The source document is authoritative. The editor bridges reject stale source wri
 
 ## Build and provenance
 
-`just build` builds the standalone page. `just test-commit` checks Vue and TypeScript. `just test` runs the workbench tests. The source under `vendor/tikz-editor` and `vendor/quiver` comes from pinned upstream revisions plus maintained patches. Each `PROVENANCE.toml` records the source revision. `just update-tikz-editor-vendor` and `just update-quiver-vendor` rebuild those assets.
+`just build` builds the standalone page. `just test-commit` checks Vue and TypeScript. `just test` runs the workbench's Mocha tests on Node.js. The source under `vendor/tikz-editor` and `vendor/quiver` comes from pinned upstream revisions plus maintained patches. Each `PROVENANCE.toml` records the source revision. `just update-tikz-editor-vendor` and `just update-quiver-vendor` rebuild those assets.
 
 The workbench is GPL-3.0. The bundled editors and their third-party assets retain their own license files. See [LICENSE](LICENSE) and the vendor provenance records.

@@ -10,7 +10,7 @@
     "update-tikz-editor-vendor": "bun run scripts/update-tikz-editor-vendor.mjs",
     "update-quiver-vendor": "bun run scripts/update-quiver-vendor.mjs",
     "build": "vite build",
-    "test": "bunx --bun mocha --timeout 240000 test/*.spec.ts"
+    "test": "node --import tsx ./node_modules/mocha/bin/mocha.js --timeout 240000 test/*.spec.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",
@@ -27,6 +27,7 @@
     "@vitejs/plugin-vue": "^6.0.0",
     "less": "^4.9.0",
     "mocha": "^12.0.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^7.1.0",
     "vue-tsc": "^3.3.10"
