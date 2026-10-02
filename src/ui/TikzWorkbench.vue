@@ -61,7 +61,7 @@
         <span v-if="copyError !== ''" role="alert">{{ copyError }}</span>
       </div>
       <component
-        v-else
+        v-if="unavailableMessage === '' && displayMode === 'tikz'"
         :is="activeProvider.component"
         ref="previewHandle"
         :key="`${activeProvider.id}\0${targetIdentity(props.target)}`"
@@ -74,6 +74,22 @@
         @exit-fullscreen="fullscreen = false"
         @status="activeStatus = $event"
         @busy="activeBusy = $event"
+      />
+      <component
+        v-for="provider in providers.filter((candidate) => candidate.id !== 'tikz' && visitedEditors.has(candidate.id))"
+        v-if="unavailableMessage === ''"
+        v-show="displayMode === provider.id"
+        :is="provider.component"
+        :key="`${provider.id}\0${targetIdentity(props.target)}`"
+        class="tikz-live-preview-provider"
+        :target="props.target"
+        :host="props.host"
+        :theme="props.theme"
+        :fullscreen="fullscreen"
+        :show-inspector="props.showInspector"
+        @exit-fullscreen="fullscreen = false"
+        @status="onProviderStatus(provider.id, $event)"
+        @busy="onProviderBusy(provider.id, $event)"
       />
     </div>
   </aside>
@@ -110,8 +126,6 @@ const props = defineProps<{
   showInspector?: boolean;
 }>();
 
-// The host may lay itself out around the active mode; the visual editor, for
-// one, carries its own source pane.
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
 }>();
@@ -120,6 +134,7 @@ const fullscreen = ref(false);
 const requestedMode = ref<TikzPreviewModeId>(
   props.initialMode ?? defaultTikzPreviewMode(props.target),
 );
+const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
 const activeBusy = ref(false);
 const copyError = ref("");
@@ -165,6 +180,9 @@ watch(
   () => targetIdentity(props.target),
   () => {
     requestedMode.value = props.initialMode ?? defaultTikzPreviewMode(props.target);
+    visitedEditors.value = requestedMode.value === 'tikz'
+      ? new Set()
+      : new Set([requestedMode.value]);
     fullscreen.value = false;
   },
 );
@@ -174,6 +192,7 @@ watch(
   (mode) => {
     activeStatus.value = "";
     activeBusy.value = false;
+    if (mode !== 'tikz') visitedEditors.value = new Set([...visitedEditors.value, mode]);
     emit("mode", mode);
   },
   { immediate: true },
@@ -188,6 +207,14 @@ function selectProvider(mode: TikzPreviewModeId): void {
 
 function forceRefresh(): void {
   previewHandle.value?.refresh?.();
+}
+
+function onProviderStatus(provider: TikzPreviewModeId, status: string): void {
+  if (displayMode.value === provider) activeStatus.value = status;
+}
+
+function onProviderBusy(provider: TikzPreviewModeId, busy: boolean): void {
+  if (displayMode.value === provider) activeBusy.value = busy;
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {
