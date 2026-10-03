@@ -4,6 +4,8 @@ import { setActiveEditorPlatform } from '@tikz-editor/app/platform/current';
 import { useEditorStore } from '@tikz-editor/app/store';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
+import type { ToolMode } from '@tikz-editor/app/store/types';
+import { NODE_SHAPE_OPTIONS } from 'tikz-editor/edit/inspector';
 import './styles.css';
 
 const App = lazy(async () => {
@@ -34,6 +36,11 @@ type HostMessage = {
 	imageBaseUrl?: string;
 	workspace?: 'default' | 'canvasOnly';
 	inspector?: boolean;
+	tool?: ToolMode;
+	option?: 'smoothing' | 'strokeColor' | 'fillColor' | 'shape' | 'matrix';
+	value?: string | number;
+	rows?: number;
+	columns?: number;
 };
 
 type PendingEditorMessage = {
@@ -318,6 +325,7 @@ function HostBridge() {
 	const [fullscreen, setFullscreen] = useState(false);
 	const fullscreenRef = useRef(false);
 	const previousSourceRef = useRef<string | null>(null);
+	const previousToolRef = useRef<ToolMode | null>(null);
 	const previousSvgRef = useRef<string>('');
 	const pendingChangeRef = useRef<PendingEditorMessage | null>(null);
 	const pendingAutosaveRef = useRef<PendingEditorMessage | null>(null);
@@ -326,6 +334,8 @@ function HostBridge() {
 
 	useEffect(() => {
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
+		postToHost({ event: 'tool', tool: useEditorStore.getState().toolMode });
+		postToHost({ event: 'tool-options', shapes: NODE_SHAPE_OPTIONS });
 
 		const flushChange = () => {
 			changeTimerRef.current = null;
@@ -369,6 +379,10 @@ function HostBridge() {
 		};
 
 		const unsubscribe = useEditorStore.subscribe((state) => {
+			if (state.toolMode !== previousToolRef.current) {
+				previousToolRef.current = state.toolMode;
+				postToHost({ event: 'tool', tool: state.toolMode });
+			}
 			const nextSvg = state.snapshot.svg?.svg ?? '';
 			if (nextSvg && nextSvg !== previousSvgRef.current) {
 				previousSvgRef.current = nextSvg;
@@ -421,6 +435,22 @@ function HostBridge() {
 			} else if (action === 'inspector' && typeof message.inspector === 'boolean') {
 				document.documentElement.dataset.embedInspector = message.inspector ? 'open' : 'closed';
 				window.dispatchEvent(new Event('tikz-embed-inspector'));
+			} else if (action === 'tool' && message.tool) {
+				useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: message.tool });
+			} else if (action === 'tool-option') {
+				const dispatch = useEditorStore.getState().dispatch;
+				if (message.option === 'smoothing' && typeof message.value === 'number') {
+					dispatch({ type: 'SET_FREEHAND_SMOOTHING', value: message.value });
+				} else if (message.option === 'strokeColor' && typeof message.value === 'string') {
+					dispatch({ type: 'SET_CREATION_STROKE_COLOR', value: message.value });
+				} else if (message.option === 'fillColor' && typeof message.value === 'string') {
+					dispatch({ type: 'SET_BUCKET_FILL_COLOR', value: message.value });
+				} else if (message.option === 'shape' && typeof message.value === 'string') {
+					const shape = NODE_SHAPE_OPTIONS.find((candidate) => candidate.value === message.value);
+					if (shape) dispatch({ type: 'SET_ADD_SHAPE_PRESET', value: shape.value });
+				} else if (message.option === 'matrix' && typeof message.rows === 'number' && typeof message.columns === 'number') {
+					dispatch({ type: 'SET_ADD_MATRIX_PRESET', rows: message.rows, columns: message.columns });
+				}
 			} else if (action === 'save') {
 				flushPendingEditorMessages();
 				const source = useEditorStore.getState().source;

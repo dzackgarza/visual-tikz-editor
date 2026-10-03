@@ -2,39 +2,39 @@
   <div class="tikz-standalone" :class="theme">
     <header class="document-bar">
       <strong>{{ fileName }}</strong>
-      <details class="file-menu">
-        <summary>File</summary>
-        <div class="file-menu-items">
-          <button type="button" :disabled="document === null" @click="newDocument">New diagram</button>
-          <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
-          <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
-          <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
-        </div>
-      </details>
+      <div class="document-views" role="group" aria-label="Diagram view">
+        <Button label="Render" text :disabled="target?.language !== 'tikz'" :severity="activeMode === 'tikz' ? 'primary' : 'secondary'" @click="activeMode = 'tikz'" />
+        <Button label="Quiver" text :disabled="target?.language !== 'tikzcd'" :severity="activeMode === 'quiver' ? 'primary' : 'secondary'" @click="activeMode = 'quiver'" />
+        <Button label="Draw" text :disabled="target?.language !== 'tikz'" :severity="activeMode === 'visual' ? 'primary' : 'secondary'" @click="activeMode = 'visual'" />
+      </div>
+      <Button label="File" icon="pi pi-folder" text aria-haspopup="true" aria-controls="file-menu" @click="toggleFileMenu" />
+      <Menu id="file-menu" ref="fileMenu" :model="fileItems" popup />
       <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
         {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
       </button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
     </header>
-    <main v-if="document !== null && target !== null">
-      <SourceEditor
-        class="tikz-standalone-source"
-        :source="source"
-        :theme="theme"
-        @change="source = $event"
-      />
-      <TikzWorkbench
-        :key="documentKey"
-        class="tikz-standalone-workbench"
-        :target="target"
-        :host="host"
-        :theme="theme"
-        :show-inspector="inspectorOpen"
-        :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
-        @inspector-closed="inspectorOpen = false"
-      />
-    </main>
+    <Splitter v-if="document !== null && target !== null" class="workspace-splitter" layout="horizontal">
+      <SplitterPanel :size="40" :min-size="25">
+        <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" @change="source = $event" />
+      </SplitterPanel>
+      <SplitterPanel :size="60" :min-size="35">
+        <TikzWorkbench
+          :key="documentKey"
+          class="tikz-standalone-workbench"
+          :target="target"
+          :host="host"
+          :theme="theme"
+          :show-inspector="inspectorOpen"
+          :show-header="false"
+          :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
+          :requested-mode="activeMode"
+          @mode="activeMode = $event"
+          @inspector-closed="inspectorOpen = false"
+        />
+      </SplitterPanel>
+    </Splitter>
     <pre v-else-if="loadError !== ''" class="tikz-standalone-error" role="alert">{{ loadError }}</pre>
   </div>
 </template>
@@ -46,14 +46,19 @@
  * serves the pinned editor pages.
  */
 
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
+import type { TikzPreviewModeId } from "../src/preview-modes";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
 import SourceEditor from "./SourceEditor.vue";
+import Button from "primevue/button";
+import Menu from "primevue/menu";
+import Splitter from "primevue/splitter";
+import SplitterPanel from "primevue/splitterpanel";
 
 interface StandaloneDocument {
   path: string;
@@ -68,6 +73,18 @@ const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
 const inspectorOpen = ref(false);
+const activeMode = ref<TikzPreviewModeId>("visual");
+const fileMenu = ref<InstanceType<typeof Menu> | null>(null);
+const fileItems = computed(() => [
+  { label: "New diagram", disabled: document.value === null, command: newDocument },
+  { label: "Open…", disabled: document.value === null, command: openDocument },
+  { separator: true },
+  { label: "Save", disabled: document.value === null || !dirty.value, command: save },
+  { label: "Save As…", disabled: document.value === null, command: saveAs },
+]);
+function toggleFileMenu(event: Event): void {
+  fileMenu.value?.toggle(event);
+}
 const theme = ref<TikzWorkbenchTheme>(
   window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
 );
@@ -100,6 +117,11 @@ const target = computed<TikzLivePreviewTarget | null>(() => {
     docPath: document.value.path,
     authoredSource: text,
   };
+});
+
+watch(() => target.value?.language, (language) => {
+  if (language === "tikzcd") activeMode.value = "quiver";
+  if (language === "tikz" && activeMode.value === "quiver") activeMode.value = "visual";
 });
 
 async function responseText(response: Response): Promise<string> {
@@ -153,6 +175,7 @@ async function applyDocument(response: Response): Promise<void> {
   const text = await responseText(response);
   document.value = metadata(response);
   source.value = text;
+  activeMode.value = document.value.path.endsWith(".tikzcd") || rawTikzEnvironment(text) === "tikzcd" ? "quiver" : "visual";
   savedSource.value = text;
   documentKey.value++;
   hostError.value = "";
@@ -313,6 +336,28 @@ body,
   white-space: nowrap;
 }
 
+.document-views {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.document-views :deep(.p-button) {
+  min-height: 40px;
+  padding-inline: 10px;
+  font-size: 14px;
+}
+
+.document-views :deep(.p-button:disabled) { display: none; }
+
+.document-views :deep(.p-button.p-button-primary) {
+  background: var(--ribbon);
+  color: #fff;
+}
+
 .document-bar button,
 .file-menu summary {
   display: inline-flex;
@@ -370,14 +415,19 @@ body,
   overflow-wrap: anywhere;
 }
 
-main {
+.workspace-splitter {
   flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(240px, 40%) minmax(0, 1fr);
+  border: 0;
+}
+
+.workspace-splitter :deep(.p-splitterpanel) {
+  min-width: 0;
+  min-height: 0;
 }
 
 .tikz-standalone-source {
+  height: 100%;
   border-right: 1px solid color-mix(in srgb, currentColor 20%, transparent);
   background: var(--paper);
 }
@@ -408,8 +458,5 @@ main {
     display: none;
   }
 
-  main {
-    grid-template-columns: minmax(220px, 42%) minmax(0, 1fr);
-  }
 }
 </style>

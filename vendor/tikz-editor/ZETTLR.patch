@@ -2272,3 +2272,48 @@ index 1be8c49..cfe86d6 100644
    | {
        mode: "mathjax";
        cacheKey: string;
+diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
+index 5818d92..bdaf44c 100644
+--- a/packages/app/src/ui/App.tsx
++++ b/packages/app/src/ui/App.tsx
+@@ -2030,13 +2030,13 @@ export function App() {
+       onDragLeave={onAppDragLeave}
+       onDrop={(e) => { void onAppDrop(e); }}
+     >
+-      {platform.menu?.usesNativeMenuBar ? null : (
++      {platform.id === "zettlr-embed" || platform.menu?.usesNativeMenuBar ? null : (
+         <AppMenuBar
+           definition={menuDefinition}
+           bindings={commandRuntime.bindings}
+         />
+       )}
+-      <Toolbar
++      {platform.id === "zettlr-embed" ? null : <Toolbar
+         updateChip={
+           availableUpdate && !showUpdateModal && !updateDismissedForSession
+             ? {
+@@ -2048,12 +2048,12 @@ export function App() {
+               }
+             : null
+         }
+-      />
+-      <TabStrip
++      />}
++      {platform.id === "zettlr-embed" ? null : <TabStrip
+         onRequestCloseDocument={(documentId) => {
+           requestCloseIntent({ kind: "close-document", documentId });
+         }}
+-      />
++      />}
+       <div className={css.body}>
+         <DockLayout
+           repeatPreviewModel={repeatPreviewModel}
+@@ -2062,7 +2062,7 @@ export function App() {
+           onNewChat={handleAssistantNewChat}
+         />
+       </div>
+-      <StatusBar />
++      {platform.id === "zettlr-embed" ? null : <StatusBar />}
+       <Suspense fallback={null}>
+         <DevPanel />
+       </Suspense>
