@@ -41,6 +41,47 @@ body.zettlr-quiver-host .toolbar {
     justify-content: center;
 }
 
+body.zettlr-quiver-host:not(.dark-theme) .toolbar {
+    background: #f5f6f2;
+    border: 1px solid #d7ddd4;
+    box-shadow: 0 8px 24px rgba(28, 42, 35, 0.16);
+    color: #27342f;
+}
+
+body.zettlr-quiver-host .toolbar .action {
+    cursor: pointer;
+}
+
+body.zettlr-quiver-host .toolbar .action .name,
+body.zettlr-quiver-host .toolbar .action .shortcut {
+    color: inherit;
+    font-size: 11px;
+    line-height: 11px;
+}
+
+body.zettlr-quiver-host:not(.dark-theme) .toolbar .action img {
+    filter: brightness(0);
+}
+
+body.zettlr-quiver-host:not(.dark-theme) .toolbar .action:hover,
+body.zettlr-quiver-host:not(.dark-theme) .toolbar .action:focus-visible {
+    background: #e3ece7;
+}
+
+body.zettlr-quiver-host .toolbar .action:focus-visible {
+    outline: 2px solid #1883a5;
+    outline-offset: -2px;
+}
+
+body.zettlr-quiver-host:not(.dark-theme) .toolbar .action .subtoolbar {
+    background: #f5f6f2;
+    box-shadow: 0 8px 24px rgba(28, 42, 35, 0.16);
+}
+
+body.zettlr-quiver-host .toolbar .action:focus-within .subtoolbar {
+    display: block;
+}
+
 body.zettlr-quiver-host.zettlr-fullscreen .toolbar {
     left: 50%;
     right: auto;

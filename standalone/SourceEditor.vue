@@ -11,7 +11,8 @@
 
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
+import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tikz } from "@tikz-editor/lang-tikz";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -28,6 +29,7 @@ const emit = defineEmits<{
 
 const parent = ref<HTMLDivElement | null>(null);
 let view: EditorView | null = null;
+const themeCompartment = new Compartment();
 
 onMounted(() => {
   if (parent.value === null) {
@@ -42,7 +44,7 @@ onMounted(() => {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         tikz(),
-        syntaxHighlighting(defaultHighlightStyle),
+        themeCompartment.of(props.theme === "dark" ? oneDark : syntaxHighlighting(defaultHighlightStyle)),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -61,6 +63,17 @@ watch(
       return;
     }
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } });
+  },
+);
+
+watch(
+  () => props.theme,
+  (theme) => {
+    view?.dispatch({
+      effects: themeCompartment.reconfigure(
+        theme === "dark" ? oneDark : syntaxHighlighting(defaultHighlightStyle),
+      ),
+    });
   },
 );
 
