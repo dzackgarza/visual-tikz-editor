@@ -162,7 +162,7 @@ watch(
       props.host.reportError(`TikZ editor mode unavailable in ${docPath}:${sourceFrom}`, message);
     }
   },
-  { immediate: true },
+  { immediate: true, flush: "post" },
 );
 
 function copyUnavailableMessage(): void {
