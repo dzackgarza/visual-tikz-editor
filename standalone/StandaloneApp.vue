@@ -117,18 +117,25 @@ const host: TikzWorkbenchHost = {
   writeSource: (from, to, insert) => {
     source.value = source.value.slice(0, from) + insert + source.value.slice(to);
   },
-  render: async (request) => {
-    const response = await fetch("/api/render", { method: "POST", body: JSON.stringify(request) });
-    return JSON.parse(await responseText(response)) as TikzRenderResult;
+  rendering: {
+    render: async (request) => {
+      const response = await fetch("/api/render", {
+        method: "POST",
+        body: JSON.stringify(request),
+      });
+      return JSON.parse(await responseText(response)) as TikzRenderResult;
+    },
+    figureUrl: (figure) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(figure.svg)}`,
   },
-  quiverMacros: async () => {
-    const response = await fetch("/api/quiver-macros");
-    return JSON.parse(await responseText(response)) as QuiverMacroProjection;
+  quiver: {
+    macros: async () => {
+      const response = await fetch("/api/quiver-macros");
+      return JSON.parse(await responseText(response)) as QuiverMacroProjection;
+    },
+    url: "/quiver/zettlr-host.html",
   },
-  figureUrl: (figure) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(figure.svg)}`,
   imageBaseUrl: () => new URL("/tikz-image/", location.href).href,
   editorUrl: "/tikz-editor/index.html",
-  quiverUrl: "/quiver/zettlr-host.html",
   reportError: (message, error) => {
     hostError.value = `${message}: ${error instanceof Error ? error.message : String(error)}`;
     console.error(message, error);

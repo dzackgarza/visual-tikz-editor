@@ -9,7 +9,7 @@
         v-if="state.lastGood !== null"
         ref="figureViewer"
         class="tikz-compiler-preview-figure tikz-live-preview-figure"
-        :src="props.host.figureUrl(state.lastGood.result)"
+        :src="rendering.figureUrl(state.lastGood.result)"
         :data-svg-path="state.lastGood.result.svgPath"
         :theme="props.theme"
         :show-fullscreen-button="false"
@@ -83,13 +83,18 @@ const emit = defineEmits<{
   (e: "busy", busy: boolean): void;
 }>();
 
+if (props.host.rendering === undefined) {
+  throw new Error("The host has no compiled TikZ renderer");
+}
+const rendering = props.host.rendering;
+
 interface FigureViewerHandle {
   fit: () => void;
 }
 
 async function render(request: TikzRenderRequest): Promise<TikzRenderResult> {
   try {
-    return await props.host.render(request);
+    return await rendering.render(request);
   } catch (error) {
     props.host.reportError("TikZ render request failed", error);
     return {

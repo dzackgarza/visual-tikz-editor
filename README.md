@@ -19,15 +19,15 @@ The workbench offers a **TeX render** view of the same source. It uses the local
 
 ## Embed the workbench
 
-Mount `src/ui/TikzWorkbench.vue` with `target`, `host`, and `theme`. Set `initialMode` for the opening view, or bind `requestedMode` when a host control must switch views after mount. The standalone host opens `tikzpicture` in its visual editor; Zettlr opens it in TeX render. `target` names the source bytes, their document range, the diagram language, and the document path. `host` implements `TikzWorkbenchHost` in `src/host.ts`:
+Mount `src/ui/TikzWorkbench.vue` with `target`, `host`, and `theme`. Set `initialMode` for the opening view, or bind `requestedMode` when a host control must switch views after mount. The standalone host opens `tikzpicture` in its visual editor; Zettlr opens it in TeX render. A host that supplies only the visual editor opens the drawing canvas. `target` names the source bytes, their document range, the diagram language, and the document path. `host` implements `TikzWorkbenchHost` in `src/host.ts`:
 
 | Service | Host responsibility |
 | --- | --- |
 | `readSource`, `writeSource` | Read and replace the source range. Send an updated target after a write. |
-| `render`, `figureUrl` | Run an explicitly requested compiled preview and provide its figure URL. |
-| `quiverMacros` | Supply the host document's KaTeX macro projection. |
+| `rendering` | Supply `render` and `figureUrl` together when the host offers a TeX render view. |
+| `quiver` | Supply the Quiver page URL and KaTeX macro projection when the host edits `tikzcd`. |
 | `imageBaseUrl` | Resolve figure image paths. |
-| `editorUrl`, `quiverUrl` | Serve the pinned editor pages under `vendor/`. |
+| `editorUrl` | Serve the pinned drawing editor page under `vendor/`. |
 | `reportError` | Report an integration error. |
 
 The source document is authoritative. The editor bridges reject stale source writes. The host must keep source identity and save transactions consistent with its own document model.

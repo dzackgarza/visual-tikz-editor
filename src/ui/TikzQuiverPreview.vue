@@ -10,7 +10,7 @@
     <iframe
       ref="frame"
       class="tikz-quiver-frame"
-      :src="props.host.quiverUrl"
+      :src="quiver.url"
       title="Quiver diagram editor"
     />
   </div>
@@ -77,6 +77,11 @@ const emit = defineEmits<{
   (e: "exitFullscreen"): void;
   (e: "status", text: string): void;
 }>();
+
+const quiver = props.host.quiver;
+if (quiver === undefined) {
+  throw new Error("The host has no Quiver editor");
+}
 
 const frame = ref<HTMLIFrameElement | null>(null);
 const session = shallowRef<PreviewSession>({
@@ -239,7 +244,7 @@ onMounted(async () => {
   window.addEventListener("message", onMessage);
 
   try {
-    macroProjection.value = await props.host.quiverMacros();
+    macroProjection.value = await quiver.macros();
     sendFullLoad();
   } catch (error) {
     errorMessage.value = `Could not load Quiver macros: ${error instanceof Error ? error.message : String(error)}`;

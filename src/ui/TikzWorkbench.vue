@@ -18,8 +18,8 @@
           type="button"
           :class="{ active: displayMode === provider.id }"
           :aria-pressed="displayMode === provider.id"
-          :disabled="!provider.supports(props.target) && displayMode !== provider.id"
-          :title="provider.supports(props.target) ? '' : provider.unavailableTitle(props.target)"
+          :disabled="!supportsProvider(provider) && displayMode !== provider.id"
+          :title="supportsProvider(provider) ? '' : unavailableTitle(provider)"
           @click="selectProvider(provider.id)"
         >
           {{ provider.label }}
@@ -132,8 +132,18 @@ const emit = defineEmits<{
 }>();
 
 const fullscreen = ref(false);
+function defaultMode(): TikzPreviewModeId {
+  if (props.target.language === "tikzcd" && props.host.quiver === undefined) {
+    return props.host.rendering === undefined ? "visual" : "tikz";
+  }
+  if (props.target.language === "tikz" && props.host.rendering === undefined) {
+    return "visual";
+  }
+  return defaultTikzPreviewMode(props.target);
+}
+
 const requestedMode = ref<TikzPreviewModeId>(
-  props.requestedMode ?? props.initialMode ?? defaultTikzPreviewMode(props.target),
+  props.requestedMode ?? props.initialMode ?? defaultMode(),
 );
 const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
@@ -155,10 +165,24 @@ const activeProvider = computed(() => {
   }
   return provider;
 });
+function supportsProvider(provider: TikzPreviewProvider): boolean {
+  if (provider.id === "tikz" && props.host.rendering === undefined) return false;
+  if (provider.id === "quiver" && props.host.quiver === undefined) return false;
+  return provider.supports(props.target);
+}
+
+function unavailableTitle(provider: TikzPreviewProvider): string {
+  if (provider.id === "tikz" && props.host.rendering === undefined) {
+    return "This host has no TeX renderer";
+  }
+  if (provider.id === "quiver" && props.host.quiver === undefined) {
+    return "This host has no Quiver editor";
+  }
+  return provider.unavailableTitle(props.target);
+}
+
 const unavailableMessage = computed(() =>
-  activeProvider.value.supports(props.target)
-    ? ""
-    : activeProvider.value.unavailableTitle(props.target),
+  supportsProvider(activeProvider.value) ? "" : unavailableTitle(activeProvider.value),
 );
 
 watch(
@@ -186,8 +210,7 @@ function targetIdentity(target: TikzLivePreviewTarget): string {
 watch(
   () => targetIdentity(props.target),
   () => {
-    requestedMode.value =
-      props.requestedMode ?? props.initialMode ?? defaultTikzPreviewMode(props.target);
+    requestedMode.value = props.requestedMode ?? props.initialMode ?? defaultMode();
     visitedEditors.value =
       requestedMode.value === "tikz" ? new Set() : new Set([requestedMode.value]);
     providerStatus.value = { tikz: "", quiver: "", visual: "" };
@@ -216,7 +239,7 @@ watch(
 
 function selectProvider(mode: TikzPreviewModeId): void {
   const provider = providers.find((candidate) => candidate.id === mode);
-  if (provider?.supports(props.target) === true) {
+  if (provider !== undefined && supportsProvider(provider)) {
     requestedMode.value = mode;
   }
 }
