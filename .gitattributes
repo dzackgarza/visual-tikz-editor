@@ -1,0 +1,2 @@
+vendor/tikz-editor/ZETTLR.patch whitespace=-blank-at-eol
+vendor/tikz-editor/src/assets/* whitespace=-blank-at-eol

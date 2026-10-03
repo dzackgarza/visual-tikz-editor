@@ -33,6 +33,7 @@ type HostMessage = {
 	settings?: HostSettingsPatch;
 	imageBaseUrl?: string;
 	workspace?: 'default' | 'canvasOnly';
+	inspector?: boolean;
 };
 
 type PendingEditorMessage = {
@@ -417,6 +418,9 @@ function HostBridge() {
 			} else if (action === 'workspace' && message.workspace) {
 				const workspace = message.workspace;
 				void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => applyWorkspace(workspace));
+			} else if (action === 'inspector' && typeof message.inspector === 'boolean') {
+				document.documentElement.dataset.embedInspector = message.inspector ? 'open' : 'closed';
+				window.dispatchEvent(new Event('tikz-embed-inspector'));
 			} else if (action === 'save') {
 				flushPendingEditorMessages();
 				const source = useEditorStore.getState().source;

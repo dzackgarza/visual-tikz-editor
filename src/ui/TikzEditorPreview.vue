@@ -69,6 +69,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "exitFullscreen"): void;
+  (e: "inspectorClosed"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
 }>();
@@ -118,7 +119,8 @@ function sendFullLoad(): void {
     },
   });
   postToEditor({ action: "display", fullscreen: props.fullscreen });
-  postToEditor({ action: "workspace", workspace: props.showInspector ? "default" : "canvasOnly" });
+  postToEditor({ action: "workspace", workspace: "canvasOnly" });
+  postToEditor({ action: "inspector", inspector: props.showInspector === true });
 }
 
 function sendTheme(): void {
@@ -163,7 +165,7 @@ watch(
   () => props.showInspector,
   (visible) => {
     if (hostReady.value) {
-      postToEditor({ action: "workspace", workspace: visible ? "default" : "canvasOnly" });
+      postToEditor({ action: "inspector", inspector: visible === true });
     }
   },
 );
@@ -262,6 +264,9 @@ function onMessage(event: MessageEvent): void {
       if (props.fullscreen) {
         emit("exitFullscreen");
       }
+      break;
+    case "inspector-closed":
+      emit("inspectorClosed");
       break;
   }
 }

@@ -13,7 +13,7 @@
         aria-label="Diagram view"
       >
         <button
-          v-for="provider in providers"
+          v-for="provider in visibleProviders"
           :key="provider.id"
           type="button"
           :class="{ active: displayMode === provider.id }"
@@ -88,6 +88,7 @@
         :fullscreen="fullscreen"
         :show-inspector="props.showInspector"
         @exit-fullscreen="fullscreen = false"
+        @inspector-closed="emit('inspectorClosed')"
         @status="onProviderStatus(provider.id, $event)"
         @busy="onProviderBusy(provider.id, $event)"
       />
@@ -129,6 +130,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
+  (e: "inspectorClosed"): void;
 }>();
 
 const fullscreen = ref(false);
@@ -158,6 +160,9 @@ const copyError = ref("");
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const providers: readonly TikzPreviewProvider[] = TIKZ_PREVIEW_PROVIDERS;
 const displayMode = requestedMode;
+const visibleProviders = computed(() =>
+  providers.filter((provider) => supportsProvider(provider) || provider.id === displayMode.value),
+);
 const activeProvider = computed(() => {
   const provider = providers.find((candidate) => candidate.id === displayMode.value);
   if (provider === undefined) {

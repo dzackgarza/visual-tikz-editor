@@ -392,8 +392,82 @@ index 4d4cfa9..b5595dc 100644
  function stringifyDebug(value: unknown): string {
    const replacer = (_key: string, current: unknown): unknown => {
      if (current instanceof Map) {
+diff --git a/packages/app/src/ui/DockLayout.css b/packages/app/src/ui/DockLayout.css
+index 6757888..13a7cac 100644
+--- a/packages/app/src/ui/DockLayout.css
++++ b/packages/app/src/ui/DockLayout.css
+@@ -1,6 +1,69 @@
+ /* ── FlexLayout theme overrides ─────────────────────────────────────────────── */
+ /* Built on top of flexlayout-react/style/gray.css imported in DockLayout.tsx  */
+ 
++.dock-layout,
++.embed-dock-layout {
++  position: relative;
++  width: 100%;
++  height: 100%;
++  min-width: 0;
++  min-height: 0;
++}
++
++.embed-inspector {
++  position: absolute;
++  top: 8px;
++  right: 8px;
++  z-index: 30;
++  display: flex;
++  flex-direction: column;
++  width: min(280px, calc(100% - 16px));
++  height: min(600px, 70%);
++  min-height: 0;
++  border: 1px solid var(--border);
++  border-radius: 12px;
++  background: var(--bg-pane);
++  box-shadow: 0 8px 30px color-mix(in srgb, black 24%, transparent);
++  overflow: hidden;
++}
++
++.embed-inspector-tabs {
++  display: flex;
++  align-items: center;
++  gap: 4px;
++  padding: 6px;
++  border-bottom: 1px solid var(--border);
++  background: var(--bg-header);
++}
++
++.embed-inspector-tabs button {
++  min-width: 44px;
++  min-height: 44px;
++  padding: 0 9px;
++  border: 0;
++  border-radius: 8px;
++  background: transparent;
++  color: var(--text);
++  font: 14px var(--font-ui);
++  cursor: pointer;
++}
++
++.embed-inspector-tabs button[aria-selected="true"] {
++  background: var(--accent-btn-bg);
++  color: var(--accent-dark);
++}
++
++.embed-inspector-tabs .embed-inspector-close {
++  margin-left: auto;
++  font-size: 24px;
++}
++
++.embed-inspector-content {
++  flex: 1;
++  min-height: 0;
++  overflow: auto;
++}
++
+ .flexlayout__layout {
+   /* Map to app design tokens */
+   --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb..7e0a7af 100644
+index ba28ddb..d702f65 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
 @@ -91,6 +91,7 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
@@ -433,19 +507,126 @@ index ba28ddb..7e0a7af 100644
  }
  
  /** Strip assistant tabs if assistant is not available on this platform,
-@@ -396,7 +401,11 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
+@@ -395,8 +400,13 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
+ }
  
  function createInitialModel(): Model {
++  if (getActiveEditorPlatform().id === "zettlr-embed") {
++    return Model.fromJson(buildCanvasOnlyLayout());
++  }
    const persisted = loadDockLayout();
 -  const json = persisted ? sanitizeLayout(persisted) : buildDefaultLayout();
 +  const json = persisted
 +    ? sanitizeLayout(persisted)
-+    : getActiveEditorPlatform().id === "zettlr-embed"
-+      ? buildCanvasOnlyLayout()
-+      : buildDefaultLayout();
++    : buildDefaultLayout();
    try {
      return Model.fromJson(json);
    } catch {
+@@ -405,8 +415,24 @@ function createInitialModel(): Model {
+ }
+ 
+ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn, onNewChat }: DockLayoutProps) {
++  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
+   const dispatch = useEditorStore((s) => s.dispatch);
+   const [model, setModel] = useState(createInitialModel);
++  const [inspectorOpen, setInspectorOpen] = useState(() => document.documentElement.dataset.embedInspector === "open");
++  const [inspectorTab, setInspectorTab] = useState<"inspector" | "objects" | "styles">("inspector");
++
++  useEffect(() => {
++    if (!embedded) return;
++    const update = () => setInspectorOpen(document.documentElement.dataset.embedInspector === "open");
++    window.addEventListener("tikz-embed-inspector", update);
++    return () => window.removeEventListener("tikz-embed-inspector", update);
++  }, [embedded]);
++
++  const closeInspector = useCallback(() => {
++    document.documentElement.dataset.embedInspector = "closed";
++    setInspectorOpen(false);
++    window.parent.postMessage(JSON.stringify({ event: "inspector-closed" }), "*");
++  }, []);
+ 
+   // Factory — renders panel content for each tab
+   const factory = useCallback(
+@@ -472,6 +498,14 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+     getModel: () => modelRef.current,
+     getCurrentJson: () => modelRef.current.toJson(),
+     togglePanel(panelId: string) {
++      if (embedded) {
++        if (panelId === PANEL_IDS.inspector || panelId === PANEL_IDS.objects || panelId === PANEL_IDS.styles) {
++          setInspectorTab(panelId);
++          setInspectorOpen(true);
++          document.documentElement.dataset.embedInspector = "open";
++        }
++        return;
++      }
+       const m = modelRef.current;
+       const existing = m.getNodeById(panelId);
+       if (existing) {
+@@ -523,10 +557,12 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+       syncLayoutStateToStore(m, dispatchRef.current);
+     },
+     applyPreset(preset: keyof typeof LAYOUT_PRESETS) {
++      if (embedded) return;
+       const builder = LAYOUT_PRESETS[preset];
+       this.applyLayoutJson(builder());
+     },
+     applyLayoutJson(json: IJsonModel) {
++      if (embedded) return;
+       const sanitized = sanitizeLayout(json);
+       const newModel = Model.fromJson(sanitized);
+       saveDockLayout(sanitized);
+@@ -536,7 +572,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+     resetLayout() {
+       this.applyPreset("default");
+     },
+-  }), []); // stable — uses refs internally
++  }), [embedded]); // stable — uses refs internally
+ 
+   useEffect(() => {
+     activeDockHandle = handle;
+@@ -590,11 +626,36 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+   }, [figureCount]);
+ 
+   return (
+-    <Layout
+-      model={model}
+-      factory={factory}
+-      onModelChange={onModelChange}
+-      realtimeResize
+-    />
++    <div className={embedded ? "embed-dock-layout" : "dock-layout"}>
++      <Layout
++        model={model}
++        factory={factory}
++        onModelChange={onModelChange}
++        realtimeResize
++      />
++      {embedded && inspectorOpen && (
++        <aside className="embed-inspector" aria-label="Diagram properties">
++          <div className="embed-inspector-tabs" role="tablist" aria-label="Properties view">
++            {(["inspector", "objects", "styles"] as const).map((tab) => (
++              <button
++                key={tab}
++                type="button"
++                role="tab"
++                aria-selected={inspectorTab === tab}
++                onClick={() => setInspectorTab(tab)}
++              >
++                {tab === "inspector" ? "Properties" : tab === "objects" ? "Objects" : "Style"}
++              </button>
++            ))}
++            <button type="button" className="embed-inspector-close" aria-label="Close properties" onClick={closeInspector}>×</button>
++          </div>
++          <div className="embed-inspector-content" role="tabpanel">
++            {inspectorTab === "inspector" && <MemoInspectorPanel />}
++            {inspectorTab === "objects" && <MemoObjectsPanel />}
++            {inspectorTab === "styles" && <MemoStylesPanel />}
++          </div>
++        </aside>
++      )}
++    </div>
+   );
+ }
 diff --git a/packages/app/src/ui/SettingsModal.tsx b/packages/app/src/ui/SettingsModal.tsx
 index e849b25..134cf65 100644
 --- a/packages/app/src/ui/SettingsModal.tsx

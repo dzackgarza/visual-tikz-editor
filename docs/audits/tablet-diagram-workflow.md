@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-The standalone host now has one source pane beside the drawing, Quiver, or TeX render view. At tablet width, source and properties open from the header; the drawing rail floats over the canvas and scrolls to all tools. The author can select a light or dark appearance. The pinned editor applies the same theme to the canvas, controls, popup, and inspector.
+The standalone host has one source pane on the left beside the drawing, Quiver, or TeX render view at desktop and tablet widths. Properties opens a popup over the drawing; it does not reserve a third column. The drawing rail floats over the canvas and scrolls to all tools. The author can select a light or dark appearance. The pinned editor applies the same theme to the canvas, controls, popup, and inspector.
 
 The drawing canvas keeps the pen tool selected when a finger pans the page. A browser touch gesture moved the canvas from `translate(53.4035px, 44px)` to `translate(125.404px, 74px)` while the TikZ source remained byte-for-byte unchanged. A browser pen gesture drew a line and moved it from `\draw (1.06,2.19) -- (2.45,1.32);` to `\draw (1.4,2.02) -- (2.79,1.15);`. The inspector now uses 14 px fields with 36 px height at tablet width. The existing two-finger pinch controller remains available. A physical pen and touch session is still needed to judge palm contact, grip, and target comfort.
 

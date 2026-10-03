@@ -11,18 +11,14 @@
           <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
         </div>
       </details>
-      <button type="button" :aria-pressed="sourceOpen" @click="toggleSource">
-        {{ sourceOpen ? 'Hide code' : 'Show code' }}
-      </button>
       <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
         {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
       </button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
     </header>
-    <main v-if="document !== null && target !== null" :class="{ 'with-source': sourceOpen }">
+    <main v-if="document !== null && target !== null">
       <SourceEditor
-        v-show="sourceOpen"
         class="tikz-standalone-source"
         :source="source"
         :theme="theme"
@@ -36,6 +32,7 @@
         :theme="theme"
         :show-inspector="inspectorOpen"
         :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
+        @inspector-closed="inspectorOpen = false"
       />
     </main>
     <pre v-else-if="loadError !== ''" class="tikz-standalone-error" role="alert">{{ loadError }}</pre>
@@ -70,7 +67,6 @@ const source = ref("");
 const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
-const sourceOpen = ref(window.innerWidth > 900);
 const inspectorOpen = ref(false);
 const theme = ref<TikzWorkbenchTheme>(
   window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
@@ -245,14 +241,8 @@ function toggleTheme(): void {
   window.localStorage.setItem("visual-tikz-editor:theme", theme.value);
 }
 
-function toggleSource(): void {
-  sourceOpen.value = !sourceOpen.value;
-  if (sourceOpen.value && window.innerWidth <= 900) inspectorOpen.value = false;
-}
-
 function toggleInspector(): void {
   inspectorOpen.value = !inspectorOpen.value;
-  if (inspectorOpen.value && window.innerWidth <= 900) sourceOpen.value = false;
 }
 
 onMounted(() => {
@@ -384,11 +374,7 @@ main {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-main.with-source {
-  grid-template-columns: minmax(240px, 35%) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 40%) minmax(0, 1fr);
 }
 
 .tikz-standalone-source {
@@ -423,19 +409,7 @@ main.with-source {
   }
 
   main {
-    position: relative;
-  }
-
-  main.with-source {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  main.with-source .tikz-standalone-source {
-    position: absolute;
-    inset: 0 auto 0 0;
-    z-index: 10;
-    width: min(75vw, 440px);
-    box-shadow: 5px 0 20px color-mix(in srgb, var(--ink) 20%, transparent);
+    grid-template-columns: minmax(220px, 42%) minmax(0, 1fr);
   }
 }
 </style>
