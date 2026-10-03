@@ -5,10 +5,19 @@ html,body,#root{margin:0;width:100%;height:100%;overflow:hidden}#root{display:fl
 #root [role="menubar"] { min-height: 48px; padding: 2px 8px; background: #eef0ea; }
 #root [role="menubar"] button { min-height: 44px; padding-inline: 12px; font-size: 14px; }
 #root [data-testid="tab-strip"] { display: none; }
-#root > div > [data-tauri-drag-region][data-select="chrome"] { position: absolute; z-index: 20; top: 88px; left: 12px; right: 12px; width: auto; min-height: 56px; padding: 5px 8px; overflow-x: auto; overflow-y: hidden; border: 1px solid #c9cdc6; border-radius: 14px; background: #eef0ea; box-shadow: 0 5px 16px #1c243026; scrollbar-width: none; }
-#root > div > [data-tauri-drag-region][data-select="chrome"]::-webkit-scrollbar { display: none; }
-#root > div > [data-tauri-drag-region] > span, #root > div > [data-tauri-drag-region] > div:nth-child(2) { display: none; }
+#root > div > [data-diagram-tools] { position: absolute; z-index: 20; top: 88px; left: 12px; right: 12px; display: flex; align-items: center; min-height: 56px; border: 1px solid #c9cdc6; border-radius: 14px; background: #eef0ea; box-shadow: 0 5px 16px #1c243026; }
+#root [data-diagram-tools] > [data-tauri-drag-region] { min-width: 0; flex: 1 1 auto; overflow-x: auto; overflow-y: hidden; border: 0; background: transparent; scrollbar-width: none; }
+#root [data-diagram-tools] > [data-tauri-drag-region]::-webkit-scrollbar { display: none; }
+#root [data-diagram-tools] > button { flex: 0 0 44px; width: 44px; height: 52px; border: 0; border-radius: 12px; color: #9e2a2b; background: transparent; font: 28px/1 system-ui,sans-serif; cursor: pointer; }
+#root [data-diagram-tools] > button:hover, #root [data-diagram-tools] > button:focus-visible { background: #9e2a2b1f; outline: 2px solid #9e2a2b; outline-offset: -2px; }
+#root [data-diagram-tools] > [data-tauri-drag-region] > span, #root [data-diagram-tools] > [data-tauri-drag-region] > div:nth-child(2) { display: none; }
 #root [data-tauri-drag-region] button { min-width: 44px; min-height: 44px; border-radius: 10px; }
 #root [data-tauri-drag-region] button[class*="btnActive"] { color: #fff; background: #9e2a2b; }
 #root [data-tauri-drag-region] button:focus-visible, #root [role="menubar"] button:focus-visible { outline: 2px solid #9e2a2b; outline-offset: 2px; }
-html[data-color-scheme="dark"] #root [role="menubar"], html[data-color-scheme="dark"] #root > div > [data-tauri-drag-region][data-select="chrome"] { border-color: #4f5863; background: #313b45; }
+html[data-color-scheme="dark"] #root [role="menubar"], html[data-color-scheme="dark"] #root > div > [data-diagram-tools] { border-color: #4f5863; background: #313b45; }
+#root .flexlayout__tabset:has(.flexlayout__tab_button) .flexlayout__tabset_tabbar_outer { height: 42px !important; min-height: 42px !important; }
+#root .flexlayout__tabset:has(.flexlayout__tab_button) .flexlayout__tab_button { display: inline-flex; align-items: center; min-height: 40px; padding-inline: 10px !important; font-size: 14px !important; }
+#root .flexlayout__tabset:has(.flexlayout__tab_button) .flexlayout__tabset_content { font-size: 14px; }
+#root .flexlayout__tabset:has(.flexlayout__tab_button) input,
+#root .flexlayout__tabset:has(.flexlayout__tab_button) select,
+#root .flexlayout__tabset:has(.flexlayout__tab_button) button { min-height: 36px; font-size: 14px; }

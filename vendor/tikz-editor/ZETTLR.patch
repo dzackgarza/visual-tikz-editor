@@ -392,7 +392,7 @@ index 4d4cfa9..b5595dc 100644
    const replacer = (_key: string, current: unknown): unknown => {
      if (current instanceof Map) {
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb..ffa933e 100644
+index ba28ddb..7e0a7af 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
 @@ -91,6 +91,7 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
@@ -412,6 +412,15 @@ index ba28ddb..ffa933e 100644
      global: {
        tabEnableClose: true,
        tabEnableRename: false,
+@@ -135,7 +136,7 @@ function buildDefaultLayout(): IJsonModel {
+         },
+         {
+           type: "tabset",
+-          weight: 20,
++          weight: embedded ? 30 : 20,
+           id: "right-tabset",
+           enableDeleteWhenEmpty: false,
+           children: rightTabs,
 @@ -143,6 +144,10 @@ function buildDefaultLayout(): IJsonModel {
        ],
      },
@@ -479,6 +488,49 @@ index 681cb41..1de10d5 100644
      case "addArrow":
      case "addBezier":
        return snapHint;
+diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
+index a3293df..715a554 100644
+--- a/packages/app/src/ui/Toolbar.tsx
++++ b/packages/app/src/ui/Toolbar.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useMemo, useState } from "react";
++import { useEffect, useMemo, useRef, useState } from "react";
+ import { RiDownloadCloudLine } from "@remixicon/react";
+ import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
+ import { useEditorStore } from "../store/store";
+@@ -56,6 +56,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+     typeof navigator !== "undefined" &&
+     /(mac|iphone|ipad)/i.test(navigator.platform);
+   const showAppTitle = !isDesktop;
++  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
++  const toolbarRef = useRef<HTMLDivElement>(null);
+ 
+   // Close popup when tool mode changes (unless it's a popup that can be used independently)
+   useEffect(() => {
+@@ -342,8 +344,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+     );
+   };
+ 
+-  return (
+-    <div className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome">
++  const toolbar = (
++    <div ref={toolbarRef} className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome">
+       {showAppTitle ? (
+         <>
+           <span className={css.title}>
+@@ -387,4 +389,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+       ) : null}
+     </div>
+   );
++  if (!embedded) return toolbar;
++  return (
++    <div data-diagram-tools>
++      <button type="button" aria-label="Scroll tools left" onClick={() => toolbarRef.current?.scrollBy({ left: -320, behavior: "smooth" })}>‹</button>
++      {toolbar}
++      <button type="button" aria-label="Scroll tools right" onClick={() => toolbarRef.current?.scrollBy({ left: 320, behavior: "smooth" })}>›</button>
++    </div>
++  );
+ }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.module.css b/packages/app/src/ui/ToolbarToolPopup.module.css
 index b12fedb..d4f1f6b 100644
 --- a/packages/app/src/ui/ToolbarToolPopup.module.css
