@@ -1,5 +1,5 @@
 diff --git a/apps/landing/scripts/generate-tool-svgs.mts b/apps/landing/scripts/generate-tool-svgs.mts
-index 4b04e6f0..5d645412 100644
+index 4b04e6f..5d64541 100644
 --- a/apps/landing/scripts/generate-tool-svgs.mts
 +++ b/apps/landing/scripts/generate-tool-svgs.mts
 @@ -158,6 +158,18 @@ const previews: readonly ToolPreview[] = [
@@ -22,7 +22,7 @@ index 4b04e6f0..5d645412 100644
      mode: "addBucket",
      source: String.raw`\draw[fill=green!18, draw=black] (-1,-0.25) rectangle (1,0.25);`
 diff --git a/apps/landing/src/App.tsx b/apps/landing/src/App.tsx
-index ac3169df..d3c1b601 100644
+index ac3169d..d3c1b60 100644
 --- a/apps/landing/src/App.tsx
 +++ b/apps/landing/src/App.tsx
 @@ -177,6 +177,15 @@ const TOOL_COPY: Record<ToolPreviewMode, { name?: string; description: ReactNode
@@ -42,7 +42,7 @@ index ac3169df..d3c1b601 100644
      description: "Apply a fill color to an existing closed region."
    }
 diff --git a/apps/landing/src/generated/tool-svgs.ts b/apps/landing/src/generated/tool-svgs.ts
-index 9dde7f6e..566e2d80 100644
+index 9dde7f6..566e2d8 100644
 --- a/apps/landing/src/generated/tool-svgs.ts
 +++ b/apps/landing/src/generated/tool-svgs.ts
 @@ -44,6 +44,15 @@ export const LANDING_TOOL_SVGS = {
@@ -61,8 +61,20 @@ index 9dde7f6e..566e2d80 100644
    "addBucket": {
      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-32.6095 -10.8019 65.2189 21.6038\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M -28.4528 7.1132 M -28.4528 7.1132 L 28.4528 7.1132 L 28.4528 -7.1132 L -28.4528 -7.1132 Z\" stroke=\"#000000\" fill=\"#d1ffd1\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactSelectionOverlay\"><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.2562\" points=\"-28.4528,-7.1132 28.4528,-7.1132 28.4528,7.1132 -28.4528,7.1132\" /></g><g class=\"landingExactHandleOverlay\"><rect x=\"-29.2098\" y=\"-7.8702\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"27.6958\" y=\"-7.8702\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"27.6958\" y=\"6.3562\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"-29.2098\" y=\"6.3562\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /></g></svg>"
    }
+diff --git a/packages/app/package.json b/packages/app/package.json
+index f20fa9c..9d4f0e0 100644
+--- a/packages/app/package.json
++++ b/packages/app/package.json
+@@ -57,6 +57,7 @@
+     "jspdf": "^4.2.0",
+     "keynote-clipboard": "^1.2.0",
+     "mathlive": "^0.107.1",
++    "paper": "^0.12.18",
+     "pptx2tikz": "^1.3.0",
+     "react": "^19.0.0",
+     "react-dom": "^19.0.0",
 diff --git a/packages/app/src/app-menu/default-menu.ts b/packages/app/src/app-menu/default-menu.ts
-index 59fab7a8..8cc20ff6 100644
+index 59fab7a..8cc20ff 100644
 --- a/packages/app/src/app-menu/default-menu.ts
 +++ b/packages/app/src/app-menu/default-menu.ts
 @@ -112,7 +112,8 @@ export const APP_MENU_DEFINITION = [
@@ -76,7 +88,7 @@ index 59fab7a8..8cc20ff6 100644
        { kind: "separator" },
        {
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6e..186e4624 100644
+index e0845d6..8c63017 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
 @@ -33,12 +33,6 @@ const DEFAULT_ADD_MATRIX_ROWS = 2;
@@ -92,7 +104,15 @@ index e0845d6e..186e4624 100644
  
  function initialUiState(): WorkspaceEphemeralState {
    return {
-@@ -107,63 +101,7 @@ function prependDeveloperLog(
+@@ -100,6 +94,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
+     case "align": return "Aligned elements";
+     case "distribute": return "Distributed elements";
+     case "flatten-foreach": return "Flattened foreach";
++    case "freehand-fit": return "Fitted freehand stroke";
+   }
+ }
+ 
+@@ -107,63 +102,7 @@ function prependDeveloperLog(
    logs: WorkspaceEphemeralState["developerLogs"],
    entry: WorkspaceEphemeralState["developerLogs"][number]
  ): WorkspaceEphemeralState["developerLogs"] {
@@ -157,8 +177,53 @@ index e0845d6e..186e4624 100644
  }
  
  function applyEditWarningToDocument(doc: DocumentSession, message: string | null): DocumentSession {
+@@ -934,6 +873,44 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+       break;
+     }
+ 
++    case "REPLACE_FREEHAND_RESULT": {
++      const doc = readDocument(workspace.documents, activeId);
++      if (!doc || doc.assistantLockReason || doc.sourceRevision !== action.expectedSourceRevision) {
++        return state;
++      }
++      const index = doc.source.lastIndexOf(action.before);
++      if (index < 0 || action.before === action.after) {
++        return state;
++      }
++      const nextSource = doc.source.slice(0, index) + action.after + doc.source.slice(index + action.before.length);
++      const truncated = doc.history.slice(0, doc.historyIndex + 1);
++      const entry: HistoryEntry = {
++        kind: "freehand-fit",
++        label: actionLabel("freehand-fit"),
++        forward: [],
++        backward: [],
++        sourceBefore: doc.source,
++        sourceAfter: nextSource,
++        selectedElementIdsBefore: [...doc.selectedElementIds],
++        selectedElementIdsAfter: [...doc.selectedElementIds]
++      };
++      workspace = updateDocument(workspace, activeId, (current) => ({
++        ...current,
++        source: nextSource,
++        sourceRevision: current.sourceRevision + 1,
++        lastEditChangedSourceIds: null,
++        lastEditChangeToken: current.lastEditChangeToken + 1,
++        lastEditPatches: null,
++        lastEditPatchBaseRevision: null,
++        lastEditWarningMessage: null,
++        history: [...truncated, entry],
++        historyIndex: truncated.length,
++        activeHandleId: null,
++        dirty: nextSource !== current.savedSource
++      }));
++      break;
++    }
++
+     case "SET_SOURCE_TRANSIENT": {
+       const documentId = activeDocumentIdFromAction(state, action.documentId);
+       workspace = updateDocument(workspace, documentId, (doc) => {
 diff --git a/packages/app/src/store/types.ts b/packages/app/src/store/types.ts
-index 450957d0..ff2ba523 100644
+index 450957d..7bcc7a2 100644
 --- a/packages/app/src/store/types.ts
 +++ b/packages/app/src/store/types.ts
 @@ -14,6 +14,8 @@ export type ToolMode =
@@ -178,8 +243,31 @@ index 450957d0..ff2ba523 100644
    | "addArrow"
    | "addBezier";
  export type CanvasDragKind = "element" | "resize" | "rotate" | "handle" | "pan" | "marquee" | "tool-create";
+@@ -81,7 +84,8 @@ export type HistoryEntry = {
+     | "reorder"
+     | "align"
+     | "distribute"
+-    | "flatten-foreach";
++    | "flatten-foreach"
++    | "freehand-fit";
+   label: string;
+   /** Optional key used to coalesce drag updates into one undo step. */
+   mergeKey?: string;
+@@ -354,6 +358,12 @@ export type EditorAction =
+       source: string;
+       changedSourceIds?: string[] | null;
+     }
++  | {
++      type: "REPLACE_FREEHAND_RESULT";
++      before: string;
++      after: string;
++      expectedSourceRevision: number;
++    }
+   | { type: "COMPUTE_REQUESTED"; requestId: string; documentId?: string }
+   | { type: "SNAPSHOT_READY"; requestId: string; snapshot: SessionSnapshot; documentId?: string }
+   | { type: "REORDER_TABS"; fromId: string; toId: string }
 diff --git a/packages/app/src/ui/DevPanel.tsx b/packages/app/src/ui/DevPanel.tsx
-index 4d4cfa95..b5595dc3 100644
+index 4d4cfa9..b5595dc 100644
 --- a/packages/app/src/ui/DevPanel.tsx
 +++ b/packages/app/src/ui/DevPanel.tsx
 @@ -18,7 +18,6 @@ type DiagnosticRow = Diagnostic & {
@@ -303,8 +391,53 @@ index 4d4cfa95..b5595dc3 100644
  function stringifyDebug(value: unknown): string {
    const replacer = (_key: string, current: unknown): unknown => {
      if (current instanceof Map) {
+diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
+index ba28ddb..ffa933e 100644
+--- a/packages/app/src/ui/DockLayout.tsx
++++ b/packages/app/src/ui/DockLayout.tsx
+@@ -91,6 +91,7 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
+ }
+ 
+ function buildDefaultLayout(): IJsonModel {
++  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
+   const rightTabs: Array<{ type: "tab"; id: string; name: string; component: string; enableClose?: boolean }> = [
+     { type: "tab", id: PANEL_IDS.inspector, name: "Inspector", component: "inspector" },
+     { type: "tab", id: PANEL_IDS.objects, name: "Objects", component: "objects" },
+@@ -100,7 +101,7 @@ function buildDefaultLayout(): IJsonModel {
+     rightTabs.push({ type: "tab", id: PANEL_IDS.assistant, name: "Assistant", component: "assistant" });
+   }
+ 
+-  return {
++  const layout: IJsonModel = {
+     global: {
+       tabEnableClose: true,
+       tabEnableRename: false,
+@@ -143,6 +144,10 @@ function buildDefaultLayout(): IJsonModel {
+       ],
+     },
+   };
++  if (embedded) {
++    layout.layout.children.shift();
++  }
++  return layout;
+ }
+ 
+ /** Strip assistant tabs if assistant is not available on this platform,
+@@ -396,7 +401,11 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
+ 
+ function createInitialModel(): Model {
+   const persisted = loadDockLayout();
+-  const json = persisted ? sanitizeLayout(persisted) : buildDefaultLayout();
++  const json = persisted
++    ? sanitizeLayout(persisted)
++    : getActiveEditorPlatform().id === "zettlr-embed"
++      ? buildCanvasOnlyLayout()
++      : buildDefaultLayout();
+   try {
+     return Model.fromJson(json);
+   } catch {
 diff --git a/packages/app/src/ui/SettingsModal.tsx b/packages/app/src/ui/SettingsModal.tsx
-index e849b257..134cf65d 100644
+index e849b25..134cf65 100644
 --- a/packages/app/src/ui/SettingsModal.tsx
 +++ b/packages/app/src/ui/SettingsModal.tsx
 @@ -7,17 +7,7 @@ import css from "./SettingsModal.module.css";
@@ -327,7 +460,7 @@ index e849b257..134cf65d 100644
  
  const CATEGORIES: { id: CategoryId; label: string }[] = [
 diff --git a/packages/app/src/ui/StatusBar.tsx b/packages/app/src/ui/StatusBar.tsx
-index 681cb41c..1de10d51 100644
+index 681cb41..1de10d5 100644
 --- a/packages/app/src/ui/StatusBar.tsx
 +++ b/packages/app/src/ui/StatusBar.tsx
 @@ -309,12 +309,15 @@ function resolveToolCreateModifierHint(toolMode: ToolMode, keys: ModifierKeyLabe
@@ -346,11 +479,159 @@ index 681cb41c..1de10d51 100644
      case "addArrow":
      case "addBezier":
        return snapHint;
+diff --git a/packages/app/src/ui/ToolbarToolPopup.module.css b/packages/app/src/ui/ToolbarToolPopup.module.css
+index b12fedb..d4f1f6b 100644
+--- a/packages/app/src/ui/ToolbarToolPopup.module.css
++++ b/packages/app/src/ui/ToolbarToolPopup.module.css
+@@ -11,7 +11,7 @@
+   min-width: 170px;
+   padding: 8px;
+   border: 1px solid var(--border);
+-  border-radius: 4px;
++  border-radius: 12px;
+   background: var(--bg-pane);
+   box-shadow: 0 6px 16px color-mix(in srgb, black 24%, transparent);
+ }
+@@ -35,10 +35,10 @@
+ }
+ 
+ .matrixPickerCell {
+-  width: 20px;
+-  height: 20px;
++  width: 44px;
++  height: 44px;
+   border: 1px solid var(--border);
+-  border-radius: 2px;
++  border-radius: 6px;
+   background: color-mix(in srgb, var(--bg-pane) 82%, var(--bg-app));
+   cursor: pointer;
+   padding: 0;
+@@ -63,7 +63,7 @@
+ }
+ 
+ .sectionTitle {
+-  font-size: calc(var(--app-ui-scale, 1) * 11px);
++  font-size: calc(var(--app-ui-scale, 1) * 14px);
+   color: var(--text-faint);
+ }
+ 
+@@ -75,15 +75,15 @@
+ 
+ .choiceButton {
+   width: 100%;
+-  min-height: 24px;
++  min-height: 44px;
+   display: flex;
+   align-items: center;
+   border: 1px solid transparent;
+-  border-radius: 2px;
++  border-radius: 8px;
+   background: transparent;
+   color: var(--text);
+   font-family: inherit;
+-  font-size: calc(var(--app-ui-scale, 1) * 11px);
++  font-size: calc(var(--app-ui-scale, 1) * 14px);
+   text-align: left;
+   cursor: pointer;
+   padding: 2px 6px;
+@@ -159,7 +159,7 @@
+ }
+ 
+ .visualChoiceLabel {
+-  font-size: calc(var(--app-ui-scale, 1) * 10px);
++  font-size: calc(var(--app-ui-scale, 1) * 12px);
+   line-height: 1.2;
+   text-align: center;
+ }
+diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
+index 8aeb413..baa3a6f 100644
+--- a/packages/app/src/ui/ToolbarToolPopup.tsx
++++ b/packages/app/src/ui/ToolbarToolPopup.tsx
+@@ -1,4 +1,5 @@
+-import { useEffect, useRef, type ReactNode } from "react";
++import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
++import { createPortal } from "react-dom";
+ import css from "./ToolbarToolPopup.module.css";
+ 
+ export function ToolbarToolPopup({
+@@ -17,6 +18,28 @@ export function ToolbarToolPopup({
+   popupClassName?: string;
+ }) {
+   const rootRef = useRef<HTMLDivElement | null>(null);
++  const popupRef = useRef<HTMLDivElement | null>(null);
++  const [popupPosition, setPopupPosition] = useState({ left: 0, top: 0 });
++
++  useLayoutEffect(() => {
++    if (!open) return;
++    function positionPopup(): void {
++      const anchor = rootRef.current?.getBoundingClientRect();
++      const popup = popupRef.current;
++      if (!anchor || !popup) return;
++      setPopupPosition({
++        left: Math.max(8, Math.min(anchor.left, window.innerWidth - popup.offsetWidth - 8)),
++        top: anchor.bottom + 4
++      });
++    }
++    positionPopup();
++    window.addEventListener("resize", positionPopup);
++    window.addEventListener("scroll", positionPopup, true);
++    return () => {
++      window.removeEventListener("resize", positionPopup);
++      window.removeEventListener("scroll", positionPopup, true);
++    };
++  }, [open]);
+ 
+   useEffect(() => {
+     if (!open) {
+@@ -28,7 +51,7 @@ export function ToolbarToolPopup({
+       if (!target) {
+         return;
+       }
+-      if (!rootRef.current?.contains(target)) {
++      if (!rootRef.current?.contains(target) && !popupRef.current?.contains(target)) {
+         onClose();
+       }
+     }
+@@ -55,15 +78,18 @@ export function ToolbarToolPopup({
+   return (
+     <div className={css.root} ref={rootRef}>
+       {children}
+-      {open ? (
++      {open ? createPortal(
+         <div
++          ref={popupRef}
+           className={[css.popup, popupClassName ?? ""].filter(Boolean).join(" ")}
+           role="dialog"
+           aria-label="Tool options"
+           data-testid={popupTestId}
++          style={{ position: "fixed", ...popupPosition, maxHeight: `calc(100dvh - ${popupPosition.top + 8}px)`, overflowY: "auto" }}
+         >
+           {popup}
+-        </div>
++        </div>,
++        document.body
+       ) : null}
+     </div>
+   );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..ca33536a 100644
+index 4e22ccf..2f22f83 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-@@ -119,6 +119,7 @@ type SnapDebugPoint
+@@ -67,8 +67,12 @@ import { CanvasPanelView } from "./CanvasPanelView";
+ import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
+ import {
+ appendFreehandToolPoint,
+-generateFreehandToolSource
++interpretFreehandToolSource,
++FREEHAND_SMOOTHING_MIN_PX,
++FREEHAND_SMOOTHING_MAX_PX,
++type FreehandInterpretation
+ } from "./freehand-tool";
++import freehandPopupCss from "./FreehandResultPopup.module.css";
+ import {
+ clamp,
+ clientToSvgPoint,
+@@ -119,6 +123,7 @@ type SnapDebugPoint
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -358,7 +639,37 @@ index 4e22ccfa..ca33536a 100644
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
-@@ -917,6 +918,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -757,6 +762,18 @@ function computeAutoScaleForImportedTikz(
+   return formatScopeScale(clampedScale);
+ }
+ 
++type FreehandResultOffer = {
++  draft: FreehandToolDraft;
++  interpretation: FreehandInterpretation;
++  current: "simplified" | "raw";
++  tolerancePx: number;
++  zoom: number;
++  strokeColor: string;
++  sourceRevision: number;
++  left: number;
++  top: number;
++};
++
+ export const CanvasPanel = memo(function CanvasPanel({
+   repeatPreviewModel = null
+ }: {
+@@ -913,10 +930,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+   const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
+   const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
+   const [freehandDraft, setFreehandDraft] = useState<FreehandToolDraft | null>(null);
++  const [freehandResultOffer, setFreehandResultOffer] = useState<FreehandResultOffer | null>(null);
++
++  useEffect(() => {
++    setFreehandResultOffer((offer) =>
++      offer && offer.sourceRevision !== sourceRevision ? null : offer
++    );
++  }, [sourceRevision]);
+   const [pathSegmentDraft, setPathSegmentDraft] = useState<Extract<DragState, { kind: "tool-path-segment" }> | null>(null);
    const [toolDraft, setToolDraft] = useState<Extract<DragState, { kind: "tool-create" }> | null>(null);
    const [bezierBendDraft, setBezierBendDraft] = useState<Extract<DragState, { kind: "tool-bezier-bend" }> | null>(null);
    const [pendingBezier, setPendingBezier] = useState<PendingBezier | null>(null);
@@ -366,7 +677,7 @@ index 4e22ccfa..ca33536a 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -1866,6 +1868,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1866,6 +1891,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      pathDraft,
      pathSegmentDraft,
      pendingBezier,
@@ -374,7 +685,102 @@ index 4e22ccfa..ca33536a 100644
      bezierBendDraft,
      canvasTransform
    });
-@@ -3226,6 +3229,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2090,10 +2116,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+       return;
+     }
+ 
+-    const snippet = generateFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
++    const interpretation = interpretFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
+       strokeColor: creationStrokeColor
+     });
+-    if (snippet) {
++    if (interpretation) {
+       const firstPoint = draft.points[0];
+       const lastPoint = draft.points[draft.points.length - 1];
+       queueSelectionForAddedElement(
+@@ -2104,11 +2130,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+       );
+       const ok = applyActionWithFeedback({
+         kind: "pasteStatements",
+-        snippets: [snippet],
++        snippets: [interpretation.rawSource],
+         delta: makeWorldPoint(pt(0), pt(0))
+       });
+       if (!ok.sourceChanged) {
+         pendingAddedSelectionRef.current = null;
++      } else if (interpretation.source !== interpretation.rawSource) {
++        dispatch({
++          type: "REPLACE_FREEHAND_RESULT",
++          before: interpretation.rawSource,
++          after: interpretation.source,
++          expectedSourceRevision: useEditorStore.getState().sourceRevision
++        });
++        const viewport = viewportRef.current?.getBoundingClientRect();
++        const svgPoint = svgResult ? worldToSvgPoint(lastPoint, svgResult.viewBox) : null;
++        const left = viewport && svgPoint && svgResult
++          ? viewport.left + canvasTransform.translateX + (svgPoint.x - svgResult.viewBox.x) * canvasTransform.scale
++          : window.innerWidth / 2;
++        const top = viewport && svgPoint && svgResult
++          ? viewport.top + canvasTransform.translateY + (svgPoint.y - svgResult.viewBox.y) * canvasTransform.scale
++          : window.innerHeight / 2;
++        setFreehandResultOffer({
++          draft,
++          interpretation,
++          current: "simplified",
++          tolerancePx: freehandSmoothingPx,
++          zoom: canvasTransform.scale,
++          strokeColor: creationStrokeColor,
++          sourceRevision: useEditorStore.getState().sourceRevision,
++          left: clamp(left + 12, 12, Math.max(12, window.innerWidth - 280)),
++          top: clamp(top + 12, 12, Math.max(12, window.innerHeight - 180))
++        });
+       }
+     } else {
+       pendingAddedSelectionRef.current = null;
+@@ -2117,7 +2169,41 @@ export const CanvasPanel = memo(function CanvasPanel({
+     setFreehandDraft(null);
+     setToolCursorWorld(null);
+     dispatch({ type: "SET_TOOL_MODE", mode: "select" });
+-  }, [applyActionWithFeedback, canvasTransform.scale, creationStrokeColor, dispatch, freehandSmoothingPx, queueSelectionForAddedElement, setDragState]);
++  }, [applyActionWithFeedback, canvasTransform, creationStrokeColor, dispatch, freehandSmoothingPx, queueSelectionForAddedElement, setDragState, svgResult]);
++
++  const chooseFreehandResult = useCallback((variant: "raw" | "simplified") => {
++    const offer = freehandResultOffer;
++    if (!offer) return;
++    if (useEditorStore.getState().sourceRevision !== offer.sourceRevision) {
++      setFreehandResultOffer(null);
++      return;
++    }
++    const nextInterpretation = variant === "simplified"
++      ? interpretFreehandToolSource(offer.draft, offer.zoom, offer.tolerancePx, { strokeColor: offer.strokeColor })
++      : offer.interpretation;
++    if (!nextInterpretation) return;
++    const snippet = variant === "raw" ? offer.interpretation.rawSource : nextInterpretation.source;
++    const currentSnippet = offer.current === "raw" ? offer.interpretation.rawSource : offer.interpretation.source;
++    if (snippet === currentSnippet) return;
++    dispatch({
++      type: "REPLACE_FREEHAND_RESULT",
++      before: currentSnippet,
++      after: snippet,
++      expectedSourceRevision: offer.sourceRevision
++    });
++    const nextState = useEditorStore.getState();
++    if (!nextState.source.includes(snippet)) {
++      setFreehandResultOffer(null);
++      setWarning("Could not replace the freehand stroke.");
++      return;
++    }
++    setFreehandResultOffer({
++      ...offer,
++      interpretation: nextInterpretation,
++      current: variant,
++      sourceRevision: nextState.sourceRevision
++    });
++  }, [dispatch, freehandResultOffer]);
+ 
+   const finalizePathDraft = useCallback(
+     (closed: boolean) => {
+@@ -3226,6 +3312,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      canvasTransform,
      interactionSvgRef,
      pendingBezier,
@@ -383,8 +789,258 @@ index 4e22ccfa..ca33536a 100644
      snapshot,
      source,
      setWarning,
+@@ -3974,6 +4062,40 @@ export const CanvasPanel = memo(function CanvasPanel({
+         magnifierState={magnifierState}
+         RULER_SIZE={RULER_SIZE}
+       />
++      {freehandResultOffer ? (
++        <div
++          className={freehandPopupCss.popup}
++          role="dialog"
++          aria-label="Freehand result"
++          style={{ left: freehandResultOffer.left, top: freehandResultOffer.top }}
++          onPointerDown={(event) => { event.stopPropagation(); }}
++        >
++          <strong>{freehandResultOffer.interpretation.kind === "curve"
++            ? "Simplified curve"
++            : `${freehandResultOffer.interpretation.kind} recognized`}</strong>
++          <label>
++            Fit strength
++            <input
++              type="range"
++              min={FREEHAND_SMOOTHING_MIN_PX}
++              max={FREEHAND_SMOOTHING_MAX_PX}
++              value={freehandResultOffer.tolerancePx}
++              onChange={(event) => {
++                const tolerancePx = Number(event.currentTarget.value);
++                setFreehandResultOffer((offer) => offer ? { ...offer, tolerancePx } : null);
++              }}
++            />
++            <span>{freehandResultOffer.tolerancePx} px</span>
++          </label>
++          <div className={freehandPopupCss.actions}>
++            {freehandResultOffer.current === "simplified" ? (
++              <button type="button" onClick={() => { chooseFreehandResult("raw"); }}>Restore stroke</button>
++            ) : null}
++            <button type="button" onClick={() => { chooseFreehandResult("simplified"); }}>Reapply fit</button>
++            <button type="button" onClick={() => { setFreehandResultOffer(null); }}>Keep</button>
++          </div>
++        </div>
++      ) : null}
+       {equationModalTarget ? (
+         <Suspense fallback={null}>
+           <EquationModal
+diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
+new file mode 100644
+index 0000000..6e67f79
+--- /dev/null
++++ b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
+@@ -0,0 +1,54 @@
++.popup {
++  position: fixed;
++  z-index: 200;
++  display: grid;
++  gap: 10px;
++  width: 268px;
++  max-width: calc(100vw - 24px);
++  padding: 12px;
++  border: 1px solid var(--border);
++  border-radius: 12px;
++  color: var(--text);
++  background: var(--bg-pane);
++  box-shadow: 0 8px 24px color-mix(in srgb, black 25%, transparent);
++  font-size: 14px;
++}
++
++.popup strong {
++  text-transform: capitalize;
++}
++
++.popup label {
++  display: grid;
++  grid-template-columns: 1fr auto;
++  align-items: center;
++  gap: 6px;
++}
++
++.popup input {
++  grid-column: 1 / -1;
++  width: 100%;
++  accent-color: #9e2a2b;
++}
++
++.actions {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
++
++.actions button {
++  min-height: 44px;
++  padding: 4px 10px;
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  background: var(--bg-app);
++  color: var(--text);
++  font: inherit;
++  cursor: pointer;
++}
++
++.actions button:focus-visible {
++  outline: 2px solid #9e2a2b;
++  outline-offset: 2px;
++}
+diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
+index a7b0a7e..771c37c 100644
+--- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
++++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
+@@ -2,6 +2,7 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
+ import { pt, worldPoint } from "tikz-editor/coords/index";
+ import { buildDrawOptions } from "tikz-editor/edit/element-templates";
+ import type { WorldPoint } from "../coords/types";
++import paper from "paper";
+ 
+ const MIN_WORLD_DISTANCE_PT = 1e-3;
+ 
+@@ -22,6 +23,22 @@ export type FreehandBezierSegment = {
+   to: WorldPoint;
+ };
+ 
++export type FreehandInterpretation = {
++  source: string;
++  rawSource: string;
++  kind: "line" | "circle" | "ellipse" | "curve" | "raw";
++};
++
++let paperScope: paper.PaperScope | null = null;
++
++function getPaperScope(): paper.PaperScope {
++  if (!paperScope) {
++    paperScope = new paper.PaperScope();
++    paperScope.setup(new paperScope.Size(1, 1));
++  }
++  return paperScope;
++}
++
+ export function createFreehandToolDraft(startWorld: WorldPoint, zoom: number): FreehandToolDraft {
+   return {
+     points: [startWorld],
+@@ -164,6 +181,113 @@ export function generateFreehandToolSource(
+   return `\\draw${drawOptions} ${parts.join(" ")};`;
+ }
+ 
++export function interpretFreehandToolSource(
++  draft: FreehandToolDraft,
++  zoom: number,
++  smoothingTolerancePx = FREEHAND_SMOOTHING_DEFAULT_PX,
++  options: { strokeColor?: string } = {}
++): FreehandInterpretation | null {
++  const rawSource = generateFreehandToolSource(draft, zoom, smoothingTolerancePx, options);
++  if (!rawSource) return null;
++  const points = draft.points;
++  const toleranceWorld = clampSmoothingTolerancePx(smoothingTolerancePx) / Math.max(zoom, 1e-3);
++  const drawOptions = buildDrawOptions(options.strokeColor, undefined, false);
++  const first = points[0];
++  const last = points[points.length - 1];
++  const span = Math.sqrt(distanceSquared(first, last));
++  const length = polylineLength(points);
++
++  if (span > 20 / zoom && length < span * 1.2) {
++    let maxLineError = 0;
++    for (const point of points) {
++      maxLineError = Math.max(maxLineError,
++        Math.abs((last.x - first.x) * (first.y - point.y) - (first.x - point.x) * (last.y - first.y)) / span);
++    }
++    if (maxLineError <= Math.min(5, smoothingTolerancePx / 2) / zoom) {
++      return {
++        source: `\\draw${drawOptions} ${formatPointCm(first)} -- ${formatPointCm(last)};`,
++        rawSource,
++        kind: "line"
++      };
++    }
++  }
++
++  // Shapeit uses closure and radial-distance gates for rough circles. Here the
++  // same checks guard an axis-aligned ellipse candidate before TikZ emission.
++  let minX = Infinity;
++  let maxX = -Infinity;
++  let minY = Infinity;
++  let maxY = -Infinity;
++  for (const point of points) {
++    minX = Math.min(minX, point.x);
++    maxX = Math.max(maxX, point.x);
++    minY = Math.min(minY, point.y);
++    maxY = Math.max(maxY, point.y);
++  }
++  const cx = (minX + maxX) / 2;
++  const cy = (minY + maxY) / 2;
++  const rx = (maxX - minX) / 2;
++  const ry = (maxY - minY) / 2;
++  const closurePx = span * zoom;
++  if (rx * zoom > 18 && ry * zoom > 18 && closurePx <= Math.min(48, Math.max(24, length * zoom * 0.1))) {
++    let sweep = 0;
++    let maxErrorPx = 0;
++    for (let i = 0; i < points.length; i += 1) {
++      const point = points[i];
++      const nx = (point.x - cx) / rx;
++      const ny = (point.y - cy) / ry;
++      maxErrorPx = Math.max(maxErrorPx, Math.abs(Math.hypot(nx, ny) - 1) * Math.min(rx, ry) * zoom);
++      if (i > 0) {
++        const before = Math.atan2((points[i - 1].y - cy) / ry, (points[i - 1].x - cx) / rx);
++        const after = Math.atan2(ny, nx);
++        sweep += Math.atan2(Math.sin(after - before), Math.cos(after - before));
++      }
++    }
++    if (Math.abs(sweep) >= 5.2 && Math.abs(sweep) <= 7.2 && maxErrorPx <= Math.min(8, Math.max(3, smoothingTolerancePx * 0.65))) {
++      const center = worldPoint(pt(cx), pt(cy));
++      const circleRadius = (rx + ry) / 2;
++      let circleErrorPx = 0;
++      for (const point of points) {
++        circleErrorPx = Math.max(circleErrorPx,
++          Math.abs(Math.hypot(point.x - cx, point.y - cy) - circleRadius) * zoom);
++      }
++      if (circleErrorPx <= Math.min(8, Math.max(3, smoothingTolerancePx * 0.65))) {
++        return {
++          source: `\\draw${drawOptions} ${formatPointCm(center)} circle (${formatNumber(circleRadius * CM_PER_PT)});`,
++          rawSource,
++          kind: "circle"
++        };
++      }
++      return {
++        source: `\\draw${drawOptions} ${formatPointCm(center)} ellipse (${formatNumber(rx * CM_PER_PT)} and ${formatNumber(ry * CM_PER_PT)});`,
++        rawSource,
++        kind: "ellipse"
++      };
++    }
++  }
++
++  const scope = getPaperScope();
++  const path = new scope.Path({
++    segments: points.map((point) => new scope.Point(point.x, point.y)),
++    insert: false
++  });
++  const fitted = path.simplify(toleranceWorld);
++  if (!fitted || path.curves.length === 0) {
++    path.remove();
++    return { source: rawSource, rawSource, kind: "raw" };
++  }
++  const parts: string[] = [formatPointCm(worldPoint(pt(path.curves[0].point1.x), pt(path.curves[0].point1.y)))];
++  for (const curve of path.curves) {
++    const control1 = curve.point1.add(curve.handle1);
++    const control2 = curve.point2.add(curve.handle2);
++    parts.push(`.. controls ${formatPointCm(worldPoint(pt(control1.x), pt(control1.y)))} and ${formatPointCm(worldPoint(pt(control2.x), pt(control2.y)))} .. ${formatPointCm(worldPoint(pt(curve.point2.x), pt(curve.point2.y)))}`);
++  }
++  path.remove();
++  const source = `\\draw${drawOptions} ${parts.join(" ")};`;
++  if (source.length >= rawSource.length) return { source: rawSource, rawSource, kind: "raw" };
++  return { source, rawSource, kind: "curve" };
++}
++
+ function polylineLength(points: readonly WorldPoint[]): number {
+   let length = 0;
+   for (let i = 1; i < points.length; i += 1) {
 diff --git a/packages/app/src/ui/canvas-panel/types.ts b/packages/app/src/ui/canvas-panel/types.ts
-index dac6b0b3..20eb1bf6 100644
+index dac6b0b..20eb1bf 100644
 --- a/packages/app/src/ui/canvas-panel/types.ts
 +++ b/packages/app/src/ui/canvas-panel/types.ts
 @@ -269,6 +269,8 @@ export type PendingBezier = {
@@ -397,7 +1053,7 @@ index dac6b0b3..20eb1bf6 100644
    elementId: string;
    end: "start" | "end";
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
-index de0ccae2..37c85ebd 100644
+index de0ccae..37c85eb 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 @@ -16,7 +16,7 @@ import {
@@ -464,7 +1120,7 @@ index de0ccae2..37c85ebd 100644
    return {
      toolPreview
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
-index c69a45af..81e67af1 100644
+index c69a45a..81e67af 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
 @@ -445,7 +445,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
@@ -488,7 +1144,7 @@ index c69a45af..81e67af1 100644
        toolMode,
        viewportRef
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..ce2a0a5c 100644
+index 709cc1b..ce2a0a5 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 @@ -13,6 +13,7 @@ import { isToolCreateMode } from "../tool-config";
@@ -627,7 +1283,7 @@ index 709cc1b9..ce2a0a5c 100644
        toolCursorWorld,
        snapGuideInput,
 diff --git a/packages/app/src/ui/capabilities.ts b/packages/app/src/ui/capabilities.ts
-index b20b72be..c9deb6f3 100644
+index b20b72b..c9deb6f 100644
 --- a/packages/app/src/ui/capabilities.ts
 +++ b/packages/app/src/ui/capabilities.ts
 @@ -34,6 +34,10 @@ const TOOL_CHECKS: Record<ToolMode, readonly CapabilityCheck[]> = {
@@ -652,7 +1308,7 @@ index b20b72be..c9deb6f3 100644
  };
  
 diff --git a/packages/app/src/ui/source-panel/SourcePanel.module.css b/packages/app/src/ui/source-panel/SourcePanel.module.css
-index f7e5e9b6..7503251d 100644
+index f7e5e9b..7503251 100644
 --- a/packages/app/src/ui/source-panel/SourcePanel.module.css
 +++ b/packages/app/src/ui/source-panel/SourcePanel.module.css
 @@ -308,7 +308,19 @@
@@ -702,7 +1358,7 @@ index f7e5e9b6..7503251d 100644
    text-align: center;
    font-size: calc(var(--app-ui-scale, 1) * 10px);
 diff --git a/packages/app/src/ui/source-panel/SourcePanel.tsx b/packages/app/src/ui/source-panel/SourcePanel.tsx
-index 4e8f0b66..4f6458b8 100644
+index 4e8f0b6..4f6458b 100644
 --- a/packages/app/src/ui/source-panel/SourcePanel.tsx
 +++ b/packages/app/src/ui/source-panel/SourcePanel.tsx
 @@ -190,9 +190,7 @@ const EMPTY_SYMBOLS: DocumentSymbols = {
@@ -849,7 +1505,7 @@ index 4e8f0b66..4f6458b8 100644
        const { from, to: normalizedTo } = normalizeRange(d.from, d.to, docLength);
        let to = normalizedTo;
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870b..86ee0998 100644
+index 0101870..86ee099 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
 @@ -32,6 +32,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
@@ -923,7 +1579,7 @@ index 0101870b..86ee0998 100644
  
  export function toolSupportsStroke(mode: ToolMode): boolean {
 diff --git a/packages/core/src/edit/actions/resize-element.ts b/packages/core/src/edit/actions/resize-element.ts
-index 07f3731a..bd1a5754 100644
+index 07f3731..bd1a575 100644
 --- a/packages/core/src/edit/actions/resize-element.ts
 +++ b/packages/core/src/edit/actions/resize-element.ts
 @@ -205,6 +205,36 @@ export function applyResizeElementAction(
@@ -964,7 +1620,7 @@ index 07f3731a..bd1a5754 100644
    const intrinsicWorldHeight = floorBounds.maxY - floorBounds.minY;
    const intrinsicLocal = nodeLinearTransform
 diff --git a/packages/core/src/edit/element-templates.ts b/packages/core/src/edit/element-templates.ts
-index 3f807ed2..2a5ee7d8 100644
+index 3f807ed..2a5ee7d 100644
 --- a/packages/core/src/edit/element-templates.ts
 +++ b/packages/core/src/edit/element-templates.ts
 @@ -19,6 +19,8 @@ export type ElementTemplate =
@@ -1002,7 +1658,7 @@ index 3f807ed2..2a5ee7d8 100644
        const radiusPt = circleRadiusPt(at, template.edge);
        return `\\fill ${atCoord} circle (${formatNumber(radiusPt * CM_PER_PT)}cm);`;
 diff --git a/packages/core/src/render/index.ts b/packages/core/src/render/index.ts
-index 11af4026..20e7e86f 100644
+index 11af402..20e7e86 100644
 --- a/packages/core/src/render/index.ts
 +++ b/packages/core/src/render/index.ts
 @@ -8,6 +8,7 @@ import { createMathJaxNodeTextEngine } from "../text/mathjax-engine.js";
@@ -1022,7 +1678,7 @@ index 11af4026..20e7e86f 100644
            }
          : undefined)
 diff --git a/packages/core/src/semantic/nodes/layout.ts b/packages/core/src/semantic/nodes/layout.ts
-index 1d9b4910..2475471c 100644
+index 1d9b491..2475471 100644
 --- a/packages/core/src/semantic/nodes/layout.ts
 +++ b/packages/core/src/semantic/nodes/layout.ts
 @@ -17,6 +17,29 @@ const PLAIN_TEXT_SERIF_FONT_STACK = "MJX-NCM, CMU Serif, Latin Modern Roman, Tim
@@ -1094,7 +1750,7 @@ index 1d9b4910..2475471c 100644
    let textLines = computeNodeTextLines(normalizedText, textWidth, charWidth);
    let textNaturalWidth: number;
 diff --git a/packages/core/src/svg/emit.ts b/packages/core/src/svg/emit.ts
-index b524a128..a2dce546 100644
+index b524a12..a2dce54 100644
 --- a/packages/core/src/svg/emit.ts
 +++ b/packages/core/src/svg/emit.ts
 @@ -505,6 +505,21 @@ export function emitSvgModel(scene: SceneFigure, opts: EmitSvgOptions = {}): Svg
@@ -1120,7 +1776,7 @@ index b524a128..a2dce546 100644
        const rendered = opts.textEngine?.renderFromCache(element.textRenderInfo.cacheKey) ?? null;
        if (!rendered) {
 diff --git a/packages/core/src/text/mathjax-engine.ts b/packages/core/src/text/mathjax-engine.ts
-index e9921165..2e35053a 100644
+index e992116..2e35053 100644
 --- a/packages/core/src/text/mathjax-engine.ts
 +++ b/packages/core/src/text/mathjax-engine.ts
 @@ -84,7 +84,7 @@ const MIDLINE_FROM_BASELINE_RATIO = 0.215;
@@ -1152,7 +1808,7 @@ index e9921165..2e35053a 100644
      },
      tex: {
 diff --git a/packages/core/src/text/types.ts b/packages/core/src/text/types.ts
-index 1be8c49a..cfe86d66 100644
+index 1be8c49..cfe86d6 100644
 --- a/packages/core/src/text/types.ts
 +++ b/packages/core/src/text/types.ts
 @@ -46,6 +46,13 @@ export type NodeTextRenderInfo =
@@ -1169,182 +1825,3 @@ index 1be8c49a..cfe86d66 100644
    | {
        mode: "mathjax";
        cacheKey: string;
-diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb..0af3f4b 100644
---- a/packages/app/src/ui/DockLayout.tsx
-+++ b/packages/app/src/ui/DockLayout.tsx
-@@ -91,6 +91,7 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
- }
- 
- function buildDefaultLayout(): IJsonModel {
-+  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
-   const rightTabs: Array<{ type: "tab"; id: string; name: string; component: string; enableClose?: boolean }> = [
-     { type: "tab", id: PANEL_IDS.inspector, name: "Inspector", component: "inspector" },
-     { type: "tab", id: PANEL_IDS.objects, name: "Objects", component: "objects" },
-@@ -100,7 +101,7 @@ function buildDefaultLayout(): IJsonModel {
-     rightTabs.push({ type: "tab", id: PANEL_IDS.assistant, name: "Assistant", component: "assistant" });
-   }
- 
--  return {
-+  const layout: IJsonModel = {
-     global: {
-       tabEnableClose: true,
-       tabEnableRename: false,
-@@ -143,6 +144,10 @@ function buildDefaultLayout(): IJsonModel {
-       ],
-     },
-   };
-+  if (embedded) {
-+    layout.layout.children.shift();
-+  }
-+  return layout;
- }
- 
- /** Strip assistant tabs if assistant is not available on this platform,
-@@ -396,7 +401,11 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
- 
- function createInitialModel(): Model {
-   const persisted = loadDockLayout();
--  const json = persisted ? sanitizeLayout(persisted) : buildDefaultLayout();
-+  const json = persisted
-+    ? sanitizeLayout(persisted)
-+    : getActiveEditorPlatform().id === "zettlr-embed"
-+      ? buildCanvasOnlyLayout()
-+      : buildDefaultLayout();
-   try {
-     return Model.fromJson(json);
-   } catch {
-diff --git a/packages/app/src/ui/ToolbarToolPopup.module.css b/packages/app/src/ui/ToolbarToolPopup.module.css
-index b12fedb..d4f1f6b 100644
---- a/packages/app/src/ui/ToolbarToolPopup.module.css
-+++ b/packages/app/src/ui/ToolbarToolPopup.module.css
-@@ -11,7 +11,7 @@
-   min-width: 170px;
-   padding: 8px;
-   border: 1px solid var(--border);
--  border-radius: 4px;
-+  border-radius: 12px;
-   background: var(--bg-pane);
-   box-shadow: 0 6px 16px color-mix(in srgb, black 24%, transparent);
- }
-@@ -35,10 +35,10 @@
- }
- 
- .matrixPickerCell {
--  width: 20px;
--  height: 20px;
-+  width: 44px;
-+  height: 44px;
-   border: 1px solid var(--border);
--  border-radius: 2px;
-+  border-radius: 6px;
-   background: color-mix(in srgb, var(--bg-pane) 82%, var(--bg-app));
-   cursor: pointer;
-   padding: 0;
-@@ -63,7 +63,7 @@
- }
- 
- .sectionTitle {
--  font-size: calc(var(--app-ui-scale, 1) * 11px);
-+  font-size: calc(var(--app-ui-scale, 1) * 14px);
-   color: var(--text-faint);
- }
- 
-@@ -75,15 +75,15 @@
- 
- .choiceButton {
-   width: 100%;
--  min-height: 24px;
-+  min-height: 44px;
-   display: flex;
-   align-items: center;
-   border: 1px solid transparent;
--  border-radius: 2px;
-+  border-radius: 8px;
-   background: transparent;
-   color: var(--text);
-   font-family: inherit;
--  font-size: calc(var(--app-ui-scale, 1) * 11px);
-+  font-size: calc(var(--app-ui-scale, 1) * 14px);
-   text-align: left;
-   cursor: pointer;
-   padding: 2px 6px;
-@@ -159,7 +159,7 @@
- }
- 
- .visualChoiceLabel {
--  font-size: calc(var(--app-ui-scale, 1) * 10px);
-+  font-size: calc(var(--app-ui-scale, 1) * 12px);
-   line-height: 1.2;
-   text-align: center;
- }
-diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
-index 8aeb413..baa3a6f 100644
---- a/packages/app/src/ui/ToolbarToolPopup.tsx
-+++ b/packages/app/src/ui/ToolbarToolPopup.tsx
-@@ -1,4 +1,5 @@
--import { useEffect, useRef, type ReactNode } from "react";
-+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-+import { createPortal } from "react-dom";
- import css from "./ToolbarToolPopup.module.css";
- 
- export function ToolbarToolPopup({
-@@ -17,6 +18,28 @@ export function ToolbarToolPopup({
-   popupClassName?: string;
- }) {
-   const rootRef = useRef<HTMLDivElement | null>(null);
-+  const popupRef = useRef<HTMLDivElement | null>(null);
-+  const [popupPosition, setPopupPosition] = useState({ left: 0, top: 0 });
-+
-+  useLayoutEffect(() => {
-+    if (!open) return;
-+    function positionPopup(): void {
-+      const anchor = rootRef.current?.getBoundingClientRect();
-+      const popup = popupRef.current;
-+      if (!anchor || !popup) return;
-+      setPopupPosition({
-+        left: Math.max(8, Math.min(anchor.left, window.innerWidth - popup.offsetWidth - 8)),
-+        top: anchor.bottom + 4
-+      });
-+    }
-+    positionPopup();
-+    window.addEventListener("resize", positionPopup);
-+    window.addEventListener("scroll", positionPopup, true);
-+    return () => {
-+      window.removeEventListener("resize", positionPopup);
-+      window.removeEventListener("scroll", positionPopup, true);
-+    };
-+  }, [open]);
- 
-   useEffect(() => {
-     if (!open) {
-@@ -28,7 +51,7 @@ export function ToolbarToolPopup({
-       if (!target) {
-         return;
-       }
--      if (!rootRef.current?.contains(target)) {
-+      if (!rootRef.current?.contains(target) && !popupRef.current?.contains(target)) {
-         onClose();
-       }
-     }
-@@ -55,15 +78,18 @@ export function ToolbarToolPopup({
-   return (
-     <div className={css.root} ref={rootRef}>
-       {children}
--      {open ? (
-+      {open ? createPortal(
-         <div
-+          ref={popupRef}
-           className={[css.popup, popupClassName ?? ""].filter(Boolean).join(" ")}
-           role="dialog"
-           aria-label="Tool options"
-           data-testid={popupTestId}
-+          style={{ position: "fixed", ...popupPosition, maxHeight: `calc(100dvh - ${popupPosition.top + 8}px)`, overflowY: "auto" }}
-         >
-           {popup}
--        </div>
-+        </div>,
-+        document.body
-       ) : null}
-     </div>
-   );

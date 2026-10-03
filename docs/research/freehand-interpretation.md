@@ -29,8 +29,10 @@ The synthetic ellipse uses 64 samples of an axis-aligned 72 × 44 px ellipse, st
 
 **Recommended division:** use Paper.js for generic curve fitting. Treat geometric recognition as a separate candidate fit with measured residuals and closure checks. Keep a stroke as a path when no candidate meets its acceptance gate. A classifier name alone is not enough to place a TikZ primitive.
 
-## Required editor transaction
+## Current editor transaction
 
-On release, retain the sampled points for the current edit. Fit line, circle, ellipse, rectangle, and curve candidates. Compare maximum and representative error in screen pixels, closure distance, corner behavior, and source structure. Convert a high-confidence candidate to an editable TikZ primitive. Show an anchored result control with **Restore stroke**, **Reapply**, and a fit-strength setting. Undo must return to the prior authored source in one step. A later selected-path command can resample an existing path for manual simplification after reopen; that command must not claim to recover samples that were never saved.
+On release, the editor keeps sampled points while the result control is open. It checks straight lines and axis-aligned circle or ellipse candidates, then uses Paper.js to fit remaining strokes to a shorter curve path. The original path enters source history first; the fit is a second edit. Undo restores the original path in one step. The anchored control offers **Restore stroke**, **Reapply fit**, and a fit-strength setting. The fitted source uses a TikZ line, circle, ellipse, or curve path.
+
+Rectangle recognition, a representative-error check, corner preservation, and a selected-path command for later manual simplification remain open in [issue #5](https://github.com/dzackgarza/visual-tikz-editor/issues/5). A later command can resample a source path; it cannot recover stroke samples that were not saved.
 
 Fit and snap parameters after recognition. Snapping each sampled point first does not create a concise geometric object. The shape candidate must be checked on real sketches and deliberate near misses before it becomes automatic.
