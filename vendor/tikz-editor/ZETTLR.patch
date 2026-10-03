@@ -667,7 +667,7 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..c578a53 100644
+index 4e22ccf..892a29f 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -67,8 +67,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
@@ -912,7 +912,11 @@ index 4e22ccf..c578a53 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3226,6 +3391,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3223,9 +3388,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+     suppressNextBackgroundClickRef,
+     svgResult,
+     setDragState,
++    setFitToContentModeActive,
      canvasTransform,
      interactionSvgRef,
      pendingBezier,
@@ -921,7 +925,7 @@ index 4e22ccf..c578a53 100644
      snapshot,
      source,
      setWarning,
-@@ -3974,6 +4141,53 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4142,53 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -1378,7 +1382,7 @@ index c69a45a..81e67af 100644
        toolMode,
        viewportRef
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b..ce2a0a5 100644
+index 709cc1b..e5a72a1 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 @@ -13,6 +13,7 @@ import { isToolCreateMode } from "../tool-config";
@@ -1389,7 +1393,11 @@ index 709cc1b..ce2a0a5 100644
    ApplyActionWithFeedbackFn,
    CanvasDispatch,
    CanvasEditParseOptions,
-@@ -43,6 +44,8 @@ export type UseCanvasToolInteractionsArgs = {
+@@ -40,9 +41,12 @@ export type UseCanvasToolInteractionsArgs = {
+   suppressNextBackgroundClickRef: MutableRefObject<boolean>;
+   svgResult: CanvasSnapshot["svg"];
+   setDragState: ValueSetter<DragState | null>;
++  setFitToContentModeActive: (active: boolean) => void;
    canvasTransform: CanvasTransform;
    interactionSvgRef: RefObject<SVGSVGElement | null>;
    pendingBezier: PendingBezier | null;
@@ -1398,7 +1406,11 @@ index 709cc1b..ce2a0a5 100644
    snapshot: CanvasSnapshot;
    source: string;
    setWarning: StateSetter<string | null>;
-@@ -97,6 +100,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -94,9 +98,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+     suppressNextBackgroundClickRef,
+     svgResult,
+     setDragState,
++    setFitToContentModeActive,
      canvasTransform,
      interactionSvgRef,
      pendingBezier,
@@ -1407,7 +1419,7 @@ index 709cc1b..ce2a0a5 100644
      snapshot,
      source,
      setWarning,
-@@ -137,6 +142,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -137,6 +144,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      freehandDraft,
      parseOptions
    } = args;
@@ -1425,7 +1437,7 @@ index 709cc1b..ce2a0a5 100644
    const finalizePendingTouchViewportTap = useCallback(
      (pointerId: number) => {
        const pending = pendingTouchViewportRef.current;
-@@ -200,6 +216,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -200,6 +218,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          !pendingBezier &&
          !freehandDraft &&
          (toolMode === "addNode" ||
@@ -1434,7 +1446,19 @@ index 709cc1b..ce2a0a5 100644
            toolMode === "addMatrix" ||
            (isToolCreateMode(toolMode) && toolMode !== "addFreehand"));
  
-@@ -351,6 +369,37 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -267,8 +287,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+         return;
+       }
+ 
+-      const canPan = event.button === 1 || (event.button === 0 && event.altKey);
++      const canPan = event.button === 1 || (event.button === 0 && event.altKey) ||
++        (event.pointerType === "touch" && toolMode !== "select");
+       if (canPan) {
++        setFitToContentModeActive(false);
+         const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
+         setDragState({
+           kind: "pan",
+@@ -351,6 +373,37 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          setToolCursorWorld(resolvedStart);
          event.preventDefault();
  
@@ -1472,7 +1496,7 @@ index 709cc1b..ce2a0a5 100644
          if (toolMode === "addFreehand") {
            const nextFreehandDraft = createFreehandToolDraft(resolvedStart, canvasTransform.scale);
            setPathDraft(null);
-@@ -515,7 +564,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -515,7 +568,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            return;
          }
  
@@ -1481,7 +1505,7 @@ index 709cc1b..ce2a0a5 100644
            event.preventDefault();
            event.stopPropagation();
            setDragTooltip(null);
-@@ -535,6 +584,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -535,6 +588,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              toolCursorWorld != null &&
              distanceSquared(world, toolCursorWorld) <= previewToleranceWorld * previewToleranceWorld;
            const nodeAt = previewMatchesClick ? toolCursorWorld : snapResult.snappedPoint ?? world;
@@ -1494,7 +1518,7 @@ index 709cc1b..ce2a0a5 100644
            setSnapLines(snapResult.lines);
            logSnapDebug({
              phase: "tool-add-node",
-@@ -558,7 +613,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -558,7 +617,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                    columns: selectedAddMatrixColumns,
                    matrixKind: "nodes"
                  }
@@ -1507,7 +1531,15 @@ index 709cc1b..ce2a0a5 100644
              at: nodeAt
            });
            if (!ok.sourceChanged) {
-@@ -669,6 +728,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -657,6 +720,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+       logSnapDebug,
+       queueSelectionForAddedElement,
+       setDragState,
++      setFitToContentModeActive,
+       setNodeAnchorOverlay,
+       selectedAddMatrixRows,
+       selectedAddMatrixColumns,
+@@ -669,6 +733,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        nodeAnchorTargets,
        matrixCellAnchorHints,
        pendingBezier,
