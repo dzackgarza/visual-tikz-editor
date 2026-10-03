@@ -31,8 +31,8 @@ The synthetic ellipse uses 64 samples of an axis-aligned 72 × 44 px ellipse, st
 
 ## Current editor transaction
 
-On release, the editor keeps sampled points while the result control is open. It checks straight lines and axis-aligned circle or ellipse candidates, then uses Paper.js to fit remaining strokes to a shorter curve path. The original path enters source history first; the fit is a second edit. Undo restores the original path in one step. The anchored control offers **Restore stroke**, **Reapply fit**, and a fit-strength setting. The fitted source uses a TikZ line, circle, ellipse, or curve path.
+On release, the editor keeps sampled points while the result control is open. It checks straight lines and axis-aligned rectangles, circles, and ellipses, then uses Paper.js to fit remaining strokes to a shorter curve path. The original path enters source history first; the fit is a second edit. Undo restores the original path in one step. The anchored control offers **Restore stroke**, **Reapply fit**, and a fit-strength setting. The fitted source uses a TikZ line, rectangle, circle, ellipse, or curve path.
 
-Rectangle recognition, a representative-error check, corner preservation, and a selected-path command for later manual simplification remain open in [issue #5](https://github.com/dzackgarza/visual-tikz-editor/issues/5). A later command can resample a source path; it cannot recover stroke samples that were not saved.
+Rotated rectangles, arcs, a representative-error check, corner preservation, and a selected-path command for later manual simplification remain open in [issue #5](https://github.com/dzackgarza/visual-tikz-editor/issues/5). A later command can resample a source path; it cannot recover stroke samples that were not saved.
 
 Fit and snap parameters after recognition. Snapping each sampled point first does not create a concise geometric object. The shape candidate must be checked on real sketches and deliberate near misses before it becomes automatic.

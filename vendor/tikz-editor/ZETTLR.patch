@@ -943,7 +943,7 @@ index 0000000..6e67f79
 +  outline-offset: 2px;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-index a7b0a7e..771c37c 100644
+index a7b0a7e..3e61e45 100644
 --- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
 @@ -2,6 +2,7 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
@@ -961,7 +961,7 @@ index a7b0a7e..771c37c 100644
 +export type FreehandInterpretation = {
 +  source: string;
 +  rawSource: string;
-+  kind: "line" | "circle" | "ellipse" | "curve" | "raw";
++  kind: "line" | "rectangle" | "circle" | "ellipse" | "curve" | "raw";
 +};
 +
 +let paperScope: paper.PaperScope | null = null;
@@ -977,7 +977,7 @@ index a7b0a7e..771c37c 100644
  export function createFreehandToolDraft(startWorld: WorldPoint, zoom: number): FreehandToolDraft {
    return {
      points: [startWorld],
-@@ -164,6 +181,113 @@ export function generateFreehandToolSource(
+@@ -164,6 +181,143 @@ export function generateFreehandToolSource(
    return `\\draw${drawOptions} ${parts.join(" ")};`;
  }
  
@@ -1029,6 +1029,36 @@ index a7b0a7e..771c37c 100644
 +  const rx = (maxX - minX) / 2;
 +  const ry = (maxY - minY) / 2;
 +  const closurePx = span * zoom;
++  if (rx * zoom > 18 && ry * zoom > 18 && closurePx <= Math.min(48, Math.max(24, length * zoom * 0.1))) {
++    // Shapeit's polygon recognition motivates checking all four edges and
++    // corners before replacing a rough loop with an editable rectangle.
++    let maxEdgeErrorPx = 0;
++    const corners = [
++      worldPoint(pt(minX), pt(minY)), worldPoint(pt(maxX), pt(minY)),
++      worldPoint(pt(maxX), pt(maxY)), worldPoint(pt(minX), pt(maxY))
++    ];
++    const cornerErrorsPx = [Infinity, Infinity, Infinity, Infinity];
++    for (const point of points) {
++      maxEdgeErrorPx = Math.max(maxEdgeErrorPx, Math.min(
++        Math.abs(point.x - minX), Math.abs(point.x - maxX),
++        Math.abs(point.y - minY), Math.abs(point.y - maxY)
++      ) * zoom);
++      corners.forEach((corner, index) => {
++        cornerErrorsPx[index] = Math.min(cornerErrorsPx[index], Math.sqrt(distanceSquared(point, corner)) * zoom);
++      });
++    }
++    const perimeterPx = 4 * (rx + ry) * zoom;
++    const tracedPx = (length + span) * zoom;
++    if (maxEdgeErrorPx <= Math.min(8, Math.max(3, smoothingTolerancePx * 0.65)) &&
++        cornerErrorsPx.every((error) => error <= Math.max(18, smoothingTolerancePx * 1.5)) &&
++        tracedPx >= perimeterPx * 0.8 && tracedPx <= perimeterPx * 1.2) {
++      return {
++        source: `\\draw${drawOptions} ${formatPointCm(corners[0])} rectangle ${formatPointCm(corners[2])};`,
++        rawSource,
++        kind: "rectangle"
++      };
++    }
++  }
 +  if (rx * zoom > 18 && ry * zoom > 18 && closurePx <= Math.min(48, Math.max(24, length * zoom * 0.1))) {
 +    let sweep = 0;
 +    let maxErrorPx = 0;
