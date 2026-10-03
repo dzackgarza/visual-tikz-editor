@@ -88,7 +88,7 @@ index 59fab7a..8cc20ff 100644
        { kind: "separator" },
        {
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6..8c63017 100644
+index e0845d6..396f8a8 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
 @@ -33,12 +33,6 @@ const DEFAULT_ADD_MATRIX_ROWS = 2;
@@ -186,8 +186,8 @@ index e0845d6..8c63017 100644
 +      if (!doc || doc.assistantLockReason || doc.sourceRevision !== action.expectedSourceRevision) {
 +        return state;
 +      }
-+      const index = doc.source.lastIndexOf(action.before);
-+      if (index < 0 || action.before === action.after) {
++      const index = action.from;
++      if (index < 0 || doc.source.slice(index, index + action.before.length) !== action.before || action.before === action.after) {
 +        return state;
 +      }
 +      const nextSource = doc.source.slice(0, index) + action.after + doc.source.slice(index + action.before.length);
@@ -223,7 +223,7 @@ index e0845d6..8c63017 100644
        const documentId = activeDocumentIdFromAction(state, action.documentId);
        workspace = updateDocument(workspace, documentId, (doc) => {
 diff --git a/packages/app/src/store/types.ts b/packages/app/src/store/types.ts
-index 450957d..7bcc7a2 100644
+index 450957d..16cc576 100644
 --- a/packages/app/src/store/types.ts
 +++ b/packages/app/src/store/types.ts
 @@ -14,6 +14,8 @@ export type ToolMode =
@@ -253,12 +253,13 @@ index 450957d..7bcc7a2 100644
    label: string;
    /** Optional key used to coalesce drag updates into one undo step. */
    mergeKey?: string;
-@@ -354,6 +358,12 @@ export type EditorAction =
+@@ -354,6 +358,13 @@ export type EditorAction =
        source: string;
        changedSourceIds?: string[] | null;
      }
 +  | {
 +      type: "REPLACE_FREEHAND_RESULT";
++      from: number;
 +      before: string;
 +      after: string;
 +      expectedSourceRevision: number;
@@ -666,15 +667,16 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..2f22f83 100644
+index 4e22ccf..c578a53 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-@@ -67,8 +67,12 @@ import { CanvasPanelView } from "./CanvasPanelView";
+@@ -67,8 +67,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
  import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
  import {
  appendFreehandToolPoint,
 -generateFreehandToolSource
 +interpretFreehandToolSource,
++sampleSelectedCurvePath,
 +FREEHAND_SMOOTHING_MIN_PX,
 +FREEHAND_SMOOTHING_MAX_PX,
 +type FreehandInterpretation
@@ -683,7 +685,7 @@ index 4e22ccf..2f22f83 100644
  import {
  clamp,
  clientToSvgPoint,
-@@ -119,6 +123,7 @@ type SnapDebugPoint
+@@ -119,6 +124,7 @@ type SnapDebugPoint
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -691,13 +693,16 @@ index 4e22ccf..2f22f83 100644
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
-@@ -757,6 +762,18 @@ function computeAutoScaleForImportedTikz(
+@@ -757,6 +763,26 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
 +type FreehandResultOffer = {
 +  draft: FreehandToolDraft;
 +  interpretation: FreehandInterpretation;
++  rawSource: string;
++  sourcePrefix: string | null;
++  from: number;
 +  current: "simplified" | "raw";
 +  tolerancePx: number;
 +  zoom: number;
@@ -707,10 +712,15 @@ index 4e22ccf..2f22f83 100644
 +  top: number;
 +};
 +
++const freehandPointPattern = String.raw`\([+-]?(?:\d+(?:\.\d*)?|\.\d+),[+-]?(?:\d+(?:\.\d*)?|\.\d+)\)`;
++const simpleFreehandPathPattern = new RegExp(
++  String.raw`^\s*\\draw(?:\[[^\]]*\])?\s+${freehandPointPattern}(?:\s+\.\. controls ${freehandPointPattern} and ${freehandPointPattern} \.\. ${freehandPointPattern})+;\s*$`
++);
++
  export const CanvasPanel = memo(function CanvasPanel({
    repeatPreviewModel = null
  }: {
-@@ -913,10 +930,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -913,10 +939,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
    const [freehandDraft, setFreehandDraft] = useState<FreehandToolDraft | null>(null);
@@ -721,6 +731,16 @@ index 4e22ccf..2f22f83 100644
 +      offer && offer.sourceRevision !== sourceRevision ? null : offer
 +    );
 +  }, [sourceRevision]);
++  const selectedPathForFit = useMemo(() => {
++    if (snapshot.source !== source || selectedElementIds.size !== 1) return null;
++    const selectedId = [...selectedElementIds][0];
++    const path = snapshot.scene?.elements.find((element) => element.sourceRef.sourceId === selectedId);
++    if (path?.kind !== "Path" || path.transform) return null;
++    const from = path.sourceRef.sourceSpan.from;
++    const original = source.slice(from, path.sourceRef.sourceSpan.to);
++    if (!simpleFreehandPathPattern.test(original)) return null;
++    return { path, from, original };
++  }, [selectedElementIds, snapshot.scene, snapshot.source, source]);
    const [pathSegmentDraft, setPathSegmentDraft] = useState<Extract<DragState, { kind: "tool-path-segment" }> | null>(null);
    const [toolDraft, setToolDraft] = useState<Extract<DragState, { kind: "tool-create" }> | null>(null);
    const [bezierBendDraft, setBezierBendDraft] = useState<Extract<DragState, { kind: "tool-bezier-bend" }> | null>(null);
@@ -729,7 +749,7 @@ index 4e22ccf..2f22f83 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -1866,6 +1891,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1866,6 +1910,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      pathDraft,
      pathSegmentDraft,
      pendingBezier,
@@ -737,7 +757,7 @@ index 4e22ccf..2f22f83 100644
      bezierBendDraft,
      canvasTransform
    });
-@@ -2090,10 +2116,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2090,10 +2135,10 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
  
@@ -750,7 +770,7 @@ index 4e22ccf..2f22f83 100644
        const firstPoint = draft.points[0];
        const lastPoint = draft.points[draft.points.length - 1];
        queueSelectionForAddedElement(
-@@ -2104,11 +2130,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2104,11 +2149,43 @@ export const CanvasPanel = memo(function CanvasPanel({
        );
        const ok = applyActionWithFeedback({
          kind: "pasteStatements",
@@ -761,11 +781,14 @@ index 4e22ccf..2f22f83 100644
        if (!ok.sourceChanged) {
          pendingAddedSelectionRef.current = null;
 +      } else if (interpretation.source !== interpretation.rawSource) {
++        const rawState = useEditorStore.getState();
++        const from = rawState.source.lastIndexOf(interpretation.rawSource);
 +        dispatch({
 +          type: "REPLACE_FREEHAND_RESULT",
++          from,
 +          before: interpretation.rawSource,
 +          after: interpretation.source,
-+          expectedSourceRevision: useEditorStore.getState().sourceRevision
++          expectedSourceRevision: rawState.sourceRevision
 +        });
 +        const viewport = viewportRef.current?.getBoundingClientRect();
 +        const svgPoint = svgResult ? worldToSvgPoint(lastPoint, svgResult.viewBox) : null;
@@ -778,6 +801,9 @@ index 4e22ccf..2f22f83 100644
 +        setFreehandResultOffer({
 +          draft,
 +          interpretation,
++          rawSource: interpretation.rawSource,
++          sourcePrefix: null,
++          from,
 +          current: "simplified",
 +          tolerancePx: freehandSmoothingPx,
 +          zoom: canvasTransform.scale,
@@ -789,7 +815,7 @@ index 4e22ccf..2f22f83 100644
        }
      } else {
        pendingAddedSelectionRef.current = null;
-@@ -2117,7 +2169,41 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2117,7 +2194,95 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft(null);
      setToolCursorWorld(null);
      dispatch({ type: "SET_TOOL_MODE", mode: "select" });
@@ -807,32 +833,86 @@ index 4e22ccf..2f22f83 100644
 +      ? interpretFreehandToolSource(offer.draft, offer.zoom, offer.tolerancePx, { strokeColor: offer.strokeColor })
 +      : offer.interpretation;
 +    if (!nextInterpretation) return;
-+    const snippet = variant === "raw" ? offer.interpretation.rawSource : nextInterpretation.source;
-+    const currentSnippet = offer.current === "raw" ? offer.interpretation.rawSource : offer.interpretation.source;
++    const fittedSource = offer.sourcePrefix
++      ? nextInterpretation.source.replace(/^\\draw(?:\[[^\]]*\])?/, offer.sourcePrefix)
++      : nextInterpretation.source;
++    const snippet = variant === "raw" ? offer.rawSource : fittedSource;
++    const currentSnippet = offer.current === "raw" ? offer.rawSource : offer.interpretation.source;
 +    if (snippet === currentSnippet) return;
 +    dispatch({
 +      type: "REPLACE_FREEHAND_RESULT",
++      from: offer.from,
 +      before: currentSnippet,
 +      after: snippet,
 +      expectedSourceRevision: offer.sourceRevision
 +    });
 +    const nextState = useEditorStore.getState();
-+    if (!nextState.source.includes(snippet)) {
++    if (nextState.source.slice(offer.from, offer.from + snippet.length) !== snippet) {
 +      setFreehandResultOffer(null);
 +      setWarning("Could not replace the freehand stroke.");
 +      return;
 +    }
 +    setFreehandResultOffer({
 +      ...offer,
-+      interpretation: nextInterpretation,
++      interpretation: { ...nextInterpretation, source: fittedSource },
 +      current: variant,
 +      sourceRevision: nextState.sourceRevision
 +    });
 +  }, [dispatch, freehandResultOffer]);
++
++  const simplifySelectedPath = useCallback(() => {
++    if (!selectedPathForFit || !svgResult) return;
++    const draft = sampleSelectedCurvePath(selectedPathForFit.path, canvasTransform.scale);
++    if (!draft) return;
++    const interpretation = interpretFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx);
++    const sourcePrefix = /^\s*\\draw(?:\[[^\]]*\])?/.exec(selectedPathForFit.original)?.[0];
++    if (!interpretation || !sourcePrefix) return;
++    const fittedSource = interpretation.source.replace(/^\\draw(?:\[[^\]]*\])?/, sourcePrefix);
++    if (fittedSource.length >= selectedPathForFit.original.length) {
++      setWarning("This path has no simpler fit at the selected strength.");
++      return;
++    }
++    const revision = useEditorStore.getState().sourceRevision;
++    dispatch({
++      type: "REPLACE_FREEHAND_RESULT",
++      from: selectedPathForFit.from,
++      before: selectedPathForFit.original,
++      after: fittedSource,
++      expectedSourceRevision: revision
++    });
++    const nextState = useEditorStore.getState();
++    if (nextState.sourceRevision === revision) {
++      setWarning("Could not simplify the selected path.");
++      return;
++    }
++    const anchor = selectedPathForFit.path.commands[0];
++    const point = anchor.kind === "M" ? worldToSvgPoint(anchor.to, svgResult.viewBox) : null;
++    const viewport = viewportRef.current?.getBoundingClientRect();
++    const left = viewport && point
++      ? viewport.left + canvasTransform.translateX + (point.x - svgResult.viewBox.x) * canvasTransform.scale
++      : window.innerWidth / 2;
++    const top = viewport && point
++      ? viewport.top + canvasTransform.translateY + (point.y - svgResult.viewBox.y) * canvasTransform.scale
++      : window.innerHeight / 2;
++    setFreehandResultOffer({
++      draft,
++      interpretation: { ...interpretation, source: fittedSource },
++      rawSource: selectedPathForFit.original,
++      sourcePrefix,
++      from: selectedPathForFit.from,
++      current: "simplified",
++      tolerancePx: freehandSmoothingPx,
++      zoom: canvasTransform.scale,
++      strokeColor: creationStrokeColor,
++      sourceRevision: nextState.sourceRevision,
++      left: clamp(left + 12, 12, Math.max(12, window.innerWidth - 280)),
++      top: clamp(top + 12, 12, Math.max(12, window.innerHeight - 180))
++    });
++  }, [canvasTransform, creationStrokeColor, dispatch, freehandSmoothingPx, selectedPathForFit, svgResult]);
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3226,6 +3312,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3226,6 +3391,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      canvasTransform,
      interactionSvgRef,
      pendingBezier,
@@ -841,10 +921,23 @@ index 4e22ccf..2f22f83 100644
      snapshot,
      source,
      setWarning,
-@@ -3974,6 +4062,40 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4141,53 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
++      {selectedPathForFit && !freehandResultOffer ? (
++        <button
++          type="button"
++          className={freehandPopupCss.reapply}
++          style={{
++            left: Math.max(12, (viewportRef.current?.getBoundingClientRect().right ?? window.innerWidth) - 208),
++            top: Math.max(12, (viewportRef.current?.getBoundingClientRect().bottom ?? window.innerHeight) - 70)
++          }}
++          onClick={simplifySelectedPath}
++        >
++          Simplify selected path
++        </button>
++      ) : null}
 +      {freehandResultOffer ? (
 +        <div
 +          className={freehandPopupCss.popup}
@@ -884,10 +977,10 @@ index 4e22ccf..2f22f83 100644
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
-index 0000000..6e67f79
+index 0000000..22aee53
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,73 @@
 +.popup {
 +  position: fixed;
 +  z-index: 200;
@@ -942,19 +1035,39 @@ index 0000000..6e67f79
 +  outline: 2px solid #9e2a2b;
 +  outline-offset: 2px;
 +}
++
++.reapply {
++  position: fixed;
++  z-index: 190;
++  min-height: 44px;
++  padding: 8px 14px;
++  border: 1px solid var(--border);
++  border-radius: 10px;
++  background: var(--bg-pane);
++  color: var(--text);
++  box-shadow: 0 4px 14px color-mix(in srgb, black 20%, transparent);
++  font: 14px var(--font-ui);
++  cursor: pointer;
++}
++
++.reapply:focus-visible {
++  outline: 2px solid #9e2a2b;
++  outline-offset: 2px;
++}
 diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-index a7b0a7e..3e61e45 100644
+index a7b0a7e..61a3c8e 100644
 --- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-@@ -2,6 +2,7 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
+@@ -2,6 +2,8 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
  import { pt, worldPoint } from "tikz-editor/coords/index";
  import { buildDrawOptions } from "tikz-editor/edit/element-templates";
  import type { WorldPoint } from "../coords/types";
++import type { ScenePath } from "tikz-editor/semantic/types";
 +import paper from "paper";
  
  const MIN_WORLD_DISTANCE_PT = 1e-3;
  
-@@ -22,6 +23,22 @@ export type FreehandBezierSegment = {
+@@ -22,6 +24,22 @@ export type FreehandBezierSegment = {
    to: WorldPoint;
  };
  
@@ -977,7 +1090,7 @@ index a7b0a7e..3e61e45 100644
  export function createFreehandToolDraft(startWorld: WorldPoint, zoom: number): FreehandToolDraft {
    return {
      points: [startWorld],
-@@ -164,6 +181,143 @@ export function generateFreehandToolSource(
+@@ -164,6 +182,182 @@ export function generateFreehandToolSource(
    return `\\draw${drawOptions} ${parts.join(" ")};`;
  }
  
@@ -1116,6 +1229,45 @@ index a7b0a7e..3e61e45 100644
 +  const source = `\\draw${drawOptions} ${parts.join(" ")};`;
 +  if (source.length >= rawSource.length) return { source: rawSource, rawSource, kind: "raw" };
 +  return { source, rawSource, kind: "curve" };
++}
++
++export function sampleSelectedCurvePath(path: ScenePath, zoom: number): FreehandToolDraft | null {
++  if (path.transform || !path.commands.some((command) => command.kind === "C")) return null;
++  const points: WorldPoint[] = [];
++  let current: WorldPoint | null = null;
++  for (const command of path.commands) {
++    if (command.kind === "M") {
++      if (points.length > 0) return null;
++      current = command.to;
++      points.push(command.to);
++    } else if (command.kind === "L" && current) {
++      const count = Math.min(64, Math.max(2, Math.ceil(Math.sqrt(distanceSquared(current, command.to)) * zoom / 8)));
++      for (let i = 1; i <= count; i += 1) {
++        const t = i / count;
++        points.push(worldPoint(pt(current.x + (command.to.x - current.x) * t), pt(current.y + (command.to.y - current.y) * t)));
++      }
++      current = command.to;
++    } else if (command.kind === "C" && current) {
++      const netLength = Math.sqrt(distanceSquared(current, command.c1)) +
++        Math.sqrt(distanceSquared(command.c1, command.c2)) +
++        Math.sqrt(distanceSquared(command.c2, command.to));
++      const count = Math.min(64, Math.max(4, Math.ceil(netLength * zoom / 8)));
++      for (let i = 1; i <= count; i += 1) {
++        const t = i / count;
++        const u = 1 - t;
++        points.push(worldPoint(
++          pt(u * u * u * current.x + 3 * u * u * t * command.c1.x + 3 * u * t * t * command.c2.x + t * t * t * command.to.x),
++          pt(u * u * u * current.y + 3 * u * u * t * command.c1.y + 3 * u * t * t * command.c2.y + t * t * t * command.to.y)
++        ));
++      }
++      current = command.to;
++    } else {
++      return null;
++    }
++  }
++  return points.length >= FREEHAND_MIN_POINTS
++    ? { points, minSampleDistanceWorld: FREEHAND_LIVE_POINT_SPACING_PX / Math.max(zoom, 1e-3) }
++    : null;
 +}
 +
  function polylineLength(points: readonly WorldPoint[]): number {
