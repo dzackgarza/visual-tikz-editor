@@ -180,10 +180,10 @@ function targetIdentity(target: TikzLivePreviewTarget): string {
 watch(
   () => targetIdentity(props.target),
   () => {
-    requestedMode.value = props.requestedMode ?? props.initialMode ?? defaultTikzPreviewMode(props.target);
-    visitedEditors.value = requestedMode.value === 'tikz'
-      ? new Set()
-      : new Set([requestedMode.value]);
+    requestedMode.value =
+      props.requestedMode ?? props.initialMode ?? defaultTikzPreviewMode(props.target);
+    visitedEditors.value =
+      requestedMode.value === "tikz" ? new Set() : new Set([requestedMode.value]);
     fullscreen.value = false;
   },
 );
@@ -200,7 +200,7 @@ watch(
   (mode) => {
     activeStatus.value = "";
     activeBusy.value = false;
-    if (mode !== 'tikz') visitedEditors.value = new Set([...visitedEditors.value, mode]);
+    if (mode !== "tikz") visitedEditors.value = new Set([...visitedEditors.value, mode]);
     emit("mode", mode);
   },
   { immediate: true },

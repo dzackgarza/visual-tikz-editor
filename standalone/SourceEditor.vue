@@ -44,7 +44,9 @@ onMounted(() => {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         tikz(),
-        themeCompartment.of(props.theme === "dark" ? oneDark : syntaxHighlighting(defaultHighlightStyle)),
+        themeCompartment.of(
+          props.theme === "dark" ? oneDark : syntaxHighlighting(defaultHighlightStyle),
+        ),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -62,7 +64,9 @@ watch(
     if (view === null || source === view.state.doc.toString()) {
       return;
     }
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } });
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: source },
+    });
   },
 );
 
