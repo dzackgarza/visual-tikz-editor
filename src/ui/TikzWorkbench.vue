@@ -123,6 +123,7 @@ const props = defineProps<{
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
   initialMode?: TikzPreviewModeId;
+  requestedMode?: TikzPreviewModeId;
   showInspector?: boolean;
 }>();
 
@@ -132,7 +133,7 @@ const emit = defineEmits<{
 
 const fullscreen = ref(false);
 const requestedMode = ref<TikzPreviewModeId>(
-  props.initialMode ?? defaultTikzPreviewMode(props.target),
+  props.requestedMode ?? props.initialMode ?? defaultTikzPreviewMode(props.target),
 );
 const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
@@ -179,11 +180,18 @@ function targetIdentity(target: TikzLivePreviewTarget): string {
 watch(
   () => targetIdentity(props.target),
   () => {
-    requestedMode.value = props.initialMode ?? defaultTikzPreviewMode(props.target);
+    requestedMode.value = props.requestedMode ?? props.initialMode ?? defaultTikzPreviewMode(props.target);
     visitedEditors.value = requestedMode.value === 'tikz'
       ? new Set()
       : new Set([requestedMode.value]);
     fullscreen.value = false;
+  },
+);
+
+watch(
+  () => props.requestedMode,
+  (mode) => {
+    if (mode !== undefined) requestedMode.value = mode;
   },
 );
 

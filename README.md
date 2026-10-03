@@ -19,7 +19,7 @@ The workbench offers a **TeX render** view of the same source. It uses the local
 
 ## Embed the workbench
 
-Mount `src/ui/TikzWorkbench.vue` with `target`, `host`, and `theme`. Set `initialMode` when the host needs a different opening view. The standalone host opens `tikzpicture` in its visual editor; Zettlr opens it in compiled preview. `target` names the source bytes, their document range, the diagram language, and the document path. `host` implements `TikzWorkbenchHost` in `src/host.ts`:
+Mount `src/ui/TikzWorkbench.vue` with `target`, `host`, and `theme`. Set `initialMode` for the opening view, or bind `requestedMode` when a host control must switch views after mount. The standalone host opens `tikzpicture` in its visual editor; Zettlr opens it in TeX render. `target` names the source bytes, their document range, the diagram language, and the document path. `host` implements `TikzWorkbenchHost` in `src/host.ts`:
 
 | Service | Host responsibility |
 | --- | --- |
