@@ -347,6 +347,31 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+.tikz-figure-viewer :deep(.tikz-workbench-viewerjs.viewer-backdrop) {
+  background: #f8f9f5;
+}
+
+.tikz-figure-viewer.dark :deep(.tikz-workbench-viewerjs.viewer-backdrop) {
+  background: #10151b;
+}
+
+.tikz-figure-viewer :deep(.viewer-toolbar > ul) {
+  display: flex;
+  gap: 6px;
+}
+
+.tikz-figure-viewer :deep(.viewer-toolbar > ul > li) {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+}
+
+.tikz-figure-viewer :deep(.viewer-toolbar > ul > li::before) {
+  margin: 0;
+}
+
 /*
  * pdf2svg output is black-on-transparent. Keep the existing dark-mode
  * readability rule, but apply it to Viewer.js' one canonical image surface so
