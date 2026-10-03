@@ -1,9 +1,9 @@
 {
-  "lockfileVersion": 2,
+  "lockfileVersion": 1,
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "visual-tikz-editor",
+      "name": "tikz-workbench",
       "dependencies": {
         "@codemirror/commands": "^6.11.0",
         "@codemirror/language": "^6.12.4",
