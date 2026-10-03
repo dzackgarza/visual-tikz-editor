@@ -72,8 +72,8 @@
         :fullscreen="fullscreen"
         :show-inspector="props.showInspector"
         @exit-fullscreen="fullscreen = false"
-        @status="activeStatus = $event"
-        @busy="activeBusy = $event"
+        @status="onProviderStatus('tikz', $event)"
+        @busy="onProviderBusy('tikz', $event)"
       />
       <component
         v-for="provider in providers.filter((candidate) => candidate.id !== 'tikz' && visitedEditors.has(candidate.id))"
@@ -138,6 +138,12 @@ const requestedMode = ref<TikzPreviewModeId>(
 const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
 const activeBusy = ref(false);
+const providerStatus = ref<Record<TikzPreviewModeId, string>>({ tikz: "", quiver: "", visual: "" });
+const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({
+  tikz: false,
+  quiver: false,
+  visual: false,
+});
 const copyError = ref("");
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const providers: readonly TikzPreviewProvider[] = TIKZ_PREVIEW_PROVIDERS;
@@ -184,6 +190,8 @@ watch(
       props.requestedMode ?? props.initialMode ?? defaultTikzPreviewMode(props.target);
     visitedEditors.value =
       requestedMode.value === "tikz" ? new Set() : new Set([requestedMode.value]);
+    providerStatus.value = { tikz: "", quiver: "", visual: "" };
+    providerBusy.value = { tikz: false, quiver: false, visual: false };
     fullscreen.value = false;
   },
 );
@@ -198,8 +206,8 @@ watch(
 watch(
   displayMode,
   (mode) => {
-    activeStatus.value = "";
-    activeBusy.value = false;
+    activeStatus.value = mode === "tikz" ? "" : providerStatus.value[mode];
+    activeBusy.value = mode === "tikz" ? false : providerBusy.value[mode];
     if (mode !== "tikz") visitedEditors.value = new Set([...visitedEditors.value, mode]);
     emit("mode", mode);
   },
@@ -218,10 +226,12 @@ function forceRefresh(): void {
 }
 
 function onProviderStatus(provider: TikzPreviewModeId, status: string): void {
+  providerStatus.value[provider] = status;
   if (displayMode.value === provider) activeStatus.value = status;
 }
 
 function onProviderBusy(provider: TikzPreviewModeId, busy: boolean): void {
+  providerBusy.value[provider] = busy;
   if (displayMode.value === provider) activeBusy.value = busy;
 }
 
