@@ -13,7 +13,7 @@
         aria-label="Diagram view"
       >
         <button
-          v-for="provider in visibleProviders"
+          v-for="provider in providers"
           :key="provider.id"
           type="button"
           :class="{ active: displayMode === provider.id }"
@@ -160,9 +160,6 @@ const copyError = ref("");
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const providers: readonly TikzPreviewProvider[] = TIKZ_PREVIEW_PROVIDERS;
 const displayMode = requestedMode;
-const visibleProviders = computed(() =>
-  providers.filter((provider) => supportsProvider(provider) || provider.id === displayMode.value),
-);
 const activeProvider = computed(() => {
   const provider = providers.find((candidate) => candidate.id === displayMode.value);
   if (provider === undefined) {
