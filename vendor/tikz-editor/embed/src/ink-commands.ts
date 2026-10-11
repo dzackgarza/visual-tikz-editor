@@ -29,7 +29,7 @@ export function executeInkCommand(command: Extract<HostCommand, { action: 'impor
         points: entry.stroke.samples.map(sample => worldPoint(pt(sample.x), pt(sample.y))),
         minSampleDistanceWorld: 0,
       }, 1, command.tolerance, { strokeColor: tikzStrokeColor(entry.stroke) });
-      if (fit === null) return 'no-fit';
+      if (fit === null || fit.kind === 'raw') return 'no-fit';
       drawing = fit.source;
     }
     next = state.source.slice(0, entry.drawingFrom) + drawing + state.source.slice(entry.drawingTo);
