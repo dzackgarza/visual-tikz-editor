@@ -142,5 +142,14 @@ print(confirm(Atspi.get_desktop(0)))
     assert.equal((await cancelled).status(), 204);
     await expect(page.locator('.tikz-standalone-status')).toHaveText('Saved');
     assert.equal(await readFile(diagramPath, 'utf8'), edited);
+    await page.locator('.file-menu summary').click();
+    await page.locator('.cm-content').fill(String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`);
+    await expect(page.getByRole('button', { name: 'Quiver canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await frame.locator('.vertex').nth(1).click();
+    await frame.locator('.label-input').fill('C');
+    await frame.locator('.label-input').press('Control+s');
+    await expect.poll(() => readFile(diagramPath, 'utf8')).toMatch(/\\begin\{tikzcd\}[\s\S]*\bC\b/);
+    await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+    assert.equal(await readFile(diagramPath, 'utf8'), await page.evaluate(() => navigator.clipboard.readText()));
   });
 });
