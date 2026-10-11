@@ -3621,10 +3621,12 @@ index 4e8f0b66..4f6458b8 100644
        const { from, to: normalizedTo } = normalizeRange(d.from, d.to, docLength);
        let to = normalizedTo;
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870b..52d01a38 100644
+index 0101870b..7d54160f 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
-@@ -2,6 +2,7 @@ import React from "react";
+@@ -1,7 +1,9 @@
+ import React from "react";
++import { RiEraserLine } from "@remixicon/react";
  import { BASIC_PICKER_COLORS } from "../colors/color-palette";
  import type { SnapToolPointerKind } from "tikz-editor/edit/snapping";
  import type { ToolMode } from "../store/types";
@@ -3632,7 +3634,18 @@ index 0101870b..52d01a38 100644
  
  // ── Custom Tool Icons ─────────────────────────────────────────────────────────
  // All icons use a consistent 20x20 viewBox with 1.5px stroke width
-@@ -32,6 +33,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
+@@ -14,6 +16,10 @@ function SelectIcon({ size = 20 }: { size?: number }) {
+   );
+ }
+ 
++function EraserIcon({ size = 20 }: { size?: number }) {
++  return <RiEraserLine size={size} />;
++}
++
+ function MagnifyIcon({ size = 20 }: { size?: number }) {
+   return (
+     <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+@@ -32,6 +38,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -3647,7 +3660,7 @@ index 0101870b..52d01a38 100644
  function MatrixIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" strokeLinecap="round" strokeLinejoin="round">
-@@ -135,6 +144,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
+@@ -135,6 +149,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -3663,7 +3676,7 @@ index 0101870b..52d01a38 100644
  function BucketIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-@@ -166,15 +184,19 @@ export type ToolButtonDef = {
+@@ -166,15 +189,19 @@ export type ToolButtonDef = {
    separatorBefore?: true;
  };
  
@@ -3676,7 +3689,7 @@ index 0101870b..52d01a38 100644
  export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
    { mode: "select",     label: "Select",   title: "Select (V)",   shortcut: "v", icon: SelectIcon },
 +  { mode: "lasso",      label: "Lasso",    title: "Lasso selection",       icon: PathIcon },
-+  { mode: "erase",      label: "Eraser",   title: "Erase an element",      icon: RectIcon },
++  { mode: "erase",      label: "Eraser",   title: "Erase an element",      icon: EraserIcon },
    { mode: "magnify",    label: "Magnify",  title: "Magnify (M)",  shortcut: "m", icon: MagnifyIcon },
    { mode: "addNode",    label: "Node",     title: "Node (N)",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
 +  { mode: "addPoint",   label: "Point",    title: "Point",                    icon: PointIcon },
@@ -3684,7 +3697,7 @@ index 0101870b..52d01a38 100644
    { mode: "addShape",   label: "Shape",    title: "Shape (S)",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
    { mode: "addMatrix",  label: "Matrix",   title: "Matrix",                      icon: MatrixIcon,   popupKind: "matrix-picker" },
    { mode: "addLine",    label: "Line",     title: "Line (L)",     shortcut: "l", icon: LineIcon,     separatorBefore: true },
-@@ -186,6 +208,7 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
+@@ -186,6 +213,7 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
    { mode: "addRect",    label: "Rect",     title: "Rectangle (R)", shortcut: "r", icon: RectIcon },
    { mode: "addEllipse", label: "Ellipse",  title: "Ellipse (E)",  shortcut: "e", icon: EllipseIcon },
    { mode: "addCircle",  label: "Circle",   title: "Circle (C)",   shortcut: "c", icon: CircleIcon },
@@ -3692,7 +3705,7 @@ index 0101870b..52d01a38 100644
    { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
  ];
  
-@@ -214,7 +237,8 @@ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
+@@ -214,7 +242,8 @@ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
  const TOOL_CREATE_MODE_SET = new Set<ToolCreateMode>(TOOL_CREATE_MODES);
  
  export function toolModeFromShortcut(key: string): ToolMode | null {
@@ -3702,7 +3715,7 @@ index 0101870b..52d01a38 100644
  }
  
  export function resolveToolbarToolMode(currentMode: ToolMode, clickedMode: ToolMode): ToolMode {
-@@ -262,6 +286,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -262,6 +291,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addEllipse: "Hold Shift to constrain to a circle",
    addGrid: "Hold Shift to constrain to a square",
    addCircle: "Drag from center to edge",
@@ -3710,7 +3723,7 @@ index 0101870b..52d01a38 100644
    addPath: "Click to add points, drag to bend. Click start to close, or double-click/press Enter/Esc to finish.",
    addFreehand: "Press and drag to draw",
    addBezier: "Two drags: endpoints then curve",
-@@ -270,14 +295,16 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -270,14 +300,16 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addShape: "Drag to set size",
    addMatrix: "Pick rows/columns, then click to place",
    addNode: "Click to place text",
