@@ -65,7 +65,8 @@ let imageBaseErrorReported = false;
 const persistenceValues = new Map<string, string>();
 
 function postToHost(message: Record<string, unknown>) {
-	window.parent?.postMessage(JSON.stringify(message), '*');
+	if (window.parent === window) return;
+	window.parent.postMessage(JSON.stringify(message), new URL(document.referrer).origin);
 }
 
 function sourceFromMessage(message: HostMessage): string | null {
@@ -388,6 +389,8 @@ function HostBridge() {
 		});
 
 		const handleMessage = (event: MessageEvent) => {
+			if (window.parent === window || event.source !== window.parent) return;
+			if (event.origin !== new URL(document.referrer).origin) return;
 			let message: HostMessage | null = null;
 			if (typeof event.data === 'string') {
 				try { message = JSON.parse(event.data) as HostMessage; } catch { return; }
@@ -395,7 +398,7 @@ function HostBridge() {
 				message = event.data as HostMessage;
 			}
 			if (!message) return;
-			const action = message.action || message.event;
+			const action = message.action;
 			if (action === 'load') {
 				imageBaseUrl = message.imageBaseUrl ?? '';
 				imageBaseErrorReported = false;

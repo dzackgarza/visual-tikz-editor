@@ -62,10 +62,29 @@ index 9dde7f6..566e2d8 100644
      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-32.6095 -10.8019 65.2189 21.6038\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M -28.4528 7.1132 M -28.4528 7.1132 L 28.4528 7.1132 L 28.4528 -7.1132 L -28.4528 -7.1132 Z\" stroke=\"#000000\" fill=\"#d1ffd1\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactSelectionOverlay\"><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.2562\" points=\"-28.4528,-7.1132 28.4528,-7.1132 28.4528,7.1132 -28.4528,7.1132\" /></g><g class=\"landingExactHandleOverlay\"><rect x=\"-29.2098\" y=\"-7.8702\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"27.6958\" y=\"-7.8702\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"27.6958\" y=\"6.3562\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"-29.2098\" y=\"6.3562\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /></g></svg>"
    }
 diff --git a/packages/app/package.json b/packages/app/package.json
-index f20fa9c..9d4f0e0 100644
+index f20fa9c..ed56d72 100644
 --- a/packages/app/package.json
 +++ b/packages/app/package.json
-@@ -57,6 +57,7 @@
+@@ -40,14 +40,18 @@
+     }
+   },
+   "dependencies": {
++    "@codemirror/autocomplete": "6.20.1",
+     "@codemirror/commands": "^6.10.2",
+     "@codemirror/lang-xml": "^6.1.0",
+     "@codemirror/language": "^6.12.1",
++    "@codemirror/lint": "6.9.5",
++    "@codemirror/search": "6.6.0",
+     "@codemirror/state": "^6.5.4",
+     "@codemirror/view": "^6.39.14",
+     "@lezer/common": "^1.5.1",
+     "@lezer/highlight": "^1.2.3",
+     "@lezer/lr": "^1.4.8",
++    "@mathjax/mathjax-newcm-font": "4.1.1",
+     "@remixicon/react": "^4.9.0",
+     "@tikz-editor/core": "0.5.2",
+     "@tikz-editor/lang-tikz": "0.5.2",
+@@ -57,6 +61,7 @@
      "jspdf": "^4.2.0",
      "keynote-clipboard": "^1.2.0",
      "mathlive": "^0.107.1",
@@ -2025,6 +2044,23 @@ index 0101870..86ee099 100644
  }
  
  export function toolSupportsStroke(mode: ToolMode): boolean {
+diff --git a/packages/core/package.json b/packages/core/package.json
+index f8fc200..1322040 100644
+--- a/packages/core/package.json
++++ b/packages/core/package.json
+@@ -9,10 +9,10 @@
+     "build": "tsc -p tsconfig.json"
+   },
+   "dependencies": {
+-    "@mathjax/src": "^4.1.1",
++    "@mathjax/src": "4.1.1",
+     "@lezer/common": "^1.5.1",
+     "@tikz-editor/lezer-tikz": "0.5.2",
+-    "mathjax": "^4.1.1",
++    "mathjax": "4.1.1",
+     "xml-formatter": "^3.6.7"
+   },
+   "devDependencies": {
 diff --git a/packages/core/src/edit/actions/resize-element.ts b/packages/core/src/edit/actions/resize-element.ts
 index 07f3731..bd1a575 100644
 --- a/packages/core/src/edit/actions/resize-element.ts

@@ -93,7 +93,7 @@ function postToEditor(message: Record<string, unknown>): void {
   if (target === undefined || target === null) {
     return;
   }
-  target.postMessage(message, "*");
+  target.postMessage(message, new URL(props.host.editorUrl, location.href).origin);
 }
 
 function sendFullLoad(): void {
@@ -222,6 +222,9 @@ function applyEditorSource(source: string, revision: number | undefined): void {
 
 function onMessage(event: MessageEvent): void {
   if (event.source !== frame.value?.contentWindow) {
+    return;
+  }
+  if (event.origin !== new URL(props.host.editorUrl, location.href).origin) {
     return;
   }
   const message = parseHostMessage(event.data);

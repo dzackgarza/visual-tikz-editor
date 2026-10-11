@@ -2,6 +2,7 @@
 /** Reconstruct the vendored tikz-editor embed from its pinned upstream commit. */
 
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -57,8 +58,10 @@ try {
   // The Zettlr fork points that loader at ./mathjax instead, so ship the exact
   // component package selected by the pinned upstream lockfile. The default
   // NewCM SVG font lives under MathJax's expected output/fonts component path.
-  const mathjax = path.join(upstream, 'node_modules', 'mathjax')
-  const newcm = path.join(upstream, 'node_modules', '@mathjax', 'mathjax-newcm-font')
+  const coreRequire = createRequire(path.join(upstream, 'packages/core/package.json'))
+  const appRequire = createRequire(path.join(upstream, 'packages/app/package.json'))
+  const mathjax = path.dirname(coreRequire.resolve('mathjax/package.json'))
+  const newcm = path.dirname(appRequire.resolve('@mathjax/mathjax-newcm-font/package.json'))
   const mathjaxPackage = JSON.parse(await readFile(path.join(mathjax, 'package.json'), 'utf8'))
   const newcmPackage = JSON.parse(await readFile(path.join(newcm, 'package.json'), 'utf8'))
   if (mathjaxPackage.version !== '4.1.1' || newcmPackage.version !== '4.1.1') {
