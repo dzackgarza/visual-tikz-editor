@@ -6,7 +6,7 @@ This repository was extracted from [`zettlr-pandoc/packages/tikz-workbench`](htt
 
 ## Run the standalone app
 
-Install [Bun](https://bun.sh/), [just](https://github.com/casey/just), and Zenity for the native Open and Save As dialogs. The test suite also uses Node.js. Then run:
+Install [Bun](https://bun.sh/), [just](https://github.com/casey/just), and Zenity for the native Open and Save As dialogs. The test suite also uses Node.js. Native file workflows require Xvfb, D-Bus, xdotool, ImageMagick, and Python's system PyGObject/AT-SPI bindings (`python3-gi` and `gir1.2-atspi-2.0` on Ubuntu). They run Chrome and the real Zenity chooser on a private display and session bus. Then run:
 
 ```sh
 bun install --frozen-lockfile
