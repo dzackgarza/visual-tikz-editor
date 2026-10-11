@@ -6,8 +6,9 @@
     :data-tikz-language="props.target.language"
   >
     <header class="tikz-live-preview-header">
-      <span class="tikz-live-preview-label">View:</span>
+      <span v-if="props.showModeSwitcher !== false" class="tikz-live-preview-label">View:</span>
       <div
+        v-if="props.showModeSwitcher !== false"
         class="tikz-live-preview-modes"
         role="group"
         aria-label="Diagram view"
@@ -126,6 +127,7 @@ const props = defineProps<{
   initialMode?: TikzPreviewModeId;
   requestedMode?: TikzPreviewModeId;
   showInspector?: boolean;
+  showModeSwitcher?: boolean;
 }>();
 
 const emit = defineEmits<{

@@ -17,23 +17,40 @@
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
     </header>
-    <main v-if="document !== null && target !== null">
-      <SourceEditor
-        class="tikz-standalone-source"
-        :source="source"
-        :theme="theme"
-        @change="source = $event"
-      />
-      <TikzWorkbench
-        :key="documentKey"
-        class="tikz-standalone-workbench"
-        :target="target"
-        :host="host"
-        :theme="theme"
-        :show-inspector="inspectorOpen"
-        :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
-        @inspector-closed="inspectorOpen = false"
-      />
+    <main v-if="document !== null && target !== null" class="workspace">
+      <nav class="view-rail" aria-label="Left views" :class="{ 'drop-target': dropSide === 'left' }"
+        @dragover.prevent="dropSide = 'left'" @dragleave="dropSide = null" @drop.prevent="dropView($event, 'left')">
+        <button v-for="view in placements.left" :key="view" type="button" draggable="true"
+          :aria-label="`${viewLabels[view]}: left sidebar`" :title="viewLabels[view]"
+          :aria-pressed="active.left === view" :class="{ selected: active.left === view }"
+          @click="toggleView('left', view)" @dragstart="startDrag($event, view)" @dragend="dropSide = null">
+          <span aria-hidden="true">{{ viewIcons[view] }}</span>
+        </button>
+      </nav>
+      <div ref="paneHost" class="pane-host" :class="{ split: bothOpen }"
+        :style="bothOpen ? { gridTemplateColumns: `${splitPercent}% 6px minmax(0, 1fr)` } : undefined">
+        <div v-if="visited.has('code')" v-show="isVisible('code')" class="view-pane" :style="paneStyle('code')">
+          <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" @change="source = $event" />
+        </div>
+        <div v-for="view in workbenchViews" :key="view" v-show="isVisible(view)" class="view-pane" :style="paneStyle(view)">
+          <TikzWorkbench v-if="visited.has(view)" :key="`${documentKey}-${view}`"
+            class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
+            :show-inspector="inspectorOpen" :show-mode-switcher="false" :initial-mode="modeForView(view)"
+            @inspector-closed="inspectorOpen = false" />
+        </div>
+        <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
+          aria-orientation="vertical" :aria-valuenow="Math.round(splitPercent)" aria-valuemin="15" aria-valuemax="85"
+          tabindex="0" @pointerdown="startResize" @keydown="resizeWithKeyboard" />
+      </div>
+      <nav class="view-rail right-rail" aria-label="Right views" :class="{ 'drop-target': dropSide === 'right' }"
+        @dragover.prevent="dropSide = 'right'" @dragleave="dropSide = null" @drop.prevent="dropView($event, 'right')">
+        <button v-for="view in placements.right" :key="view" type="button" draggable="true"
+          :aria-label="`${viewLabels[view]}: right sidebar`" :title="viewLabels[view]"
+          :aria-pressed="active.right === view" :class="{ selected: active.right === view }"
+          @click="toggleView('right', view)" @dragstart="startDrag($event, view)" @dragend="dropSide = null">
+          <span aria-hidden="true">{{ viewIcons[view] }}</span>
+        </button>
+      </nav>
     </main>
     <pre v-else-if="loadError !== ''" class="tikz-standalone-error" role="alert">{{ loadError }}</pre>
   </div>
@@ -46,12 +63,13 @@
  * serves the pinned editor pages.
  */
 
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
+import type { TikzPreviewModeId } from "../src/preview-modes";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
 import SourceEditor from "./SourceEditor.vue";
 
@@ -63,6 +81,81 @@ interface StandaloneDocument {
 
 const document = shallowRef<StandaloneDocument | null>(null);
 const documentKey = ref(0);
+type ViewId = "code" | "preview" | "canvas" | "quiver";
+type Side = "left" | "right";
+const viewLabels: Record<ViewId, string> = { code: "Code", preview: "Preview", canvas: "Canvas", quiver: "Quiver" };
+const viewIcons: Record<ViewId, string> = { code: "</>", preview: "◉", canvas: "◇", quiver: "⤧" };
+const workbenchViews: readonly Exclude<ViewId, "code">[] = ["preview", "canvas", "quiver"];
+const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["preview", "canvas", "quiver"] });
+const active = reactive<Record<Side, ViewId | null>>({ left: "code", right: "canvas" });
+const visited = reactive(new Set<ViewId>(["code", "canvas"]));
+const dropSide = ref<Side | null>(null);
+const paneHost = ref<HTMLElement | null>(null);
+const splitPercent = ref(50);
+const bothOpen = computed(() => active.left !== null && active.right !== null);
+
+function modeForView(view: Exclude<ViewId, "code">): TikzPreviewModeId {
+  return view === "preview" ? "tikz" : view === "canvas" ? "visual" : "quiver";
+}
+
+function isVisible(view: ViewId): boolean {
+  return active.left === view || active.right === view;
+}
+
+function paneStyle(view: ViewId): { gridColumn: string } {
+  if (!bothOpen.value) return { gridColumn: "1" };
+  return { gridColumn: active.left === view ? "1" : "3" };
+}
+
+function toggleView(side: Side, view: ViewId): void {
+  active[side] = active[side] === view ? null : view;
+  visited.add(view);
+}
+
+function startDrag(event: DragEvent, view: ViewId): void {
+  event.dataTransfer?.setData("application/x-visual-tikz-view", view);
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+}
+
+function dropView(event: DragEvent, destination: Side): void {
+  dropSide.value = null;
+  const view = event.dataTransfer?.getData("application/x-visual-tikz-view");
+  if (view !== "code" && view !== "preview" && view !== "canvas" && view !== "quiver") return;
+  const source: Side = placements.left.includes(view) ? "left" : "right";
+  if (source === destination) return;
+  placements[source].splice(placements[source].indexOf(view), 1);
+  placements[destination].push(view);
+  if (active[source] === view) active[source] = null;
+  active[destination] = view;
+  visited.add(view);
+}
+
+function setSplit(clientX: number): void {
+  const rect = paneHost.value?.getBoundingClientRect();
+  if (rect === undefined) return;
+  splitPercent.value = Math.max(15, Math.min(85, ((clientX - rect.left) / rect.width) * 100));
+}
+
+function startResize(event: PointerEvent): void {
+  const separator = event.currentTarget as HTMLElement;
+  separator.setPointerCapture(event.pointerId);
+  setSplit(event.clientX);
+  const move = (moveEvent: PointerEvent): void => setSplit(moveEvent.clientX);
+  const stop = (): void => {
+    separator.removeEventListener("pointermove", move);
+    separator.removeEventListener("pointerup", stop);
+    separator.removeEventListener("pointercancel", stop);
+  };
+  separator.addEventListener("pointermove", move);
+  separator.addEventListener("pointerup", stop);
+  separator.addEventListener("pointercancel", stop);
+}
+
+function resizeWithKeyboard(event: KeyboardEvent): void {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  splitPercent.value = Math.max(15, Math.min(85, splitPercent.value + (event.key === "ArrowLeft" ? -5 : 5)));
+}
 const source = ref("");
 const savedSource = ref("");
 const loadError = ref("");
@@ -155,6 +248,9 @@ async function applyDocument(response: Response): Promise<void> {
   source.value = text;
   savedSource.value = text;
   documentKey.value++;
+  const preferred: ViewId = rawTikzEnvironment(text) === "tikzcd" || document.value.path.endsWith(".tikzcd") ? "quiver" : "canvas";
+  active.right = preferred;
+  visited.add(preferred);
   hostError.value = "";
 }
 
@@ -370,15 +466,84 @@ body,
   overflow-wrap: anywhere;
 }
 
-main {
+.workspace {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(240px, 40%) minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
 }
 
+.view-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding: 8px 5px;
+  border-right: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  background: var(--leaf);
+}
+
+.right-rail {
+  border-right: 0;
+  border-left: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.view-rail.drop-target { background: color-mix(in srgb, var(--ribbon) 20%, var(--leaf)); }
+
+.view-rail button {
+  display: grid;
+  place-items: center;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--graphite);
+  font: 700 19px system-ui, sans-serif;
+  cursor: grab;
+}
+
+.view-rail button:hover, .view-rail button:focus-visible {
+  background: color-mix(in srgb, var(--ribbon) 12%, var(--leaf));
+}
+
+.view-rail button.selected {
+  color: var(--ribbon);
+  background: var(--paper);
+  box-shadow: inset 3px 0 var(--ribbon);
+}
+
+.right-rail button.selected { box-shadow: inset -3px 0 var(--ribbon); }
+
+.pane-host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.view-pane {
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.view-pane > * { width: 100%; height: 100%; }
+
+.pane-divider {
+  grid-column: 2;
+  grid-row: 1;
+  z-index: 2;
+  background: color-mix(in srgb, var(--ink) 18%, var(--leaf));
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pane-divider:hover, .pane-divider:focus-visible { background: var(--ribbon); }
+
 .tikz-standalone-source {
-  border-right: 1px solid color-mix(in srgb, currentColor 20%, transparent);
   background: var(--paper);
 }
 
@@ -408,8 +573,5 @@ main {
     display: none;
   }
 
-  main {
-    grid-template-columns: minmax(220px, 42%) minmax(0, 1fr);
-  }
 }
 </style>
