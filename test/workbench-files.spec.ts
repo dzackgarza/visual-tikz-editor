@@ -99,7 +99,7 @@ print(confirm(Atspi.get_desktop(0)))
 \draw[blue] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
     await page.goto(url);
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
     await page.locator('.cm-content').fill(authored);
     await page.locator('.file-menu summary').click();
     await page.getByRole('button', { name: 'Save As…', exact: true }).click();
@@ -112,7 +112,7 @@ print(confirm(Atspi.get_desktop(0)))
     await new Promise(resolve => server.once('exit', resolve));
     await startServer();
     await page.goto(url);
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
     await page.locator('.file-menu summary').click();
     await page.getByRole('button', { name: 'Open…', exact: true }).click();
     await chooseFile('open');

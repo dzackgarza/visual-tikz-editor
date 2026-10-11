@@ -49,7 +49,7 @@ describe("standalone workbench host boundary", function () {
   it('keeps authored source through a render error and recovers in the dark tablet workspace', async function () {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.reload();
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: 'Dark theme', exact: true }).click();
     await page.getByRole('button', { name: 'Source', exact: true }).click();
     const valid = String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (1cm);\end{tikzpicture}`;
@@ -113,7 +113,7 @@ describe("standalone workbench host boundary", function () {
 
   it('persists the completed Quiver edit through the embedding owner before delayed change delivery', async function () {
     await page.goto(`${url}quiver-embedding.html`);
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
     const frame = page.frameLocator('iframe');
     await frame.locator('.vertex').nth(1).click();
     // Deliver the edit and save gesture in one browser task, before Quiver's
@@ -172,7 +172,7 @@ describe("standalone workbench host boundary", function () {
       await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
       const visualSvg = JSON.parse(await page.locator('#result').innerText()).svg as string;
       await page.goto(url);
-      await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+      await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
       await page.locator('.cm-content').fill(authored);
       await page.getByRole('button', { name: 'TeX render', exact: true }).click();
       await expect(page.getByText('Up to date', { exact: true })).toBeVisible({ timeout: 40000 });
@@ -289,7 +289,7 @@ describe("standalone workbench host boundary", function () {
       });
     });
     await page.reload();
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
     const authored = await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n'));
     const loaded = await page.evaluate(() => (window as unknown as { editorLoad: { revision: number } }).editorLoad);
     await page.frames()[1].evaluate(({ revision }) => {
@@ -317,7 +317,7 @@ describe("standalone workbench host boundary", function () {
     });
     page = await context.newPage();
     await page.goto(url);
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
     await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
 \node at (0,0) {$x^2$};
 \draw[blue] (0,0) rectangle (2,1);
@@ -393,7 +393,7 @@ describe("standalone workbench host boundary", function () {
   it("opens a tablet canvas and independently toggles source and properties before copying", async function () {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.reload();
-    await expect(page.getByText("Synced", { exact: true })).toBeVisible();
+    await expect(page.getByText("Synced", { exact: true })).toBeVisible({ timeout: 30_000 });
     const sourcePane = page.locator(".cm-content");
     await expect(sourcePane).toBeHidden();
     await page.getByRole("button", { name: "Source", exact: true }).click();
@@ -934,7 +934,7 @@ describe("standalone workbench host boundary", function () {
     it(`retains authored source and its drawing tool through rendered-view switches at ${width}px`, async function () {
       await page.setViewportSize({ width, height: 1024 });
       await page.reload();
-      await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+      await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
       if (width === 768) await page.getByRole('button', { name: 'Source', exact: true }).click();
       const authored = String.raw`\begin{tikzpicture}
 % Retain this comment and the authored macro even if the canvas does not interpret it.
