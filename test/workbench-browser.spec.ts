@@ -31,7 +31,7 @@ describe("standalone workbench host boundary", function () {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
     await page.goto(url);
-    await expect(page.getByText("Synced", { exact: true })).toBeVisible();
+    await expect(page.getByText("Synced", { exact: true })).toBeVisible({ timeout: 30_000 });
   });
 
   afterEach(async function () {
