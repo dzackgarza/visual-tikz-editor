@@ -96,4 +96,34 @@ describe("standalone workbench host boundary", function () {
     await page.getByRole("button", { name: "Hide properties", exact: true }).click();
     assert.equal(await sourcePane.innerText(), authored);
   });
+
+  it("opens a tablet canvas and independently toggles source and properties before copying", async function () {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.reload();
+    await expect(page.getByText("Synced", { exact: true })).toBeVisible();
+    const sourcePane = page.locator(".cm-content");
+    await expect(sourcePane).toBeHidden();
+    await page.getByRole("button", { name: "Source", exact: true }).click();
+    const source = String.raw`\begin{tikzpicture}
+% Keep this authored comment.
+\draw[blue] (0,0) circle (1cm);
+\end{tikzpicture}`;
+    await sourcePane.fill(source);
+    await page.getByRole("button", { name: "Hide source", exact: true }).click();
+    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    await page.screenshot({ path: "test-results/workbench/tablet-properties.png" });
+    await expect(sourcePane).toBeHidden();
+    await page.getByRole("button", { name: "Source", exact: true }).click();
+    assert.equal(await sourcePane.innerText(), source);
+    await page.screenshot({ path: "test-results/workbench/tablet-both-panels.png" });
+    await page.getByRole("button", { name: "Hide properties", exact: true }).click();
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const writes: string[] = [];
+    page.on("request", request => { if (request.method() !== "GET") writes.push(request.url()); });
+    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(source);
+    assert.deepEqual(writes, []);
+    await sourcePane.press("Control+z");
+    await expect(sourcePane).not.toHaveText(source);
+  });
 });
