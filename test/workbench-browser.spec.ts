@@ -398,6 +398,32 @@ describe("standalone workbench host boundary", function () {
     assert.ok(samples.some((sample: { tiltX: number; tiltY: number }) => sample.tiltX === 12 && sample.tiltY === -8));
   });
 
+  it('lets the author keep handwritten ink outside geometric interpretation', async function () {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const frame = page.frameLocator('iframe');
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Properties', exact: true }).click();
+    await frame.getByRole('checkbox', { name: 'Interpret geometry', exact: true }).uncheck();
+    await page.getByRole('button', { name: 'Hide properties', exact: true }).click();
+    const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    const x = box.x + box.width * .4, y = box.y + box.height * .55;
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x + 35, y, button: 'left', buttons: 1, clickCount: 1, pointerType: 'pen', force: .5 });
+    for (let i = 1; i <= 40; i++) await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + 35 * Math.cos(i * Math.PI / 20), y: y + 35 * Math.sin(i * Math.PI / 20), button: 'left', buttons: 1, pointerType: 'pen', force: .5 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + 35, y, button: 'left', buttons: 0, clickCount: 1, pointerType: 'pen' });
+    await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+    const source = await page.evaluate(() => navigator.clipboard.readText());
+    const record = /% workbench-ink:([^\r\n]+)/.exec(source);
+    assert.ok(record);
+    const original = JSON.parse(decodeURIComponent(record[1]));
+    assert.equal(original.intent, 'ink');
+    assert.ok(original.samples.length >= 42);
+    assert.equal((source.match(/ circle /g) ?? []).length, 1, 'Only the existing circle is a recognized shape');
+    await expect(frame.getByRole('dialog', { name: 'Freehand result' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Properties', exact: true }).click();
+    await expect(frame.getByRole('checkbox', { name: 'Interpret geometry', exact: true })).not.toBeChecked();
+  });
+
   it('preserves a short pen stroke even when interpretation has no fit', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
