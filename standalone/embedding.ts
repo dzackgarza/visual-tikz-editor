@@ -14,7 +14,7 @@ function post(message: HostCommand) {
 
 function load() {
   revision++;
-  post({ action: 'load', source: source.value, autosave: 0, fileName: 'fixture.tikz', sessionId, revision, requestId: crypto.randomUUID() });
+  post({ action: 'load', source: source.value, autosave: 0, fileName: 'fixture.tikz', imageBaseUrl: `${location.origin}/`, sessionId, revision, requestId: crypto.randomUUID() });
   post({ action: 'workspace', workspace: 'canvasOnly', sessionId, revision, requestId: crypto.randomUUID() });
 }
 
@@ -24,14 +24,21 @@ function receive(event: MessageEvent) {
   if (message.event === 'init') load();
   if (message.event === 'loaded' && message.revision === revision) status.textContent = 'Loaded';
   if (message.event === 'change' && message.revision === revision) source.value = message.source;
+  if (message.event === 'reply' && message.status === 'failed') status.textContent = message.error;
 }
 
 window.addEventListener('message', receive);
 document.querySelector('#import-ink')!.addEventListener('click', () => {
   const strokes = JSON.parse(document.querySelector<HTMLTextAreaElement>('#ink')!.value);
-  editor.contentWindow!.postMessage({ action: 'import-ink', strokes, sessionId, revision,
-    requestId: crypto.randomUUID(), source: source.value }, location.origin);
+  post({ action: 'import-ink', strokes, sessionId, revision,
+    requestId: crypto.randomUUID(), source: source.value });
 });
+for (const action of ['interpret-ink', 'restore-ink'] as const) {
+  document.querySelector(`#${action}`)!.addEventListener('click', () => {
+    post({ action, source: source.value, key: document.querySelector<HTMLInputElement>('#stroke-key')!.value,
+      tolerance: 8, sessionId, revision, requestId: crypto.randomUUID() });
+  });
+}
 document.querySelector('#load')!.addEventListener('click', load);
 document.querySelector('#snapshot')!.addEventListener('click', async () => {
   status.textContent = 'Awaiting snapshot';

@@ -222,15 +222,47 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
     const saved = JSON.parse(await page.locator("#result").innerText());
     assert.deepEqual(saved.originalInk.map((entry: { stroke: unknown }) => entry.stroke), strokes);
+    await page.getByLabel("Stroke key").fill(strokes[0].key);
+    await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
+    await expect(page.getByLabel("Authored source")).not.toHaveValue(saved.source);
+    const fitted = await page.getByLabel("Authored source").inputValue();
     await page.reload();
     await expect(page.locator("#status")).toHaveText("Loaded");
-    await page.getByLabel("Authored source").fill(saved.source);
+    await page.getByLabel("Authored source").fill(fitted);
     await page.getByRole("button", { name: "Load source", exact: true }).click();
     await page.getByRole("button", { name: "Snapshot", exact: true }).click();
     await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
     const reopened = JSON.parse(await page.locator("#result").innerText());
-    assert.equal(reopened.source, saved.source);
+    assert.equal(reopened.source, fitted);
     assert.deepEqual(reopened.originalInk, saved.originalInk);
     assert.ok(reopened.svg.includes("#112233"));
+    await page.getByLabel("Stroke key").fill(strokes[0].key);
+    await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
+    await expect(page.getByLabel("Authored source")).toHaveValue(saved.source);
+    await page.frameLocator("iframe").locator('[data-canvas-viewport="true"]').press("Control+z");
+    await expect(page.getByLabel("Authored source")).toHaveValue(fitted);
+  });
+
+  it("exports an image resource that renders outside its document while offline", async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator("#status")).toHaveText("Loaded");
+    await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
+\node[inner sep=0pt] at (0,0) {\includegraphics[width=4cm]{image-resource.svg}};
+\end{tikzpicture}`);
+    await page.getByRole("button", { name: "Load source", exact: true }).click();
+    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+    const exported = JSON.parse(await page.locator("#result").innerText());
+    await page.goto(`${url}svg-viewer.html`);
+    await context.setOffline(true);
+    await page.getByLabel("Exported SVG").fill(exported.svg);
+    await page.getByRole("button", { name: "Append diagram" }).click();
+    const href = await page.locator("figure image").getAttribute("href");
+    assert.ok(href?.startsWith("data:image/svg+xml;base64,"), "The export must own the image bytes");
+    const loaded = await page.evaluate(async data => {
+      const image = new Image(); image.src = data!;
+      await image.decode(); return [image.naturalWidth, image.naturalHeight];
+    }, href);
+    assert.deepEqual(loaded, [120, 60]);
   });
 });
