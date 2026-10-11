@@ -11,7 +11,6 @@ import { existsSync } from "node:fs";
 import { readFile, realpath, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { build } from "vite";
 import {
   renderTikz,
   resolveTikzDataDir,
@@ -28,13 +27,15 @@ if (input !== undefined && input !== "" && !DIAGRAM_EXTENSIONS.has(path.extname(
 
 let documentPath = input === undefined || input === "" ? null : await realpath(input);
 let untitledSource = NEW_DIAGRAM;
-const packageRoot = path.resolve(import.meta.dir, "..");
-const pageRoot = path.join(import.meta.dir, "dist");
+const packageRoot = process.env.TIKZ_WORKBENCH_ASSETS ?? path.resolve(import.meta.dir, "..");
+const pageRoot = path.join(packageRoot, "standalone", "dist");
 const home = os.homedir();
 const untitledPath = path.join(home, "Untitled.tikz");
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".svg"]);
 
-await build({ configFile: path.join(packageRoot, "vite.config.ts"), logLevel: "warn" });
+if (!existsSync(path.join(pageRoot, "index.html"))) {
+  throw new Error(`Build the standalone page before launch: ${pageRoot}`);
+}
 
 function revisionOf(source: string): string {
   return `"${createHash("sha256").update(source).digest("hex")}"`;
