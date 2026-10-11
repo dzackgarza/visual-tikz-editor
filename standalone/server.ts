@@ -30,6 +30,8 @@ let untitledSource = NEW_DIAGRAM;
 const packageRoot = process.env.TIKZ_WORKBENCH_ASSETS ?? path.resolve(import.meta.dir, "..");
 const pageRoot = path.join(packageRoot, "standalone", "dist");
 const home = os.homedir();
+const cacheHome = process.env.XDG_CACHE_HOME || path.join(home, ".cache");
+if (!path.isAbsolute(cacheHome)) throw new Error("XDG_CACHE_HOME must be an absolute path");
 const untitledPath = path.join(home, "Untitled.tikz");
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".svg"]);
 
@@ -135,7 +137,7 @@ async function handleRender(request: Request): Promise<Response> {
   const config = {
     tikzAssetDir: resolveTikzDataDir("", home),
     templatePath: resolveTikzTemplatePath(home),
-    cacheDir: path.join(home, ".cache", "tikz-workbench"),
+    cacheDir: path.join(cacheHome, "visual-tikz-editor"),
     env: process.env,
   };
   // The page edits exactly one diagram: relative inputs resolve from its location.

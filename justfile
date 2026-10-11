@@ -18,7 +18,7 @@ build:
 package:
     bunx tauri build --bundles deb
 
-# Install the desktop app and menu entry for this user.
+# Sync the desktop app and menu entry for this user.
 install-desktop: package
     bash scripts/install-desktop.sh
 

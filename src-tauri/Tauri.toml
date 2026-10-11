@@ -1,5 +1,5 @@
 productName = "Visual TikZ Editor"
-version = "0.1.0"
+version = "../package.json"
 identifier = "com.dzackgarza.visual-tikz-editor"
 
 [build]
