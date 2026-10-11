@@ -1873,7 +1873,7 @@ index cf4cf2cf..50d8677f 100644
  }
  
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..b23c74bd 100644
+index 4e22ccfa..55fd7d4b 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -68,6 +68,11 @@ import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useC
@@ -1920,19 +1920,31 @@ index 4e22ccfa..b23c74bd 100644
 +
  export const CanvasPanel = memo(function CanvasPanel({
    repeatPreviewModel = null
-@@ -785,5 +811,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -775,4 +801,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+     toolMode,
+     selectedElementIds,
++    activeHandleId,
+     focusedScopeId,
+     hoveredElementId,
+@@ -785,5 +812,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      canvasTransform,
      fitToContentRequestToken,
 -    fitToContentModeActive,
      zoomRequestToken,
      zoomRequestDirection,
-@@ -825,5 +850,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -815,4 +841,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+     toolMode: s.toolMode,
+     selectedElementIds: s.selectedElementIds,
++    activeHandleId: s.activeHandleId,
+     focusedScopeId: s.focusedScopeId,
+     hoveredElementId: s.hoveredElementId,
+@@ -825,5 +852,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      canvasTransform: s.canvasTransform,
      fitToContentRequestToken: s.fitToContentRequestToken,
 -    fitToContentModeActive: s.fitToContentModeActive,
      zoomRequestToken: s.zoomRequestToken,
      zoomRequestDirection: s.zoomRequestDirection,
-@@ -846,6 +870,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -846,6 +872,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch: s.dispatch
    })));
 -  const { gridSize, handleSizePx, zoomSpeed, snapHapticsEnabled, mathJaxFont } = useSettingsStore(useShallow((s) => ({
@@ -1941,21 +1953,21 @@ index 4e22ccfa..b23c74bd 100644
 +    gridOpacity: s.settings.canvas.gridOpacity,
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
-@@ -890,5 +915,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -890,5 +917,5 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
 -    if (!baseSvgResult || showDocumentBounds) {
 +    if (!baseSvgResult) {
        return baseSvgResult;
      }
-@@ -897,5 +922,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -897,5 +924,5 @@ export const CanvasPanel = memo(function CanvasPanel({
        viewBox: expandSvgViewBox(baseSvgResult.viewBox, viewportSize, canvasTransform.scale)
      };
 -  }, [baseSvgResult, canvasTransform.scale, showDocumentBounds, viewportSize]);
 +  }, [baseSvgResult, canvasTransform.scale, viewportSize]);
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
-@@ -914,8 +939,26 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -914,8 +941,26 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
    const [freehandDraft, setFreehandDraft] = useState<FreehandToolDraft | null>(null);
 +  const [freehandResultOffer, setFreehandResultOffer] = useState<FreehandResultOffer | null>(null);
@@ -1982,13 +1994,13 @@ index 4e22ccfa..b23c74bd 100644
 +  const [arcDraft, setArcDraft] = useState<ArcDraft | null>(null);
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
-@@ -935,5 +978,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -935,5 +980,4 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
    const [expandedDensePathSourceId, setExpandedDensePathSourceId] = useState<string | null>(null);
 -  const fitToContentModeActiveRef = useRef(fitToContentModeActive);
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
-@@ -947,11 +989,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -947,11 +991,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      setNodeAnchorOverlay(null);
    }, []);
 -  const setFitToContentModeActive = useCallback(
@@ -2000,19 +2012,19 @@ index 4e22ccfa..b23c74bd 100644
 -  );
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
-@@ -1823,5 +1858,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1823,5 +1860,4 @@ export const CanvasPanel = memo(function CanvasPanel({
    selectedElementIdsRef.current = selectedElementIds;
    svgResultRef.current = svgResult;
 -  fitToContentModeActiveRef.current = fitToContentModeActive;
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
-@@ -1867,4 +1901,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1867,4 +1903,5 @@ export const CanvasPanel = memo(function CanvasPanel({
      pathSegmentDraft,
      pendingBezier,
 +    arcDraft,
      bezierBendDraft,
      canvasTransform
-@@ -1881,7 +1916,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1881,7 +1918,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      tabOrder,
      canvasTransform,
 -    fitToContentModeActive,
@@ -2020,7 +2032,7 @@ index 4e22ccfa..b23c74bd 100644
 -    setFitToContentModeActive,
      viewportRef,
      canvasTransformRef,
-@@ -1891,9 +1923,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1891,9 +1925,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestToken,
      zoomScaleRequestValue,
 -    activeCanvasDragKind,
@@ -2030,7 +2042,7 @@ index 4e22ccfa..b23c74bd 100644
 -    lastEditChangeToken,
      MIN_SCALE,
      MAX_SCALE
-@@ -2057,14 +2084,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2057,14 +2086,10 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const appendFreehandSamplePoint = useCallback((point: WorldPoint): WorldPoint[] | null => {
 -    let nextPoints: WorldPoint[] | null = null;
@@ -2051,7 +2063,7 @@ index 4e22ccfa..b23c74bd 100644
 +    return nextDraft.points;
    }, []);
  
-@@ -2091,8 +2114,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2091,8 +2116,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
 -    const snippet = generateFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
@@ -2062,7 +2074,7 @@ index 4e22ccfa..b23c74bd 100644
 +    if (interpretation) {
        const firstPoint = draft.points[0];
        const lastPoint = draft.points[draft.points.length - 1];
-@@ -2105,9 +2128,41 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2105,9 +2130,41 @@ export const CanvasPanel = memo(function CanvasPanel({
        const ok = applyActionWithFeedback({
          kind: "pasteStatements",
 -        snippets: [snippet],
@@ -2105,7 +2117,7 @@ index 4e22ccfa..b23c74bd 100644
 +        });
        }
      } else {
-@@ -2118,5 +2173,95 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2118,5 +2175,95 @@ export const CanvasPanel = memo(function CanvasPanel({
      setToolCursorWorld(null);
      dispatch({ type: "SET_TOOL_MODE", mode: "select" });
 -  }, [applyActionWithFeedback, canvasTransform.scale, creationStrokeColor, dispatch, freehandSmoothingPx, queueSelectionForAddedElement, setDragState]);
@@ -2202,7 +2214,7 @@ index 4e22ccfa..b23c74bd 100644
 +  }, [canvasTransform, creationStrokeColor, dispatch, freehandSmoothingPx, selectedPathForFit, svgResult]);
  
    const finalizePathDraft = useCallback(
-@@ -3148,5 +3293,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3148,5 +3295,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          currentWorld: world,
          additive: additiveSelection,
 -        baseSelectedIds: additiveSelection ? [...selectedElementIds] : []
@@ -2211,7 +2223,7 @@ index 4e22ccfa..b23c74bd 100644
 +        points: [world]
        };
        setDragState(nextMarquee);
-@@ -3172,5 +3319,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3172,5 +3321,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        scopeOverlay,
        snapshot.source,
 -      source
@@ -2219,27 +2231,33 @@ index 4e22ccfa..b23c74bd 100644
 +      toolMode
      ]
    );
-@@ -3227,4 +3375,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3227,4 +3377,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      interactionSvgRef,
      pendingBezier,
 +    arcDraft,
 +    setArcDraft,
      snapshot,
      source,
-@@ -3335,6 +3485,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3307,4 +3459,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+     setMarqueeDraft,
+     selectedElementIds,
++    activeHandleId,
+     applyActionWithFeedback,
+     snapshot,
+@@ -3335,6 +3488,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      svgResult,
      svgResultRef,
 -    fitToContentModeActive,
 -    fitToContentModeActiveRef,
      sourceBoundsSvg,
      sourceBoundsSvgRef,
-@@ -3346,5 +3494,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3346,5 +3497,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
 -    setFitToContentModeActive
    });
  
-@@ -3707,13 +3854,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3707,13 +3857,13 @@ export const CanvasPanel = memo(function CanvasPanel({
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
 -  const curveControlStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
@@ -2261,20 +2279,20 @@ index 4e22ccfa..b23c74bd 100644
 +  const snapStrokeWidth = 1;
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
-@@ -3887,4 +4034,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3887,4 +4037,5 @@ export const CanvasPanel = memo(function CanvasPanel({
          onInteractionPointerLeave={onInteractionPointerLeave}
          gridLines={gridLines}
 +        gridOpacity={gridOpacity}
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
-@@ -3914,4 +4062,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3914,4 +4065,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          nodePositionLinks={nodePositionLinks}
          marqueeBounds={marqueeBounds}
 +        marqueeShape={marqueeDraft?.shape ?? "rectangle"}
 +        marqueePoints={marqueeDraft && svgResult ? marqueeDraft.points.map((point) => worldToSvgPoint(point, svgResult.viewBox)) : []}
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
-@@ -3975,4 +4125,51 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3975,4 +4128,51 @@ export const CanvasPanel = memo(function CanvasPanel({
          RULER_SIZE={RULER_SIZE}
        />
 +      {selectedPathForFit && !freehandResultOffer ? (
@@ -3171,6 +3189,44 @@ index 7113da3e..7526298e 100644
 -function rangeContainsZero(min: number, max: number): boolean {
 -  return min <= 0 && max >= 0;
 -}
+diff --git a/packages/app/src/ui/canvas-panel/useCanvasKeyboardClipboard.ts b/packages/app/src/ui/canvas-panel/useCanvasKeyboardClipboard.ts
+index f100fe15..20ea0a68 100644
+--- a/packages/app/src/ui/canvas-panel/useCanvasKeyboardClipboard.ts
++++ b/packages/app/src/ui/canvas-panel/useCanvasKeyboardClipboard.ts
+@@ -69,4 +69,5 @@ export type UseCanvasKeyboardClipboardArgs = {
+   setMarqueeDraft: StateSetter<Extract<DragState, { kind: "marquee" }> | null>;
+   selectedElementIds: ReadonlySet<string>;
++  activeHandleId: string | null;
+   applyActionWithFeedback: ApplyActionWithFeedbackFn;
+   snapshot: CanvasSnapshot;
+@@ -150,4 +151,5 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+     setMarqueeDraft,
+     selectedElementIds,
++    activeHandleId,
+     applyActionWithFeedback,
+     snapshot,
+@@ -251,4 +253,15 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+ 
+       if ((event.key === "Delete" || event.key === "Backspace") && selectedElementIds.size > 0) {
++        const activeHandle = snapshot.editHandles.find((handle) => handle.id === activeHandleId);
++        if (selectedElementIds.size === 1 && activeHandle?.kind === "path-point" &&
++          selectedElementIds.has(activeHandle.sourceRef.sourceId)) {
++          applyActionWithFeedback({
++            kind: "deletePathPoint",
++            elementId: activeHandle.sourceRef.sourceId,
++            handleId: activeHandle.id
++          });
++          event.preventDefault();
++          return;
++        }
+         const didDelete = deleteSelection({
+           source,
+@@ -352,4 +365,5 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+       NUDGE_STEP_PT,
+       NUDGE_STEP_SHIFT_PT,
++      activeHandleId,
+       applyActionWithFeedback,
+       contextMenuState,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
 index 8078a5d4..cb937209 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
