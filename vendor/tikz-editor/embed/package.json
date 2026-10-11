@@ -16,7 +16,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "4.6.5",
-    "svgo": "4.0.1"
+    "svgo": "4.0.1",
+    "svg2tikz": "0.1.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",

@@ -1,3 +1,4 @@
+import { svgToTikz } from 'svg2tikz';
 import { z } from 'zod';
 
 const coordinate = z.number().finite();
@@ -26,6 +27,19 @@ export function tikzStrokeColor(stroke: OriginalStroke): string {
 }
 
 export function originalDrawingSource(stroke: OriginalStroke): string {
+  if (stroke.outline !== undefined) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    // The converter uses downward SVG coordinates and centimetres. The ink
+    // contract uses the same upward point coordinates as its sensor samples.
+    svg.setAttribute('viewBox', '0 -1 1 1');
+    const path = document.createElementNS(svg.namespaceURI, 'path');
+    path.setAttribute('d', stroke.outline.path);
+    path.setAttribute('fill', stroke.outline.fill);
+    svg.append(path);
+    return svgToTikz(svg, { scale: 1 / 28.4528, precision: 8 })
+      .replace('\\begin{tikzpicture}', '\\begin{scope}[yscale=-1]')
+      .replace('\\end{tikzpicture}', '\\end{scope}');
+  }
   return `\\draw[draw=${tikzStrokeColor(stroke)}] ${stroke.samples.map(sample => `(${sample.x}pt,${sample.y}pt)`).join(' -- ')};`;
 }
 export const originalAssociationSchema = z.object({

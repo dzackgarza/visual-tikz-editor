@@ -26,6 +26,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: path.join(import.meta.dirname, "standalone/index.html"),
+        quiverEmbedding: path.join(import.meta.dirname, "standalone/quiver-embedding.html"),
         embedding: path.join(import.meta.dirname, "standalone/embedding.html"),
       },
     },

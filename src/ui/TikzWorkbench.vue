@@ -159,6 +159,9 @@ const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({
   visual: false,
 });
 const copyError = ref("");
+// Rendered output is a view of the source, not its editor. Retain the last
+// editor as the read target so Save/Copy includes its unpublished changes.
+const sourceEditor = ref<TikzPreviewModeId>(requestedMode.value);
 type EditorHandle = { currentSource?: (signal: AbortSignal) => Promise<string> };
 const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
 function setEditorHandle(id: TikzPreviewModeId, handle: unknown): void {
@@ -166,7 +169,8 @@ function setEditorHandle(id: TikzPreviewModeId, handle: unknown): void {
   else editorHandles.set(id, handle as EditorHandle);
 }
 async function currentSource(signal: AbortSignal): Promise<string> {
-  const editor = editorHandles.get(displayMode.value);
+  signal.throwIfAborted();
+  const editor = editorHandles.get(sourceEditor.value);
   if (editor?.currentSource) return editor.currentSource(signal);
   return props.target.source;
 }
@@ -227,6 +231,7 @@ watch(
   () => targetIdentity(props.target),
   () => {
     requestedMode.value = props.requestedMode ?? props.initialMode ?? defaultMode();
+    sourceEditor.value = requestedMode.value;
     visitedEditors.value =
       requestedMode.value === "tikz" ? new Set() : new Set([requestedMode.value]);
     providerStatus.value = { tikz: "", quiver: "", visual: "" };
@@ -247,7 +252,10 @@ watch(
   (mode) => {
     activeStatus.value = mode === "tikz" ? "" : providerStatus.value[mode];
     activeBusy.value = mode === "tikz" ? false : providerBusy.value[mode];
-    if (mode !== "tikz") visitedEditors.value = new Set([...visitedEditors.value, mode]);
+    if (mode !== "tikz") {
+      sourceEditor.value = mode;
+      visitedEditors.value = new Set([...visitedEditors.value, mode]);
+    }
     emit("mode", mode);
   },
   { immediate: true },

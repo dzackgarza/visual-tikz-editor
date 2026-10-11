@@ -180,29 +180,36 @@ watch(
 );
 
 function applyEditorSource(source: string): void {
-  if (source === quiverSourceForSession(session.value.source)) return;
   const active = session.value;
   const current = props.host.readSource(active.source.sourceFrom, active.source.sourceTo);
   if (current !== active.source.authoredSource) {
-    // The host document changed first. The host will update the
-    // target prop and reload Quiver from the newer authority bytes; never
-    // overwrite that source with a stale iframe export.
-    return;
+    throw new Error("The host document changed before Quiver synchronized");
   }
+  if (source === quiverSourceForSession(active.source)) return;
+  const replacement = quiverReplacement(active.source, source);
+  props.host.writeSource(replacement.from, replacement.to, replacement.insert);
+  session.value = { ...active, source: replacement.next };
+  errorMessage.value = "";
+}
+
+function reportSynchronizationError(error: unknown): void {
+  errorMessage.value = error instanceof Error ? error.message : String(error);
+  props.host.reportError("Could not synchronize Quiver source into the document", error);
+}
+
+async function saveCurrentSource(): Promise<void> {
   try {
-    const replacement = quiverReplacement(active.source, source);
-    props.host.writeSource(replacement.from, replacement.to, replacement.insert);
-    session.value = { ...active, source: replacement.next };
-    errorMessage.value = "";
+    await currentSource(lifetime.signal);
+    lifetime.signal.throwIfAborted();
+    props.host.requestSave?.();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error);
-    props.host.reportError("Could not synchronize Quiver source into the document", error);
+    if (!lifetime.signal.aborted) reportSynchronizationError(error);
   }
 }
 
 async function currentSource(signal: AbortSignal): Promise<string> {
   const active = session.value;
-  if (frame.value === null || !hostReady.value) return active.source.source;
+  if (frame.value === null || !hostReady.value) throw new Error("Quiver has not loaded its source");
   const source = await requestEditorSource(frame.value, { sessionId: active.id, revision: active.revision },
     AbortSignal.any([signal, lifetime.signal]));
   if (session.value.id !== active.id || session.value.revision !== active.revision) {
@@ -232,11 +239,15 @@ function onMessage(event: MessageEvent<QuiverHostMessage>): void {
       break;
     case "zettlr-quiver:change": {
       if (typeof message.source !== "string") return;
-      applyEditorSource(message.source);
+      try {
+        applyEditorSource(message.source);
+      } catch (error) {
+        reportSynchronizationError(error);
+      }
       break;
     }
     case "zettlr-quiver:save":
-      props.host.requestSave?.();
+      void saveCurrentSource();
       break;
     case "zettlr-quiver:error":
       errorMessage.value = message.message ?? "Quiver reported an unknown error.";

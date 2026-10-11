@@ -69,6 +69,94 @@ describe("standalone workbench host boundary", function () {
     assert.equal(await page.locator('.cm-content').innerText(), valid);
   });
 
+  it('copies the final drawing immediately after switching to rendered view', async function () {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
+    const frame = page.frameLocator('iframe');
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const canvas = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    await page.mouse.move(canvas.x + 90, canvas.y + canvas.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(canvas.x + 180, canvas.y + canvas.height / 2 + 25, { steps: 12 });
+    const render = (await page.getByRole('button', { name: 'TeX render', exact: true }).boundingBox())!;
+    const copy = (await page.getByRole('button', { name: 'Copy source', exact: true }).boundingBox())!;
+    await page.mouse.up();
+    // Use the observed button positions: locator stability waits can let the
+    // editor's throttled change notification arrive before this rapid sequence.
+    await page.mouse.click(render.x + render.width / 2, render.y + render.height / 2);
+    await page.mouse.click(copy.x + copy.width / 2, copy.y + copy.height / 2);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('workbench-ink:');
+    const authored = String.raw`\begin{tikzpicture}\draw[red] (0,0) rectangle (4,3);\end{tikzpicture}`;
+    await page.locator('.cm-content').fill(authored);
+    await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(authored);
+  });
+
+  it('copies the completed Quiver edit immediately after switching to rendered view', async function () {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.locator('.cm-content').fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    const frame = page.frameLocator('iframe');
+    await frame.locator('.vertex').nth(1).click();
+    await frame.locator('.label-input').evaluate((input: HTMLInputElement) => {
+      input.value = 'ClipboardFinal';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const buttons = [...window.parent.document.querySelectorAll('button')];
+      buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
+      buttons.find(button => button.textContent?.trim() === 'Copy source')!.click();
+    });
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('ClipboardFinal');
+    const newer = String.raw`\begin{tikzcd}NewerAuthored \arrow[r] & Source\end{tikzcd}`;
+    await page.locator('.cm-content').fill(newer);
+    await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(newer);
+  });
+
+  it('persists the completed Quiver edit through the embedding owner before delayed change delivery', async function () {
+    await page.goto(`${url}quiver-embedding.html`);
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    const frame = page.frameLocator('iframe');
+    await frame.locator('.vertex').nth(1).click();
+    // Deliver the edit and save gesture in one browser task, before Quiver's
+    // 40ms change notification can update the embedding document.
+    await frame.locator('.label-input').evaluate((input: HTMLInputElement) => {
+      input.value = 'Completed';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 's', code: 'KeyS', ctrlKey: true, bubbles: true }));
+    });
+    await expect(page.getByLabel('Persisted document')).toContainText('Completed');
+    const saved = await page.evaluate(() => localStorage.getItem('embedded-diagram'));
+    assert.equal(saved, await page.getByLabel('Host document').inputValue());
+    await frame.locator('.label-input').fill('Subsequent');
+    await frame.locator('.label-input').press('Control+s');
+    await expect(page.getByLabel('Persisted document')).toContainText('Subsequent');
+    assert.equal(await page.evaluate(() => localStorage.getItem('embedded-diagram')),
+      await page.getByLabel('Host document').inputValue());
+    const persisted = await page.evaluate(() => localStorage.getItem('embedded-diagram'));
+    await page.getByRole('checkbox', { name: 'Read-only document' }).check();
+    await frame.locator('.label-input').fill('Rejected');
+    await frame.locator('.label-input').press('Control+s');
+    await expect(page.getByLabel('Host error')).toContainText('read-only');
+    assert.equal(await page.evaluate(() => localStorage.getItem('embedded-diagram')), persisted);
+    assert.equal(await page.getByLabel('Host document').inputValue(), persisted);
+    await page.getByRole('checkbox', { name: 'Read-only document' }).uncheck();
+    const newer = String.raw`\begin{tikzcd}HostAuthority \arrow[r] & Newer\end{tikzcd}`;
+    await page.getByLabel('Host document').evaluate((input: HTMLTextAreaElement, value) => {
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('iframe')!.contentDocument!.querySelector('.label-input')!
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 's', code: 'KeyS', ctrlKey: true, bubbles: true }));
+    }, newer);
+    await expect(frame.locator('.vertex').first()).toContainText('HostAuthority');
+    assert.equal(await page.getByLabel('Host document').inputValue(), newer);
+    assert.equal(await page.evaluate(() => localStorage.getItem('embedded-diagram')), persisted);
+    await frame.locator('.vertex').nth(1).click();
+    await frame.locator('.label-input').fill('Resumed');
+    await frame.locator('.label-input').press('Control+s');
+    await expect(page.getByLabel('Persisted document')).toContainText('Resumed');
+    assert.equal(await page.evaluate(() => localStorage.getItem('embedded-diagram')),
+      await page.getByLabel('Host document').inputValue());
+  });
+
   it('matches compiled geometry for filled primitives and transformed curves', async function () {
     const examples = [
       String.raw`\begin{tikzpicture}\fill[blue] (0,0) rectangle (3,2);\fill[red] (4,1) circle (.5cm);\end{tikzpicture}`,
@@ -483,7 +571,7 @@ describe("standalone workbench host boundary", function () {
         pressure: .3 + i / 40, altitude: 1.1, azimuth: .7, roll: .2,
         hoverHeight: 0, buttons: 1, capabilities: 15, id: i, tool: 0, phase: i === 0 ? 0 : 1, predicted: false,
       })),
-      outline: { path: "M0 11L76 11L76 13L0 13Z", fill: "#112233" },
+      outline: { path: "M0 5L76 5L76 35L0 35Z", fill: "#e02040" },
     }];
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
@@ -494,6 +582,28 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
     const saved = JSON.parse(await page.locator("#result").innerText());
     assert.deepEqual(saved.originalInk.map((entry: { stroke: unknown }) => entry.stroke), strokes);
+    async function assertPaintedOutline(svg: string): Promise<void> {
+      const paint = await page.evaluate((markup) => {
+        const root = new DOMParser().parseFromString(markup, 'image/svg+xml').documentElement;
+        document.body.append(root);
+        const path = root.querySelector('path[data-source-id]') as SVGPathElement;
+        const box = path.getBBox();
+        const matrix = (root as unknown as SVGSVGElement).getCTM()!.inverse().multiply(path.getCTM()!);
+        const corners = [new DOMPoint(box.x, box.y), new DOMPoint(box.x + box.width, box.y + box.height)]
+          .map(point => point.matrixTransform(matrix));
+        const origin = root.querySelector('circle') as SVGCircleElement;
+        const result = { fill: getComputedStyle(path).fill, bounds: corners.map(point => [point.x - origin.cx.baseVal.value, point.y - origin.cy.baseVal.value]),
+          interior: path.isPointInFill(new DOMPoint(box.x + box.width / 2, box.y + box.height / 2)) };
+        root.remove();
+        return result;
+      }, svg);
+      assert.equal(paint.fill, 'rgb(224, 32, 64)');
+      assert.equal(paint.interior, true);
+      assert.ok(Math.abs(paint.bounds[0][0]) < .01 && Math.abs(paint.bounds[1][0] - 76) < .01);
+      const ys = paint.bounds.map(point => point[1]).sort((a,b) => a-b);
+      assert.ok(Math.abs(ys[0] + 35) < .01 && Math.abs(ys[1] + 5) < .01, JSON.stringify(paint));
+    }
+    await assertPaintedOutline(saved.svg);
     await page.getByLabel("Stroke key").fill(strokes[0].key);
     await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
     await expect(page.getByLabel("Authored source")).not.toHaveValue(saved.source);
@@ -506,11 +616,16 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
     const reopened = JSON.parse(await page.locator("#result").innerText());
     assert.equal(reopened.source, fitted);
-    assert.deepEqual(reopened.originalInk, saved.originalInk);
+    assert.deepEqual(reopened.originalInk.map((entry: { stroke: unknown }) => entry.stroke), strokes);
     assert.ok(reopened.svg.includes("#112233"));
     await page.getByLabel("Stroke key").fill(strokes[0].key);
     await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
     await expect(page.getByLabel("Authored source")).toHaveValue(saved.source);
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const restored = JSON.parse(await page.locator('#result').innerText());
+    await assertPaintedOutline(restored.svg);
+    assert.deepEqual(restored.originalInk, saved.originalInk);
     await page.frameLocator("iframe").locator('[data-canvas-viewport="true"]').press("Control+z");
     await expect(page.getByLabel("Authored source")).toHaveValue(fitted);
     const frame = page.frameLocator('#editor');

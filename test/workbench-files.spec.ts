@@ -37,6 +37,7 @@ describe('standalone native file workflow', function () {
     await execute('xdotool', ['windowfocus', '--sync', id], { env: desktopEnv });
     await execute('import', ['-window', 'root', `test-results/workbench/native-${name}-dialog.png`], { env: desktopEnv });
     await execute('xdotool', ['key', '--clearmodifiers', 'ctrl+l'], { env: desktopEnv });
+    await execute('xdotool', ['key', '--clearmodifiers', 'ctrl+a'], { env: desktopEnv });
     await execute('xdotool', ['type', '--clearmodifiers', '--delay', '1', diagramPath], { env: desktopEnv });
     await execute('xdotool', ['key', '--clearmodifiers', 'Return'], { env: desktopEnv });
     if (name === 'open') {
@@ -152,4 +153,55 @@ print(confirm(Atspi.get_desktop(0)))
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
     assert.equal(await readFile(diagramPath, 'utf8'), await page.evaluate(() => navigator.clipboard.readText()));
   });
+  it('saves completed canvas and Quiver edits after an immediate rendered-view switch', async function () {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    for (const provider of ['visual', 'quiver']) {
+      await page.goto(url);
+      const authored = provider === 'visual'
+        ? String.raw`\begin{tikzpicture}\draw (0,0) -- (2,1);\end{tikzpicture}`
+        : String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
+      await page.locator('.cm-content').fill(authored);
+      const frame = page.frameLocator('iframe');
+      await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+      diagramPath = join(await mkdtemp(join(tmpdir(), 'workbench-render-save-')), `${provider}.tikz`);
+      if (provider === 'visual') {
+        await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+        const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await page.mouse.move(bounds.x + 80, bounds.y + bounds.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(bounds.x + 180, bounds.y + bounds.height / 2 + 25, { steps: 12 });
+        await page.mouse.up();
+        await page.evaluate(() => {
+          const buttons = [...document.querySelectorAll('button')];
+          buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
+          buttons.find(button => button.textContent?.trim() === 'Save As…')!.click();
+        });
+      } else {
+        await frame.locator('.vertex').nth(1).click();
+        await frame.locator('.label-input').evaluate((input: HTMLInputElement) => {
+          input.value = 'Completed';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          const buttons = [...window.parent.document.querySelectorAll('button')];
+          buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
+          buttons.find(button => button.textContent?.trim() === 'Save As…')!.click();
+        });
+      }
+      await chooseFile('save');
+      await expect.poll(() => existsSync(diagramPath)).toBe(true);
+      const browserWindow = await execute('xdotool', ['search', '--onlyvisible', '--class', 'chromium'], { env: desktopEnv });
+      await execute('xdotool', ['windowfocus', '--sync', browserWindow.stdout.trim().split('\n')[0]], { env: desktopEnv });
+      await page.bringToFront();
+      await page.locator('.document-bar strong').click();
+      const saved = await readFile(diagramPath, 'utf8');
+      assert.match(saved, provider === 'visual' ? /workbench-ink:/ : /Completed/);
+
+      const later = authored.replace(provider === 'visual' ? '(2,1)' : 'B', provider === 'visual' ? '(8,6)' : 'HostAuthored');
+      await page.locator('.cm-content').fill(later);
+      await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(later);
+      await page.keyboard.press('Control+s');
+      await expect.poll(() => readFile(diagramPath, 'utf8')).toBe(later);
+    }
+  });
+
 });
