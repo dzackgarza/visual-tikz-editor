@@ -416,7 +416,7 @@ describe("standalone workbench host boundary", function () {
     const result = JSON.parse(await page.locator('#result').innerText());
     assert.equal(result.originalInk.length, 1);
     assert.ok(result.originalInk[0].stroke.samples.length >= 3);
-    assert.ok(result.svg.includes('data-source-id="path:1"'));
+    assert.ok(result.svg.includes(`data-source-id="${result.originalInk[0].sourceIds[0]}"`));
     await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
   });
 
