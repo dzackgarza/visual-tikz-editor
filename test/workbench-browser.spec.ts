@@ -126,4 +126,28 @@ describe("standalone workbench host boundary", function () {
     await sourcePane.press("Control+z");
     await expect(sourcePane).not.toHaveText(source);
   });
+
+  it("returns a revision-matched drawing through the mounted embedding surface", async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator("#status")).toHaveText("Loaded");
+    const source = String.raw`\begin{tikzpicture}
+% preserve authored bytes
+\draw[red] (0,0) rectangle (3,2);
+\end{tikzpicture}`;
+    await page.getByLabel("Authored source").fill(source);
+    await page.getByRole("button", { name: "Load source", exact: true }).click();
+    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+    const result = JSON.parse(await page.locator("#result").innerText());
+    assert.equal(result.source, source);
+    assert.equal(result.revision, 2);
+    const drawing = await page.evaluate(svg => {
+      const document = new DOMParser().parseFromString(svg, "image/svg+xml");
+      return { paths: [...document.querySelectorAll("path")].map(path => path.getAttribute("d")), errors: document.querySelectorAll("parsererror").length };
+    }, result.svg);
+    assert.equal(drawing.errors, 0);
+    assert.ok(drawing.paths.some(path => path?.includes("85.358")), "The exported view must contain the authored 3cm rectangle");
+    await page.getByRole("button", { name: "Dispose", exact: true }).click();
+    await expect(page.locator("iframe")).toHaveCount(0);
+  });
 });

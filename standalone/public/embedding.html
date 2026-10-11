@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workbench embedding fixture</title>
+<style>
+body { margin: 16px; font: 16px system-ui; }
+textarea { display: block; width: 95%; height: 100px; }
+button { min-height: 44px; margin: 8px 4px 8px 0; }
+iframe { width: 100%; height: 500px; border: 1px solid #aaa; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<label>Authored source<textarea id="source">\begin{tikzpicture}
+\draw[blue] (0,0) circle (1cm);
+\end{tikzpicture}</textarea></label>
+<button id="load">Load source</button>
+<button id="snapshot">Snapshot</button>
+<button id="dispose">Dispose</button>
+<output id="status">Loading editor</output>
+<iframe id="editor" title="Embedded drawing" src="/tikz-editor/index.html"></iframe>
+<pre id="result"></pre>
+<script type="module" src="/embedding.js"></script>
+</html>
