@@ -23,6 +23,12 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        app: path.join(import.meta.dirname, "standalone/index.html"),
+        embedding: path.join(import.meta.dirname, "standalone/embedding.html"),
+      },
+    },
     // The page loads once from 127.0.0.1; Vue, CodeMirror and Viewer.js in one
     // chunk cost no network round trips, so splitting them gains nothing.
     chunkSizeWarningLimit: 1024,
