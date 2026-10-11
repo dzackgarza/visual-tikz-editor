@@ -92,6 +92,7 @@ describe("standalone workbench host boundary", function () {
       assert.ok(compiledUri);
       const difference = await page.evaluate(async ({ visualSvg, compiledUri }) => {
         const masks: number[][] = [];
+        const aspectRatios: number[] = [];
         for (const uri of [`data:image/svg+xml;charset=utf-8,${encodeURIComponent(visualSvg)}`, compiledUri]) {
           const image = new Image();
           image.src = uri;
@@ -99,7 +100,8 @@ describe("standalone workbench host boundary", function () {
           const canvas = document.createElement('canvas');
           canvas.width = canvas.height = 512;
           const context = canvas.getContext('2d')!;
-          context.drawImage(image, 0, 0, 512, 512);
+          const scale = Math.min(512 / image.naturalWidth, 512 / image.naturalHeight);
+          context.drawImage(image, 0, 0, image.naturalWidth * scale, image.naturalHeight * scale);
           const pixels = context.getImageData(0, 0, 512, 512).data;
           const mask = Array.from({ length: 512 * 512 }, (_, i) => {
             const r = pixels[i * 4], g = pixels[i * 4 + 1], b = pixels[i * 4 + 2];
@@ -114,6 +116,7 @@ describe("standalone workbench host boundary", function () {
             top = Math.min(top, Math.floor(i / 512));
             bottom = Math.max(bottom, Math.floor(i / 512));
           }
+          aspectRatios.push((right - left) / (bottom - top));
           masks.push(Array.from({ length: 128 * 128 }, (_, i) => {
             const x = Math.round(left + (i % 128) * (right - left) / 127);
             const y = Math.round(top + Math.floor(i / 128) * (bottom - top) / 127);
@@ -121,9 +124,13 @@ describe("standalone workbench host boundary", function () {
           }));
         }
         const [visual, compiled] = masks;
-        return visual.filter((value, i) => value !== compiled[i]).length / visual.length;
+        return {
+          shape: visual.filter((value, i) => value !== compiled[i]).length / visual.length,
+          aspect: Math.abs(aspectRatios[0] / aspectRatios[1] - 1),
+        };
       }, { visualSvg, compiledUri });
-      assert.ok(difference < .03, `Visual and compiled coloured geometry differ at ${difference * 100}% of normalized pixels`);
+      assert.ok(difference.shape < .03, `Visual and compiled coloured geometry differ at ${difference.shape * 100}% of normalized pixels`);
+      assert.ok(difference.aspect < .03, `Visual and compiled aspect ratios differ by ${difference.aspect * 100}%`);
     }
   });
 
@@ -742,7 +749,12 @@ describe("standalone workbench host boundary", function () {
     await page.mouse.up();
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
     await expect(page.locator('.cm-content')).toContainText('workbench-ink:');
-    const current = await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n'));
+    const current = await page.evaluate(() => navigator.clipboard.readText());
+    assert.ok(current.includes('workbench-ink-end:'));
+    // CodeMirror virtualizes long metadata lines; use its full-document copy.
+    await page.evaluate(() => navigator.clipboard.writeText('previous clipboard'));
+    await page.locator('.cm-content').press('Control+a');
+    await page.locator('.cm-content').press('Control+c');
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(current);
   });
 

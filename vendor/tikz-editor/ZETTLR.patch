@@ -1026,7 +1026,7 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..94f7cd0 100644
+index 4e22ccf..a88e169 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -54,6 +54,9 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
@@ -1146,7 +1146,15 @@ index 4e22ccf..94f7cd0 100644
      bezierBendDraft,
      canvasTransform
    });
-@@ -2055,17 +2116,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1874,6 +1935,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+     baseSvgResult,
+     svgResult,
+     viewportSize,
++    previousViewBoxRef,
+     dispatch,
+     dispatchCanvasTransform,
+     activeDocumentId,
+@@ -2055,17 +2117,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -1171,7 +1179,7 @@ index 4e22ccf..94f7cd0 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2140,182 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2141,182 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -1377,7 +1385,7 @@ index 4e22ccf..94f7cd0 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3223,9 +3421,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3223,9 +3422,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      suppressNextBackgroundClickRef,
      svgResult,
      setDragState,
@@ -1390,7 +1398,7 @@ index 4e22ccf..94f7cd0 100644
      snapshot,
      source,
      setWarning,
-@@ -3974,6 +4175,63 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4176,63 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -2196,7 +2204,7 @@ index 43f0125..cb22d80 100644
        pinchGesture = null;
      };
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af..bb50208 100644
+index de737af..0449afd 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 @@ -9,6 +9,7 @@ import {
@@ -2207,7 +2215,23 @@ index de737af..bb50208 100644
  import type { CanvasDragKind, CanvasTransform } from "../../store/types";
  import { clamp, viewportToSvgPoint } from "./geometry";
  import type { CanvasDispatch, CanvasSnapshot, ValueSetter } from "./types";
-@@ -75,6 +76,7 @@ export function useCanvasViewportPersistence({
+@@ -22,6 +23,7 @@ export type UseCanvasViewportPersistenceArgs = {
+   baseSvgResult: CanvasSnapshot["svg"];
+   svgResult: CanvasSnapshot["svg"];
+   viewportSize: { width: number; height: number };
++  previousViewBoxRef: MutableRefObject<NonNullable<CanvasSnapshot["svg"]>["viewBox"] | null>;
+   dispatch: CanvasDispatch;
+   dispatchCanvasTransform: (transform: CanvasTransform) => void;
+   activeDocumentId: string;
+@@ -51,6 +53,7 @@ export function useCanvasViewportPersistence({
+   baseSvgResult,
+   svgResult,
+   viewportSize,
++  previousViewBoxRef,
+   dispatch,
+   dispatchCanvasTransform,
+   activeDocumentId,
+@@ -75,6 +78,7 @@ export function useCanvasViewportPersistence({
    MIN_SCALE,
    MAX_SCALE
  }: UseCanvasViewportPersistenceArgs): { maxZoomScale: number } {
@@ -2215,12 +2239,20 @@ index de737af..bb50208 100644
    const viewportStateByFigureKeyRef = useRef(new Map<string, FigureViewportState>());
    const visitedFigureKeysRef = useRef(new Set<string>());
    const previousFigureViewportKeyRef = useRef<string | null>(null);
-@@ -154,6 +156,16 @@ export function useCanvasViewportPersistence({
+@@ -154,6 +158,24 @@ export function useCanvasViewportPersistence({
    }, [tabOrder]);
  
    useLayoutEffect(() => {
 +    if (pendingRestore) {
-+      if (source !== pendingRestore.source || snapshotSource !== source || !baseSvgResult) return;
++      if (source !== pendingRestore.source || snapshotSource !== source || !baseSvgResult || !svgResult ||
++          viewportSize.width <= 0 || viewportSize.height <= 0) return;
++      // Changing scale recomputes the expanded SVG view box. Wait for that view
++      // before installing the saved translation, so compensation cannot move it.
++      if (canvasTransform.scale !== pendingRestore.transform.scale) {
++        dispatchCanvasTransform(pendingRestore.transform);
++        return;
++      }
++      previousViewBoxRef.current = svgResult.viewBox;
 +      saveFigureViewportState(activeFigureViewportKey, pendingRestore.transform, pendingRestore.fitToContent);
 +      pendingFirstVisitAutoFitKeyRef.current = null;
 +      previousFigureViewportKeyRef.current = activeFigureViewportKey;
@@ -2232,11 +2264,12 @@ index de737af..bb50208 100644
      const pendingAutoFit = pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey;
      if (previousFigureViewportKeyRef.current === activeFigureViewportKey && !pendingAutoFit) {
        return;
-@@ -196,6 +208,7 @@ export function useCanvasViewportPersistence({
+@@ -196,6 +218,8 @@ export function useCanvasViewportPersistence({
      previousFigureViewportKeyRef.current = activeFigureViewportKey;
    }, [
      activeFigureViewportKey,
-+    pendingRestore, source, snapshotSource, baseSvgResult, dispatch,
++    pendingRestore, source, snapshotSource, baseSvgResult, svgResult, dispatch,
++    canvasTransform.scale, previousViewBoxRef, viewportSize.width, viewportSize.height,
      canvasTransformRef,
      dispatchCanvasTransform,
      fitToContent,
