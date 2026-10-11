@@ -119,7 +119,7 @@ index af9d6c30..182e7c67 100644
    TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
    TOGGLE_SNAP_OBJECT_POINTS: "view.toggle-snap-object-points",
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
-index 4850a87e..4fa91b1a 100644
+index 4850a87e..250a50fb 100644
 --- a/packages/app/src/settings/storage.ts
 +++ b/packages/app/src/settings/storage.ts
 @@ -1,5 +1,5 @@
@@ -129,7 +129,15 @@ index 4850a87e..4fa91b1a 100644
  import { getActiveEditorPlatform } from "../platform/current";
  
  const STORAGE_KEY = "tikz-editor:settings";
-@@ -40,7 +40,19 @@ export function loadSettings(): AppSettings {
+@@ -36,11 +36,26 @@ export function loadSettings(): AppSettings {
+       },
+       canvas: {
+         ...DEFAULT_SETTINGS.canvas,
+-        ...parsed.canvas
++        ...parsed.canvas,
++        gridOpacity: typeof parsed.canvas?.gridOpacity === "number" && Number.isFinite(parsed.canvas.gridOpacity)
++          ? Math.max(0, Math.min(100, parsed.canvas.gridOpacity))
++          : DEFAULT_SETTINGS.canvas.gridOpacity
        },
        colorPicker: {
          ...DEFAULT_SETTINGS.colorPicker,
@@ -150,7 +158,7 @@ index 4850a87e..4fa91b1a 100644
        },
        rendering: {
          ...DEFAULT_SETTINGS.rendering,
-@@ -52,6 +64,16 @@ export function loadSettings(): AppSettings {
+@@ -52,6 +67,16 @@ export function loadSettings(): AppSettings {
    }
  }
  
@@ -168,7 +176,7 @@ index 4850a87e..4fa91b1a 100644
    if (!Number.isFinite(value)) {
      return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
 diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
-index af0a7abe..e9ae3fa7 100644
+index af0a7abe..eabee417 100644
 --- a/packages/app/src/settings/types.ts
 +++ b/packages/app/src/settings/types.ts
 @@ -9,6 +9,15 @@ export type EditorSettings = {
@@ -187,7 +195,15 @@ index af0a7abe..e9ae3fa7 100644
  export type GridSize = "fine" | "standard" | "coarse";
  
  export type ColorScheme = "system" | "light" | "dark";
-@@ -49,7 +58,9 @@ export type AppSettings = {
+@@ -21,6 +30,7 @@ export type GeneralSettings = {
+ 
+ export type CanvasSettings = {
+   gridSize: GridSize;
++  gridOpacity: number;
+   handleSizePx: number;
+   zoomSpeed: number;
+   snapHapticsEnabled: boolean;
+@@ -49,7 +59,9 @@ export type AppSettings = {
    canvas: CanvasSettings;
    colorPicker: {
      accuracy: ColorPickerAccuracy;
@@ -197,7 +213,13 @@ index af0a7abe..e9ae3fa7 100644
    rendering: RenderingSettings;
  };
  
-@@ -87,7 +98,27 @@ export const DEFAULT_SETTINGS: AppSettings = {
+@@ -82,12 +94,33 @@ export const DEFAULT_SETTINGS: AppSettings = {
+   },
+   canvas: {
+     gridSize: "standard",
++    gridOpacity: 70,
+     handleSizePx: 9,
+     zoomSpeed: 0.0045,
      snapHapticsEnabled: true
    },
    colorPicker: {
@@ -1068,7 +1090,7 @@ index ba28ddb9..d702f65a 100644
    );
  }
 diff --git a/packages/app/src/ui/SettingsModal.tsx b/packages/app/src/ui/SettingsModal.tsx
-index e849b257..135a9c34 100644
+index e849b257..d5d0de72 100644
 --- a/packages/app/src/ui/SettingsModal.tsx
 +++ b/packages/app/src/ui/SettingsModal.tsx
 @@ -1,29 +1,23 @@
@@ -1218,6 +1240,23 @@ index e849b257..135a9c34 100644
              {activeCategory === "general" && (
                <div className={css.panel}>
                  <div className={css.panelTitle}>General</div>
+@@ -332,6 +400,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+                     </select>
+                   </div>
+ 
++                  <div className={css.settingRow}>
++                    <label className={css.settingLabel} htmlFor="setting-grid-opacity">
++                      Grid Opacity
++                      <span className={css.settingDesc}>{settings.canvas.gridOpacity}%</span>
++                    </label>
++                    <input id="setting-grid-opacity" className={css.range} type="range"
++                      min={0} max={100} step={1} value={settings.canvas.gridOpacity}
++                      onChange={(event) => { updateCanvasSettings({ gridOpacity: Number(event.currentTarget.value) }); }} />
++                  </div>
++
+                   <div className={css.settingRow}>
+                     <label className={css.settingLabel} htmlFor="setting-handle-size">
+                       Edit Handle Size
 diff --git a/packages/app/src/ui/StatusBar.tsx b/packages/app/src/ui/StatusBar.tsx
 index 681cb41c..fe64d736 100644
 --- a/packages/app/src/ui/StatusBar.tsx
@@ -1926,9 +1965,27 @@ index 8aeb4133..50d346db 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-index cf4cf2cf..1e712afc 100644
+index cf4cf2cf..50d8677f 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
+@@ -94,14 +94,14 @@
+ }
+ 
+ .rulerTickMinor {
+-  stroke: var(--border);
++  stroke: rgba(75, 85, 95, 0.55);
+   stroke-width: 1;
+   vector-effect: non-scaling-stroke;
+ }
+ 
+ .rulerTickMajor {
+-  stroke: var(--text-dim);
+-  stroke-width: 1;
++  stroke: rgba(60, 70, 80, 0.8);
++  stroke-width: 1.25;
+   vector-effect: non-scaling-stroke;
+ }
+ 
 @@ -122,10 +122,7 @@
    overflow: hidden;
    touch-action: none;
@@ -1965,8 +2022,72 @@ index cf4cf2cf..1e712afc 100644
  :global([data-canvas-invert]) .svgLayer {
    background: #e8e8e8;
    filter: invert(1) hue-rotate(180deg);
+@@ -323,59 +328,22 @@
+ }
+ 
+ .gridMinor {
+-  stroke: rgba(85, 82, 76, 0.16);
++  stroke: rgba(75, 85, 95, 0.55);
+   vector-effect: non-scaling-stroke;
+ }
+ 
+ .gridMajor {
+-  stroke: rgba(69, 65, 59, 0.24);
++  stroke: rgba(60, 70, 80, 0.85);
+   vector-effect: non-scaling-stroke;
+ }
+ 
+ .gridAxis {
+-  stroke: color-mix(in srgb, var(--accent-dark) 40%, transparent);
++  stroke: color-mix(in srgb, var(--accent-dark) 70%, transparent);
+   vector-effect: non-scaling-stroke;
+ }
+ 
+-:global([data-color-scheme="dark"]) .gridMinor {
+-  stroke: rgba(85, 82, 76, 0.2);
+-}
+-
+-:global([data-color-scheme="dark"]) .gridMajor {
+-  stroke: rgba(69, 65, 59, 0.32);
+-}
+-
+-:global([data-color-scheme="dark"]) .gridAxis {
+-  stroke: rgba(37, 34, 116, 0.5);
+-}
+-
+ @media (min-resolution: 2dppx) {
+-  .gridMinor {
+-    stroke: rgba(85, 82, 76, 0.12);
+-    shape-rendering: crispEdges;
+-  }
+-
+-  .gridMajor {
+-    stroke: rgba(69, 65, 59, 0.18);
+-    shape-rendering: crispEdges;
+-  }
+-
+-  .gridAxis {
+-    stroke: color-mix(in srgb, var(--accent-dark) 30%, transparent);
+-    shape-rendering: crispEdges;
+-  }
+-
+-  :global([data-color-scheme="dark"]) .gridMinor {
+-    stroke: rgba(85, 82, 76, 0.16);
+-  }
+-
+-  :global([data-color-scheme="dark"]) .gridMajor {
+-    stroke: rgba(69, 65, 59, 0.26);
+-  }
+-
+-  :global([data-color-scheme="dark"]) .gridAxis {
+-    stroke: rgba(37, 34, 116, 0.4);
+-  }
++  .gridMinor, .gridMajor, .gridAxis { shape-rendering: crispEdges; }
+ }
+ 
+ .hitRegions {
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..3256e073 100644
+index 4e22ccfa..3975fe01 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -67,8 +67,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
@@ -2035,7 +2156,18 @@ index 4e22ccfa..3256e073 100644
      zoomRequestToken: s.zoomRequestToken,
      zoomRequestDirection: s.zoomRequestDirection,
      zoomScaleRequestToken: s.zoomScaleRequestToken,
-@@ -889,14 +913,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +869,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+     showDevPanel: s.showDevPanel,
+     dispatch: s.dispatch
+   })));
+-  const { gridSize, handleSizePx, zoomSpeed, snapHapticsEnabled, mathJaxFont } = useSettingsStore(useShallow((s) => ({
++  const { gridSize, gridOpacity, handleSizePx, zoomSpeed, snapHapticsEnabled, mathJaxFont } = useSettingsStore(useShallow((s) => ({
+     gridSize: s.settings.canvas.gridSize,
++    gridOpacity: s.settings.canvas.gridOpacity,
+     handleSizePx: s.settings.canvas.handleSizePx,
+     zoomSpeed: s.settings.canvas.zoomSpeed,
+     snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
+@@ -889,14 +914,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -2052,7 +2184,7 @@ index 4e22ccfa..3256e073 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -913,10 +937,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -913,10 +938,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
    const [freehandDraft, setFreehandDraft] = useState<FreehandToolDraft | null>(null);
@@ -2081,7 +2213,7 @@ index 4e22ccfa..3256e073 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -934,7 +976,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -934,7 +977,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
    const [expandedDensePathSourceId, setExpandedDensePathSourceId] = useState<string | null>(null);
@@ -2089,7 +2221,7 @@ index 4e22ccfa..3256e073 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +987,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +988,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -2103,7 +2235,7 @@ index 4e22ccfa..3256e073 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1822,7 +1856,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1822,7 +1857,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    canvasTransformRef.current = canvasTransform;
    selectedElementIdsRef.current = selectedElementIds;
    svgResultRef.current = svgResult;
@@ -2111,7 +2243,7 @@ index 4e22ccfa..3256e073 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1866,6 +1899,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1866,6 +1900,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      pathDraft,
      pathSegmentDraft,
      pendingBezier,
@@ -2119,7 +2251,7 @@ index 4e22ccfa..3256e073 100644
      bezierBendDraft,
      canvasTransform
    });
-@@ -1880,9 +1914,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1880,9 +1915,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      activeFigureId,
      tabOrder,
      canvasTransform,
@@ -2129,7 +2261,7 @@ index 4e22ccfa..3256e073 100644
      viewportRef,
      canvasTransformRef,
      fitToContentRequestToken,
-@@ -1890,11 +1921,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1890,11 +1922,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomRequestDirection,
      zoomScaleRequestToken,
      zoomScaleRequestValue,
@@ -2141,7 +2273,7 @@ index 4e22ccfa..3256e073 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -2090,10 +2116,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2090,10 +2117,10 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
  
@@ -2154,7 +2286,7 @@ index 4e22ccfa..3256e073 100644
        const firstPoint = draft.points[0];
        const lastPoint = draft.points[draft.points.length - 1];
        queueSelectionForAddedElement(
-@@ -2104,11 +2130,43 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2104,11 +2131,43 @@ export const CanvasPanel = memo(function CanvasPanel({
        );
        const ok = applyActionWithFeedback({
          kind: "pasteStatements",
@@ -2199,7 +2331,7 @@ index 4e22ccfa..3256e073 100644
        }
      } else {
        pendingAddedSelectionRef.current = null;
-@@ -2117,7 +2175,95 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2117,7 +2176,95 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft(null);
      setToolCursorWorld(null);
      dispatch({ type: "SET_TOOL_MODE", mode: "select" });
@@ -2296,7 +2428,7 @@ index 4e22ccfa..3256e073 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3147,7 +3293,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3294,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -2307,7 +2439,7 @@ index 4e22ccfa..3256e073 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3319,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3320,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -2317,7 +2449,7 @@ index 4e22ccfa..3256e073 100644
      ]
    );
  
-@@ -3226,6 +3375,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3226,6 +3376,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      canvasTransform,
      interactionSvgRef,
      pendingBezier,
@@ -2326,7 +2458,7 @@ index 4e22ccfa..3256e073 100644
      snapshot,
      source,
      setWarning,
-@@ -3334,8 +3485,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3334,8 +3486,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      selectedElementIdsRef,
      svgResult,
      svgResultRef,
@@ -2335,7 +2467,7 @@ index 4e22ccfa..3256e073 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -3345,7 +3494,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3345,7 +3495,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomSpeed,
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
@@ -2343,7 +2475,28 @@ index 4e22ccfa..3256e073 100644
    });
  
    useCanvasGuideEffects({
-@@ -3913,6 +4061,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3709,9 +3858,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+   const curveControlStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
+   const selectionStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
+   const selectionDragStrokeWidth = 12 / Math.max(canvasTransform.scale, 1e-3);
+-  const gridMinorStrokeWidth = 0.6 / Math.max(canvasTransform.scale, 1e-3);
+-  const gridMajorStrokeWidth = 0.9 / Math.max(canvasTransform.scale, 1e-3);
+-  const gridAxisStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
++  const gridMinorStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
++  const gridMajorStrokeWidth = 1.25 / Math.max(canvasTransform.scale, 1e-3);
++  const gridAxisStrokeWidth = 1.5 / Math.max(canvasTransform.scale, 1e-3);
+   const guideStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
+   const guideHitStrokeWidth = 12 / Math.max(canvasTransform.scale, 1e-3);
+   const snapStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
+@@ -3886,6 +4035,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+         onInteractionPointerEnter={onInteractionPointerEnter}
+         onInteractionPointerLeave={onInteractionPointerLeave}
+         gridLines={gridLines}
++        gridOpacity={gridOpacity}
+         gridMinorStrokeWidth={gridMinorStrokeWidth}
+         gridMajorStrokeWidth={gridMajorStrokeWidth}
+         gridAxisStrokeWidth={gridAxisStrokeWidth}
+@@ -3913,6 +4063,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          onHoverChange={(id: string | null) => { dispatch({ type: "SET_HOVERED_ELEMENT", id }); }}
          nodePositionLinks={nodePositionLinks}
          marqueeBounds={marqueeBounds}
@@ -2352,7 +2505,7 @@ index 4e22ccfa..3256e073 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3974,6 +4124,53 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4126,53 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -2407,7 +2560,7 @@ index 4e22ccfa..3256e073 100644
          <Suspense fallback={null}>
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
-index f0ff59f8..7422a930 100644
+index f0ff59f8..a8b18851 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 @@ -45,7 +45,7 @@ import type {
@@ -2419,7 +2572,15 @@ index f0ff59f8..7422a930 100644
  import { fmt, worldToSvgY, type RulerTick, type VisibleRanges } from "./geometry";
  import { CanvasContextMenu } from "../CanvasContextMenu";
  import { RenderedTooltip } from "../RenderedTooltip";
-@@ -132,6 +132,8 @@ type CanvasPanelViewProps = {
+@@ -105,6 +105,7 @@ type CanvasPanelViewProps = {
+   onInteractionPointerEnter: (event: ReactPointerEvent<SVGSVGElement>) => void;
+   onInteractionPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
+   gridLines: GridLines | null;
++  gridOpacity: number;
+   gridMinorStrokeWidth: number;
+   gridMajorStrokeWidth: number;
+   gridAxisStrokeWidth: number;
+@@ -132,6 +133,8 @@ type CanvasPanelViewProps = {
    onHoverChange: (id: string | null) => void;
    nodePositionLinks: readonly NodePositionLinkDisplay[];
    marqueeBounds: SvgBounds | null;
@@ -2428,7 +2589,15 @@ index f0ff59f8..7422a930 100644
    selectionBoxes: readonly SelectionBoxDisplay[];
    adornmentHighlightBoxes: readonly AdornmentHighlightBox[];
    selectedAdornmentConnectors: readonly AdornmentConnectorDisplay[];
-@@ -263,6 +265,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -236,6 +239,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+     onInteractionPointerEnter,
+     onInteractionPointerLeave,
+     gridLines,
++    gridOpacity,
+     gridMinorStrokeWidth,
+     gridMajorStrokeWidth,
+     gridAxisStrokeWidth,
+@@ -263,6 +267,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      onHoverChange,
      nodePositionLinks,
      marqueeBounds,
@@ -2437,7 +2606,7 @@ index f0ff59f8..7422a930 100644
      selectionBoxes,
      adornmentHighlightBoxes,
      selectedAdornmentConnectors,
-@@ -511,6 +515,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -511,6 +517,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  onFallback={onSvgPatchFallback}
                  hostRef={svgLayerHostRef}
                />
@@ -2455,7 +2624,16 @@ index f0ff59f8..7422a930 100644
  
                {repeatPreviewModel ? (
                  <svg
-@@ -681,7 +696,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -543,7 +560,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+                 onContextMenu={onCanvasContextMenu}
+               >
+                 {gridLines && (
+-                  <g className={css.gridOverlay}>
++                  <g className={css.gridOverlay} style={{ opacity: gridOpacity / 100 }}>
+                     {gridLines.verticalMinor.map((x: number) => (
+                       <line
+                         key={`v-min-${x}`}
+@@ -681,7 +698,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    previewArrowPoints={previewArrowPoints}
                  />
  
@@ -2464,7 +2642,7 @@ index f0ff59f8..7422a930 100644
                    hitRegions={hitRegions}
                    hoveredElementId={hoveredElementId}
                    toolMode={toolMode}
-@@ -692,7 +707,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -692,7 +709,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    onElementContextMenu={onElementContextMenu}
                    onElementDoubleClick={onElementDoubleClick}
                    onHoverChange={onHoverChange}
@@ -2473,7 +2651,7 @@ index f0ff59f8..7422a930 100644
  
                  <NodePositionLinkOverlay
                    links={nodePositionLinks}
-@@ -701,6 +716,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -701,6 +718,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
  
                  <SelectionOverlay
                    marqueeBounds={marqueeBounds}
@@ -2780,6 +2958,26 @@ index a7b0a7e2..61a3c8ee 100644
  function polylineLength(points: readonly WorldPoint[]): number {
    let length = 0;
    for (let i = 1; i < points.length; i += 1) {
+diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
+index 5660d6d8..a65f5b93 100644
+--- a/packages/app/src/ui/canvas-panel/geometry.ts
++++ b/packages/app/src/ui/canvas-panel/geometry.ts
+@@ -15,6 +15,7 @@ import type { ClientPoint, SvgPoint, TextRectLocalPoint, ViewportPoint, WorldPoi
+ import type { WorldVector } from "tikz-editor/coords/index";
+ 
+ export type RulerTick = {
++  worldValue: number;
+   viewportPos: number;
+   major: boolean;
+   label?: string;
+@@ -71,6 +72,7 @@ export function buildTicks(
+   for (const worldValue of values) {
+     const major = isMultipleOfStep(worldValue, majorStep);
+     ticks.push({
++      worldValue,
+       viewportPos: mapWorldToViewport(worldValue),
+       major,
+       label: major ? formatCm(worldValue / PT_PER_CM) : undefined
 diff --git a/packages/app/src/ui/canvas-panel/overlays.tsx b/packages/app/src/ui/canvas-panel/overlays.tsx
 index 13b3ad2b..6174979a 100644
 --- a/packages/app/src/ui/canvas-panel/overlays.tsx
@@ -3110,6 +3308,86 @@ index c69a45af..3ae414de 100644
        svgResult,
        toolMode,
        viewportRef
+diff --git a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
+index 7113da3e..7526298e 100644
+--- a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
++++ b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
+@@ -2,8 +2,6 @@ import { useCallback, useMemo, type Dispatch, type MutableRefObject, type Pointe
+ import { viewportPoint as makeViewportPoint, clientPoint as makeClientPoint, px } from "tikz-editor/coords/index";
+ import {
+   buildTicks,
+-  buildValueSequence,
+-  isMultipleOfStep,
+   resolveOverlayGridSteps,
+   toViewportXFromWorld,
+   toViewportYFromWorld,
+@@ -163,36 +161,31 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+   const gridLines = useMemo((): GridLines | null => {
+     if (!svgResult || !visibleRanges || !showGrid) return null;
+ 
+-    const { minorStep, majorStep } = overlayGridSteps;
+-
+-    const worldXs = buildValueSequence(visibleRanges.worldMinX, visibleRanges.worldMaxX, minorStep, 1000);
+-    const worldYs = buildValueSequence(visibleRanges.worldMinY, visibleRanges.worldMaxY, minorStep, 1000);
+-
+     const verticalMinor: number[] = [];
+     const verticalMajor: number[] = [];
+-    const verticalAxisX = rangeContainsZero(visibleRanges.worldMinX, visibleRanges.worldMaxX) ? 0 : null;
+-    for (const worldX of worldXs) {
+-      if (isZeroGridValue(worldX)) {
++    let verticalAxisX: number | null = null;
++    for (const tick of rulers.topTicks) {
++      if (isZeroGridValue(tick.worldValue)) {
++        verticalAxisX = tick.worldValue;
+         continue;
+       }
+-      if (isMultipleOfStep(worldX, majorStep)) {
+-        verticalMajor.push(worldX);
++      if (tick.major) {
++        verticalMajor.push(tick.worldValue);
+       } else {
+-        verticalMinor.push(worldX);
++        verticalMinor.push(tick.worldValue);
+       }
+     }
+ 
+     const horizontalMinor: number[] = [];
+     const horizontalMajor: number[] = [];
+-    const horizontalAxisY = rangeContainsZero(visibleRanges.worldMinY, visibleRanges.worldMaxY)
+-      ? worldToSvgY(0, svgResult.viewBox)
+-      : null;
+-    for (const worldY of worldYs) {
+-      const svgY = worldToSvgY(worldY, svgResult.viewBox);
+-      if (isZeroGridValue(worldY)) {
++    let horizontalAxisY: number | null = null;
++    for (const tick of rulers.leftTicks) {
++      const svgY = worldToSvgY(tick.worldValue, svgResult.viewBox);
++      if (isZeroGridValue(tick.worldValue)) {
++        horizontalAxisY = svgY;
+         continue;
+       }
+-      if (isMultipleOfStep(worldY, majorStep)) {
++      if (tick.major) {
+         horizontalMajor.push(svgY);
+       } else {
+         horizontalMinor.push(svgY);
+@@ -209,7 +202,7 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+       yMin: visibleRanges.svgMinY,
+       yMax: visibleRanges.svgMaxY
+     };
+-  }, [overlayGridSteps, showGrid, svgResult, visibleRanges]);
++  }, [rulers, showGrid, svgResult, visibleRanges]);
+ 
+   const resolveGuideFromClient = useCallback(
+     (orientation: GuideOrientation, clientPoint: ClientPoint): { value: number; overViewport: boolean } | null => {
+@@ -371,7 +364,3 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+ function isZeroGridValue(value: number): boolean {
+   return Math.abs(value) < 1e-8;
+ }
+-
+-function rangeContainsZero(min: number, max: number): boolean {
+-  return min <= 0 && max >= 0;
+-}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
 index 8078a5d4..cb937209 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
