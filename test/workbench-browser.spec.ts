@@ -265,4 +265,31 @@ describe("standalone workbench host boundary", function () {
     }, href);
     assert.deepEqual(loaded, [120, 60]);
   });
+
+  it("retains pen samples when the drawing rail fits a stroke", async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator("#status")).toHaveText("Loaded");
+    const frame = page.frameLocator('#editor');
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const viewport = frame.locator('[data-canvas-viewport="true"]');
+    await viewport.scrollIntoViewIfNeeded();
+    const bounds = (await viewport.boundingBox())!;
+    const cdp = await context.newCDPSession(page);
+    const x = bounds.x + bounds.width * .35, y = bounds.y + bounds.height * .5;
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1, pointerType: 'pen', force: .4, tiltX: 12, tiltY: -8 });
+    for (let i = 1; i <= 20; i++) {
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + i * 6, y: y + Math.sin(i) * 2,
+        button: 'left', buttons: 1, pointerType: 'pen', force: .4 + i / 100, tiltX: 12, tiltY: -8 });
+    }
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + 120, y, button: 'left', buttons: 0, clickCount: 1, pointerType: 'pen' });
+    await expect(page.getByLabel('Authored source')).toHaveValue(/workbench-ink:/);
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const snapshot = JSON.parse(await page.locator('#result').innerText());
+    assert.equal(snapshot.originalInk.length, 1);
+    const samples = snapshot.originalInk[0].stroke.samples;
+    assert.ok(samples.length >= 22);
+    assert.ok(samples.some((sample: { pressure: number }) => Math.abs(sample.pressure - .5) < .01));
+    assert.ok(samples.some((sample: { tiltX: number; tiltY: number }) => sample.tiltX === 12 && sample.tiltY === -8));
+  });
 });
