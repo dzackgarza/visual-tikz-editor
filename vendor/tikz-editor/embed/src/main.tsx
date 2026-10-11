@@ -303,6 +303,7 @@ function HostBridge() {
 	const changeTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
+		const pendingCommands = new Map<string, { command: HostCommand; timer: number }>();
 		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }), () => imageBaseUrl);
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
 
@@ -336,11 +337,16 @@ function HostBridge() {
 			scheduleChange(state.source, state.sourceRevision, currentHostRevision);
 		});
 
-		const reply = (command: HostCommand, error?: CommandFailure) => postToHost({
-			event: 'reply', requestId: command.requestId, sessionId: command.sessionId,
-			revision: command.revision, action: command.action,
-			status: error === undefined ? 'ok' : 'failed', error,
-		});
+		const reply = (command: HostCommand, error?: CommandFailure) => {
+			const pending = pendingCommands.get(command.requestId);
+			if (pending) {
+				window.clearTimeout(pending.timer);
+				pendingCommands.delete(command.requestId);
+			}
+			postToHost({ event: 'reply', requestId: command.requestId, sessionId: command.sessionId,
+				revision: command.revision, action: command.action,
+				status: error === undefined ? 'ok' : 'failed', error });
+		};
 
 		const handleMessage = (event: MessageEvent) => {
 			if (window.parent === window || event.source !== window.parent) return;
@@ -378,6 +384,7 @@ function HostBridge() {
 						return;
 					}
 					snapshots.replace();
+					for (const pending of pendingCommands.values()) reply(pending.command, 'stale-target');
 					currentHostSession = command.sessionId;
 					currentHostRevision = command.revision;
 					imageBaseUrl = command.imageBaseUrl ?? '';
@@ -400,6 +407,7 @@ function HostBridge() {
 					snapshots.request(command, currentHostSession, currentHostRevision);
 					return;
 				case 'cancel':
+					if (pendingCommands.has(command.targetRequestId)) reply(pendingCommands.get(command.targetRequestId)!.command, 'cancelled');
 					snapshots.cancel(command.targetRequestId);
 					reply(command);
 					return;
@@ -417,12 +425,19 @@ function HostBridge() {
 					reply(command);
 					return;
 				case 'workspace':
-					document.documentElement.dataset.embedWorkspace = command.workspace;
+					if (pendingCommands.has(command.requestId)) return;
+					if (pendingCommands.size >= 32) { reply(command, 'busy'); return; }
+					pendingCommands.set(command.requestId, { command,
+						timer: window.setTimeout(() => reply(command, 'timeout'), 10000) });
 					void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => {
+						if (pendingCommands.get(command.requestId)?.command !== command) return;
 						if (command.revision !== currentHostRevision) { reply(command, 'stale-target'); return; }
 						applyWorkspace(command.workspace);
+						document.documentElement.dataset.embedWorkspace = command.workspace;
 						reply(command);
-					}, () => reply(command, 'workspace-unavailable'));
+					}).catch(() => {
+						if (pendingCommands.get(command.requestId)?.command === command) reply(command, 'workspace-unavailable');
+					});
 					return;
 				case 'inspector':
 					document.documentElement.dataset.embedInspector = command.inspector ? 'open' : 'closed';
@@ -460,6 +475,8 @@ function HostBridge() {
 		window.addEventListener('keydown', handleKeydown, true);
 		return () => {
 			snapshots.dispose();
+			for (const pending of pendingCommands.values()) window.clearTimeout(pending.timer);
+			pendingCommands.clear();
 			imageObserver.disconnect();
 			unsubscribe();
 			window.removeEventListener('tikz-embed-inspector-closed', inspectorClosed);

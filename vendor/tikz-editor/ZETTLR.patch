@@ -2266,7 +2266,7 @@ index b20b72b..c9deb6f 100644
  };
  
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c6558..be3eac4 100644
+index d5c6558..83859b6 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 @@ -91,6 +91,7 @@ export function InspectorPanel() {
@@ -2281,7 +2281,7 @@ index d5c6558..be3eac4 100644
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
-+                    <label>
++                    <label className={css.checkboxControl} style={{ minHeight: 44, width: "100%" }}>
 +                      <input type="checkbox" checked={freehandInterpretGeometry}
 +                        onChange={(event) => dispatch({ type: "SET_FREEHAND_INTERPRETATION", enabled: event.currentTarget.checked })} />
 +                      Interpret geometry
