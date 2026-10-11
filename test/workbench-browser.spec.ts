@@ -300,13 +300,15 @@ describe("standalone workbench host boundary", function () {
   it('cancels a pending workspace command before it can change the editor', async function () {
     let release!: () => void;
     const delayed = new Promise<void>(resolve => { release = resolve; });
+    await page.addInitScript(() => window.addEventListener('message', event => {
+      const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (message?.event === 'loaded') (window as unknown as { loadedEditor: unknown }).loadedEditor = message;
+    }));
     await page.route('**/workspace-apply-*.js', async route => { await delayed; await route.continue(); });
     try {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator('#status')).toHaveText('Loaded');
-      await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
-      await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
-      const accepted = JSON.parse(await page.locator('#result').innerText());
+      const accepted = { ...await page.evaluate(() => (window as unknown as { loadedEditor: { sessionId: string; revision: number } }).loadedEditor), source: await page.getByLabel('Authored source').inputValue() };
       await page.evaluate(({ sessionId, revision }) => {
         const editor = document.querySelector<HTMLIFrameElement>('#editor')!;
         const output = document.createElement('pre');
