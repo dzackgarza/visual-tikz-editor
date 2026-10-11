@@ -9,6 +9,7 @@
           <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
           <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
           <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
+          <button v-if="nativeWindow" type="button" @click="requestExit">Exit</button>
         </div>
       </details>
       <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
@@ -17,6 +18,17 @@
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}<template v-if="editorStatus !== ''"> · {{ editorStatus }}</template></span>
     </header>
+    <div v-if="unsavedPrompt" class="new-kind-backdrop">
+      <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" @keydown.esc.stop.prevent="resolveUnsaved('cancel')">
+        <h2 id="unsaved-title">Save changes?</h2>
+        <p>Save changes to {{ fileName }} before {{ unsavedPrompt }}?</p>
+        <div class="unsaved-actions">
+          <button type="button" @click="resolveUnsaved('cancel')">Cancel</button>
+          <button type="button" @click="resolveUnsaved('discard')">Discard</button>
+          <button type="button" autofocus @click="resolveUnsaved('save')">Save</button>
+        </div>
+      </div>
+    </div>
     <div v-if="newKindOpen" class="new-kind-backdrop">
       <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="new-kind-title">
         <h2 id="new-kind-title">New diagram</h2>
@@ -76,7 +88,9 @@
  * serves the pinned editor pages.
  */
 
-import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
@@ -103,6 +117,11 @@ const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["p
 const active = reactive<Record<Side, ViewId | null>>({ left: null, right: "canvas" });
 const visited = reactive(new Set<ViewId>());
 const newKindOpen = ref(false);
+const nativeWindow = isTauri();
+const unsavedPrompt = ref<"closing" | "continuing" | null>(null);
+let resolvePrompt: ((choice: "save" | "discard" | "cancel") => void) | null = null;
+let allowUnload = false;
+let unlistenClose: (() => void) | null = null;
 const editorStatuses = reactive<Record<Exclude<ViewId, "code">, string>>({ preview: "", canvas: "", quiver: "" });
 const editorStatus = computed(() => {
   const visible = active.right ?? active.left;
@@ -189,7 +208,7 @@ const theme = ref<TikzWorkbenchTheme>(
 );
 
 const dirty = computed(
-  () => document.value !== null && (!document.value.saved || source.value !== savedSource.value),
+  () => document.value !== null && (source.value !== savedSource.value || (!document.value.saved && source.value !== "")),
 );
 const fileName = computed(() => document.value?.path.split("/").pop() ?? "TikZ workbench");
 const status = computed(() => {
@@ -291,12 +310,31 @@ async function load(): Promise<void> {
   }
 }
 
-function mayReplaceDocument(): boolean {
-  return source.value === savedSource.value || window.confirm("Discard unsaved changes?");
+function resolveUnsaved(choice: "save" | "discard" | "cancel"): void {
+  unsavedPrompt.value = null;
+  resolvePrompt?.(choice);
+  resolvePrompt = null;
+}
+
+async function mayLeaveDocument(action: "closing" | "continuing"): Promise<boolean> {
+  if (!dirty.value) return true;
+  if (unsavedPrompt.value !== null) return false;
+  const choice = await new Promise<"save" | "discard" | "cancel">((resolve) => {
+    resolvePrompt = resolve;
+    unsavedPrompt.value = action;
+    void nextTick(() => window.document.querySelector<HTMLButtonElement>(".unsaved-actions button:last-child")?.focus());
+  });
+  if (choice === "cancel") return false;
+  if (choice === "discard") return true;
+  return await save() && !dirty.value;
+}
+
+async function requestExit(): Promise<void> {
+  if (nativeWindow) await getCurrentWindow().close();
 }
 
 async function newDocument(): Promise<void> {
-  if (!mayReplaceDocument()) return;
+  if (!await mayLeaveDocument("continuing")) return;
   newKindOpen.value = true;
 }
 
@@ -310,7 +348,7 @@ async function createDocument(kind: "tikzpicture" | "tikzcd"): Promise<void> {
 }
 
 async function openDocument(): Promise<void> {
-  if (!mayReplaceDocument()) return;
+  if (!await mayLeaveDocument("continuing")) return;
   try {
     const response = await fetch("/api/open", { method: "POST" });
     await applyDocument(response);
@@ -320,23 +358,25 @@ async function openDocument(): Promise<void> {
   }
 }
 
-async function saveAs(): Promise<void> {
+async function saveAs(): Promise<boolean> {
   const text = source.value;
   try {
     const response = await fetch("/api/save-as", { method: "POST", body: text });
-    if (response.status === 204) return;
+    if (response.status === 204) return false;
     await responseText(response);
     document.value = metadata(response);
     savedSource.value = text;
     hostError.value = "";
+    return true;
   } catch (error) {
     host.reportError("Could not save the diagram", error);
+    return false;
   }
 }
 
-async function save(): Promise<void> {
+async function save(): Promise<boolean> {
   const current = document.value;
-  if (current === null) return;
+  if (current === null) return false;
   if (!current.saved) return await saveAs();
   const text = source.value;
   try {
@@ -351,8 +391,10 @@ async function save(): Promise<void> {
     document.value = { ...current, revision };
     savedSource.value = text;
     hostError.value = "";
+    return true;
   } catch (error) {
     host.reportError("Could not save the file", error);
+    return false;
   }
 }
 
@@ -364,8 +406,9 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onBeforeUnload(event: BeforeUnloadEvent): void {
-  if (source.value === savedSource.value) return;
+  if (allowUnload || !dirty.value) return;
   event.preventDefault();
+  event.returnValue = "";
 }
 
 function toggleTheme(): void {
@@ -380,12 +423,32 @@ function toggleInspector(): void {
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("beforeunload", onBeforeUnload);
+  if (nativeWindow) {
+    void getCurrentWindow().onCloseRequested((event) => {
+      if (!dirty.value) return;
+      event.preventDefault();
+      void mayLeaveDocument("closing").then(async (leave) => {
+        if (!leave) return;
+        allowUnload = true;
+        try {
+          await getCurrentWindow().destroy();
+        } catch (error) {
+          allowUnload = false;
+          host.reportError("Could not close the window", error);
+        }
+      });
+    }).then((unlisten) => { unlistenClose = unlisten; }).catch((error) => {
+      host.reportError("Could not guard unsaved changes", error);
+    });
+  }
   void load();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("beforeunload", onBeforeUnload);
+  unlistenClose?.();
+  resolveUnsaved("cancel");
 });
 </script>
 
@@ -526,6 +589,8 @@ body,
 .new-kind-dialog button { min-height: 56px; border: 1px solid var(--ribbon); border-radius: 10px; color: var(--ink); background: var(--leaf); font: inherit; cursor: pointer; }
 .new-kind-dialog button:hover, .new-kind-dialog button:focus-visible { background: color-mix(in srgb, var(--ribbon) 15%, var(--leaf)); }
 .new-kind-dialog .new-kind-cancel { display: block; width: 100%; min-height: 40px; margin-top: 12px; border-color: color-mix(in srgb, var(--ink) 18%, transparent); }
+.unsaved-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.unsaved-actions button { min-height: 44px; padding: 0 14px; }
 
 .workspace {
   flex: 1 1 auto;
