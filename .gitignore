@@ -1,3 +1,4 @@
 node_modules/
 standalone/dist/
 *.log
+test-results/
