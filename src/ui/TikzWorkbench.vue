@@ -27,7 +27,7 @@
         </button>
       </div>
 
-      <span class="tikz-live-preview-status">{{ unavailableMessage !== '' ? 'Unavailable' : activeStatus }}</span>
+      <span v-if="props.showStatus !== false" class="tikz-live-preview-status">{{ unavailableMessage !== '' ? 'Unavailable' : activeStatus }}</span>
       <span
         v-if="activeBusy"
         class="tikz-live-preview-spinner"
@@ -44,6 +44,7 @@
         <span aria-hidden="true">↻</span>
       </button>
       <button
+        v-if="props.showFullscreen !== false"
         type="button"
         class="tikz-live-preview-action tikz-live-preview-expand"
         :title="fullscreen ? 'Exit fullscreen preview (Esc)' : 'Open fullscreen preview'"
@@ -128,11 +129,14 @@ const props = defineProps<{
   requestedMode?: TikzPreviewModeId;
   showInspector?: boolean;
   showModeSwitcher?: boolean;
+  showStatus?: boolean;
+  showFullscreen?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
   (e: "inspectorClosed"): void;
+  (e: "status", status: string): void;
 }>();
 
 const fullscreen = ref(false);
@@ -254,7 +258,10 @@ function forceRefresh(): void {
 
 function onProviderStatus(provider: TikzPreviewModeId, status: string): void {
   providerStatus.value[provider] = status;
-  if (displayMode.value === provider) activeStatus.value = status;
+  if (displayMode.value === provider) {
+    activeStatus.value = status;
+    emit("status", status);
+  }
 }
 
 function onProviderBusy(provider: TikzPreviewModeId, busy: boolean): void {

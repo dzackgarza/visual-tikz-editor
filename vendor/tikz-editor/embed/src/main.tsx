@@ -326,6 +326,7 @@ function HostBridge() {
 
 	useEffect(() => {
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
+		useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: 'addFreehand' });
 
 		const flushChange = () => {
 			changeTimerRef.current = null;

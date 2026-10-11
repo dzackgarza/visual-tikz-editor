@@ -671,7 +671,7 @@ index 681cb41..1de10d5 100644
      case "addBezier":
        return snapHint;
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df..715a554 100644
+index a3293df..ecc07a9 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,4 @@
@@ -680,7 +680,25 @@ index a3293df..715a554 100644
  import { RiDownloadCloudLine } from "@remixicon/react";
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
-@@ -56,6 +56,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -15,7 +15,7 @@ import {
+   type ToolPopupKind
+ } from "./tool-config";
+ import { GENERATED_NODE_SHAPE_PREVIEWS } from "./generated-node-shape-previews";
+-import { ToolbarToolPopup, ToolbarPopupSection, ToolbarPopupVisualChoiceGrid } from "./ToolbarToolPopup";
++import { ToolbarToolPopup, ToolbarPopupSection, ToolbarPopupChoiceList, ToolbarPopupVisualChoiceGrid } from "./ToolbarToolPopup";
+ import popupCss from "./ToolbarToolPopup.module.css";
+ import type { ToolMode } from "../store/types";
+ import css from "./Toolbar.module.css";
+@@ -40,6 +40,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+   const selectedAddMatrixRows = useEditorStore((s) => s.selectedAddMatrixRows);
+   const selectedAddMatrixColumns = useEditorStore((s) => s.selectedAddMatrixColumns);
+   const dispatch = useEditorStore((s) => s.dispatch);
++  const historyIndex = useEditorStore((s) => s.historyIndex);
++  const historyLength = useEditorStore((s) => s.history.length);
+   const projectNamedColorSwatches = useProjectNamedColorSwatches();
+   const namedColorLookup = useMemo(
+     () => new Map(projectNamedColorSwatches.map((swatch) => [swatch.token, swatch.cssColor] as const)),
+@@ -56,10 +58,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -689,27 +707,118 @@ index a3293df..715a554 100644
  
    // Close popup when tool mode changes (unless it's a popup that can be used independently)
    useEffect(() => {
-@@ -342,8 +344,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+-    if (openPopupMode && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== toolMode) {
++    if (openPopupMode && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== "addLine" && openPopupMode !== toolMode) {
+       setOpenPopupMode(null);
+     }
+   }, [openPopupMode, toolMode]);
+@@ -111,7 +115,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+     }
+     if (popupKind === "shape-picker") {
+       return (
+-        <ToolbarPopupSection title="Shape">
++        <ToolbarPopupSection title={embedded ? "Drawing shapes" : "Shape"}>
++          {embedded ? <ToolbarPopupChoiceList
++            choices={[{ id: "addRect", label: "Rectangle" }, { id: "addEllipse", label: "Ellipse" }, { id: "addCircle", label: "Circle" }]}
++            selectedId={toolMode}
++            onSelect={(id) => {
++              dispatch({ type: "SET_TOOL_MODE", mode: id as "addRect" | "addEllipse" | "addCircle" });
++              setOpenPopupMode(null);
++            }}
++          /> : null}
++          {embedded ? <div className={popupCss.sectionTitle}>Node shapes</div> : null}
+           <ToolbarPopupVisualChoiceGrid
+             choices={SHAPE_POPUP_CHOICES}
+             selectedId={selectedAddShape}
+@@ -126,6 +139,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+         </ToolbarPopupSection>
+       );
+     }
++    if (popupKind === "line-picker") {
++      return <ToolbarPopupSection title="Line settings">
++        <ToolbarPopupChoiceList
++          choices={[{ id: "addLine", label: "Line" }, { id: "addArrow", label: "Arrow" }, { id: "addPath", label: "PL path" }]}
++          selectedId={toolMode}
++          onSelect={(id) => {
++            dispatch({ type: "SET_TOOL_MODE", mode: id as "addLine" | "addArrow" | "addPath" });
++            setOpenPopupMode(null);
++          }}
++        />
++      </ToolbarPopupSection>;
++    }
+     if (popupKind === "matrix-picker") {
+       const maxColumns = 10;
+       const maxRows = 8;
+@@ -314,6 +339,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+     );
+   };
+ 
++  const renderLineButton = () => {
++    const toolDef = TOOL_BUTTONS.find((button) => button.mode === "addLine")!;
++    const Icon = toolDef.icon;
++    return <ToolbarToolPopup key="line" open={openPopupMode === "addLine"}
++      onClose={() => setOpenPopupMode(null)} popup={renderPopup("line-picker")} popupTestId="toolbar-line-settings">
++      <RenderedTooltip content="Line settings">
++        <button type="button" className={[css.btn, ["addLine", "addArrow", "addPath"].includes(toolMode) ? css.btnActive : ""].filter(Boolean).join(" ")}
++          aria-label="Line" aria-haspopup="dialog" aria-expanded={openPopupMode === "addLine"}
++          onClick={() => setOpenPopupMode((current) => current === "addLine" ? null : "addLine")}>
++          <Icon size={18} />
++        </button>
++      </RenderedTooltip>
++    </ToolbarToolPopup>;
++  };
++
+   const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
+     const { mode, label, title, icon: Icon } = toolDef;
+     const capability = getToolCapabilityStatus(mode);
+@@ -342,8 +382,14 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
 -  return (
 -    <div className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome">
 +  const toolbar = (
-+    <div ref={toolbarRef} className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome">
++    <div ref={toolbarRef} className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome"
++      onWheel={embedded ? (event) => {
++        const strip = toolbarRef.current;
++        if (!strip || strip.scrollWidth <= strip.clientWidth) return;
++        strip.scrollLeft += event.deltaX || event.deltaY;
++        event.preventDefault();
++      } : undefined}>
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -387,4 +389,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +400,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+       ) : null}
+ 
+       <div className={css.group}>
++        {embedded ? <>
++          <RenderedTooltip content="Undo"><button type="button" className={css.btn} aria-label="Undo" disabled={historyIndex < 0} onClick={() => dispatch({ type: "UNDO" })}>↶</button></RenderedTooltip>
++          <RenderedTooltip content="Redo"><button type="button" className={css.btn} aria-label="Redo" disabled={historyIndex >= historyLength - 1} onClick={() => dispatch({ type: "REDO" })}>↷</button></RenderedTooltip>
++          <div className={css.separator} />
++        </> : null}
+         {TOOL_BUTTONS.flatMap((toolDef) => {
++          if (embedded && ["magnify", "addArrow", "addPath", "addRect", "addEllipse", "addCircle"].includes(toolDef.mode)) return [];
+           const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
+           // Special handling for bucket and shape buttons
+           let button;
+@@ -364,6 +416,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+             button = renderMatrixButton();
+           } else if (toolDef.mode === "addShape") {
+             button = renderShapeButton();
++          } else if (embedded && toolDef.mode === "addLine") {
++            button = renderLineButton();
+           } else {
+             button = renderStandardButton(toolDef);
+           }
+@@ -387,4 +441,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
 +  if (!embedded) return toolbar;
 +  return (
 +    <div data-diagram-tools>
-+      <button type="button" aria-label="Scroll tools left" onClick={() => toolbarRef.current?.scrollBy({ left: -320, behavior: "smooth" })}>‹</button>
 +      {toolbar}
-+      <button type="button" aria-label="Scroll tools right" onClick={() => toolbarRef.current?.scrollBy({ left: 320, behavior: "smooth" })}>›</button>
 +    </div>
 +  );
  }
@@ -1952,10 +2061,18 @@ index 4e8f0b6..4f6458b 100644
        const { from, to: normalizedTo } = normalizeRange(d.from, d.to, docLength);
        let to = normalizedTo;
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870..86ee099 100644
+index 0101870..8c09bbe 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
-@@ -32,6 +32,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
+@@ -2,6 +2,7 @@ import React from "react";
+ import { BASIC_PICKER_COLORS } from "../colors/color-palette";
+ import type { SnapToolPointerKind } from "tikz-editor/edit/snapping";
+ import type { ToolMode } from "../store/types";
++import { getActiveEditorPlatform } from "../platform/current";
+ 
+ // ── Custom Tool Icons ─────────────────────────────────────────────────────────
+ // All icons use a consistent 20x20 viewBox with 1.5px stroke width
+@@ -32,6 +33,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -1970,7 +2087,7 @@ index 0101870..86ee099 100644
  function MatrixIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" strokeLinecap="round" strokeLinejoin="round">
-@@ -135,6 +143,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
+@@ -135,6 +144,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -1986,7 +2103,16 @@ index 0101870..86ee099 100644
  function BucketIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-@@ -175,6 +192,8 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
+@@ -166,7 +184,7 @@ export type ToolButtonDef = {
+   separatorBefore?: true;
+ };
+ 
+-export type ToolPopupKind = "bucket-color" | "shape-picker" | "matrix-picker";
++export type ToolPopupKind = "bucket-color" | "shape-picker" | "matrix-picker" | "line-picker";
+ 
+ export const TOOL_COLOR_OPTIONS = BASIC_PICKER_COLORS;
+ 
+@@ -175,6 +193,8 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
    { mode: "select",     label: "Select",   title: "Select (V)",   shortcut: "v", icon: SelectIcon },
    { mode: "magnify",    label: "Magnify",  title: "Magnify (M)",  shortcut: "m", icon: MagnifyIcon },
    { mode: "addNode",    label: "Node",     title: "Node (N)",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
@@ -1995,7 +2121,7 @@ index 0101870..86ee099 100644
    { mode: "addShape",   label: "Shape",    title: "Shape (S)",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
    { mode: "addMatrix",  label: "Matrix",   title: "Matrix",                      icon: MatrixIcon,   popupKind: "matrix-picker" },
    { mode: "addLine",    label: "Line",     title: "Line (L)",     shortcut: "l", icon: LineIcon,     separatorBefore: true },
-@@ -186,6 +205,7 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
+@@ -186,6 +206,7 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
    { mode: "addRect",    label: "Rect",     title: "Rectangle (R)", shortcut: "r", icon: RectIcon },
    { mode: "addEllipse", label: "Ellipse",  title: "Ellipse (E)",  shortcut: "e", icon: EllipseIcon },
    { mode: "addCircle",  label: "Circle",   title: "Circle (C)",   shortcut: "c", icon: CircleIcon },
@@ -2003,7 +2129,17 @@ index 0101870..86ee099 100644
    { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
  ];
  
-@@ -262,6 +282,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -214,7 +235,8 @@ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
+ const TOOL_CREATE_MODE_SET = new Set<ToolCreateMode>(TOOL_CREATE_MODES);
+ 
+ export function toolModeFromShortcut(key: string): ToolMode | null {
+-  return TOOL_SHORTCUT_MAP.get(key.toLowerCase()) ?? null;
++  const mode = TOOL_SHORTCUT_MAP.get(key.toLowerCase()) ?? null;
++  return mode === "magnify" && getActiveEditorPlatform().id === "zettlr-embed" ? null : mode;
+ }
+ 
+ export function resolveToolbarToolMode(currentMode: ToolMode, clickedMode: ToolMode): ToolMode {
+@@ -262,6 +284,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addEllipse: "Hold Shift to constrain to a circle",
    addGrid: "Hold Shift to constrain to a square",
    addCircle: "Drag from center to edge",
@@ -2011,7 +2147,7 @@ index 0101870..86ee099 100644
    addPath: "Click to add points, drag to bend. Click start to close, or double-click/press Enter/Esc to finish.",
    addFreehand: "Press and drag to draw",
    addBezier: "Two drags: endpoints then curve",
-@@ -270,10 +291,12 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -270,10 +293,12 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addShape: "Drag to set size",
    addMatrix: "Pick rows/columns, then click to place",
    addNode: "Click to place text",

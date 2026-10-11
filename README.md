@@ -13,13 +13,13 @@ bun install --frozen-lockfile
 just run
 ```
 
-Open the local URL printed by `just run`. The app starts with a new `tikzpicture` in the drawing canvas. The **File** menu holds New, Open, Save, and Save As. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
+Open the local URL printed by `just run`. Choose **TikZ picture** or **TikZ commutative diagram** in the new-file dialog. The first opens the drawing canvas; the second opens Quiver. The **File** menu holds New, Open, Save, and Save As. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
 
 ## Linux desktop package
 
 Run `just package` to build a Debian package in `src-tauri/target/release/bundle/deb/`. It contains a Tauri window, a compiled Bun file host, the editor assets, an application icon, and a desktop entry. Install the package with your system package manager, or run `just install-desktop` to sync a user installation under `XDG_DATA_HOME` (default `~/.local/share`). The user install stores the app in `visual-tikz-editor/`, the entry in `applications/`, and the icon in `icons/`. Run the installer again after a new build to update those files. Launch **Visual TikZ Editor** from the application menu or pass a `.tikz` or `.tikzcd` file to its command. The drawing view works without TeX; the optional **TeX render** view uses the tools and `~/.pandoc` configuration described below.
 
-The workbench offers a **TeX render** view of the same source. It uses the local `pandoc`, `pdflatex`, and `pdf2svg` tools with the Pandoc filter and standalone template under `~/.pandoc`. The standalone Quiver canvas starts with standard KaTeX macros; an embedding host supplies its document's macro definitions through the host interface. The standalone app keeps source on the left and the selected diagram view on the right at desktop and tablet widths. **Properties** opens an inspector popup over the diagram without changing the two pane layout. The light theme is the default; the theme button saves the chosen appearance locally.
+The workbench offers a **TeX render** view of the same source. It uses the local `pandoc`, `pdflatex`, and `pdf2svg` tools with the Pandoc filter and standalone template under `~/.pandoc`. The standalone Quiver canvas starts with standard KaTeX macros; an embedding host supplies its document's macro definitions through the host interface. Code, preview, canvas, and Quiver have icons on two sidebars. Drag icons between the sidebars. Click an icon to open its view, or click the active icon to close it. One open view fills the center; two open views have a movable divider. **Properties** opens an inspector popup over the diagram. The light theme is the default; the theme button saves the chosen appearance locally.
 
 ## Embed the workbench
 

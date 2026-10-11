@@ -15,9 +15,21 @@
         {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
       </button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
-      <span class="tikz-standalone-status" role="status">{{ status }}</span>
+      <span class="tikz-standalone-status" role="status">{{ status }}<template v-if="editorStatus !== ''"> · {{ editorStatus }}</template></span>
     </header>
-    <main v-if="document !== null && target !== null" class="workspace">
+    <div v-if="newKindOpen" class="new-kind-backdrop">
+      <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="new-kind-title">
+        <h2 id="new-kind-title">New diagram</h2>
+        <p>Choose a diagram type.</p>
+        <div class="new-kind-options">
+          <button type="button" @click="createDocument('tikzpicture')">TikZ picture</button>
+          <button type="button" @click="createDocument('tikzcd')">TikZ commutative diagram</button>
+        </div>
+        <button type="button" class="new-kind-cancel" @click="openDocument">Open existing…</button>
+        <button v-if="document?.saved || source !== ''" type="button" class="new-kind-cancel" @click="newKindOpen = false">Cancel</button>
+      </div>
+    </div>
+    <main v-if="document !== null && target !== null && !newKindOpen" class="workspace">
       <nav class="view-rail" aria-label="Left views" :class="{ 'drop-target': dropSide === 'left' }"
         @dragover.prevent="dropSide = 'left'" @dragleave="dropSide = null" @drop.prevent="dropView($event, 'left')">
         <button v-for="view in placements.left" :key="view" type="button" draggable="true"
@@ -35,7 +47,8 @@
         <div v-for="view in workbenchViews" :key="view" v-show="isVisible(view)" class="view-pane" :style="paneStyle(view)">
           <TikzWorkbench v-if="visited.has(view)" :key="`${documentKey}-${view}`"
             class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
-            :show-inspector="inspectorOpen" :show-mode-switcher="false" :initial-mode="modeForView(view)"
+            :show-inspector="inspectorOpen" :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
+            :initial-mode="modeForView(view)" @status="onEditorStatus(view, $event)"
             @inspector-closed="inspectorOpen = false" />
         </div>
         <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
@@ -87,8 +100,18 @@ const viewLabels: Record<ViewId, string> = { code: "Code", preview: "Preview", c
 const viewIcons: Record<ViewId, string> = { code: "</>", preview: "◉", canvas: "◇", quiver: "⤧" };
 const workbenchViews: readonly Exclude<ViewId, "code">[] = ["preview", "canvas", "quiver"];
 const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["preview", "canvas", "quiver"] });
-const active = reactive<Record<Side, ViewId | null>>({ left: "code", right: "canvas" });
-const visited = reactive(new Set<ViewId>(["code", "canvas"]));
+const active = reactive<Record<Side, ViewId | null>>({ left: null, right: "canvas" });
+const visited = reactive(new Set<ViewId>());
+const newKindOpen = ref(false);
+const editorStatuses = reactive<Record<Exclude<ViewId, "code">, string>>({ preview: "", canvas: "", quiver: "" });
+const editorStatus = computed(() => {
+  const visible = active.right ?? active.left;
+  return visible === "preview" || visible === "canvas" || visible === "quiver" ? editorStatuses[visible] : "";
+});
+
+function onEditorStatus(view: Exclude<ViewId, "code">, value: string): void {
+  editorStatuses[view] = value;
+}
 const dropSide = ref<Side | null>(null);
 const paneHost = ref<HTMLElement | null>(null);
 const splitPercent = ref(50);
@@ -248,9 +271,15 @@ async function applyDocument(response: Response): Promise<void> {
   source.value = text;
   savedSource.value = text;
   documentKey.value++;
+  newKindOpen.value = !document.value.saved && text === "";
   const preferred: ViewId = rawTikzEnvironment(text) === "tikzcd" || document.value.path.endsWith(".tikzcd") ? "quiver" : "canvas";
-  active.right = preferred;
+  visited.clear();
   visited.add(preferred);
+  active.left = null;
+  active.right = preferred;
+  editorStatuses.preview = "";
+  editorStatuses.canvas = "";
+  editorStatuses.quiver = "";
   hostError.value = "";
 }
 
@@ -268,8 +297,13 @@ function mayReplaceDocument(): boolean {
 
 async function newDocument(): Promise<void> {
   if (!mayReplaceDocument()) return;
+  newKindOpen.value = true;
+}
+
+async function createDocument(kind: "tikzpicture" | "tikzcd"): Promise<void> {
   try {
-    await applyDocument(await fetch("/api/new", { method: "POST" }));
+    await applyDocument(await fetch("/api/new", { method: "POST", body: kind }));
+    newKindOpen.value = false;
   } catch (error) {
     host.reportError("Could not create a diagram", error);
   }
@@ -278,7 +312,9 @@ async function newDocument(): Promise<void> {
 async function openDocument(): Promise<void> {
   if (!mayReplaceDocument()) return;
   try {
-    await applyDocument(await fetch("/api/open", { method: "POST" }));
+    const response = await fetch("/api/open", { method: "POST" });
+    await applyDocument(response);
+    if (response.status !== 204) newKindOpen.value = false;
   } catch (error) {
     host.reportError("Could not open a diagram", error);
   }
@@ -465,6 +501,31 @@ body,
   color: var(--graphite);
   overflow-wrap: anywhere;
 }
+
+.new-kind-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+}
+
+.new-kind-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 16px 48px color-mix(in srgb, var(--ink) 30%, transparent);
+}
+
+.new-kind-dialog h2 { margin: 0 0 8px; font-size: 20px; }
+.new-kind-dialog p { margin: 0 0 20px; color: var(--graphite); }
+.new-kind-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.new-kind-dialog button { min-height: 56px; border: 1px solid var(--ribbon); border-radius: 10px; color: var(--ink); background: var(--leaf); font: inherit; cursor: pointer; }
+.new-kind-dialog button:hover, .new-kind-dialog button:focus-visible { background: color-mix(in srgb, var(--ribbon) 15%, var(--leaf)); }
+.new-kind-dialog .new-kind-cancel { display: block; width: 100%; min-height: 40px; margin-top: 12px; border-color: color-mix(in srgb, var(--ink) 18%, transparent); }
 
 .workspace {
   flex: 1 1 auto;
