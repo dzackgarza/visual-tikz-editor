@@ -389,6 +389,7 @@ function HostBridge() {
 					if (command.state) {
 						const { dispatch } = useEditorStore.getState();
 						dispatch({ type: 'SET_TOOL_MODE', mode: command.state.tool });
+						dispatch({ type: 'SET_FREEHAND_INTERPRETATION', enabled: command.state.interpretGeometry });
 						dispatch({ type: 'SELECT_RANGE', ids: command.state.selection });
 					}
 					reply(command);

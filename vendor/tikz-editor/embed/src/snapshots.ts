@@ -66,6 +66,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
           selection: [...state.selectedElementIds], tool: state.toolMode,
           viewport: { ...state.canvasTransform },
           fitToContent: state.fitToContentModeActive,
+          interpretGeometry: state.freehandInterpretGeometry,
         },
       } as const;
       void exportSvg(drawing.svg, `figure-${request.sessionId}-${request.revision}-${sourceRevision}`, imageBaseUrl(), entry.abort.signal)

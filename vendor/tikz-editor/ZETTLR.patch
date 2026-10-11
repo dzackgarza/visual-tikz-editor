@@ -117,7 +117,7 @@ index 59fab7a..8cc20ff 100644
        { kind: "separator" },
        {
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6..f6c7479 100644
+index e0845d6..1e2b6b5 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
 @@ -33,17 +33,12 @@ const DEFAULT_ADD_MATRIX_ROWS = 2;
@@ -139,7 +139,15 @@ index e0845d6..f6c7479 100644
      hoveredElementId: null,
      activeCanvasDragKind: null,
      activeSourceScrubSourceId: null,
-@@ -100,6 +95,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
+@@ -60,6 +55,7 @@ function initialUiState(): WorkspaceEphemeralState {
+     showGuides: true,
+     showDocumentBounds: true,
+     freehandSmoothingPx: DEFAULT_FREEHAND_SMOOTHING_PX,
++    freehandInterpretGeometry: true,
+     bucketFillColor: DEFAULT_BUCKET_FILL_COLOR,
+     selectedAddShape: DEFAULT_ADD_SHAPE_PRESET,
+     selectedAddMatrixRows: DEFAULT_ADD_MATRIX_ROWS,
+@@ -100,6 +96,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
      case "align": return "Aligned elements";
      case "distribute": return "Distributed elements";
      case "flatten-foreach": return "Flattened foreach";
@@ -147,7 +155,7 @@ index e0845d6..f6c7479 100644
    }
  }
  
-@@ -107,63 +103,7 @@ function prependDeveloperLog(
+@@ -107,63 +104,7 @@ function prependDeveloperLog(
    logs: WorkspaceEphemeralState["developerLogs"],
    entry: WorkspaceEphemeralState["developerLogs"][number]
  ): WorkspaceEphemeralState["developerLogs"] {
@@ -212,7 +220,7 @@ index e0845d6..f6c7479 100644
  }
  
  function applyEditWarningToDocument(doc: DocumentSession, message: string | null): DocumentSession {
-@@ -934,6 +874,44 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -934,6 +875,44 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
  
@@ -257,7 +265,7 @@ index e0845d6..f6c7479 100644
      case "SET_SOURCE_TRANSIENT": {
        const documentId = activeDocumentIdFromAction(state, action.documentId);
        workspace = updateDocument(workspace, documentId, (doc) => {
-@@ -1094,6 +1072,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1094,6 +1073,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, toolMode: action.mode };
        break;
  
@@ -268,8 +276,19 @@ index e0845d6..f6c7479 100644
      case "SET_CANVAS_TRANSFORM":
        ui = { ...ui, canvasTransform: action.transform };
        break;
+@@ -1108,6 +1091,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+       ui = { ...ui, activeCanvasDragKind: action.kind };
+       break;
+ 
++    case "SET_FREEHAND_INTERPRETATION":
++      ui = { ...ui, freehandInterpretGeometry: action.enabled };
++      break;
++
+     case "SET_FREEHAND_SMOOTHING": {
+       const nextValue = Math.max(
+         FREEHAND_SMOOTHING_MIN_PX,
 diff --git a/packages/app/src/store/types.ts b/packages/app/src/store/types.ts
-index 450957d..df580de 100644
+index 450957d..6fd7392 100644
 --- a/packages/app/src/store/types.ts
 +++ b/packages/app/src/store/types.ts
 @@ -14,6 +14,8 @@ export type ToolMode =
@@ -307,7 +326,15 @@ index 450957d..df580de 100644
    hoveredElementId: string | null;
    activeCanvasDragKind: CanvasDragKind | null;
    /** Source id currently being edited via source-number scrubbing. */
-@@ -258,6 +263,7 @@ export type EditorState = {
+@@ -183,6 +188,7 @@ export type WorkspaceEphemeralState = {
+   showGuides: boolean;
+   showDocumentBounds: boolean;
+   freehandSmoothingPx: number;
++  freehandInterpretGeometry: boolean;
+   bucketFillColor: string;
+   selectedAddShape: Exclude<NodeShapePresetId, "custom">;
+   selectedAddMatrixRows: number;
+@@ -258,6 +264,7 @@ export type EditorState = {
    // ── canvas slice ─────────────────────────────────────────────────────────────
    toolMode: ToolMode;
    canvasTransform: CanvasTransform;
@@ -315,7 +342,15 @@ index 450957d..df580de 100644
    hoveredElementId: string | null;
    activeCanvasDragKind: CanvasDragKind | null;
    /** Source id currently being edited via source-number scrubbing. */
-@@ -354,6 +360,13 @@ export type EditorAction =
+@@ -271,6 +278,7 @@ export type EditorState = {
+   showGuides: boolean;
+   showDocumentBounds: boolean;
+   freehandSmoothingPx: number;
++  freehandInterpretGeometry: boolean;
+   bucketFillColor: string;
+   selectedAddShape: Exclude<NodeShapePresetId, "custom">;
+   selectedAddMatrixRows: number;
+@@ -354,6 +362,13 @@ export type EditorAction =
        source: string;
        changedSourceIds?: string[] | null;
      }
@@ -329,7 +364,7 @@ index 450957d..df580de 100644
    | { type: "COMPUTE_REQUESTED"; requestId: string; documentId?: string }
    | { type: "SNAPSHOT_READY"; requestId: string; snapshot: SessionSnapshot; documentId?: string }
    | { type: "REORDER_TABS"; fromId: string; toId: string }
-@@ -394,6 +407,7 @@ export type EditorAction =
+@@ -394,10 +409,12 @@ export type EditorAction =
    | { type: "SET_ACTIVE_HANDLE"; handleId: string | null }
    // Canvas
    | { type: "SET_TOOL_MODE"; mode: ToolMode }
@@ -337,8 +372,13 @@ index 450957d..df580de 100644
    | { type: "SET_CANVAS_TRANSFORM"; transform: CanvasTransform }
    | { type: "SET_HOVERED_ELEMENT"; id: string | null }
    | { type: "SET_ACTIVE_CANVAS_DRAG"; kind: CanvasDragKind | null }
+   | { type: "SET_ACTIVE_CANVAS_TEXT_EDIT"; sourceId: string | null }
++  | { type: "SET_FREEHAND_INTERPRETATION"; enabled: boolean }
+   | { type: "SET_FREEHAND_SMOOTHING"; value: number }
+   | { type: "SET_BUCKET_FILL_COLOR"; value: string }
+   | { type: "SET_ADD_SHAPE_PRESET"; value: Exclude<NodeShapePresetId, "custom"> }
 diff --git a/packages/app/src/store/workspace-state.ts b/packages/app/src/store/workspace-state.ts
-index 758bd61..58b223f 100644
+index 758bd61..4c286d3 100644
 --- a/packages/app/src/store/workspace-state.ts
 +++ b/packages/app/src/store/workspace-state.ts
 @@ -221,6 +221,7 @@ export function projectState(workspace: WorkspacePersistedState, ui: WorkspaceEp
@@ -349,7 +389,15 @@ index 758bd61..58b223f 100644
      hoveredElementId: ui.hoveredElementId,
      activeCanvasDragKind: ui.activeCanvasDragKind,
      activeSourceScrubSourceId: ui.activeSourceScrubSourceId,
-@@ -273,6 +274,7 @@ export function uiStateFromEditorState(state: EditorState): WorkspaceEphemeralSt
+@@ -232,6 +233,7 @@ export function projectState(workspace: WorkspacePersistedState, ui: WorkspaceEp
+     showGuides: ui.showGuides,
+     showDocumentBounds: ui.showDocumentBounds,
+     freehandSmoothingPx: ui.freehandSmoothingPx,
++    freehandInterpretGeometry: ui.freehandInterpretGeometry,
+     bucketFillColor: ui.bucketFillColor,
+     selectedAddShape: ui.selectedAddShape,
+     selectedAddMatrixRows: ui.selectedAddMatrixRows,
+@@ -273,6 +275,7 @@ export function uiStateFromEditorState(state: EditorState): WorkspaceEphemeralSt
    return {
      toolMode: state.toolMode,
      canvasTransform: state.canvasTransform,
@@ -357,6 +405,14 @@ index 758bd61..58b223f 100644
      hoveredElementId: state.hoveredElementId,
      activeCanvasDragKind: state.activeCanvasDragKind,
      activeSourceScrubSourceId: state.activeSourceScrubSourceId,
+@@ -284,6 +287,7 @@ export function uiStateFromEditorState(state: EditorState): WorkspaceEphemeralSt
+     showGuides: state.showGuides,
+     showDocumentBounds: state.showDocumentBounds,
+     freehandSmoothingPx: state.freehandSmoothingPx,
++    freehandInterpretGeometry: state.freehandInterpretGeometry,
+     bucketFillColor: state.bucketFillColor,
+     selectedAddShape: state.selectedAddShape,
+     selectedAddMatrixRows: state.selectedAddMatrixRows,
 diff --git a/packages/app/src/ui/DevPanel.tsx b/packages/app/src/ui/DevPanel.tsx
 index 4d4cfa9..b5595dc 100644
 --- a/packages/app/src/ui/DevPanel.tsx
@@ -970,7 +1026,7 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..a505378 100644
+index 4e22ccf..94f7cd0 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -54,6 +54,9 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
@@ -1115,7 +1171,7 @@ index 4e22ccf..a505378 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2140,181 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2140,182 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -1128,8 +1184,13 @@ index 4e22ccf..a505378 100644
      }
  
 -    const snippet = generateFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
-+    const fitted = interpretFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
++    const interpretGeometry = useEditorStore.getState().freehandInterpretGeometry;
++    const fitted = interpretGeometry ? interpretFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
        strokeColor: creationStrokeColor
++    }) : null;
++    const original = originalStrokeSchema.parse({
++      key: crypto.randomUUID(), intent: interpretGeometry ? 'geometry' : 'ink', color: normalizeColor(creationStrokeColor),
++      samples: draft.samples,
      });
 -    if (snippet) {
 -      const firstPoint = draft.points[0];
@@ -1149,10 +1210,6 @@ index 4e22ccf..a505378 100644
 -        pendingAddedSelectionRef.current = null;
 -      }
 -    } else {
-+    const original = originalStrokeSchema.parse({
-+      key: crypto.randomUUID(), intent: 'geometry', color: normalizeColor(creationStrokeColor),
-+      samples: draft.samples,
-+    });
 +    const rawSource = originalDrawingSource(original);
 +    const interpretation = fitted && fitted.kind !== 'raw'
 +      ? { ...fitted, rawSource }
@@ -1320,7 +1377,7 @@ index 4e22ccf..a505378 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3223,9 +3420,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3223,9 +3421,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      suppressNextBackgroundClickRef,
      svgResult,
      setDragState,
@@ -1333,7 +1390,7 @@ index 4e22ccf..a505378 100644
      snapshot,
      source,
      setWarning,
-@@ -3974,6 +4174,63 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4175,63 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -2045,7 +2102,7 @@ index 709cc1b..4275482 100644
        toolCursorWorld,
        snapGuideInput,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
-index 43f0125..a3d654c 100644
+index 43f0125..cb22d80 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
 @@ -175,6 +175,8 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
@@ -2079,7 +2136,11 @@ index 43f0125..a3d654c 100644
        if (event.pointerType !== "touch") {
          return;
        }
-@@ -305,6 +322,11 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -302,9 +319,15 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+       beginPinchGesture();
+       updatePinchGesture();
+       event.preventDefault();
++      event.stopImmediatePropagation();
      };
  
      const onPointerMove = (event: PointerEvent) => {
@@ -2091,7 +2152,11 @@ index 43f0125..a3d654c 100644
        if (event.pointerType !== "touch" || !activeTouchPointers.has(event.pointerId)) {
          return;
        }
-@@ -317,6 +339,12 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -314,9 +337,16 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+       }
+       updatePinchGesture();
+       event.preventDefault();
++      event.stopImmediatePropagation();
      };
  
      const onPointerUp = (event: PointerEvent) => {
@@ -2104,7 +2169,7 @@ index 43f0125..a3d654c 100644
        if (event.pointerType !== "touch" || !activeTouchPointers.has(event.pointerId)) {
          return;
        }
-@@ -329,17 +357,17 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -329,17 +359,17 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
      };
  
      viewport.addEventListener("wheel", onWheel, { passive: false });
@@ -2200,6 +2265,30 @@ index b20b72b..c9deb6f 100644
    ]
  };
  
+diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
+index d5c6558..be3eac4 100644
+--- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
++++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
+@@ -91,6 +91,7 @@ export function InspectorPanel() {
+   const toolMode = useEditorStore((s) => s.toolMode);
+   const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
+   const creationFillColor = useEditorStore((s) => s.creationFillColor);
++  const freehandInterpretGeometry = useEditorStore((s) => s.freehandInterpretGeometry);
+   const freehandSmoothingPx = useEditorStore((s) => s.freehandSmoothingPx);
+   const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
+ 
+@@ -1886,6 +1887,11 @@ export function InspectorPanel() {
+                 </SidePanel.SectionHeader>
+                 <SidePanel.SectionBody>
+                   <div className={css.property}>
++                    <label>
++                      <input type="checkbox" checked={freehandInterpretGeometry}
++                        onChange={(event) => dispatch({ type: "SET_FREEHAND_INTERPRETATION", enabled: event.currentTarget.checked })} />
++                      Interpret geometry
++                    </label>
+                     <label className={css.propertyLabel} htmlFor="inspector-freehand-smoothing">
+                       Smoothing
+                     </label>
 diff --git a/packages/app/src/ui/source-panel/SourcePanel.module.css b/packages/app/src/ui/source-panel/SourcePanel.module.css
 index f7e5e9b..7503251 100644
 --- a/packages/app/src/ui/source-panel/SourcePanel.module.css

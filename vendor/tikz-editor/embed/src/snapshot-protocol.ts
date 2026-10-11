@@ -14,6 +14,7 @@ export const editorStateSchema = z.object({
     'addCircle', 'addArc', 'addArrow', 'addBezier']),
   viewport: z.object({ scale: z.number().positive(), translateX: z.number(), translateY: z.number() }),
   fitToContent: z.boolean(),
+  interpretGeometry: z.boolean(),
 });
 
 export const snapshotRequestSchema = z.object({
