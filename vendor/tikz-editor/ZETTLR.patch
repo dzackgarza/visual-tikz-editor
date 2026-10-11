@@ -2087,7 +2087,7 @@ index cf4cf2cf..50d8677f 100644
  
  .hitRegions {
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..3975fe01 100644
+index 4e22ccfa..e670b768 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -67,8 +67,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
@@ -2475,19 +2475,30 @@ index 4e22ccfa..3975fe01 100644
    });
  
    useCanvasGuideEffects({
-@@ -3709,9 +3858,9 @@ export const CanvasPanel = memo(function CanvasPanel({
-   const curveControlStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
-   const selectionStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
+@@ -3706,15 +3855,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+ 
+   const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
+   const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
+-  const curveControlStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
+-  const selectionStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
++  const curveControlStrokeWidth = 1.1;
++  const selectionStrokeWidth = 1.1;
    const selectionDragStrokeWidth = 12 / Math.max(canvasTransform.scale, 1e-3);
 -  const gridMinorStrokeWidth = 0.6 / Math.max(canvasTransform.scale, 1e-3);
 -  const gridMajorStrokeWidth = 0.9 / Math.max(canvasTransform.scale, 1e-3);
 -  const gridAxisStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
-+  const gridMinorStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
-+  const gridMajorStrokeWidth = 1.25 / Math.max(canvasTransform.scale, 1e-3);
-+  const gridAxisStrokeWidth = 1.5 / Math.max(canvasTransform.scale, 1e-3);
-   const guideStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
-   const guideHitStrokeWidth = 12 / Math.max(canvasTransform.scale, 1e-3);
-   const snapStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
+-  const guideStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
+-  const guideHitStrokeWidth = 12 / Math.max(canvasTransform.scale, 1e-3);
+-  const snapStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
++  const gridMinorStrokeWidth = 1;
++  const gridMajorStrokeWidth = 1.25;
++  const gridAxisStrokeWidth = 1.5;
++  const guideStrokeWidth = 1;
++  const guideHitStrokeWidth = 12;
++  const snapStrokeWidth = 1;
+   const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
+   const snapSourceNames = useMemo(() => {
+     const names = new Map<string, string>();
 @@ -3886,6 +4035,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onInteractionPointerEnter={onInteractionPointerEnter}
          onInteractionPointerLeave={onInteractionPointerLeave}
@@ -2979,7 +2990,7 @@ index 5660d6d8..a65f5b93 100644
        major,
        label: major ? formatCm(worldValue / PT_PER_CM) : undefined
 diff --git a/packages/app/src/ui/canvas-panel/overlays.tsx b/packages/app/src/ui/canvas-panel/overlays.tsx
-index 13b3ad2b..6174979a 100644
+index 13b3ad2b..7a587c97 100644
 --- a/packages/app/src/ui/canvas-panel/overlays.tsx
 +++ b/packages/app/src/ui/canvas-panel/overlays.tsx
 @@ -1,6 +1,6 @@
@@ -3065,6 +3076,15 @@ index 13b3ad2b..6174979a 100644
            <rect
              className={css.marqueeRect}
              x={marqueeBounds.minX}
+@@ -1119,7 +1138,7 @@ export function HandleOverlay({
+                 y1={display.anchor.y}
+                 x2={display.point.x}
+                 y2={display.point.y}
+-                strokeWidth={handleStrokeWidth}
++                strokeWidth={1.2}
+                 onPointerDown={onPointerDown}
+                 onContextMenu={onContextMenu}
+                 data-handle-kind="rotate-element-stem"
 diff --git a/packages/app/src/ui/canvas-panel/scope-overlay.ts b/packages/app/src/ui/canvas-panel/scope-overlay.ts
 index 0766ca92..1c23b820 100644
 --- a/packages/app/src/ui/canvas-panel/scope-overlay.ts
