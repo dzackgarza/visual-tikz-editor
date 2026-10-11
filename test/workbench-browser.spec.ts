@@ -216,6 +216,31 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator("iframe")).toHaveCount(0);
   });
 
+  it('replies consistently when a completed snapshot request is repeated', async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const accepted = JSON.parse(await page.locator('#result').innerText());
+    await page.evaluate(accepted => {
+      const editor = document.querySelector<HTMLIFrameElement>('#editor')!;
+      const output = document.createElement('pre');
+      output.id = 'repeated-result';
+      document.querySelector('section')!.append(output);
+      window.addEventListener('message', event => {
+        if (event.source !== editor.contentWindow || event.origin !== location.origin) return;
+        const reply = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (reply.event === 'snapshot' && reply.requestId === accepted.requestId) output.textContent = JSON.stringify(reply);
+      });
+      editor.contentWindow!.postMessage({ action: 'snapshot', sessionId: accepted.sessionId,
+        revision: accepted.revision, requestId: accepted.requestId, source: accepted.source }, location.origin);
+    }, accepted);
+    await expect(page.locator('#repeated-result')).not.toBeEmpty();
+    assert.deepEqual(JSON.parse(await page.locator('#repeated-result').innerText()), accepted);
+    await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(accepted.source);
+  });
+
   it("retains the current drawing when an older load arrives from its host", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
