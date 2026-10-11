@@ -327,4 +327,46 @@ describe("standalone workbench host boundary", function () {
     assert.ok(accepted.svg.includes('85.358'));
     assert.ok(!accepted.svg.includes('<image'));
   });
+
+  it('offers only supported views and keeps file ownership in the standalone host', async function () {
+    await expect(page.getByRole('button', { name: 'Quiver canvas', exact: true })).toHaveCount(0);
+    await expect(page.frameLocator('iframe').getByRole('menuitem', { name: 'File', exact: true })).toBeHidden();
+    await expect(page.locator('.file-menu summary')).toBeVisible();
+  });
+
+  for (const width of [1280, 768]) {
+    it(`retains authored source and its drawing tool through rendered-view switches at ${width}px`, async function () {
+      await page.setViewportSize({ width, height: 1024 });
+      await page.reload();
+      await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+      if (width === 768) await page.getByRole('button', { name: 'Source', exact: true }).click();
+      const authored = String.raw`\begin{tikzpicture}
+% Retain this comment and the authored macro even if the canvas does not interpret it.
+\pgfmathsetmacro{\unused}{3+4}
+\draw[blue] (0,0) circle (1cm);
+\end{tikzpicture}`;
+      const sourcePane = page.locator('.cm-content');
+      await sourcePane.fill(authored);
+      await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+      const frame = page.frameLocator('iframe');
+      await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+      await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await page.getByRole('button', { name: 'TeX render', exact: true }).click();
+      await expect(page.getByText('Up to date', { exact: true })).toBeVisible({ timeout: 40000 });
+      assert.equal(await sourcePane.innerText(), authored);
+      await page.screenshot({ path: `test-results/workbench/rendered-${width}.png` });
+      await page.getByRole('button', { name: 'Drawing canvas', exact: true }).click();
+      await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      const viewport = frame.locator('[data-canvas-viewport="true"]');
+      const bounds = (await viewport.boundingBox())!;
+      await page.mouse.move(bounds.x + bounds.width / 3, bounds.y + bounds.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(bounds.x + bounds.width / 3 + 100, bounds.y + bounds.height / 2 + 25, { steps: 16 });
+      await page.mouse.up();
+      await expect(sourcePane).toContainText('workbench-ink:');
+      await viewport.press('Control+z');
+      await viewport.press('Control+z');
+      await expect(sourcePane).toHaveText(authored);
+    });
+  }
 });
