@@ -81,7 +81,7 @@ index f20fa9c3..63ab7235 100644
      "react": "^19.0.0",
      "react-dom": "^19.0.0",
 diff --git a/packages/app/src/app-menu/default-menu.ts b/packages/app/src/app-menu/default-menu.ts
-index 59fab7a8..8cc20ff6 100644
+index 59fab7a8..721bde35 100644
 --- a/packages/app/src/app-menu/default-menu.ts
 +++ b/packages/app/src/app-menu/default-menu.ts
 @@ -112,7 +112,8 @@ export const APP_MENU_DEFINITION = [
@@ -94,6 +94,30 @@ index 59fab7a8..8cc20ff6 100644
        },
        { kind: "separator" },
        {
+@@ -504,8 +505,8 @@ export const APP_MENU_DEFINITION = [
+       },
+       {
+         kind: "command",
+-        commandId: APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS,
+-        label: "Infinite Canvas"
++        commandId: APP_MENU_COMMAND_IDS.TOGGLE_OUTPUT_BOUNDS,
++        label: "Output Bounds"
+       },
+       {
+         kind: "submenu",
+diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
+index af9d6c30..182e7c67 100644
+--- a/packages/app/src/app-menu/types.ts
++++ b/packages/app/src/app-menu/types.ts
+@@ -87,7 +87,7 @@ export const APP_MENU_COMMAND_IDS = {
+   ZOOM_OUT: "view.zoom-out",
+   TOGGLE_GRID: "view.toggle-grid",
+   TOGGLE_TRANSPARENCY_GRID: "view.toggle-transparency-grid",
+-  TOGGLE_INFINITE_CANVAS: "view.toggle-infinite-canvas",
++  TOGGLE_OUTPUT_BOUNDS: "view.toggle-output-bounds",
+   TOGGLE_SNAP_GRID: "view.toggle-snap-grid",
+   TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
+   TOGGLE_SNAP_OBJECT_POINTS: "view.toggle-snap-object-points",
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
 index 4850a87e..4fa91b1a 100644
 --- a/packages/app/src/settings/storage.ts
@@ -482,20 +506,20 @@ index 450957d0..419f03a8 100644
    | { type: "REQUEST_ZOOM"; direction: ZoomRequestDirection }
    | { type: "REQUEST_ZOOM_SCALE"; scale: number }
 diff --git a/packages/app/src/store/workspace-state.ts b/packages/app/src/store/workspace-state.ts
-index 758bd611..a51aa257 100644
+index 758bd611..2489b211 100644
 --- a/packages/app/src/store/workspace-state.ts
 +++ b/packages/app/src/store/workspace-state.ts
 @@ -14,11 +14,12 @@ export const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
  \end{tikzpicture}`;
  
  export const WORKSPACE_VERSION = 3;
-+export const ACTUAL_SIZE_SCALE = 96 / 72.27;
++export const CANVAS_ZOOM_BASE_SCALE = 5;
  
  export const DEFAULT_CANVAS_TRANSFORM: CanvasTransform = {
    translateX: 0,
    translateY: 0,
 -  scale: 1
-+  scale: ACTUAL_SIZE_SCALE
++  scale: CANVAS_ZOOM_BASE_SCALE
  };
  
  export type WorkspaceSeedDocument = {
@@ -1195,13 +1219,13 @@ index e849b257..135a9c34 100644
                <div className={css.panel}>
                  <div className={css.panelTitle}>General</div>
 diff --git a/packages/app/src/ui/StatusBar.tsx b/packages/app/src/ui/StatusBar.tsx
-index 681cb41c..390dd359 100644
+index 681cb41c..fe64d736 100644
 --- a/packages/app/src/ui/StatusBar.tsx
 +++ b/packages/app/src/ui/StatusBar.tsx
 @@ -1,15 +1,12 @@
  import { RiArrowDownSLine, RiAspectRatioLine, RiGridLine } from "@remixicon/react";
  import { useEditorStore } from "../store/store";
-+import { ACTUAL_SIZE_SCALE } from "../store/workspace-state";
++import { CANVAS_ZOOM_BASE_SCALE } from "../store/workspace-state";
  import type { CanvasDragKind, ToolMode } from "../store/types";
  import { getModifierKeyLabels, type ModifierKeyLabels } from "./key-labels";
  import { useFrameTimingStats } from "./useFrameTimingStats";
@@ -1223,9 +1247,25 @@ index 681cb41c..390dd359 100644
    const showGrid = useEditorStore((s) => s.showGrid);
    const selectedIds = useEditorStore((s) => s.selectedElementIds);
    const pendingRequestId = useEditorStore((s) => s.pendingRequestId);
-@@ -66,11 +62,7 @@ export function StatusBar() {
+@@ -48,10 +44,10 @@ export function StatusBar() {
+   const figures = snapshot.figures;
+   const activeFigureIndex = activeFigureId ? figures.findIndex((figure) => figure.id === activeFigureId) : -1;
+   const showFigureContext = figures.length > 1 && activeFigureIndex >= 0;
+-  const zoomPercent = Math.round((canvasTransform.scale / ACTUAL_SIZE_SCALE) * 100);
++  const zoomPercent = Math.round((canvasTransform.scale / CANVAS_ZOOM_BASE_SCALE) * 100);
+   const fitToContentDoubleZoomPercent = canvasFitToContentScale == null
+     ? MAX_ZOOM_PERCENT
+-    : Math.ceil((canvasFitToContentScale / ACTUAL_SIZE_SCALE) * 200);
++    : Math.ceil((canvasFitToContentScale / CANVAS_ZOOM_BASE_SCALE) * 200);
+   const maxZoomPercent = Math.max(MAX_ZOOM_PERCENT, fitToContentDoubleZoomPercent, zoomPercent);
+   const sliderZoomPercent = Math.max(MIN_ZOOM_PERCENT, Math.min(maxZoomPercent, zoomPercent));
+   const zoomOptions = [...new Set([
+@@ -64,13 +60,9 @@ export function StatusBar() {
+     if (!Number.isFinite(percent)) {
+       return;
      }
-     dispatch({ type: "REQUEST_ZOOM_SCALE", scale: (percent / 100) * ACTUAL_SIZE_SCALE });
+-    dispatch({ type: "REQUEST_ZOOM_SCALE", scale: (percent / 100) * ACTUAL_SIZE_SCALE });
++    dispatch({ type: "REQUEST_ZOOM_SCALE", scale: (percent / 100) * CANVAS_ZOOM_BASE_SCALE });
    };
 -  const toggleFitToContent = () => {
 -    if (fitToContentModeActive) {
@@ -1885,8 +1925,48 @@ index 8aeb4133..50d346db 100644
        ) : null}
      </div>
    );
+diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
+index cf4cf2cf..1e712afc 100644
+--- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
++++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
+@@ -122,10 +122,7 @@
+   overflow: hidden;
+   touch-action: none;
+   outline: none;
+-  background-color: var(--bg-canvas-area);
+-  background-image:
+-    radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.16), transparent 45%),
+-    radial-gradient(circle at 90% 90%, rgba(255, 255, 255, 0.1), transparent 40%);
++  background-color: #fff;
+ }
+ 
+ .viewportTool {
+@@ -163,7 +160,7 @@
+   position: absolute;
+   inset: 0;
+   background: #fff;
+-  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
++  box-shadow: none;
+   pointer-events: none;
+   -webkit-user-select: none;
+   user-select: none;
+@@ -192,6 +189,14 @@
+   box-shadow: none;
+ }
+ 
++.outputWindow {
++  position: absolute;
++  z-index: 1;
++  border: 1px solid color-mix(in srgb, var(--accent) 72%, var(--text));
++  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 9%, transparent);
++  pointer-events: none;
++}
++
+ :global([data-canvas-invert]) .svgLayer {
+   background: #e8e8e8;
+   filter: invert(1) hue-rotate(180deg);
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..10e9aee8 100644
+index 4e22ccfa..3256e073 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -67,8 +67,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
@@ -1955,6 +2035,23 @@ index 4e22ccfa..10e9aee8 100644
      zoomRequestToken: s.zoomRequestToken,
      zoomRequestDirection: s.zoomRequestDirection,
      zoomScaleRequestToken: s.zoomScaleRequestToken,
+@@ -889,14 +913,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+   const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
+   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+   const svgResult = useMemo(() => {
+-    if (!baseSvgResult || showDocumentBounds) {
++    if (!baseSvgResult) {
+       return baseSvgResult;
+     }
+     return {
+       ...baseSvgResult,
+       viewBox: expandSvgViewBox(baseSvgResult.viewBox, viewportSize, canvasTransform.scale)
+     };
+-  }, [baseSvgResult, canvasTransform.scale, showDocumentBounds, viewportSize]);
++  }, [baseSvgResult, canvasTransform.scale, viewportSize]);
+   const svgModel = useMemo(() => {
+     if (!baseSvgModel || !svgResult) {
+       return baseSvgModel;
 @@ -913,10 +937,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
@@ -2310,7 +2407,7 @@ index 4e22ccfa..10e9aee8 100644
          <Suspense fallback={null}>
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
-index f0ff59f8..4906b42b 100644
+index f0ff59f8..7422a930 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 @@ -45,7 +45,7 @@ import type {
@@ -2340,7 +2437,25 @@ index f0ff59f8..4906b42b 100644
      selectionBoxes,
      adornmentHighlightBoxes,
      selectedAdornmentConnectors,
-@@ -681,7 +685,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -511,6 +515,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+                 onFallback={onSvgPatchFallback}
+                 hostRef={svgLayerHostRef}
+               />
++              {showDocumentBounds && snapshot.svg ? <div
++                className={css.outputWindow}
++                data-testid="canvas-output-window"
++                aria-hidden="true"
++                style={{
++                  left: (snapshot.svg.viewBox.x - svgResult.viewBox.x) * canvasTransform.scale,
++                  top: (snapshot.svg.viewBox.y - svgResult.viewBox.y) * canvasTransform.scale,
++                  width: snapshot.svg.viewBox.width * canvasTransform.scale,
++                  height: snapshot.svg.viewBox.height * canvasTransform.scale
++                }}
++              /> : null}
+ 
+               {repeatPreviewModel ? (
+                 <svg
+@@ -681,7 +696,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    previewArrowPoints={previewArrowPoints}
                  />
  
@@ -2349,7 +2464,7 @@ index f0ff59f8..4906b42b 100644
                    hitRegions={hitRegions}
                    hoveredElementId={hoveredElementId}
                    toolMode={toolMode}
-@@ -692,7 +696,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -692,7 +707,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    onElementContextMenu={onElementContextMenu}
                    onElementDoubleClick={onElementDoubleClick}
                    onHoverChange={onHoverChange}
@@ -2358,7 +2473,7 @@ index f0ff59f8..4906b42b 100644
  
                  <NodePositionLinkOverlay
                    links={nodePositionLinks}
-@@ -701,6 +705,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -701,6 +716,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
  
                  <SelectionOverlay
                    marqueeBounds={marqueeBounds}
@@ -3285,21 +3400,20 @@ index 43f01253..f3698330 100644
      viewportRef,
      zoomSpeed
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af8..e03b5426 100644
+index de737af8..9634499c 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-@@ -9,13 +9,15 @@ import {
+@@ -9,13 +9,14 @@ import {
  } from "react";
  import { px, viewportPoint } from "tikz-editor/coords/index";
  
 -import type { CanvasDragKind, CanvasTransform } from "../../store/types";
 +import type { CanvasTransform } from "../../store/types";
++import { CANVAS_ZOOM_BASE_SCALE } from "../../store/workspace-state";
  import { clamp, viewportToSvgPoint } from "./geometry";
 -import type { CanvasDispatch, CanvasSnapshot, ValueSetter } from "./types";
 +import type { CanvasDispatch, CanvasSnapshot } from "./types";
 +
-+const INITIAL_PAGE_SIZE_PT = 100;
-+const INITIAL_PAGE_MARGIN_PX = 48;
  
  type FigureViewportState = {
    transform: CanvasTransform;
@@ -3307,7 +3421,7 @@ index de737af8..e03b5426 100644
  };
  
  export type UseCanvasViewportPersistenceArgs = {
-@@ -28,9 +30,6 @@ export type UseCanvasViewportPersistenceArgs = {
+@@ -28,9 +29,6 @@ export type UseCanvasViewportPersistenceArgs = {
    activeFigureId: string | null;
    tabOrder: readonly string[];
    canvasTransform: CanvasTransform;
@@ -3317,7 +3431,7 @@ index de737af8..e03b5426 100644
    viewportRef: RefObject<HTMLDivElement | null>;
    canvasTransformRef: MutableRefObject<CanvasTransform>;
    fitToContentRequestToken: number;
-@@ -38,11 +37,6 @@ export type UseCanvasViewportPersistenceArgs = {
+@@ -38,11 +36,6 @@ export type UseCanvasViewportPersistenceArgs = {
    zoomRequestDirection: "in" | "out" | null;
    zoomScaleRequestToken: number;
    zoomScaleRequestValue: number | null;
@@ -3329,7 +3443,7 @@ index de737af8..e03b5426 100644
    MIN_SCALE: number;
    MAX_SCALE: number;
  };
-@@ -57,9 +51,6 @@ export function useCanvasViewportPersistence({
+@@ -57,9 +50,6 @@ export function useCanvasViewportPersistence({
    activeFigureId,
    tabOrder,
    canvasTransform,
@@ -3339,7 +3453,7 @@ index de737af8..e03b5426 100644
    viewportRef,
    canvasTransformRef,
    fitToContentRequestToken,
-@@ -67,18 +58,13 @@ export function useCanvasViewportPersistence({
+@@ -67,18 +57,13 @@ export function useCanvasViewportPersistence({
    zoomRequestDirection,
    zoomScaleRequestToken,
    zoomScaleRequestValue,
@@ -3359,7 +3473,7 @@ index de737af8..e03b5426 100644
  
    const fitToContentScale = useMemo(
      () => computeFitToContentScale(
-@@ -119,19 +105,38 @@ export function useCanvasViewportPersistence({
+@@ -119,19 +104,31 @@ export function useCanvasViewportPersistence({
      return true;
    }, [baseSvgResult, dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, svgResult, viewportRef]);
  
@@ -3367,14 +3481,7 @@ index de737af8..e03b5426 100644
 +    const viewBox = svgResult?.viewBox;
 +    const viewport = viewportRef.current;
 +    if (!viewBox || !viewport || viewport.clientWidth <= 0 || viewport.clientHeight <= 0) return false;
-+    // Page framing is separate from drawing fit, as in Inkscape's Zoom Toolbar:
-+    // https://wiki.inkscape.org/wiki/Zoom_Toolbar
-+    const scale = clamp(
-+      Math.min(viewport.clientWidth - INITIAL_PAGE_MARGIN_PX * 2, viewport.clientHeight - INITIAL_PAGE_MARGIN_PX * 2)
-+        / INITIAL_PAGE_SIZE_PT,
-+      MIN_SCALE,
-+      MAX_SCALE
-+    );
++    const scale = clamp(CANVAS_ZOOM_BASE_SCALE, MIN_SCALE, MAX_SCALE);
 +    dispatchCanvasTransform({
 +      translateX: (viewport.clientWidth - viewBox.width * scale) / 2,
 +      translateY: (viewport.clientHeight - viewBox.height * scale) / 2,
@@ -3401,7 +3508,7 @@ index de737af8..e03b5426 100644
        });
        visitedFigureKeysRef.current.add(key);
      },
-@@ -146,62 +151,54 @@ export function useCanvasViewportPersistence({
+@@ -146,62 +143,54 @@ export function useCanvasViewportPersistence({
        if (!openDocuments.has(documentId)) {
          viewportStateByFigureKeyRef.current.delete(key);
          visitedFigureKeysRef.current.delete(key);
@@ -3478,7 +3585,7 @@ index de737af8..e03b5426 100644
    ]);
  
    useEffect(() => {
-@@ -211,11 +208,11 @@ export function useCanvasViewportPersistence({
+@@ -211,11 +200,11 @@ export function useCanvasViewportPersistence({
      if (!visitedFigureKeysRef.current.has(activeFigureViewportKey)) {
        return;
      }
@@ -3493,7 +3600,7 @@ index de737af8..e03b5426 100644
  
    const handledFitRequestRef = useRef(0);
    useEffect(() => {
-@@ -225,12 +222,8 @@ export function useCanvasViewportPersistence({
+@@ -225,12 +214,8 @@ export function useCanvasViewportPersistence({
      if (fitToContentRequestToken === handledFitRequestRef.current) {
        return;
      }
@@ -3508,7 +3615,7 @@ index de737af8..e03b5426 100644
  
    const handledZoomRequestRef = useRef(0);
    useEffect(() => {
-@@ -262,17 +255,12 @@ export function useCanvasViewportPersistence({
+@@ -262,17 +247,12 @@ export function useCanvasViewportPersistence({
      const translateX = centerX - (svgPoint.x - svgResult.viewBox.x) * nextScale;
      const translateY = centerY - (svgPoint.y - svgResult.viewBox.y) * nextScale;
  
@@ -3526,7 +3633,7 @@ index de737af8..e03b5426 100644
      svgResult,
      viewportRef,
      zoomRequestDirection,
-@@ -308,57 +296,18 @@ export function useCanvasViewportPersistence({
+@@ -308,57 +288,18 @@ export function useCanvasViewportPersistence({
      const translateX = centerX - (svgPoint.x - svgResult.viewBox.x) * nextScale;
      const translateY = centerY - (svgPoint.y - svgResult.viewBox.y) * nextScale;
  
@@ -3619,7 +3726,7 @@ index b20b72be..0baae5b3 100644
  };
  
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
-index 3ab44838..79d123e7 100644
+index 3ab44838..71ad101c 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts
 +++ b/packages/app/src/ui/editor-command-runtime.ts
 @@ -98,7 +98,6 @@ type RuntimeInput = {
@@ -3651,6 +3758,18 @@ index 3ab44838..79d123e7 100644
          dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
        }
      },
+@@ -911,9 +904,9 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+       checked: showTransparencyGrid,
+       run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" }); }
+     },
+-    [APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS]: {
++    [APP_MENU_COMMAND_IDS.TOGGLE_OUTPUT_BOUNDS]: {
+       enabled: true,
+-      checked: !showDocumentBounds,
++      checked: showDocumentBounds,
+       run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "documentBounds" }); }
+     },
+     [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID]: {
 @@ -1126,7 +1119,6 @@ export function useEditorCommandRuntime(
    const tabCount = useEditorStore((s) => s.tabOrder.length);
    const dirty = useEditorStore((s) => s.documents[s.activeDocumentId]?.dirty ?? false);
