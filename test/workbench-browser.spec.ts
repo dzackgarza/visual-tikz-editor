@@ -300,7 +300,7 @@ describe("standalone workbench host boundary", function () {
     assert.equal(await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
-    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), authored);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(authored);
     assert.equal(await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
   });
 
@@ -332,7 +332,7 @@ describe("standalone workbench host boundary", function () {
     await page.mouse.up();
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
-    assert.match(await page.evaluate(() => navigator.clipboard.readText()), /workbench-ink:/);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/workbench-ink:/);
     await expect(frame.locator('[data-source-id]')).not.toHaveCount(0);
     assert.deepEqual(external, []);
   });
@@ -722,6 +722,7 @@ describe("standalone workbench host boundary", function () {
     for (let i = 1; i <= 40; i++) await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + 35 * Math.cos(i * Math.PI / 20), y: y + 35 * Math.sin(i * Math.PI / 20), button: 'left', buttons: 1, pointerType: 'pen', force: .5 });
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + 35, y, button: 'left', buttons: 0, clickCount: 1, pointerType: 'pen' });
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('workbench-ink-end:');
     const source = await page.evaluate(() => navigator.clipboard.readText());
     const record = /% workbench-ink:([^\r\n]+)/.exec(source);
     assert.ok(record);
@@ -891,6 +892,7 @@ describe("standalone workbench host boundary", function () {
     await page.mouse.up();
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
     await expect(page.locator('.cm-content')).toContainText('workbench-ink:');
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('workbench-ink-end:');
     const current = await page.evaluate(() => navigator.clipboard.readText());
     assert.ok(current.includes('workbench-ink-end:'));
     // CodeMirror virtualizes long metadata lines; use its full-document copy.
