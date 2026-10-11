@@ -105,6 +105,60 @@ describe("standalone workbench host boundary", function () {
     }
   });
 
+  it('rejects a source notification from the right frame but the wrong session', async function () {
+    await page.addInitScript(() => {
+      window.addEventListener('message', event => {
+        const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (message?.event === 'loaded') (window as unknown as { editorLoad: { revision: number } }).editorLoad = message;
+      });
+    });
+    await page.reload();
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    const authored = await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n'));
+    const loaded = await page.evaluate(() => (window as unknown as { editorLoad: { revision: number } }).editorLoad);
+    await page.frames()[1].evaluate(({ revision }) => {
+      window.parent.postMessage(JSON.stringify({ event: 'change', sessionId: crypto.randomUUID(), revision,
+        source: String.raw`\begin{tikzpicture}\draw (0,0) rectangle (3,2);\end{tikzpicture}` }), location.origin);
+    }, loaded);
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), authored);
+    assert.equal(await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
+  });
+
+  it('starts cold and edits math-labelled geometry without external assets', async function () {
+    await context.tracing.stop();
+    await context.close();
+    context = await browser.newContext();
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+    const external: string[] = [];
+    await context.route('**/*', route => {
+      if (new URL(route.request().url()).origin === new URL(url).origin) return route.continue();
+      external.push(route.request().url());
+      return route.abort();
+    });
+    page = await context.newPage();
+    await page.goto(url);
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\node at (0,0) {$x^2$};
+\draw[blue] (0,0) rectangle (2,1);
+\end{tikzpicture}`);
+    const frame = page.frameLocator('iframe');
+    await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    await page.mouse.move(box.x + 90, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 180, box.y + box.height / 2 + 25, { steps: 12 });
+    await page.mouse.up();
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+    assert.match(await page.evaluate(() => navigator.clipboard.readText()), /workbench-ink:/);
+    await expect(frame.locator('[data-source-id]')).not.toHaveCount(0);
+    assert.deepEqual(external, []);
+  });
+
   it("keeps authored source when a notification names a load operation", async function () {
     const sourcePane = page.locator(".cm-content");
     await sourcePane.fill(String.raw`\begin{tikzpicture}
@@ -418,7 +472,7 @@ describe("standalone workbench host boundary", function () {
     const original = JSON.parse(decodeURIComponent(record[1]));
     assert.equal(original.intent, 'ink');
     assert.ok(original.samples.length >= 42);
-    assert.equal((source.match(/ circle /g) ?? []).length, 1, 'Only the existing circle is a recognized shape');
+    assert.equal((source.match(/ circle /g) ?? []).length, 0, 'The handwritten loop must not become a circle');
     await expect(frame.getByRole('dialog', { name: 'Freehand result' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Properties', exact: true }).click();
     await expect(frame.getByRole('checkbox', { name: 'Interpret geometry', exact: true })).not.toBeChecked();
