@@ -6,6 +6,7 @@ const status = document.querySelector<HTMLOutputElement>('#status')!;
 const result = document.querySelector<HTMLPreElement>('#result')!;
 const sessionId = crypto.randomUUID();
 let revision = 0;
+let acceptedSource = source.value;
 const lifetime = new AbortController();
 let pending: AbortController | null = null;
 
@@ -14,6 +15,7 @@ function post(message: HostCommand) {
 }
 
 function load() {
+  acceptedSource = source.value;
   revision++;
   post({ action: 'load', source: source.value, autosave: 0, fileName: 'fixture.tikz', imageBaseUrl: `${location.origin}/`, sessionId, revision, requestId: crypto.randomUUID() });
   post({ action: 'workspace', workspace: 'canvasOnly', sessionId, revision, requestId: crypto.randomUUID() });
@@ -24,7 +26,10 @@ function receive(event: MessageEvent) {
   const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
   if (message.event === 'init') load();
   if (message.event === 'loaded' && message.revision === revision) status.textContent = 'Loaded';
-  if (message.event === 'change' && message.revision === revision) source.value = message.source;
+  if (message.event === 'change' && message.sessionId === sessionId && message.revision === revision && source.value === acceptedSource) {
+    acceptedSource = message.source;
+    source.value = acceptedSource;
+  }
   if (message.event === 'reply') document.querySelector('#command-result')!.textContent = `${message.action}:${message.status}:${message.error ?? ''}`;
   if (message.event === 'reply' && message.status === 'failed') status.textContent = message.error;
 }
@@ -45,6 +50,7 @@ document.querySelector('#load')!.addEventListener('click', load);
 document.querySelector('#load-snapshot')!.addEventListener('click', () => {
   const snapshot = JSON.parse(document.querySelector<HTMLTextAreaElement>('#saved-snapshot')!.value);
   source.value = snapshot.source;
+  acceptedSource = snapshot.source;
   revision++;
   editor.contentWindow!.postMessage({ action: 'load', source: snapshot.source, state: snapshot.state,
     fileName: 'fixture.tikz', sessionId, revision, requestId: crypto.randomUUID(), imageBaseUrl: `${location.origin}/` }, location.origin);
@@ -71,6 +77,7 @@ document.querySelector('#dispose')!.addEventListener('click', () => {
 document.querySelector('#copy-source')!.addEventListener('click', async () => {
   try {
     source.value = await requestEditorSource(editor, { sessionId, revision }, lifetime.signal);
+    acceptedSource = source.value;
     await navigator.clipboard.writeText(source.value);
   } catch (error) { status.textContent = String(error); }
 });

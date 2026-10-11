@@ -253,7 +253,9 @@ describe("standalone workbench host boundary", function () {
       await page.getByRole("button", { name: "Load source", exact: true }).click();
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
       await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      exports.push(JSON.parse(await page.locator("#result").innerText()).svg);
+      const accepted = JSON.parse(await page.locator("#result").innerText());
+      assert.equal(accepted.source, source);
+      exports.push(accepted.svg);
     }
     await page.goto(`${url}svg-viewer.html`);
     for (const svg of exports) {
