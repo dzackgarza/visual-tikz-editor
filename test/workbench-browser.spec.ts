@@ -573,6 +573,34 @@ describe("standalone workbench host boundary", function () {
   });
 
   for (const width of [1280, 768]) {
+    it(`edits a Quiver diagram and retains source and selection across views at ${width}px`, async function () {
+      await page.setViewportSize({ width, height: 1024 });
+      await page.reload();
+      if (width === 768) await page.getByRole('button', { name: 'Source', exact: true }).click();
+      const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
+      await page.locator('.cm-content').fill(authored);
+      await expect(page.getByRole('button', { name: 'Quiver canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('.tikz-live-preview-status')).toHaveText('Synced');
+      await page.getByRole('button', { name: 'TeX render', exact: true }).click();
+      await expect(page.getByText('Up to date', { exact: true })).toBeVisible({ timeout: 30000 });
+      assert.equal(await page.locator('.cm-content').innerText(), authored);
+      await page.getByRole('button', { name: 'Quiver canvas', exact: true }).click();
+      if (width === 768) await page.getByRole('button', { name: 'Hide source', exact: true }).click();
+      const frame = page.frameLocator('iframe');
+      await frame.locator('.vertex').nth(1).click();
+      await frame.locator('.label-input').fill('C');
+      await expect(page.locator('.cm-content')).toContainText('C');
+      await page.getByRole('button', { name: 'TeX render', exact: true }).click();
+      await expect(page.getByText('Up to date', { exact: true })).toBeVisible({ timeout: 30000 });
+      await page.screenshot({ path: `test-results/workbench/quiver-render-${width}.png` });
+      await page.getByRole('button', { name: 'Quiver canvas', exact: true }).click();
+      await expect(frame.locator('.label-input')).toHaveValue('C');
+      await frame.locator('.label-input').press('Control+z');
+      await expect(frame.locator('.vertex').nth(1)).toContainText('B');
+    });
+  }
+
+  for (const width of [1280, 768]) {
     it(`retains authored source and its drawing tool through rendered-view switches at ${width}px`, async function () {
       await page.setViewportSize({ width, height: 1024 });
       await page.reload();
