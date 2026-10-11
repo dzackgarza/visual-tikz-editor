@@ -1271,10 +1271,10 @@ index 681cb41c..390dd359 100644
      case "addBezier":
        return snapHint;
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..fc62acba 100644
+index 0ddde08e..2b1751dc 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
-@@ -144,6 +144,24 @@
+@@ -144,6 +144,55 @@
    flex: 1;
  }
  
@@ -1292,6 +1292,37 @@ index 0ddde08e..fc62acba 100644
 +.embeddedSpacer { flex: 1 0 12px; }
 +.toolbarGrip { border: 0; background: transparent; color: var(--text-muted); cursor: grab; touch-action: none; user-select: none; }
 +.toolbarGrip:active { cursor: grabbing; }
++.dockGuide { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
++.dockZone {
++  position: absolute;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  border: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent);
++  border-radius: 10px;
++  background: color-mix(in srgb, var(--accent) 7%, transparent);
++  color: var(--text);
++  font-size: 11px;
++  font-weight: 600;
++  text-transform: capitalize;
++  opacity: .55;
++}
++.dockZoneActive { opacity: 1; border-style: solid; background: color-mix(in srgb, var(--accent) 16%, transparent); }
++.dockZoneLeft, .dockZoneRight { top: 92px; bottom: 44px; width: 64px; }
++.dockZoneLeft { left: 8px; }
++.dockZoneRight { right: 8px; }
++.dockZoneTop, .dockZoneBottom { left: 84px; right: 84px; height: 54px; }
++.dockZoneTop { top: 60px; }
++.dockZoneBottom { bottom: 32px; }
++.dockZoneLeft span, .dockZoneRight span { writing-mode: vertical-rl; }
++:global(#root > div > [data-toolbar-preview]) {
++  z-index: 19;
++  pointer-events: none;
++  outline: 2px solid var(--accent);
++  outline-offset: 3px;
++  background: color-mix(in srgb, var(--accent) 20%, var(--bg-pane));
++  opacity: .68;
++}
 +.colorSwatch { width: 22px; height: 22px; display: block; border: 1px solid var(--border); border-radius: 5px; }
 +.palette { display: flex; gap: 3px; flex-wrap: wrap; max-width: 48px; }
 +.paletteSwatch { width: 17px; height: 17px; padding: 0; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
@@ -1300,16 +1331,17 @@ index 0ddde08e..fc62acba 100644
    display: inline-flex;
    align-items: center;
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..c1e1181c 100644
+index a3293df2..af6f2910 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
-@@ -1,4 +1,4 @@
+@@ -1,4 +1,5 @@
 -import { useEffect, useMemo, useState } from "react";
-+import { useEffect, useMemo, useRef, useState } from "react";
++import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { createPortal } from "react-dom";
  import { RiDownloadCloudLine } from "@remixicon/react";
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
-@@ -15,9 +15,11 @@ import {
+@@ -15,9 +16,11 @@ import {
    type ToolPopupKind
  } from "./tool-config";
  import { GENERATED_NODE_SHAPE_PREVIEWS } from "./generated-node-shape-previews";
@@ -1322,7 +1354,25 @@ index a3293df2..c1e1181c 100644
  import css from "./Toolbar.module.css";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
-@@ -36,16 +38,29 @@ type ToolbarProps = {
+@@ -26,6 +29,17 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+   previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
+ }));
+ 
++type ToolbarDock = "left" | "right" | "top" | "bottom" | "floating";
++
++function dockAt(x: number, y: number): ToolbarDock {
++  const edge = 90;
++  if (x < edge) return "left";
++  if (x > window.innerWidth - edge) return "right";
++  if (y < edge) return "top";
++  if (y > window.innerHeight - edge) return "bottom";
++  return "floating";
++}
++
+ type ToolbarProps = {
+   updateChip?: {
+     version: string;
+@@ -36,16 +50,31 @@ type ToolbarProps = {
  export function Toolbar({ updateChip = null }: ToolbarProps) {
    const toolMode = useEditorStore((s) => s.toolMode);
    const bucketFillColor = useEditorStore((s) => s.bucketFillColor);
@@ -1343,22 +1393,63 @@ index a3293df2..c1e1181c 100644
 +  const updateToolbarSettings = useSettingsStore((s) => s.updateToolbarSettings);
 +  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | "color" | null>(null);
 +  const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
++  const [dockPreview, setDockPreview] = useState<{ dock: ToolbarDock; x: number; y: number } | null>(null);
 +  const dragReady = useRef(false);
 +  const dragOffset = useRef({ x: 0, y: 0 });
 +  const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 +  const dragStart = useRef<{ x: number; y: number } | null>(null);
++  const dockGhost = useRef<HTMLElement | null>(null);
 +  const suppressDragClick = useRef(false);
 +  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 +  const suppressToolClick = useRef(false);
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +71,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +85,51 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
 +  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
 +  const toolbarRef = useRef<HTMLDivElement>(null);
++
++  useLayoutEffect(() => {
++    // Show the destination before release, as in Visual Studio's docking guide:
++    // https://learn.microsoft.com/en-us/visualstudio/ide/customizing-window-layouts-in-visual-studio
++    const toolbar = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
++    if (!toolbar || !dockPreview || dockPreview.dock === "floating") {
++      dockGhost.current?.remove();
++      dockGhost.current = null;
++      return;
++    }
++    if (!dockGhost.current) {
++      const ghost = toolbar.cloneNode(true) as HTMLElement;
++      ghost.setAttribute("data-toolbar-preview", "");
++      ghost.setAttribute("aria-hidden", "true");
++      ghost.inert = true;
++      toolbar.parentElement?.append(ghost);
++      dockGhost.current = ghost;
++    }
++    const ghost = dockGhost.current;
++    ghost.setAttribute("data-dock", dockPreview.dock);
++    ghost.removeAttribute("style");
++    if (dockPreview.dock === "left") {
++      ghost.style.left = "12px";
++      ghost.style.top = `${Math.max(0, Math.min(1, dockPreview.y / window.innerHeight)) * 100}%`;
++    } else if (dockPreview.dock === "right") {
++      ghost.style.right = "12px";
++      ghost.style.top = `${Math.max(0, Math.min(1, dockPreview.y / window.innerHeight)) * 100}%`;
++    } else if (dockPreview.dock === "top") {
++      ghost.style.top = "60px";
++      ghost.style.left = `${Math.max(0, Math.min(1, dockPreview.x / window.innerWidth)) * 100}%`;
++    } else {
++      ghost.style.bottom = "12px";
++      ghost.style.left = `${Math.max(0, Math.min(1, dockPreview.x / window.innerWidth)) * 100}%`;
++    }
++    return () => {
++      ghost.remove();
++      dockGhost.current = null;
++    };
++  }, [dockPreview]);
  
    // Close popup when tool mode changes (unless it's a popup that can be used independently)
    useEffect(() => {
@@ -1367,7 +1458,7 @@ index a3293df2..c1e1181c 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -111,7 +128,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +181,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -1385,7 +1476,7 @@ index a3293df2..c1e1181c 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +152,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +205,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -1404,7 +1495,7 @@ index a3293df2..c1e1181c 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +208,115 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +261,114 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -1501,9 +1592,8 @@ index a3293df2..c1e1181c 100644
 +    suppressDragClick.current = true;
 +    setTimeout(() => { suppressDragClick.current = false; }, 0);
 +    setDragPoint(null);
-+    const edge = 90;
-+    const dock = clientX < edge ? "left" : clientX > window.innerWidth - edge ? "right"
-+      : clientY < edge ? "top" : clientY > window.innerHeight - edge ? "bottom" : "floating";
++    setDockPreview(null);
++    const dock = dockAt(clientX, clientY);
 +    const centerX = dock === "floating" ? clientX + dragOffset.current.x : clientX;
 +    const centerY = dock === "floating" ? clientY + dragOffset.current.y : clientY;
 +    updateToolbarSettings({ dock, x: Math.max(0, Math.min(1, centerX / window.innerWidth)), y: Math.max(0, Math.min(1, centerY / window.innerHeight)) });
@@ -1520,7 +1610,7 @@ index a3293df2..c1e1181c 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -314,6 +461,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +513,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -1542,7 +1632,7 @@ index a3293df2..c1e1181c 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +483,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +535,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -1551,13 +1641,13 @@ index a3293df2..c1e1181c 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -342,8 +504,60 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +556,71 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
 -  return (
 -    <div className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome">
-+  if (embedded) return <div data-diagram-tools data-dock={dragPoint ? "floating" : settings.toolbar.dock} style={toolbarPosition}
++  if (embedded) return <><div data-diagram-tools data-dock={dragPoint ? "floating" : settings.toolbar.dock} style={toolbarPosition}
 +    onPointerDown={(event) => {
 +      if (event.button !== 0 || (event.target as HTMLElement).closest('[aria-haspopup="dialog"]')) return;
 +      const bounds = event.currentTarget.getBoundingClientRect();
@@ -1569,10 +1659,14 @@ index a3293df2..c1e1181c 100644
 +        dragReady.current = true;
 +        toolbar.setPointerCapture(pointerId);
 +        setDragPoint({ x: dragStart.current!.x + dragOffset.current.x, y: dragStart.current!.y + dragOffset.current.y });
++        setDockPreview({ dock: dockAt(dragStart.current!.x, dragStart.current!.y), x: dragStart.current!.x, y: dragStart.current!.y });
 +      }, 350);
 +    }}
 +    onPointerMove={(event) => {
-+      if (dragReady.current) setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y });
++      if (dragReady.current) {
++        setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y });
++        setDockPreview({ dock: dockAt(event.clientX, event.clientY), x: event.clientX, y: event.clientY });
++      }
 +      else if (dragStart.current && Math.hypot(event.clientX - dragStart.current.x, event.clientY - dragStart.current.y) > 8) {
 +        if (dragTimer.current) clearTimeout(dragTimer.current);
 +        dragStart.current = null;
@@ -1584,6 +1678,7 @@ index a3293df2..c1e1181c 100644
 +      dragStart.current = null;
 +      dragReady.current = false;
 +      setDragPoint(null);
++      setDockPreview(null);
 +    }}
 +    onClickCapture={(event) => { if (suppressDragClick.current) { event.preventDefault(); event.stopPropagation(); suppressDragClick.current = false; } }}>
 +    <button type="button" className={css.toolbarGrip} aria-label="Move toolbar" title="Hold and drag toolbar">
@@ -1601,7 +1696,13 @@ index a3293df2..c1e1181c 100644
 +        : item.kind === "spacer" ? <div key={index} className={css.embeddedSpacer} />
 +          : <div key={index} className={css.embeddedItem}>{renderEmbeddedTool(item.id)}</div>)}
 +    </div>
-+  </div>;
++  </div>{dockPreview ? createPortal(<div className={css.dockGuide} aria-hidden="true">
++    {(["left", "top", "right", "bottom"] as const).map((dock) => <div key={dock}
++      className={[css.dockZone, css[`dockZone${dock[0].toUpperCase()}${dock.slice(1)}`], dockPreview.dock === dock ? css.dockZoneActive : ""].filter(Boolean).join(" ")}
++      data-dock-target={dock}>
++      <span>{dock}</span>
++    </div>)}
++  </div>, document.body) : null}</>;
 +
 +  const toolbar = (
 +    <div ref={toolbarRef} className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome"
@@ -1614,7 +1715,7 @@ index a3293df2..c1e1181c 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +568,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +631,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -1628,7 +1729,7 @@ index a3293df2..c1e1181c 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +584,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +647,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -1637,7 +1738,7 @@ index a3293df2..c1e1181c 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +609,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +672,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
