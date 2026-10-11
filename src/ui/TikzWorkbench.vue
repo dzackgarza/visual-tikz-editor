@@ -5,7 +5,7 @@
     aria-label="TikZ workbench"
     :data-tikz-language="props.target.language"
   >
-    <header class="tikz-live-preview-header">
+    <header v-if="showShellHeader" class="tikz-live-preview-header">
       <span v-if="props.showModeSwitcher !== false" class="tikz-live-preview-label">View:</span>
       <div
         v-if="props.showModeSwitcher !== false"
@@ -56,6 +56,12 @@
     </header>
 
     <div class="tikz-live-preview-content">
+      <div v-if="!showShellHeader && (activeBusy || activeProvider.refreshable)" class="tikz-live-preview-overlay-controls">
+        <span v-if="activeBusy" class="tikz-live-preview-spinner" aria-hidden="true" />
+        <button v-if="activeProvider.refreshable" type="button"
+          class="tikz-live-preview-action" title="Rebuild TikZ preview" aria-label="Rebuild TikZ preview"
+          @click="forceRefresh"><span aria-hidden="true">↻</span></button>
+      </div>
       <div v-if="unavailableMessage !== ''" class="tikz-live-preview-unavailable" role="alert">
         <strong>{{ activeProvider.label }} cannot edit this diagram</strong>
         <button type="button" @click="copyUnavailableMessage">Copy error</button>
@@ -156,6 +162,9 @@ const requestedMode = ref<TikzPreviewModeId>(
 const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
 const activeBusy = ref(false);
+const showShellHeader = computed(() =>
+  props.showModeSwitcher !== false || props.showStatus !== false || props.showFullscreen !== false,
+);
 const providerStatus = ref<Record<TikzPreviewModeId, string>>({ tikz: "", quiver: "", visual: "" });
 const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({
   tikz: false,
@@ -394,11 +403,25 @@ onBeforeUnmount(() => {
 }
 
 .tikz-live-preview-content {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.tikz-live-preview-overlay-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px color-mix(in srgb, black 16%, transparent);
 }
 
 .tikz-live-preview-provider {
