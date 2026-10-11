@@ -1,10 +1,11 @@
 import { useEditorStore } from '@tikz-editor/app/store';
 import { interpretFreehandToolSource } from '@tikz-editor/app/freehand';
 import { pt, worldPoint } from 'tikz-editor/coords/index';
+import type { CommandFailure } from './events';
 import type { HostCommand } from './commands';
 import { originalStrokes, strokeEnvelope, originalDrawingSource, tikzStrokeColor } from './original-ink';
 
-export function executeInkCommand(command: Extract<HostCommand, { action: 'import-ink' | 'interpret-ink' | 'restore-ink' }>): string | undefined {
+export function executeInkCommand(command: Extract<HostCommand, { action: 'import-ink' | 'interpret-ink' | 'restore-ink' }>): CommandFailure | undefined {
   const state = useEditorStore.getState();
   if (command.source !== state.source) return 'source-changed';
   const originals = originalStrokes(state.source);

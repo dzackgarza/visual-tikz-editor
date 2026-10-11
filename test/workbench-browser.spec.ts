@@ -297,6 +297,41 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByLabel('Authored source')).toHaveValue(accepted.source);
   });
 
+  it('cancels a pending workspace command before it can change the editor', async function () {
+    let release!: () => void;
+    const delayed = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/workspace-apply-*.js', async route => { await delayed; await route.continue(); });
+    try {
+      await page.goto(`${url}embedding.html`);
+      await expect(page.locator('#status')).toHaveText('Loaded');
+      await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+      await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+      const accepted = JSON.parse(await page.locator('#result').innerText());
+      await page.evaluate(({ sessionId, revision }) => {
+        const editor = document.querySelector<HTMLIFrameElement>('#editor')!;
+        const output = document.createElement('pre');
+        output.id = 'workspace-result';
+        document.querySelector('section')!.append(output);
+        window.addEventListener('message', event => {
+          if (event.source !== editor.contentWindow || event.origin !== location.origin) return;
+          const reply = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+          if (reply.event === 'reply' && reply.requestId === 'cancelled-workspace') output.textContent = JSON.stringify(reply);
+        });
+        editor.contentWindow!.postMessage({ action: 'workspace', workspace: 'default', sessionId, revision, requestId: 'cancelled-workspace' }, location.origin);
+        editor.contentWindow!.postMessage({ action: 'cancel', targetRequestId: 'cancelled-workspace', sessionId, revision, requestId: crypto.randomUUID() }, location.origin);
+      }, accepted);
+      await expect(page.locator('#workspace-result')).not.toBeEmpty();
+      const reply = JSON.parse(await page.locator('#workspace-result').innerText());
+      assert.equal(reply.status, 'failed');
+      assert.equal(reply.error, 'cancelled');
+      release();
+      await expect(page.frameLocator('#editor').getByRole('menuitem', { name: 'File', exact: true })).toBeHidden();
+      await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+      await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+      assert.equal(JSON.parse(await page.locator('#result').innerText()).source, accepted.source);
+    } finally { release(); }
+  });
+
   it("retains the current drawing when an older load arrives from its host", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");

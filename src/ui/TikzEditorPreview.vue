@@ -41,6 +41,7 @@ import {
   tikzEditorSessionForBlock,
 } from "../editor-bridge";
 import { requestEditorSource, requestEditorSnapshot, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../host";
+import { editorNotificationSchema, type EditorNotification } from "../../vendor/tikz-editor/embed/src/events";
 import type { TikzLivePreviewTarget } from "../live-preview";
 
 interface PreviewSession {
@@ -49,15 +50,6 @@ interface PreviewSession {
   source: TikzEditorSourceSession;
 }
 
-interface TikzEditorHostMessage {
-  event?: string;
-  revision?: number;
-  source?: string;
-  xml?: string;
-  message?: string;
-  title?: string;
-  kind?: string;
-}
 
 const props = defineProps<{
   target: TikzLivePreviewTarget;
@@ -204,18 +196,12 @@ watch(
   },
 );
 
-function parseHostMessage(data: unknown): TikzEditorHostMessage | null {
+function parseHostMessage(data: unknown): EditorNotification | null {
   if (typeof data === "string") {
-    try {
-      const parsed = JSON.parse(data) as unknown;
-      return parsed !== null && typeof parsed === "object"
-        ? (parsed as TikzEditorHostMessage)
-        : null;
-    } catch {
-      return null;
-    }
+    try { data = JSON.parse(data); } catch { return null; }
   }
-  return data !== null && typeof data === "object" ? (data as TikzEditorHostMessage) : null;
+  const parsed = editorNotificationSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 }
 
 function applyEditorSource(source: string, revision: number | undefined): void {
@@ -253,9 +239,7 @@ function onMessage(event: MessageEvent): void {
     return;
   }
   const message = parseHostMessage(event.data);
-  if (message === null) {
-    return;
-  }
+  if (message === null || (message.event !== "init" && message.sessionId !== session.value.id)) return;
 
   switch (message.event) {
     case "init":
@@ -270,19 +254,13 @@ function onMessage(event: MessageEvent): void {
       errorMessage.value = "";
       break;
     case "change":
-    case "autosave":
     case "save": {
-      const source =
-        typeof message.source === "string"
-          ? message.source
-          : typeof message.xml === "string"
-            ? message.xml
-            : null;
-      if (source !== null) {
-        applyEditorSource(source, message.revision);
-      }
+      applyEditorSource(message.source, message.revision);
       break;
     }
+    case "error":
+      errorMessage.value = message.message;
+      break;
     case "message":
       if (message.kind === "error") {
         errorMessage.value = message.message ?? message.title ?? "tikz-editor reported an error.";

@@ -613,7 +613,7 @@ index 6757888..13a7cac 100644
    /* Map to app design tokens */
    --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb..d702f65 100644
+index ba28ddb..de3dd7e 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
 @@ -91,6 +91,7 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
@@ -688,7 +688,7 @@ index ba28ddb..d702f65 100644
 +  const closeInspector = useCallback(() => {
 +    document.documentElement.dataset.embedInspector = "closed";
 +    setInspectorOpen(false);
-+    window.parent.postMessage(JSON.stringify({ event: "inspector-closed" }), "*");
++    window.dispatchEvent(new Event("tikz-embed-inspector-closed"));
 +  }, []);
  
    // Factory — renders panel content for each tab

@@ -7,6 +7,7 @@ import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
 import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
 import { createSnapshotRequests } from './snapshots';
+import type { CommandFailure } from './events';
 import { executeInkCommand } from './ink-commands';
 
 const App = lazy(async () => {
@@ -335,7 +336,7 @@ function HostBridge() {
 			scheduleChange(state.source, state.sourceRevision, currentHostRevision);
 		});
 
-		const reply = (command: HostCommand, error?: string) => postToHost({
+		const reply = (command: HostCommand, error?: CommandFailure) => postToHost({
 			event: 'reply', requestId: command.requestId, sessionId: command.sessionId,
 			revision: command.revision, action: command.action,
 			status: error === undefined ? 'ok' : 'failed', error,
@@ -438,6 +439,8 @@ function HostBridge() {
 			postToHost({ event: 'close-request' });
 		};
 
+		const inspectorClosed = () => postToHost({ event: 'inspector-closed' });
+		window.addEventListener('tikz-embed-inspector-closed', inspectorClosed);
 		window.addEventListener('message', handleMessage);
 		const imageObserver = new MutationObserver(() => {
 			const images = document.querySelectorAll<SVGImageElement>('image[data-image-file]');
@@ -459,6 +462,7 @@ function HostBridge() {
 			snapshots.dispose();
 			imageObserver.disconnect();
 			unsubscribe();
+			window.removeEventListener('tikz-embed-inspector-closed', inspectorClosed);
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('keydown', handleKeydown, true);
 			if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
