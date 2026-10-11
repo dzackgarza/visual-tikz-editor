@@ -46,5 +46,7 @@ export interface TikzWorkbenchHost {
   imageBaseUrl: (docPath: string) => string;
   /** The page of the pinned visual editor (vendor/tikz-editor/src/index.html). */
   editorUrl: string;
+  /** Explicit Save gesture from the editor; only the document owner persists it. */
+  requestSave?: () => void;
   reportError: (message: string, error: unknown) => void;
 }

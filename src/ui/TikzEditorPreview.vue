@@ -253,9 +253,14 @@ function onMessage(event: MessageEvent): void {
       loaded.value = true;
       errorMessage.value = "";
       break;
-    case "change":
-    case "save": {
+    case "change": {
       applyEditorSource(message.source, message.revision);
+      break;
+    }
+    case "save": {
+      if (message.revision !== session.value.revision) break;
+      applyEditorSource(message.source, message.revision);
+      props.host.requestSave?.();
       break;
     }
     case "error":

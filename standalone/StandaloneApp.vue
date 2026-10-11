@@ -140,6 +140,7 @@ const host: TikzWorkbenchHost = {
   },
   imageBaseUrl: () => new URL("/tikz-image/", location.href).href,
   editorUrl: "/tikz-editor/index.html",
+  requestSave: () => { void save(); },
   reportError: (message, error) => {
     hostError.value = `${message}: ${error instanceof Error ? error.message : String(error)}`;
     console.error(message, error);
@@ -197,8 +198,8 @@ async function openDocument(): Promise<void> {
 }
 
 async function saveAs(): Promise<void> {
-  const text = source.value;
   try {
+    const text = await workbench.value!.currentSource(new AbortController().signal);
     const response = await fetch("/api/save-as", { method: "POST", body: text });
     if (response.status === 204) return;
     await responseText(response);
@@ -214,8 +215,8 @@ async function save(): Promise<void> {
   const current = document.value;
   if (current === null) return;
   if (!current.saved) return await saveAs();
-  const text = source.value;
   try {
+    const text = await workbench.value!.currentSource(new AbortController().signal);
     const response = await fetch("/api/document", {
       method: "PUT",
       headers: { "if-match": current.revision },
