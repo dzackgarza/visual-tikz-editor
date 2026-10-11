@@ -1873,7 +1873,7 @@ index cf4cf2cf..50d8677f 100644
  }
  
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..ce9ce5f1 100644
+index 4e22ccfa..f13224e7 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -68,6 +68,12 @@ import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useC
@@ -1890,6 +1890,13 @@ index 4e22ccfa..ce9ce5f1 100644
 +import freehandPopupCss from "./FreehandResultPopup.module.css";
  import {
  clamp,
+@@ -104,5 +110,5 @@ undoLastPathToolSegment,
+ type PathToolGestureSegment
+ } from "./path-tool";
+-import { collectDensePathSourceIds, resolvePathSelectionHint } from "./path-selection-hint";
++import { resolvePathSelectionHint } from "./path-selection-hint";
+ import type { resolveResizeFrameForSource } from "./resize-frames";
+ import { isSvgPointWithinScopeBounds } from "./scope-overlay";
 @@ -120,4 +126,5 @@ import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -2008,13 +2015,14 @@ index 4e22ccfa..ce9ce5f1 100644
 +  const [arcDraft, setArcDraft] = useState<ArcDraft | null>(null);
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
-@@ -935,5 +994,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -934,6 +993,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+   const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
-   const [expandedDensePathSourceId, setExpandedDensePathSourceId] = useState<string | null>(null);
+-  const [expandedDensePathSourceId, setExpandedDensePathSourceId] = useState<string | null>(null);
 -  const fitToContentModeActiveRef = useRef(fitToContentModeActive);
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
-@@ -947,11 +1005,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -947,11 +1004,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      setNodeAnchorOverlay(null);
    }, []);
 -  const setFitToContentModeActive = useCallback(
@@ -2026,19 +2034,65 @@ index 4e22ccfa..ce9ce5f1 100644
 -  );
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
-@@ -1823,5 +1874,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1301,5 +1351,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+     setPendingAdornmentTextEditTargetId(null);
+     setPathAttachedNodePreview(null);
+-    setExpandedDensePathSourceId(null);
+     setToolCursorWorld(null);
+     setNodeAnchorOverlay(null);
+@@ -1510,21 +1559,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+   }, [showDevPanel, viewportSize.height, viewportSize.width]);
+ 
+-  const densePathSourceIds = useMemo(() => {
+-    return collectDensePathSourceIds(snapshot.scene?.elements);
+-  }, [snapshot.scene]);
+-
+-  const collapsedDensePathSourceIds = useMemo(() => {
+-    const collapsed = new Set<string>();
+-    if (toolMode !== "select") {
+-      return collapsed;
+-    }
+-    for (const sourceId of selectedElementIds) {
+-      if (densePathSourceIds.has(sourceId) && sourceId !== expandedDensePathSourceId) {
+-        collapsed.add(sourceId);
+-      }
+-    }
+-    return collapsed;
+-  }, [densePathSourceIds, expandedDensePathSourceId, selectedElementIds, toolMode]);
+-
+   const pathSelectionHint = useMemo(() => {
+     if (
+@@ -1542,5 +1574,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+       editHandles: snapshot.editHandles,
+       elements: snapshot.scene?.elements,
+-      collapsedDensePathSourceIds,
+       parseOptions: editParseOptions
+     });
+@@ -1548,5 +1579,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+     activeCanvasDragKind,
+     activeSourceScrubSourceId,
+-    collapsedDensePathSourceIds,
+     editParseOptions,
+     selectedElementIds,
+@@ -1811,5 +1841,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+     snapshot,
+     selectedElementIds,
+-    collapsedDensePathSourceIds,
+     svgResult,
+     canvasTransform,
+@@ -1823,5 +1852,4 @@ export const CanvasPanel = memo(function CanvasPanel({
    selectedElementIdsRef.current = selectedElementIds;
    svgResultRef.current = svgResult;
 -  fitToContentModeActiveRef.current = fitToContentModeActive;
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
-@@ -1867,4 +1917,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1867,4 +1895,5 @@ export const CanvasPanel = memo(function CanvasPanel({
      pathSegmentDraft,
      pendingBezier,
 +    arcDraft,
      bezierBendDraft,
      canvasTransform
-@@ -1881,7 +1932,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1881,7 +1910,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      tabOrder,
      canvasTransform,
 -    fitToContentModeActive,
@@ -2046,7 +2100,7 @@ index 4e22ccfa..ce9ce5f1 100644
 -    setFitToContentModeActive,
      viewportRef,
      canvasTransformRef,
-@@ -1891,9 +1939,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1891,9 +1917,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestToken,
      zoomScaleRequestValue,
 -    activeCanvasDragKind,
@@ -2056,7 +2110,7 @@ index 4e22ccfa..ce9ce5f1 100644
 -    lastEditChangeToken,
      MIN_SCALE,
      MAX_SCALE
-@@ -2057,14 +2100,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2057,14 +2078,10 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const appendFreehandSamplePoint = useCallback((point: WorldPoint): WorldPoint[] | null => {
 -    let nextPoints: WorldPoint[] | null = null;
@@ -2077,7 +2131,7 @@ index 4e22ccfa..ce9ce5f1 100644
 +    return nextDraft.points;
    }, []);
  
-@@ -2091,8 +2130,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2091,8 +2108,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
 -    const snippet = generateFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
@@ -2088,7 +2142,7 @@ index 4e22ccfa..ce9ce5f1 100644
 +    if (interpretation) {
        const firstPoint = draft.points[0];
        const lastPoint = draft.points[draft.points.length - 1];
-@@ -2105,9 +2144,41 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2105,9 +2122,41 @@ export const CanvasPanel = memo(function CanvasPanel({
        const ok = applyActionWithFeedback({
          kind: "pasteStatements",
 -        snippets: [snippet],
@@ -2131,7 +2185,7 @@ index 4e22ccfa..ce9ce5f1 100644
 +        });
        }
      } else {
-@@ -2118,5 +2189,123 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2118,5 +2167,123 @@ export const CanvasPanel = memo(function CanvasPanel({
      setToolCursorWorld(null);
      dispatch({ type: "SET_TOOL_MODE", mode: "select" });
 -  }, [applyActionWithFeedback, canvasTransform.scale, creationStrokeColor, dispatch, freehandSmoothingPx, queueSelectionForAddedElement, setDragState]);
@@ -2256,7 +2310,15 @@ index 4e22ccfa..ce9ce5f1 100644
 +  }, [canvasTransform.scale, dispatch, freehandSmoothingPx, rangeStartIndex, selectedAnchorIndex, selectedPathForFit, sourceRevision]);
  
    const finalizePathDraft = useCallback(
-@@ -3148,5 +3337,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3065,7 +3232,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+     setDragState,
+     resolveEditableTextTarget,
+-    densePathSourceIds,
+-    expandedDensePathSourceId,
+-    setExpandedDensePathSourceId,
+     scopeOverlay,
+     focusedScopeId,
+@@ -3148,5 +3312,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          currentWorld: world,
          additive: additiveSelection,
 -        baseSelectedIds: additiveSelection ? [...selectedElementIds] : []
@@ -2265,7 +2327,7 @@ index 4e22ccfa..ce9ce5f1 100644
 +        points: [world]
        };
        setDragState(nextMarquee);
-@@ -3172,5 +3363,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3172,5 +3338,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        scopeOverlay,
        snapshot.source,
 -      source
@@ -2273,33 +2335,57 @@ index 4e22ccfa..ce9ce5f1 100644
 +      toolMode
      ]
    );
-@@ -3227,4 +3419,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3227,4 +3394,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      interactionSvgRef,
      pendingBezier,
 +    arcDraft,
 +    setArcDraft,
      snapshot,
      source,
-@@ -3307,4 +3501,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3307,4 +3476,5 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMarqueeDraft,
      selectedElementIds,
 +    activeHandleId,
      applyActionWithFeedback,
      snapshot,
-@@ -3335,6 +3530,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3335,6 +3505,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      svgResult,
      svgResultRef,
 -    fitToContentModeActive,
 -    fitToContentModeActiveRef,
      sourceBoundsSvg,
      sourceBoundsSvgRef,
-@@ -3346,5 +3539,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3346,5 +3514,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
 -    setFitToContentModeActive
    });
  
-@@ -3707,13 +3899,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3450,23 +3617,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+   });
+ 
+-  useEffect(() => {
+-    if (toolMode !== "select") {
+-      setExpandedDensePathSourceId(null);
+-      return;
+-    }
+-    setExpandedDensePathSourceId((current) => {
+-      if (!current) {
+-        return current;
+-      }
+-      if (!selectedElementIds.has(current)) {
+-        return null;
+-      }
+-      if (!densePathSourceIds.has(current)) {
+-        return null;
+-      }
+-      return current;
+-    });
+-  }, [densePathSourceIds, selectedElementIds, toolMode]);
+-
+   useEffect(() => {
+     if (toolMode === "select") {
+@@ -3707,13 +3855,13 @@ export const CanvasPanel = memo(function CanvasPanel({
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
 -  const curveControlStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
@@ -2321,20 +2407,20 @@ index 4e22ccfa..ce9ce5f1 100644
 +  const snapStrokeWidth = 1;
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
-@@ -3887,4 +4079,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3887,4 +4035,5 @@ export const CanvasPanel = memo(function CanvasPanel({
          onInteractionPointerLeave={onInteractionPointerLeave}
          gridLines={gridLines}
 +        gridOpacity={gridOpacity}
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
-@@ -3914,4 +4107,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3914,4 +4063,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          nodePositionLinks={nodePositionLinks}
          marqueeBounds={marqueeBounds}
 +        marqueeShape={marqueeDraft?.shape ?? "rectangle"}
 +        marqueePoints={marqueeDraft && svgResult ? marqueeDraft.points.map((point) => worldToSvgPoint(point, svgResult.viewBox)) : []}
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
-@@ -3975,4 +4170,75 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3975,4 +4126,75 @@ export const CanvasPanel = memo(function CanvasPanel({
          RULER_SIZE={RULER_SIZE}
        />
 +      {selectedPathForFit && !freehandResultOffer ? (
@@ -2969,6 +3055,55 @@ index 13b3ad2b..7a587c97 100644
 +                strokeWidth={1.2}
                  onPointerDown={onPointerDown}
                  onContextMenu={onContextMenu}
+diff --git a/packages/app/src/ui/canvas-panel/path-selection-hint.ts b/packages/app/src/ui/canvas-panel/path-selection-hint.ts
+index 0961ce75..0ec27904 100644
+--- a/packages/app/src/ui/canvas-panel/path-selection-hint.ts
++++ b/packages/app/src/ui/canvas-panel/path-selection-hint.ts
+@@ -3,25 +3,4 @@ import type { EditParseOptions } from "tikz-editor/edit/parse-options";
+ import type { EditHandle, SceneElement } from "tikz-editor/semantic/types";
+ 
+-export const DENSE_PATH_SEGMENT_THRESHOLD = 7;
+-
+-export function collectDensePathSourceIds(elements: readonly SceneElement[] | null | undefined): Set<string> {
+-  const dense = new Set<string>();
+-  for (const element of elements ?? []) {
+-    if (element.kind !== "Path" || element.shapeHint != null) {
+-      continue;
+-    }
+-    let segmentCount = 0;
+-    for (const command of element.commands) {
+-      if (command.kind === "L" || command.kind === "C" || command.kind === "A") {
+-        segmentCount += 1;
+-      }
+-    }
+-    if (segmentCount >= DENSE_PATH_SEGMENT_THRESHOLD) {
+-      dense.add(element.sourceRef.sourceId);
+-    }
+-  }
+-  return dense;
+-}
+-
+ export function resolvePathSelectionHint(input: {
+   source: string;
+@@ -29,8 +8,7 @@ export function resolvePathSelectionHint(input: {
+   editHandles: readonly EditHandle[];
+   elements: readonly SceneElement[] | null | undefined;
+-  collapsedDensePathSourceIds: ReadonlySet<string>;
+   parseOptions: EditParseOptions;
+ }): string | null {
+-  const { source, selectedElementIds, editHandles, elements, collapsedDensePathSourceIds, parseOptions } = input;
++  const { source, selectedElementIds, editHandles, elements, parseOptions } = input;
+   if (selectedElementIds.size !== 1) return null;
+   const sourceId = [...selectedElementIds][0];
+@@ -44,7 +22,6 @@ export function resolvePathSelectionHint(input: {
+   if (resolved.kind !== "eligible") return null;
+   if (resolved.analysis.segments.length === 0) return null;
+-  if (collapsedDensePathSourceIds.has(sourceId)) return "Double-click path to edit points.";
+   if (!hasInsertablePathSegment(editHandles, sourceId, resolved.analysis)) return null;
+-  return "Double-click path to add a point.";
++  return "Drag square nodes or round curve handles. Double-click path to add a point.";
+ }
+ 
 diff --git a/packages/app/src/ui/canvas-panel/scope-overlay.ts b/packages/app/src/ui/canvas-panel/scope-overlay.ts
 index 0766ca92..1c23b820 100644
 --- a/packages/app/src/ui/canvas-panel/scope-overlay.ts
@@ -3216,10 +3351,26 @@ index 0c9bdf4f..e3a2e699 100644
          finalizeFreehandDraft(nextWorldPoints ?? undefined);
          return;
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
-index c69a45af..3ae414de 100644
+index c69a45af..d065abf8 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
-@@ -390,4 +390,11 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -53,7 +53,4 @@ export type UseCanvasElementInteractionsArgs = {
+   setDragState: ValueSetter<DragState | null>;
+   resolveEditableTextTarget: (targetId: string, region?: HitRegion) => EditableTextTarget | null;
+-  densePathSourceIds: ReadonlySet<string>;
+-  expandedDensePathSourceId: string | null;
+-  setExpandedDensePathSourceId: StateSetter<string | null>;
+   scopeOverlay: ScopeOverlayIndex;
+   focusedScopeId: string | null;
+@@ -93,7 +90,4 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+     setDragState,
+     resolveEditableTextTarget,
+-    densePathSourceIds,
+-    expandedDensePathSourceId,
+-    setExpandedDensePathSourceId,
+     scopeOverlay,
+     focusedScopeId,
+@@ -390,4 +384,11 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
      (event: ReactPointerEvent<SVGElement>, targetId: string, region?: HitRegion) => {
        if (!svgResult) return;
 +      if (toolMode === "erase" && event.button === 0) {
@@ -3231,7 +3382,13 @@ index c69a45af..3ae414de 100644
 +      }
        if (toolMode === "addBucket") {
          if (event.button !== 0) {
-@@ -446,5 +453,8 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -436,5 +437,4 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+       if (!additiveSelection && matrixEdgeSelection && event.button === 0) {
+         closeTextEditingSession();
+-        setExpandedDensePathSourceId(null);
+         dispatch({ type: "SELECT_RANGE", ids: matrixEdgeSelection.selectionIds });
+         dispatch({
+@@ -446,5 +446,8 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        }
  
 -      const textTarget = resolvedTargetId === targetId ? resolveEditableTextTarget(targetId, region) : null;
@@ -3241,12 +3398,71 @@ index c69a45af..3ae414de 100644
 +      const textTarget = resolvedTargetId === targetId && !isImage ? resolveEditableTextTarget(targetId, region) : null;
        if (!additiveSelection && textTarget) {
          const draggedIds = alreadySelected && selectedElementIds.size > 0 ? [...selectedElementIds] : [resolvedTargetId];
-@@ -570,4 +580,5 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -484,12 +487,4 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+       closeTextEditingSession();
+ 
+-      // Keep dense-path expansion when re-clicking the same selected dense path.
+-      if (
+-        !additiveSelection &&
+-        !(expandedDensePathSourceId != null && resolvedTargetId === expandedDensePathSourceId)
+-      ) {
+-        setExpandedDensePathSourceId(null);
+-      }
+-
+       const singleSelectedId = selectedElementIds.size === 1
+         ? (selectedElementIds.values().next().value ?? null)
+@@ -560,9 +555,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+       onBucketFillRegion,
+       onNodePositionTargetPick,
+-      expandedDensePathSourceId,
+       resolveEditableTextTarget,
+       selectedElementIds,
+       suppressNextBackgroundClickRef,
+-      setExpandedDensePathSourceId,
+       setSnapLines,
+       closeTextEditingSession,
+@@ -570,4 +563,5 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        scopeOverlay,
        snapshot.editHandles,
 +      snapshot.scene,
        svgResult,
        toolMode,
+@@ -626,23 +620,4 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+       viewportRef.current?.focus({ preventScroll: true });
+ 
+-      if (densePathSourceIds.has(sourceId)) {
+-        if (expandedDensePathSourceId === sourceId) {
+-          // Expanded dense paths should use double-click for point insertion first.
+-          if (tryInsertPathWorldPoint(event, sourceId)) {
+-            return;
+-          }
+-          // Missed insertion is a no-op; keep dense path expanded.
+-          return;
+-        }
+-        dispatch({ type: "SELECT", id: sourceId, additive: false });
+-        dispatch({
+-          type: "SET_FOCUSED_SCOPE",
+-          scopeId: resolveFocusedScopeIdForSelection(sourceId, scopeOverlay)
+-        });
+-        setExpandedDensePathSourceId(sourceId);
+-        closeTextEditingSession();
+-        return;
+-      }
+-
+       // Try to insert a point on a path segment
+       if (tryInsertPathWorldPoint(event, sourceId)) {
+@@ -652,11 +627,8 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+     [
+       dispatch,
+-      densePathSourceIds,
+       scopeOverlay,
+-      setExpandedDensePathSourceId,
+       closeTextEditingSession,
+       toolMode,
+       viewportRef,
+-      expandedDensePathSourceId,
+       resolveEditableTextTarget,
+       tryInsertPathWorldPoint
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
 index 7113da3e..7526298e 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
@@ -3359,10 +3575,33 @@ index f100fe15..20ea0a68 100644
        applyActionWithFeedback,
        contextMenuState,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
-index 8078a5d4..cb937209 100644
+index 8078a5d4..89bbc24e 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
-@@ -637,7 +637,11 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -55,5 +55,4 @@ export type UseCanvasSelectionDerivedStateArgs = {
+   snapshot: Pick<CanvasSnapshot, "source" | "editHandles" | "scene" | "parseResult" | "semanticResult">;
+   selectedElementIds: ReadonlySet<string>;
+-  collapsedDensePathSourceIds: ReadonlySet<string>;
+   svgResult: CanvasSnapshot["svg"];
+   canvasTransform: CanvasTransform;
+@@ -70,5 +69,4 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+     snapshot,
+     selectedElementIds,
+-    collapsedDensePathSourceIds,
+     svgResult,
+     canvasTransform,
+@@ -628,48 +626,21 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+     () =>
+       snapshot.scene
+-        ? deriveCurveControlLines(snapshot.scene.elements, selectedElementIds, snapshot.editHandles).filter(
+-            (line) => !collapsedDensePathSourceIds.has(line.sourceId)
+-          )
++        ? deriveCurveControlLines(snapshot.scene.elements, selectedElementIds, snapshot.editHandles)
+         : [],
+-    [collapsedDensePathSourceIds, selectedElementIds, snapshot.editHandles, snapshot.scene]
++    [selectedElementIds, snapshot.editHandles, snapshot.scene]
+   );
+ 
    const marqueeBounds = useMemo(() => {
      if (!svgResult || !marqueeDraft) return null;
 -    return boundsFromPoints(
@@ -3377,6 +3616,74 @@ index 8078a5d4..cb937209 100644
 +      pt(Math.max(...svgPoints.map((point) => point.y)))
      );
    }, [marqueeDraft, svgResult]);
+ 
+-  const collapsedDensePathEndpointsBySource = useMemo(() => {
+-    const endpointsBySource = new Map<string, { start: WorldPoint; end: WorldPoint }>();
+-    if (!snapshot.scene || collapsedDensePathSourceIds.size === 0) {
+-      return endpointsBySource;
+-    }
+-    for (const element of snapshot.scene.elements) {
+-      if (element.kind !== "Path" || !collapsedDensePathSourceIds.has(element.sourceRef.sourceId)) {
+-        continue;
+-      }
+-      let start: WorldPoint | null = null;
+-      let end: WorldPoint | null = null;
+-      for (const command of element.commands) {
+-        if (command.kind === "M") {
+-          start ??= command.to;
+-          end = command.to;
+-          continue;
+-        }
+-        if (command.kind === "L" || command.kind === "C" || command.kind === "A") {
+-          start ??= command.to;
+-          end = command.to;
+-        }
+-      }
+-      if (start && end) {
+-        endpointsBySource.set(element.sourceRef.sourceId, { start, end });
+-      }
+-    }
+-    return endpointsBySource;
+-  }, [collapsedDensePathSourceIds, snapshot.scene]);
+-
+   const handleDisplays = useMemo<HandleDisplay[]>(() => {
+     if (!svgResult) return [];
+@@ -697,28 +668,4 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+       }
+ 
+-      if (collapsedDensePathSourceIds.has(handle.sourceRef.sourceId)) {
+-        if (handle.kind !== "path-point") {
+-          continue;
+-        }
+-        const endpoints = collapsedDensePathEndpointsBySource.get(handle.sourceRef.sourceId);
+-        if (!endpoints) {
+-          continue;
+-        }
+-        const matchesStart = distanceSquared(handle.world, endpoints.start) <= 1e-6;
+-        const matchesEnd = distanceSquared(handle.world, endpoints.end) <= 1e-6;
+-        if (!matchesStart && !matchesEnd) {
+-          continue;
+-        }
+-        const point = worldToSvgPoint(handle.world, svgResult.viewBox);
+-        displays.push({
+-          key: `dense-endpoint:${handle.sourceRef.sourceId}:${handle.id}`,
+-          point,
+-          cursor: draggableSourceIds.has(handle.sourceRef.sourceId) ? "move" : "not-allowed",
+-          kind: "move-element",
+-          elementId: handle.sourceRef.sourceId
+-        });
+-        continue;
+-      }
+-
+       if (handle.kind === "path-point" && treeChildSourceIds.has(handle.sourceRef.sourceId)) {
+         continue;
+@@ -828,5 +775,5 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+ 
+     return displays;
+-  }, [ROTATE_HANDLE_OFFSET_PX, canvasTransform.scale, collapsedDensePathEndpointsBySource, collapsedDensePathSourceIds, dragCapability.draggableHandleIds, draggableSourceIds, fitNodeSourceIds, matrixCellSourceIds, matrixSourceIds, resizablePathShapeSourceIds, resizeFrameSourceIds, resizeFramesBySource, scopeResizeSourceIds, selectedElementIds, selectedHandles, selectionBoundsBySource, snapshot.editHandles, snapshot.parseResult, snapshot.scene, snapshot.source, svgResult, toolMode, treeChildSourceIds]);
++  }, [ROTATE_HANDLE_OFFSET_PX, canvasTransform.scale, dragCapability.draggableHandleIds, draggableSourceIds, fitNodeSourceIds, matrixCellSourceIds, matrixSourceIds, resizablePathShapeSourceIds, resizeFrameSourceIds, resizeFramesBySource, scopeResizeSourceIds, selectedElementIds, selectedHandles, selectionBoundsBySource, snapshot.editHandles, snapshot.parseResult, snapshot.scene, snapshot.source, svgResult, toolMode, treeChildSourceIds]);
+ 
+   const hitRegions = useMemo(() => {
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 index 709cc1b9..d6657374 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
@@ -4749,3 +5056,58 @@ index 26135190..38ce42a0 100644
 +  });
    it("decimates live points with a minimum spacing threshold", () => {
      const draft = createFreehandToolDraft(wp(cm(0), cm(0)), 1);
+diff --git a/test/web/matrix-cell-selection-handles.spec.ts b/test/web/matrix-cell-selection-handles.spec.ts
+index 419eaca9..d42d19fb 100644
+--- a/test/web/matrix-cell-selection-handles.spec.ts
++++ b/test/web/matrix-cell-selection-handles.spec.ts
+@@ -10,5 +10,5 @@ import { useCanvasSelectionDerivedState } from "../../packages/app/src/ui/canvas
+ type DerivedStateSnapshot = {
+   resizeFrameSourceIds: Set<string>;
+-  handleDisplays: Array<{ kind: string; elementId?: string; cursor?: string }>;
++  handleDisplays: Array<{ kind: string; elementId?: string; cursor?: string; handle?: { kind: string } }>;
+ };
+ 
+@@ -28,5 +28,4 @@ function Harness(props: {
+     },
+     selectedElementIds: props.selectedElementIds,
+-    collapsedDensePathSourceIds: new Set<string>(),
+     svgResult: rendered.svg,
+     canvasTransform: { translateX: 0, translateY: 0, scale: 1 },
+@@ -47,5 +46,5 @@ function Harness(props: {
+ }
+ 
+-describe("matrix-cell selection handles", () => {
++describe("selection handles", () => {
+   let container: HTMLDivElement;
+   let root: Root;
+@@ -65,4 +64,30 @@ describe("matrix-cell selection handles", () => {
+   });
+ 
++  it("shows the anchors and control points of a selected long curve", async () => {
++    const segments = Array.from({ length: 8 }, (_, index) =>
++      `.. controls (${index + 0.25},1) and (${index + 0.75},1) .. (${index + 1},0)`
++    ).join(" ");
++    const source = String.raw`\begin{tikzpicture}
++  \draw (0,0) ${segments};
++\end{tikzpicture}`;
++    const rendered = renderTikzToSvg(source);
++    const pathId = rendered.semantic.scene.elements.find((element) => element.kind === "Path")?.sourceRef.sourceId;
++    expect(pathId).toBeDefined();
++    if (!pathId) throw new Error("Expected path source id");
++
++    let latest: DerivedStateSnapshot = { resizeFrameSourceIds: new Set(), handleDisplays: [] };
++    await act(async () => {
++      root.render(createElement(Harness, {
++        source,
++        selectedElementIds: new Set([pathId]),
++        onUpdate: (state) => { latest = state; }
++      }));
++    });
++
++    const handles = latest.handleDisplays.filter((display) => display.kind === "move-handle");
++    expect(handles.filter((display) => display.handle?.kind === "path-point")).toHaveLength(9);
++    expect(handles.filter((display) => display.handle?.kind === "path-control")).toHaveLength(16);
++  });
++
+   it("shows no-op corner handles for selected matrix cells and suppresses rotate handle", async () => {
+     const source = String.raw`\begin{tikzpicture}
