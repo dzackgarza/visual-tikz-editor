@@ -2087,7 +2087,7 @@ index cf4cf2cf..50d8677f 100644
  
  .hitRegions {
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..3975fe01 100644
+index 4e22ccfa..ac49b5fc 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -67,8 +67,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
@@ -2113,6 +2113,15 @@ index 4e22ccfa..3975fe01 100644
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
+@@ -209,7 +215,7 @@ type SnapDebugOverlayDragState =
+     };
+ 
+ const RULER_SIZE = 24;
+-const MIN_SCALE = 0.05;
++const MIN_SCALE = 1.25;
+ const MAX_SCALE = 20;
+ const NUDGE_STEP_PT = 0.05 * PT_PER_CM;
+ const NUDGE_STEP_SHIFT_PT = 0.25 * PT_PER_CM;
 @@ -757,6 +763,26 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
