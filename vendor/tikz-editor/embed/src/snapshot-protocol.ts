@@ -33,6 +33,7 @@ export const snapshotResultSchema = z.discriminatedUnion('status', [
     source: z.string(),
     svg: z.string(),
     originalInk: z.array(originalAssociationSchema),
+    localBounds: z.object({ minX: z.number(), minY: z.number(), maxX: z.number(), maxY: z.number() }).nullable(),
     viewBox: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
     state: editorStateSchema,
   }),

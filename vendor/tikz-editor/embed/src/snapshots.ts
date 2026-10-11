@@ -1,4 +1,5 @@
 import { useEditorStore } from '@tikz-editor/app/store';
+import { worldToSvgBounds } from 'tikz-editor/coords/index';
 import { exportSvg } from './export-svg';
 import { originalStrokes } from './original-ink';
 import type { EditorSnapshotResult, SnapshotFailure, SnapshotRequest } from './snapshot-protocol';
@@ -56,6 +57,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
             .filter(element => element.sourceRef.sourceSpan.from >= entry.drawingFrom && element.sourceRef.sourceSpan.to <= entry.drawingTo)
             .map(element => element.sourceRef.sourceId),
         })),
+        localBounds: state.snapshot.scene?.bounds ? worldToSvgBounds(state.snapshot.scene.bounds, drawing.viewBox) : null,
         viewBox: drawing.viewBox,
         state: {
           selection: [...state.selectedElementIds], tool: state.toolMode,
