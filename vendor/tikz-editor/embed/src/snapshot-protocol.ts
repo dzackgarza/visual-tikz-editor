@@ -41,7 +41,7 @@ export const snapshotResultSchema = z.discriminatedUnion('status', [
     event: z.literal('snapshot'),
     ...identity,
     status: z.literal('failed'),
-    error: z.enum(['stale-target', 'source-changed', 'render-failed', 'resource-unavailable', 'invalid-original-ink', 'cancelled', 'timeout', 'busy']),
+    error: z.enum(['stale-target', 'source-changed', 'render-failed', 'resource-unavailable', 'invalid-original-ink', 'request-id-reused', 'cancelled', 'timeout', 'busy']),
   }),
 ]);
 

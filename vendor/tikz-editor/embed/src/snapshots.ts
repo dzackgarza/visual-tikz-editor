@@ -8,7 +8,9 @@ import type { EditorSnapshotResult, SnapshotFailure, SnapshotRequest } from './s
 export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => void, imageBaseUrl: () => string) {
   type Pending = { request: SnapshotRequest; sourceRevision: number; timer: number; abort: AbortController; exporting: boolean };
   const pending = new Map<string, Pending>();
-  const completed = new Set<string>();
+  const completed = new Map<string, { request: SnapshotRequest; reply: EditorSnapshotResult }>();
+  const sameRequest = (a: SnapshotRequest, b: SnapshotRequest) =>
+    a.sessionId === b.sessionId && a.revision === b.revision && a.source === b.source;
 
   function finish(requestId: string, reply: EditorSnapshotResult): void {
     const entry = pending.get(requestId);
@@ -16,7 +18,8 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
     window.clearTimeout(entry.timer);
     entry.abort.abort();
     pending.delete(requestId);
-    completed.add(requestId);
+    completed.set(requestId, { request: entry.request, reply });
+    if (completed.size > 32) completed.delete(completed.keys().next().value!);
     send(reply);
   }
 
@@ -73,7 +76,17 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
   const unsubscribe = useEditorStore.subscribe(advance);
   return {
     request(request: SnapshotRequest, sessionId: string, revision: number): void {
-      if (completed.has(request.requestId) || pending.has(request.requestId)) return;
+      const previous = completed.get(request.requestId);
+      if (previous) {
+        send(sameRequest(previous.request, request) ? previous.reply :
+          { ...request, event: 'snapshot', status: 'failed', error: 'request-id-reused' });
+        return;
+      }
+      const active = pending.get(request.requestId);
+      if (active) {
+        if (!sameRequest(active.request, request)) fail(request.requestId, 'request-id-reused');
+        return;
+      }
       if (pending.size >= 32) {
         send({ ...request, event: 'snapshot', status: 'failed', error: 'busy' });
         return;

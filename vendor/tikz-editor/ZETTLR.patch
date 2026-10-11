@@ -970,7 +970,7 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..9823a10 100644
+index 4e22ccf..a505378 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -54,6 +54,9 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
@@ -1115,79 +1115,100 @@ index 4e22ccf..9823a10 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2090,10 +2147,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2140,181 @@ export const CanvasPanel = memo(function CanvasPanel({
+       setDragState(null);
+     }
+ 
+-    if (!draft) {
++    if (!draft || !draft.samples || draft.samples.length < 2) {
+       setFreehandDraft(null);
+       setToolCursorWorld(null);
+-      dispatch({ type: "SET_TOOL_MODE", mode: "select" });
        return;
      }
  
 -    const snippet = generateFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
-+    const interpretation = interpretFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
++    const fitted = interpretFreehandToolSource(draft, canvasTransform.scale, freehandSmoothingPx, {
        strokeColor: creationStrokeColor
      });
 -    if (snippet) {
-+    if (interpretation) {
-       const firstPoint = draft.points[0];
-       const lastPoint = draft.points[draft.points.length - 1];
-       queueSelectionForAddedElement(
-@@ -2102,13 +2159,50 @@ export const CanvasPanel = memo(function CanvasPanel({
-           pt((firstPoint.y + lastPoint.y) / 2)
-         )
-       );
+-      const firstPoint = draft.points[0];
+-      const lastPoint = draft.points[draft.points.length - 1];
+-      queueSelectionForAddedElement(
+-        makeWorldPoint(
+-          pt((firstPoint.x + lastPoint.x) / 2),
+-          pt((firstPoint.y + lastPoint.y) / 2)
+-        )
+-      );
 -      const ok = applyActionWithFeedback({
 -        kind: "pasteStatements",
 -        snippets: [snippet],
 -        delta: makeWorldPoint(pt(0), pt(0))
-+      const before = useEditorStore.getState();
-+      const original = originalStrokeSchema.parse({
-+        key: crypto.randomUUID(), intent: 'geometry', color: normalizeColor(creationStrokeColor),
-+        samples: draft.samples,
-       });
+-      });
 -      if (!ok.sourceChanged) {
-+      interpretation.rawSource = originalDrawingSource(original);
-+      const after = insertElementIntoSource(before.source, strokeEnvelope(original, interpretation.rawSource),
-+        before.snapshot.figures.find(figure => figure.id === before.activeFigureId)?.span);
-+      dispatch({ type: 'REPLACE_FREEHAND_RESULT', from: 0, before: before.source, after,
-+        expectedSourceRevision: before.sourceRevision });
-+      if (useEditorStore.getState().source === before.source) {
-         pendingAddedSelectionRef.current = null;
-+      } else if (interpretation.source !== interpretation.rawSource) {
-+        const rawState = useEditorStore.getState();
-+        const from = rawState.source.lastIndexOf(interpretation.rawSource);
-+        dispatch({
-+          type: "REPLACE_FREEHAND_RESULT",
-+          from,
-+          before: interpretation.rawSource,
-+          after: interpretation.source,
-+          expectedSourceRevision: rawState.sourceRevision
-+        });
-+        const viewport = viewportRef.current?.getBoundingClientRect();
-+        const svgPoint = svgResult ? worldToSvgPoint(lastPoint, svgResult.viewBox) : null;
-+        const left = viewport && svgPoint && svgResult
-+          ? viewport.left + canvasTransform.translateX + (svgPoint.x - svgResult.viewBox.x) * canvasTransform.scale
-+          : window.innerWidth / 2;
-+        const top = viewport && svgPoint && svgResult
-+          ? viewport.top + canvasTransform.translateY + (svgPoint.y - svgResult.viewBox.y) * canvasTransform.scale
-+          : window.innerHeight / 2;
-+        setFreehandResultOffer({
-+          draft,
-+          interpretation,
-+          rawSource: interpretation.rawSource,
-+          sourcePrefix: null,
-+          from,
-+          current: "simplified",
-+          tolerancePx: freehandSmoothingPx,
-+          zoom: canvasTransform.scale,
-+          strokeColor: creationStrokeColor,
-+          sourceRevision: useEditorStore.getState().sourceRevision,
-+          left: clamp(left + 12, 12, Math.max(12, window.innerWidth - 280)),
-+          top: clamp(top + 12, 12, Math.max(12, window.innerHeight - 180))
-+        });
-       }
-     } else {
+-        pendingAddedSelectionRef.current = null;
+-      }
+-    } else {
++    const original = originalStrokeSchema.parse({
++      key: crypto.randomUUID(), intent: 'geometry', color: normalizeColor(creationStrokeColor),
++      samples: draft.samples,
++    });
++    const rawSource = originalDrawingSource(original);
++    const interpretation = fitted && fitted.kind !== 'raw'
++      ? { ...fitted, rawSource }
++      : { source: rawSource, rawSource, kind: 'raw' as const };
++    const firstPoint = draft.points[0];
++    const lastPoint = draft.points[draft.points.length - 1];
++    queueSelectionForAddedElement(
++      makeWorldPoint(
++        pt((firstPoint.x + lastPoint.x) / 2),
++        pt((firstPoint.y + lastPoint.y) / 2)
++      )
++    );
++    const before = useEditorStore.getState();
++    const after = insertElementIntoSource(before.source, strokeEnvelope(original, interpretation.rawSource),
++      before.snapshot.figures.find(figure => figure.id === before.activeFigureId)?.span);
++    dispatch({ type: 'REPLACE_FREEHAND_RESULT', from: 0, before: before.source, after,
++      expectedSourceRevision: before.sourceRevision });
++    if (useEditorStore.getState().source === before.source) {
        pendingAddedSelectionRef.current = null;
-@@ -2117,7 +2211,113 @@ export const CanvasPanel = memo(function CanvasPanel({
++    } else if (interpretation.source !== interpretation.rawSource) {
++      const rawState = useEditorStore.getState();
++      const from = rawState.source.lastIndexOf(interpretation.rawSource);
++      dispatch({
++        type: "REPLACE_FREEHAND_RESULT",
++        from,
++        before: interpretation.rawSource,
++        after: interpretation.source,
++        expectedSourceRevision: rawState.sourceRevision
++      });
++      const viewport = viewportRef.current?.getBoundingClientRect();
++      const svgPoint = svgResult ? worldToSvgPoint(lastPoint, svgResult.viewBox) : null;
++      const left = viewport && svgPoint && svgResult
++        ? viewport.left + canvasTransform.translateX + (svgPoint.x - svgResult.viewBox.x) * canvasTransform.scale
++        : window.innerWidth / 2;
++      const top = viewport && svgPoint && svgResult
++        ? viewport.top + canvasTransform.translateY + (svgPoint.y - svgResult.viewBox.y) * canvasTransform.scale
++        : window.innerHeight / 2;
++      setFreehandResultOffer({
++        draft,
++        interpretation,
++        rawSource: interpretation.rawSource,
++        sourcePrefix: null,
++        from,
++        current: "simplified",
++        tolerancePx: freehandSmoothingPx,
++        zoom: canvasTransform.scale,
++        strokeColor: creationStrokeColor,
++        sourceRevision: useEditorStore.getState().sourceRevision,
++        left: clamp(left + 12, 12, Math.max(12, window.innerWidth - 280)),
++        top: clamp(top + 12, 12, Math.max(12, window.innerHeight - 180))
++      });
+     }
+ 
      setFreehandDraft(null);
      setToolCursorWorld(null);
-     dispatch({ type: "SET_TOOL_MODE", mode: "select" });
+-    dispatch({ type: "SET_TOOL_MODE", mode: "select" });
 -  }, [applyActionWithFeedback, canvasTransform.scale, creationStrokeColor, dispatch, freehandSmoothingPx, queueSelectionForAddedElement, setDragState]);
 +  }, [applyActionWithFeedback, canvasTransform, creationStrokeColor, dispatch, freehandSmoothingPx, queueSelectionForAddedElement, setDragState, svgResult]);
 +
@@ -1299,7 +1320,7 @@ index 4e22ccf..9823a10 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3223,9 +3423,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3223,9 +3420,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      suppressNextBackgroundClickRef,
      svgResult,
      setDragState,
@@ -1312,7 +1333,7 @@ index 4e22ccf..9823a10 100644
      snapshot,
      source,
      setWarning,
-@@ -3974,6 +4177,63 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4174,63 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
