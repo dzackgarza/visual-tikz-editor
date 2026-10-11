@@ -40,7 +40,7 @@ import {
   tikzEditorReplacement,
   tikzEditorSessionForBlock,
 } from "../editor-bridge";
-import { requestEditorSnapshot, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../host";
+import { requestEditorSource, requestEditorSnapshot, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../host";
 import type { TikzLivePreviewTarget } from "../live-preview";
 
 interface PreviewSession {
@@ -93,7 +93,17 @@ function snapshot(signal: AbortSignal) {
   }, AbortSignal.any([signal, lifetime.signal]));
 }
 
-defineExpose({ snapshot });
+async function currentSource(signal: AbortSignal): Promise<string> {
+  const active = session.value;
+  if (frame.value === null || !loaded.value) return active.source.source;
+  const source = await requestEditorSource(frame.value, { sessionId: active.id, revision: active.revision },
+    AbortSignal.any([signal, lifetime.signal]));
+  if (session.value.revision !== active.revision) throw new Error("The source changed while reading the editor");
+  applyEditorSource(source, active.revision);
+  return session.value.source.source;
+}
+
+defineExpose({ snapshot, currentSource });
 
 function sameBlockIdentity(a: TikzEditorSourceSession, b: TikzEditorSourceSession): boolean {
   return a.kind === b.kind && a.blockFrom === b.blockFrom;

@@ -141,6 +141,9 @@ describe("standalone workbench host boundary", function () {
     const result = JSON.parse(await page.locator("#result").innerText());
     assert.equal(result.source, source);
     assert.equal(result.revision, 2);
+    assert.ok(result.localBounds, "The accepted drawing includes its local placement bounds");
+    assert.ok(Math.abs((result.localBounds.maxX - result.localBounds.minX) - 85.358) < 1);
+    assert.ok(Math.abs((result.localBounds.maxY - result.localBounds.minY) - 56.906) < 1);
     const drawing = await page.evaluate(svg => {
       const document = new DOMParser().parseFromString(svg, "image/svg+xml");
       return { paths: [...document.querySelectorAll("path")].map(path => path.getAttribute("d")), errors: document.querySelectorAll("parsererror").length };
@@ -247,6 +250,10 @@ describe("standalone workbench host boundary", function () {
     // A horizontal SVG line has a zero-height DOM box, but its painted stroke
     // is hittable. Send the real pointer to its midpoint.
     await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const selected = JSON.parse(await page.locator('#result').innerText());
+    assert.equal(selected.state.selection.length, 1);
     await frame.getByRole('button', { name: 'Restore original stroke', exact: true }).click();
     await expect(page.getByLabel('Authored source')).toHaveValue(saved.source);
     await frame.getByRole('button', { name: 'Reapply original fit', exact: true }).click();
@@ -334,6 +341,51 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator('.file-menu summary')).toBeVisible();
   });
 
+  it('restores its accepted tool and viewport in a fresh editor session', async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    const frame = page.frameLocator('#editor');
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const viewport = frame.locator('[data-canvas-viewport="true"]');
+    await viewport.scrollIntoViewIfNeeded();
+    const box = (await viewport.boundingBox())!;
+    const originalScale = await frame.locator('[data-canvas-scale]').getAttribute('data-canvas-scale');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.keyboard.down('Control');
+    await page.mouse.wheel(0, -180);
+    await page.keyboard.up('Control');
+    await expect(frame.locator('[data-canvas-scale]')).not.toHaveAttribute('data-canvas-scale', originalScale!);
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const saved = JSON.parse(await page.locator('#result').innerText());
+    assert.equal(saved.state.tool, 'addFreehand');
+    await page.reload();
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    await page.getByLabel('Saved snapshot').fill(JSON.stringify(saved));
+    await page.getByRole('button', { name: 'Load snapshot', exact: true }).click();
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const restored = JSON.parse(await page.locator('#result').innerText());
+    assert.deepEqual(restored.state, saved.state);
+    await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    assert.equal(await frame.locator('[data-canvas-scale]').getAttribute('data-canvas-scale'), String(saved.state.viewport.scale));
+  });
+
+  it('copies a just-finished canvas edit before the throttled source notification', async function () {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const frame = page.frameLocator('iframe');
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    await page.mouse.move(box.x + box.width / 3, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 3 + 110, box.y + box.height / 2 + 25, { steps: 12 });
+    await page.mouse.up();
+    await page.getByRole('button', { name: 'Copy source', exact: true }).click();
+    await expect(page.locator('.cm-content')).toContainText('workbench-ink:');
+    const current = await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n'));
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(current);
+  });
+
   for (const width of [1280, 768]) {
     it(`retains authored source and its drawing tool through rendered-view switches at ${width}px`, async function () {
       await page.setViewportSize({ width, height: 1024 });
@@ -366,7 +418,7 @@ describe("standalone workbench host boundary", function () {
       await expect(sourcePane).toContainText('workbench-ink:');
       await viewport.press('Control+z');
       await viewport.press('Control+z');
-      await expect(sourcePane).toHaveText(authored);
+      await expect.poll(() => sourcePane.innerText()).toBe(authored);
     });
   }
 });

@@ -7,6 +7,15 @@ const identity = {
   requestId: z.string().min(1),
 };
 
+export const editorStateSchema = z.object({
+  selection: z.array(z.string()),
+  tool: z.enum(['select', 'magnify', 'addBucket', 'addNode', 'addPoint', 'addImage', 'addMatrix',
+    'addShape', 'addPath', 'addFreehand', 'addLine', 'addGrid', 'addRect', 'addEllipse',
+    'addCircle', 'addArc', 'addArrow', 'addBezier']),
+  viewport: z.object({ scale: z.number().positive(), translateX: z.number(), translateY: z.number() }),
+  fitToContent: z.boolean(),
+});
+
 export const snapshotRequestSchema = z.object({
   action: z.literal('snapshot'),
   ...identity,
@@ -25,11 +34,7 @@ export const snapshotResultSchema = z.discriminatedUnion('status', [
     svg: z.string(),
     originalInk: z.array(originalAssociationSchema),
     viewBox: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
-    state: z.object({
-      selection: z.array(z.string()),
-      tool: z.string(),
-      viewport: z.object({ scale: z.number(), translateX: z.number(), translateY: z.number() }),
-    }),
+    state: editorStateSchema,
   }),
   z.object({
     event: z.literal('snapshot'),

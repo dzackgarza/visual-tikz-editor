@@ -117,10 +117,10 @@ index 59fab7a..8cc20ff 100644
        { kind: "separator" },
        {
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6..396f8a8 100644
+index e0845d6..f6c7479 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
-@@ -33,12 +33,6 @@ const DEFAULT_ADD_MATRIX_ROWS = 2;
+@@ -33,17 +33,12 @@ const DEFAULT_ADD_MATRIX_ROWS = 2;
  const DEFAULT_ADD_MATRIX_COLUMNS = 2;
  const DEFAULT_CREATION_STROKE_COLOR = "black";
  const DEFAULT_CREATION_FILL_COLOR = "none";
@@ -133,7 +133,13 @@ index e0845d6..396f8a8 100644
  
  function initialUiState(): WorkspaceEphemeralState {
    return {
-@@ -100,6 +94,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
+     toolMode: "select",
+     canvasTransform: DEFAULT_CANVAS_TRANSFORM,
++    pendingViewportRestore: null,
+     hoveredElementId: null,
+     activeCanvasDragKind: null,
+     activeSourceScrubSourceId: null,
+@@ -100,6 +95,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
      case "align": return "Aligned elements";
      case "distribute": return "Distributed elements";
      case "flatten-foreach": return "Flattened foreach";
@@ -141,7 +147,7 @@ index e0845d6..396f8a8 100644
    }
  }
  
-@@ -107,63 +102,7 @@ function prependDeveloperLog(
+@@ -107,63 +103,7 @@ function prependDeveloperLog(
    logs: WorkspaceEphemeralState["developerLogs"],
    entry: WorkspaceEphemeralState["developerLogs"][number]
  ): WorkspaceEphemeralState["developerLogs"] {
@@ -206,7 +212,7 @@ index e0845d6..396f8a8 100644
  }
  
  function applyEditWarningToDocument(doc: DocumentSession, message: string | null): DocumentSession {
-@@ -934,6 +873,44 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -934,6 +874,44 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
  
@@ -251,8 +257,19 @@ index e0845d6..396f8a8 100644
      case "SET_SOURCE_TRANSIENT": {
        const documentId = activeDocumentIdFromAction(state, action.documentId);
        workspace = updateDocument(workspace, documentId, (doc) => {
+@@ -1094,6 +1072,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+       ui = { ...ui, toolMode: action.mode };
+       break;
+ 
++    case "RESTORE_CANVAS_VIEWPORT":
++      ui = { ...ui, pendingViewportRestore: action.restore };
++      break;
++
+     case "SET_CANVAS_TRANSFORM":
+       ui = { ...ui, canvasTransform: action.transform };
+       break;
 diff --git a/packages/app/src/store/types.ts b/packages/app/src/store/types.ts
-index 450957d..16cc576 100644
+index 450957d..df580de 100644
 --- a/packages/app/src/store/types.ts
 +++ b/packages/app/src/store/types.ts
 @@ -14,6 +14,8 @@ export type ToolMode =
@@ -282,7 +299,23 @@ index 450957d..16cc576 100644
    label: string;
    /** Optional key used to coalesce drag updates into one undo step. */
    mergeKey?: string;
-@@ -354,6 +358,13 @@ export type EditorAction =
+@@ -170,6 +174,7 @@ export type WorkspaceEphemeralState = {
+   // ── canvas slice ─────────────────────────────────────────────────────────────
+   toolMode: ToolMode;
+   canvasTransform: CanvasTransform;
++  pendingViewportRestore: { source: string; transform: CanvasTransform; fitToContent: boolean } | null;
+   hoveredElementId: string | null;
+   activeCanvasDragKind: CanvasDragKind | null;
+   /** Source id currently being edited via source-number scrubbing. */
+@@ -258,6 +263,7 @@ export type EditorState = {
+   // ── canvas slice ─────────────────────────────────────────────────────────────
+   toolMode: ToolMode;
+   canvasTransform: CanvasTransform;
++  pendingViewportRestore: { source: string; transform: CanvasTransform; fitToContent: boolean } | null;
+   hoveredElementId: string | null;
+   activeCanvasDragKind: CanvasDragKind | null;
+   /** Source id currently being edited via source-number scrubbing. */
+@@ -354,6 +360,13 @@ export type EditorAction =
        source: string;
        changedSourceIds?: string[] | null;
      }
@@ -296,6 +329,34 @@ index 450957d..16cc576 100644
    | { type: "COMPUTE_REQUESTED"; requestId: string; documentId?: string }
    | { type: "SNAPSHOT_READY"; requestId: string; snapshot: SessionSnapshot; documentId?: string }
    | { type: "REORDER_TABS"; fromId: string; toId: string }
+@@ -394,6 +407,7 @@ export type EditorAction =
+   | { type: "SET_ACTIVE_HANDLE"; handleId: string | null }
+   // Canvas
+   | { type: "SET_TOOL_MODE"; mode: ToolMode }
++  | { type: "RESTORE_CANVAS_VIEWPORT"; restore: EditorState["pendingViewportRestore"] }
+   | { type: "SET_CANVAS_TRANSFORM"; transform: CanvasTransform }
+   | { type: "SET_HOVERED_ELEMENT"; id: string | null }
+   | { type: "SET_ACTIVE_CANVAS_DRAG"; kind: CanvasDragKind | null }
+diff --git a/packages/app/src/store/workspace-state.ts b/packages/app/src/store/workspace-state.ts
+index 758bd61..58b223f 100644
+--- a/packages/app/src/store/workspace-state.ts
++++ b/packages/app/src/store/workspace-state.ts
+@@ -221,6 +221,7 @@ export function projectState(workspace: WorkspacePersistedState, ui: WorkspaceEp
+     recentDocumentIds: normalizedWorkspace.recentDocumentIds,
+     toolMode: ui.toolMode,
+     canvasTransform: ui.canvasTransform,
++    pendingViewportRestore: ui.pendingViewportRestore,
+     hoveredElementId: ui.hoveredElementId,
+     activeCanvasDragKind: ui.activeCanvasDragKind,
+     activeSourceScrubSourceId: ui.activeSourceScrubSourceId,
+@@ -273,6 +274,7 @@ export function uiStateFromEditorState(state: EditorState): WorkspaceEphemeralSt
+   return {
+     toolMode: state.toolMode,
+     canvasTransform: state.canvasTransform,
++    pendingViewportRestore: state.pendingViewportRestore,
+     hoveredElementId: state.hoveredElementId,
+     activeCanvasDragKind: state.activeCanvasDragKind,
+     activeSourceScrubSourceId: state.activeSourceScrubSourceId,
 diff --git a/packages/app/src/ui/DevPanel.tsx b/packages/app/src/ui/DevPanel.tsx
 index 4d4cfa9..b5595dc 100644
 --- a/packages/app/src/ui/DevPanel.tsx
@@ -1962,6 +2023,51 @@ index 709cc1b..4275482 100644
        toolMode,
        toolCursorWorld,
        snapGuideInput,
+diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
+index de737af..bb50208 100644
+--- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
++++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
+@@ -9,6 +9,7 @@ import {
+ } from "react";
+ import { px, viewportPoint } from "tikz-editor/coords/index";
+ 
++import { useEditorStore } from "../../store/store";
+ import type { CanvasDragKind, CanvasTransform } from "../../store/types";
+ import { clamp, viewportToSvgPoint } from "./geometry";
+ import type { CanvasDispatch, CanvasSnapshot, ValueSetter } from "./types";
+@@ -75,6 +76,7 @@ export function useCanvasViewportPersistence({
+   MIN_SCALE,
+   MAX_SCALE
+ }: UseCanvasViewportPersistenceArgs): { maxZoomScale: number } {
++  const pendingRestore = useEditorStore(state => state.pendingViewportRestore);
+   const viewportStateByFigureKeyRef = useRef(new Map<string, FigureViewportState>());
+   const visitedFigureKeysRef = useRef(new Set<string>());
+   const previousFigureViewportKeyRef = useRef<string | null>(null);
+@@ -154,6 +156,16 @@ export function useCanvasViewportPersistence({
+   }, [tabOrder]);
+ 
+   useLayoutEffect(() => {
++    if (pendingRestore) {
++      if (source !== pendingRestore.source || snapshotSource !== source || !baseSvgResult) return;
++      saveFigureViewportState(activeFigureViewportKey, pendingRestore.transform, pendingRestore.fitToContent);
++      pendingFirstVisitAutoFitKeyRef.current = null;
++      previousFigureViewportKeyRef.current = activeFigureViewportKey;
++      setFitToContentModeActive(pendingRestore.fitToContent);
++      dispatchCanvasTransform(pendingRestore.transform);
++      dispatch({ type: "RESTORE_CANVAS_VIEWPORT", restore: null });
++      return;
++    }
+     const pendingAutoFit = pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey;
+     if (previousFigureViewportKeyRef.current === activeFigureViewportKey && !pendingAutoFit) {
+       return;
+@@ -196,6 +208,7 @@ export function useCanvasViewportPersistence({
+     previousFigureViewportKeyRef.current = activeFigureViewportKey;
+   }, [
+     activeFigureViewportKey,
++    pendingRestore, source, snapshotSource, baseSvgResult, dispatch,
+     canvasTransformRef,
+     dispatchCanvasTransform,
+     fitToContent,
 diff --git a/packages/app/src/ui/capabilities.ts b/packages/app/src/ui/capabilities.ts
 index b20b72b..c9deb6f 100644
 --- a/packages/app/src/ui/capabilities.ts

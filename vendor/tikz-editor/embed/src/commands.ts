@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { snapshotRequestSchema } from './snapshot-protocol';
+import { snapshotRequestSchema, editorStateSchema } from './snapshot-protocol';
 import { originalStrokeSchema } from './original-ink';
 
 export const commandIdentitySchema = z.object({
@@ -15,7 +15,7 @@ const settings = z.object({ general: z.object({
 
 export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('load'), source: z.string(), fileName: z.string(),
-    imageBaseUrl: z.string().optional(), settings: settings.optional(), autosave: z.literal(0).optional() }),
+    imageBaseUrl: z.string().optional(), settings: settings.optional(), state: editorStateSchema.optional(), autosave: z.literal(0).optional() }),
   z.object({ ...identity, action: z.literal('settings'), settings }),
   z.object({ ...identity, action: z.literal('display'), fullscreen: z.boolean() }),
   z.object({ ...identity, action: z.literal('workspace'), workspace: z.enum(['default', 'canvasOnly']) }),

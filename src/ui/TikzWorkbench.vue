@@ -80,6 +80,7 @@
         v-if="unavailableMessage === ''"
         v-show="displayMode === provider.id"
         :is="provider.component"
+        :ref="(handle: unknown) => setEditorHandle(provider.id, handle)"
         :key="`${provider.id}\0${targetIdentity(props.target)}`"
         class="tikz-live-preview-provider"
         :target="props.target"
@@ -157,6 +158,18 @@ const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({
   visual: false,
 });
 const copyError = ref("");
+type EditorHandle = { currentSource?: (signal: AbortSignal) => Promise<string> };
+const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
+function setEditorHandle(id: TikzPreviewModeId, handle: unknown): void {
+  if (handle === null) editorHandles.delete(id);
+  else editorHandles.set(id, handle as EditorHandle);
+}
+async function currentSource(signal: AbortSignal): Promise<string> {
+  const editor = editorHandles.get(displayMode.value);
+  if (editor?.currentSource) return editor.currentSource(signal);
+  return props.target.source;
+}
+defineExpose({ currentSource });
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const providers: readonly TikzPreviewProvider[] = TIKZ_PREVIEW_PROVIDERS;
 const displayMode = requestedMode;

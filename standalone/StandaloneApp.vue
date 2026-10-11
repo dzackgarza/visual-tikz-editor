@@ -30,6 +30,7 @@
         @change="source = $event"
       />
       <TikzWorkbench
+        ref="workbench"
         :key="documentKey"
         class="tikz-standalone-workbench"
         :target="target"
@@ -69,6 +70,7 @@ interface StandaloneDocument {
 const document = shallowRef<StandaloneDocument | null>(null);
 const documentKey = ref(0);
 const source = ref("");
+const workbench = ref<InstanceType<typeof TikzWorkbench> | null>(null);
 const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
@@ -253,7 +255,8 @@ function toggleInspector(): void {
 
 async function copySource(): Promise<void> {
   try {
-    await navigator.clipboard.writeText(source.value);
+    const text = await workbench.value?.currentSource(new AbortController().signal) ?? source.value;
+    await navigator.clipboard.writeText(text);
     hostError.value = "";
   } catch (error) {
     host.reportError("Could not copy source", error);

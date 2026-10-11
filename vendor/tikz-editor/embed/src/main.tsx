@@ -384,7 +384,13 @@ function HostBridge() {
 					applyHostSettings(command.settings);
 					persistHostSettings(command.settings);
 					pendingChangeRef.current = null;
+					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: command.state ? { source: command.source, transform: command.state.viewport, fitToContent: command.state.fitToContent } : null });
 					loadIntoEditor(command.source, command.fileName);
+					if (command.state) {
+						const { dispatch } = useEditorStore.getState();
+						dispatch({ type: 'SET_TOOL_MODE', mode: command.state.tool });
+						dispatch({ type: 'SELECT_RANGE', ids: command.state.selection });
+					}
 					reply(command);
 					return;
 				}

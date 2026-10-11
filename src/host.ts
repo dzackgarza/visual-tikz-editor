@@ -11,6 +11,7 @@ import type { QuiverMacroProjection } from "./quiver-macros";
 import type { TikzRenderRequest, TikzRenderResult } from "./tikz-render";
 
 export type { EditorSnapshot, EditorSnapshotResult } from "../vendor/tikz-editor/embed/src/snapshot-protocol";
+export { requestEditorSource } from "./editor-source";
 export { requestEditorSnapshot } from "./editor-snapshot";
 export type { HostCommand } from "../vendor/tikz-editor/embed/src/commands";
 export type { OriginalStroke } from "../vendor/tikz-editor/embed/src/original-ink";

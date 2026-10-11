@@ -41,6 +41,13 @@ for (const action of ['interpret-ink', 'restore-ink'] as const) {
   });
 }
 document.querySelector('#load')!.addEventListener('click', load);
+document.querySelector('#load-snapshot')!.addEventListener('click', () => {
+  const snapshot = JSON.parse(document.querySelector<HTMLTextAreaElement>('#saved-snapshot')!.value);
+  source.value = snapshot.source;
+  revision++;
+  editor.contentWindow!.postMessage({ action: 'load', source: snapshot.source, state: snapshot.state,
+    fileName: 'fixture.tikz', sessionId, revision, requestId: crypto.randomUUID(), imageBaseUrl: `${location.origin}/` }, location.origin);
+});
 document.querySelector('#snapshot')!.addEventListener('click', async () => {
   pending?.abort();
   const request = new AbortController();

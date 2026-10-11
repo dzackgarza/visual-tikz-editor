@@ -34,7 +34,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         fail(requestId, 'source-changed');
         continue;
       }
-      if (entry.exporting) continue;
+      if (entry.exporting || state.pendingViewportRestore !== null) continue;
       if (state.pendingRequestId !== null || state.snapshot.source !== request.source) continue;
       if (state.snapshot.activeFigureId !== state.activeFigureId) continue;
       const drawing = state.snapshot.svg;
@@ -60,6 +60,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         state: {
           selection: [...state.selectedElementIds], tool: state.toolMode,
           viewport: { ...state.canvasTransform },
+          fitToContent: state.fitToContentModeActive,
         },
       } as const;
       void exportSvg(drawing.svg, `figure-${request.sessionId}-${request.revision}-${sourceRevision}`, imageBaseUrl(), entry.abort.signal)
