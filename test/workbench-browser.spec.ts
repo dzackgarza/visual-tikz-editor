@@ -398,6 +398,28 @@ describe("standalone workbench host boundary", function () {
     assert.ok(samples.some((sample: { tiltX: number; tiltY: number }) => sample.tiltX === 12 && sample.tiltY === -8));
   });
 
+  it('preserves a short pen stroke even when interpretation has no fit', async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    const frame = page.frameLocator('#editor');
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    const x = box.x + box.width * .3, y = box.y + box.height * .55;
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1, pointerType: 'pen', force: .5 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + 3, y: y + 2, button: 'left', buttons: 1, pointerType: 'pen', force: .6 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + 3, y: y + 2, button: 'left', buttons: 0, clickCount: 1, pointerType: 'pen' });
+    await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(/workbench-ink:/);
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const result = JSON.parse(await page.locator('#result').innerText());
+    assert.equal(result.originalInk.length, 1);
+    assert.ok(result.originalInk[0].stroke.samples.length >= 3);
+    assert.ok(result.svg.includes('data-source-id="path:1"'));
+    await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('keeps palm contact out of pen drawing and supports finger pan and pinch afterward', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
@@ -422,6 +444,8 @@ describe("standalone workbench host boundary", function () {
     const drawn = JSON.parse(await page.locator('#result').innerText());
     assert.equal(drawn.originalInk.length, 1);
     assert.ok(drawn.originalInk[0].stroke.samples.length >= 22, 'Palm contact must not replace the pen drag');
+    await frame.getByRole('button', { name: 'Keep', exact: true }).click();
+    await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 4, x, y }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 4, x: x + 55, y: y + 35 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
