@@ -292,4 +292,29 @@ describe("standalone workbench host boundary", function () {
     assert.ok(samples.some((sample: { pressure: number }) => Math.abs(sample.pressure - .5) < .01));
     assert.ok(samples.some((sample: { tiltX: number; tiltY: number }) => sample.tiltX === 12 && sample.tiltY === -8));
   });
+
+  it("cancels a resource-pending snapshot and continues with a newer drawing", async function () {
+    let release!: () => void;
+    const delayed = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/image-resource.svg', async route => { await delayed; await route.continue(); });
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    await page.getByLabel('Authored source').fill(String.raw`\begin{tikzpicture}\node at (0,0) {\includegraphics{image-resource.svg}};\end{tikzpicture}`);
+    await page.getByRole('button', { name: 'Load source', exact: true }).click();
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Awaiting snapshot');
+    await page.getByRole('button', { name: 'Cancel snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot failed');
+    assert.equal(JSON.parse(await page.locator('#result').innerText()).error, 'cancelled');
+    const next = String.raw`\begin{tikzpicture}\draw[red] (0,0) rectangle (3,2);\end{tikzpicture}`;
+    await page.getByLabel('Authored source').fill(next);
+    await page.getByRole('button', { name: 'Load source', exact: true }).click();
+    release();
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const accepted = JSON.parse(await page.locator('#result').innerText());
+    assert.equal(accepted.source, next);
+    assert.ok(accepted.svg.includes('85.358'));
+    assert.ok(!accepted.svg.includes('<image'));
+  });
 });

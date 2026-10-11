@@ -7,6 +7,7 @@ const result = document.querySelector<HTMLPreElement>('#result')!;
 const sessionId = crypto.randomUUID();
 let revision = 0;
 const lifetime = new AbortController();
+let pending: AbortController | null = null;
 
 function post(message: HostCommand) {
   editor.contentWindow!.postMessage(message, location.origin);
@@ -41,12 +42,17 @@ for (const action of ['interpret-ink', 'restore-ink'] as const) {
 }
 document.querySelector('#load')!.addEventListener('click', load);
 document.querySelector('#snapshot')!.addEventListener('click', async () => {
+  pending?.abort();
+  const request = new AbortController();
+  pending = request;
   status.textContent = 'Awaiting snapshot';
-  const snapshot = await requestEditorSnapshot(editor, { sessionId, revision, source: source.value }, lifetime.signal);
-  if (lifetime.signal.aborted) return;
+  const snapshot = await requestEditorSnapshot(editor, { sessionId, revision, source: source.value }, AbortSignal.any([lifetime.signal, request.signal]));
+  if (lifetime.signal.aborted || pending !== request) return;
+  pending = null;
   result.textContent = JSON.stringify(snapshot);
   status.textContent = snapshot.status === 'ready' ? 'Snapshot ready' : 'Snapshot failed';
 });
+document.querySelector('#cancel')!.addEventListener('click', () => pending?.abort());
 document.querySelector('#dispose')!.addEventListener('click', () => {
   window.removeEventListener('message', receive);
   lifetime.abort('disposed');
