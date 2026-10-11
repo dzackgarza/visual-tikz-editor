@@ -69,12 +69,11 @@ describe("standalone workbench host boundary", function () {
   });
 
   it("keeps the drawing when another frame sends an explicit load command", async function () {
-    const sourcePane = page.locator(".cm-content");
-    await sourcePane.fill(String.raw`\begin{tikzpicture}
-\draw (0,0) circle (1cm);
-\end{tikzpicture}`);
-    await expect(page.getByText("Synced", { exact: true })).toBeVisible();
-    const authored = await sourcePane.innerText();
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator("#status")).toHaveText("Loaded");
+    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+    const accepted = JSON.parse(await page.locator("#result").innerText());
     await page.evaluate(async () => {
       const sibling = document.createElement("iframe");
       sibling.id = "unrelated-frame";
@@ -84,17 +83,18 @@ describe("standalone workbench host boundary", function () {
       await loaded;
     });
     const sibling = page.frames().find(frame => frame.url() === "about:blank")!;
-    await sibling.evaluate(() => {
+    await sibling.evaluate(({ sessionId, revision }) => {
       parent.frames[0].postMessage({
-        action: "load",
-        revision: 2,
+        action: "load", sessionId, revision: revision + 1,
+        requestId: crypto.randomUUID(), fileName: "fixture.tikz", autosave: 0,
         source: String.raw`\begin{tikzpicture}\draw (0,0) rectangle (2,1);\end{tikzpicture}`,
       }, parent.location.origin);
-    });
-    await page.waitForTimeout(600);
-    await page.getByRole("button", { name: "Properties", exact: true }).click();
-    await page.getByRole("button", { name: "Hide properties", exact: true }).click();
-    assert.equal(await sourcePane.innerText(), authored);
+    }, accepted);
+    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+    const retained = JSON.parse(await page.locator("#result").innerText());
+    assert.equal(retained.source, accepted.source);
+    assert.equal(retained.svg, accepted.svg);
   });
 
   it("opens a tablet canvas and independently toggles source and properties before copying", async function () {
