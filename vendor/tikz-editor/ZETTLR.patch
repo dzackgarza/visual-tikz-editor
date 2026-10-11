@@ -62,10 +62,17 @@ index 9dde7f6e..566e2d80 100644
      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-32.6095 -10.8019 65.2189 21.6038\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M -28.4528 7.1132 M -28.4528 7.1132 L 28.4528 7.1132 L 28.4528 -7.1132 L -28.4528 -7.1132 Z\" stroke=\"#000000\" fill=\"#d1ffd1\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactSelectionOverlay\"><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.2562\" points=\"-28.4528,-7.1132 28.4528,-7.1132 28.4528,7.1132 -28.4528,7.1132\" /></g><g class=\"landingExactHandleOverlay\"><rect x=\"-29.2098\" y=\"-7.8702\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"27.6958\" y=\"-7.8702\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"27.6958\" y=\"6.3562\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"-29.2098\" y=\"6.3562\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /></g></svg>"
    }
 diff --git a/packages/app/package.json b/packages/app/package.json
-index f20fa9c3..9d4f0e09 100644
+index f20fa9c3..63ab7235 100644
 --- a/packages/app/package.json
 +++ b/packages/app/package.json
-@@ -57,6 +57,7 @@
+@@ -51,12 +51,14 @@
+     "@remixicon/react": "^4.9.0",
+     "@tikz-editor/core": "0.5.2",
+     "@tikz-editor/lang-tikz": "0.5.2",
++    "@uiw/react-color-wheel": "^2.10.3",
+     "codemirror": "^6.0.2",
+     "flexlayout-react": "^0.8.19",
+     "ipe2tikz": "^1.0.0",
      "jspdf": "^4.2.0",
      "keynote-clipboard": "^1.2.0",
      "mathlive": "^0.107.1",
@@ -562,6 +569,120 @@ index 5818d92b..60cb63aa 100644
    };
  
    async function handleUnsavedDecision(
+diff --git a/packages/app/src/ui/ColorPicker.module.css b/packages/app/src/ui/ColorPicker.module.css
+index dd74530a..d2302d09 100644
+--- a/packages/app/src/ui/ColorPicker.module.css
++++ b/packages/app/src/ui/ColorPicker.module.css
+@@ -200,6 +200,13 @@
+   gap: 6px;
+ }
+ 
++.colorWheel {
++  display: flex;
++  justify-content: center;
++  padding: 4px 0;
++  touch-action: none;
++}
++
+ .customHueTrack {
+   position: relative;
+   width: 100%;
+diff --git a/packages/app/src/ui/ColorPicker.tsx b/packages/app/src/ui/ColorPicker.tsx
+index 49a2d341..7557b0da 100644
+--- a/packages/app/src/ui/ColorPicker.tsx
++++ b/packages/app/src/ui/ColorPicker.tsx
+@@ -1,4 +1,5 @@
+ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++import Wheel from "@uiw/react-color-wheel";
+ import { rgbToXcolorExpression, type RgbColor, type RgbToXcolorMode } from "xcolor-rgb-convert";
+ import { normalizeColor } from "tikz-editor/semantic/style/colors";
+ import { BASIC_PICKER_COLORS, BASIC_PICKER_COLOR_SET } from "../colors/color-palette";
+@@ -10,7 +11,7 @@ import { parseCustomColorInput } from "./custom-color-input";
+ import { RenderedTooltip } from "./RenderedTooltip";
+ import css from "./ColorPicker.module.css";
+ 
+-type ColorPickerTabId = "standard" | "custom";
++type ColorPickerTabId = "standard" | "wheel" | "palette" | "custom";
+ type ToneState = { baseColor: string; position: number };
+ type PopoverPlacement = "down" | "up";
+ type PopoverHorizontalPlacement = "start" | "end";
+@@ -238,6 +239,7 @@ export function ColorPicker({
+   onChange
+ }: ColorPickerProps) {
+   const colorPickerAccuracy = useSettingsStore((s) => s.settings.colorPicker.accuracy);
++  const palette = useSettingsStore((s) => s.settings.colorPicker.palette);
+   const normalizedSyntaxValue = normalizeColorToken(syntaxValue);
+   const normalizedValue = normalizeColorToken(value);
+   const driverValue = normalizedSyntaxValue ?? normalizedValue;
+@@ -339,9 +341,9 @@ export function ColorPicker({
+ 
+   useEffect(() => {
+     const previousTab = previousTabRef.current;
+-    const enteredCustom = previousTab !== "custom" && tab === "custom";
++    const enteredCustom = previousTab !== tab && (tab === "custom" || tab === "wheel");
+     previousTabRef.current = tab;
+-    if (tab !== "custom" || enteredCustom) {
++    if ((tab !== "custom" && tab !== "wheel") || enteredCustom) {
+       syncCustomStateFromDriver();
+     }
+   }, [driverValue, namedColorLookup, syncCustomStateFromDriver, tab]);
+@@ -696,7 +698,27 @@ export function ColorPicker({
+           onClick={() => { setTab("standard"); }}
+           disabled={disabled}
+         >
+-          Standard
++          Grid
++        </button>
++        <button
++          type="button"
++          role="tab"
++          aria-selected={tab === "wheel"}
++          className={[css.tabButton, tab === "wheel" ? css.tabButtonActive : ""].filter(Boolean).join(" ")}
++          onClick={() => { setTab("wheel"); }}
++          disabled={disabled}
++        >
++          Wheel
++        </button>
++        <button
++          type="button"
++          role="tab"
++          aria-selected={tab === "palette"}
++          className={[css.tabButton, tab === "palette" ? css.tabButtonActive : ""].filter(Boolean).join(" ")}
++          onClick={() => { setTab("palette"); }}
++          disabled={disabled}
++        >
++          Palette
+         </button>
+         <button
+           type="button"
+@@ -805,9 +827,27 @@ export function ColorPicker({
+             </div>
+           ) : null}
+         </div>
++      ) : tab === "palette" ? (
++        <div className={css.colorGrid} role="tabpanel" aria-label="Palette colors">
++          {palette.map((color, index) => (
++            <RenderedTooltip key={`${color}-${index}`} content={color}>
++              <button type="button" className={css.swatchButton}
++                aria-label={`Choose palette color ${color}`}
++                onClick={() => { applyColor(color); }} disabled={disabled}>
++                <span className={css.swatchDot} style={{ background: cssColorForToken(color, namedColorLookup) ?? color }} aria-hidden="true" />
++              </button>
++            </RenderedTooltip>
++          ))}
++        </div>
+       ) : (
+         <div className={css.customTabPanel} role="tabpanel">
+           <div className={css.customShadePickerStack}>
++            {tab === "wheel" ? <div className={css.colorWheel} role="group" aria-label={`${ariaLabel} wheel`}
++              style={disabled ? { pointerEvents: "none" } : undefined}>
++              <Wheel width={180} height={180}
++                color={{ h: customHsv.h, s: customHsv.s * 100, v: 100, a: 1 }}
++                onChange={({ hsva }) => { applyCustomHsv(hsva.h, hsva.s / 100, 1, "release"); }} />
++            </div> : null}
+             <div
+               ref={customHueTrackRef}
+               className={[css.customHueTrack, disabled ? css.customHueTrackDisabled : ""].filter(Boolean).join(" ")}
 diff --git a/packages/app/src/ui/DevPanel.tsx b/packages/app/src/ui/DevPanel.tsx
 index 4d4cfa95..b5595dc3 100644
 --- a/packages/app/src/ui/DevPanel.tsx
@@ -1179,7 +1300,7 @@ index 0ddde08e..fc62acba 100644
    display: inline-flex;
    align-items: center;
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..fc48abd5 100644
+index a3293df2..c1e1181c 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,4 @@
@@ -1201,7 +1322,7 @@ index a3293df2..fc48abd5 100644
  import css from "./Toolbar.module.css";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
-@@ -36,16 +38,27 @@ type ToolbarProps = {
+@@ -36,16 +38,29 @@ type ToolbarProps = {
  export function Toolbar({ updateChip = null }: ToolbarProps) {
    const toolMode = useEditorStore((s) => s.toolMode);
    const bucketFillColor = useEditorStore((s) => s.bucketFillColor);
@@ -1225,12 +1346,14 @@ index a3293df2..fc48abd5 100644
 +  const dragReady = useRef(false);
 +  const dragOffset = useRef({ x: 0, y: 0 });
 +  const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
++  const dragStart = useRef<{ x: number; y: number } | null>(null);
++  const suppressDragClick = useRef(false);
 +  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 +  const suppressToolClick = useRef(false);
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +69,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +71,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -1244,7 +1367,7 @@ index a3293df2..fc48abd5 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -111,7 +126,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +128,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -1262,7 +1385,7 @@ index a3293df2..fc48abd5 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +150,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +152,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -1281,7 +1404,7 @@ index a3293df2..fc48abd5 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +206,112 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +208,115 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -1372,8 +1495,11 @@ index a3293df2..fc48abd5 100644
 +
 +  const finishToolbarDrag = (clientX: number, clientY: number) => {
 +    if (dragTimer.current) clearTimeout(dragTimer.current);
++    dragStart.current = null;
 +    if (!dragReady.current) return;
 +    dragReady.current = false;
++    suppressDragClick.current = true;
++    setTimeout(() => { suppressDragClick.current = false; }, 0);
 +    setDragPoint(null);
 +    const edge = 90;
 +    const dock = clientX < edge ? "left" : clientX > window.innerWidth - edge ? "right"
@@ -1394,7 +1520,7 @@ index a3293df2..fc48abd5 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -314,6 +456,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +461,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -1416,7 +1542,7 @@ index a3293df2..fc48abd5 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +478,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +483,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -1425,26 +1551,42 @@ index a3293df2..fc48abd5 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -342,8 +499,44 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +504,60 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
 -  return (
 -    <div className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome">
-+  if (embedded) return <div data-diagram-tools data-dock={dragPoint ? "floating" : settings.toolbar.dock} style={toolbarPosition}>
-+    <button type="button" className={css.toolbarGrip} aria-label="Move toolbar" title="Hold and drag toolbar"
-+      onPointerDown={(event) => {
-+        event.currentTarget.setPointerCapture(event.pointerId);
-+        const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
-+        dragOffset.current = bounds ? { x: bounds.left + bounds.width / 2 - event.clientX, y: bounds.top + bounds.height / 2 - event.clientY } : { x: 0, y: 0 };
-+        dragTimer.current = setTimeout(() => {
-+          dragReady.current = true;
-+          setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y });
-+        }, 350);
-+      }}
-+      onPointerMove={(event) => { if (dragReady.current) setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y }); }}
-+      onPointerUp={(event) => finishToolbarDrag(event.clientX, event.clientY)}
-+      onPointerCancel={() => { if (dragTimer.current) clearTimeout(dragTimer.current); dragReady.current = false; setDragPoint(null); }}>
++  if (embedded) return <div data-diagram-tools data-dock={dragPoint ? "floating" : settings.toolbar.dock} style={toolbarPosition}
++    onPointerDown={(event) => {
++      if (event.button !== 0 || (event.target as HTMLElement).closest('[aria-haspopup="dialog"]')) return;
++      const bounds = event.currentTarget.getBoundingClientRect();
++      dragStart.current = { x: event.clientX, y: event.clientY };
++      dragOffset.current = { x: bounds.left + bounds.width / 2 - event.clientX, y: bounds.top + bounds.height / 2 - event.clientY };
++      const toolbar = event.currentTarget;
++      const pointerId = event.pointerId;
++      dragTimer.current = setTimeout(() => {
++        dragReady.current = true;
++        toolbar.setPointerCapture(pointerId);
++        setDragPoint({ x: dragStart.current!.x + dragOffset.current.x, y: dragStart.current!.y + dragOffset.current.y });
++      }, 350);
++    }}
++    onPointerMove={(event) => {
++      if (dragReady.current) setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y });
++      else if (dragStart.current && Math.hypot(event.clientX - dragStart.current.x, event.clientY - dragStart.current.y) > 8) {
++        if (dragTimer.current) clearTimeout(dragTimer.current);
++        dragStart.current = null;
++      }
++    }}
++    onPointerUp={(event) => finishToolbarDrag(event.clientX, event.clientY)}
++    onPointerCancel={() => {
++      if (dragTimer.current) clearTimeout(dragTimer.current);
++      dragStart.current = null;
++      dragReady.current = false;
++      setDragPoint(null);
++    }}
++    onClickCapture={(event) => { if (suppressDragClick.current) { event.preventDefault(); event.stopPropagation(); suppressDragClick.current = false; } }}>
++    <button type="button" className={css.toolbarGrip} aria-label="Move toolbar" title="Hold and drag toolbar">
 +      ⋮⋮
 +    </button>
 +    <div ref={toolbarRef} className={css.embeddedTools} onWheel={(event) => {
@@ -1472,7 +1614,7 @@ index a3293df2..fc48abd5 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +547,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +568,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -1486,7 +1628,7 @@ index a3293df2..fc48abd5 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +563,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +584,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -1495,7 +1637,7 @@ index a3293df2..fc48abd5 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +588,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +609,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -3042,19 +3184,21 @@ index 43f01253..f3698330 100644
      viewportRef,
      zoomSpeed
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af8..e6daa961 100644
+index de737af8..e03b5426 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-@@ -9,13 +9,13 @@ import {
+@@ -9,13 +9,15 @@ import {
  } from "react";
  import { px, viewportPoint } from "tikz-editor/coords/index";
  
 -import type { CanvasDragKind, CanvasTransform } from "../../store/types";
 +import type { CanvasTransform } from "../../store/types";
-+import { ACTUAL_SIZE_SCALE } from "../../store/workspace-state";
  import { clamp, viewportToSvgPoint } from "./geometry";
 -import type { CanvasDispatch, CanvasSnapshot, ValueSetter } from "./types";
 +import type { CanvasDispatch, CanvasSnapshot } from "./types";
++
++const INITIAL_PAGE_SIZE_PT = 100;
++const INITIAL_PAGE_MARGIN_PX = 48;
  
  type FigureViewportState = {
    transform: CanvasTransform;
@@ -3062,7 +3206,7 @@ index de737af8..e6daa961 100644
  };
  
  export type UseCanvasViewportPersistenceArgs = {
-@@ -28,9 +28,6 @@ export type UseCanvasViewportPersistenceArgs = {
+@@ -28,9 +30,6 @@ export type UseCanvasViewportPersistenceArgs = {
    activeFigureId: string | null;
    tabOrder: readonly string[];
    canvasTransform: CanvasTransform;
@@ -3072,7 +3216,7 @@ index de737af8..e6daa961 100644
    viewportRef: RefObject<HTMLDivElement | null>;
    canvasTransformRef: MutableRefObject<CanvasTransform>;
    fitToContentRequestToken: number;
-@@ -38,11 +35,6 @@ export type UseCanvasViewportPersistenceArgs = {
+@@ -38,11 +37,6 @@ export type UseCanvasViewportPersistenceArgs = {
    zoomRequestDirection: "in" | "out" | null;
    zoomScaleRequestToken: number;
    zoomScaleRequestValue: number | null;
@@ -3084,7 +3228,7 @@ index de737af8..e6daa961 100644
    MIN_SCALE: number;
    MAX_SCALE: number;
  };
-@@ -57,9 +49,6 @@ export function useCanvasViewportPersistence({
+@@ -57,9 +51,6 @@ export function useCanvasViewportPersistence({
    activeFigureId,
    tabOrder,
    canvasTransform,
@@ -3094,7 +3238,7 @@ index de737af8..e6daa961 100644
    viewportRef,
    canvasTransformRef,
    fitToContentRequestToken,
-@@ -67,18 +56,13 @@ export function useCanvasViewportPersistence({
+@@ -67,18 +58,13 @@ export function useCanvasViewportPersistence({
    zoomRequestDirection,
    zoomScaleRequestToken,
    zoomScaleRequestValue,
@@ -3114,22 +3258,29 @@ index de737af8..e6daa961 100644
  
    const fitToContentScale = useMemo(
      () => computeFitToContentScale(
-@@ -119,19 +103,31 @@ export function useCanvasViewportPersistence({
+@@ -119,19 +105,38 @@ export function useCanvasViewportPersistence({
      return true;
    }, [baseSvgResult, dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, svgResult, viewportRef]);
  
-+  const centerAtActualSize = useCallback((): boolean => {
++  const centerOnPage = useCallback((): boolean => {
 +    const viewBox = svgResult?.viewBox;
 +    const viewport = viewportRef.current;
 +    if (!viewBox || !viewport || viewport.clientWidth <= 0 || viewport.clientHeight <= 0) return false;
-+    const scale = ACTUAL_SIZE_SCALE;
++    // Page framing is separate from drawing fit, as in Inkscape's Zoom Toolbar:
++    // https://wiki.inkscape.org/wiki/Zoom_Toolbar
++    const scale = clamp(
++      Math.min(viewport.clientWidth - INITIAL_PAGE_MARGIN_PX * 2, viewport.clientHeight - INITIAL_PAGE_MARGIN_PX * 2)
++        / INITIAL_PAGE_SIZE_PT,
++      MIN_SCALE,
++      MAX_SCALE
++    );
 +    dispatchCanvasTransform({
 +      translateX: (viewport.clientWidth - viewBox.width * scale) / 2,
 +      translateY: (viewport.clientHeight - viewBox.height * scale) / 2,
 +      scale
 +    });
 +    return true;
-+  }, [dispatchCanvasTransform, svgResult, viewportRef]);
++  }, [dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, svgResult, viewportRef]);
 +
    const activeFigureViewportKey = useMemo(
      () => makeFigureViewportKey(activeDocumentId, activeFigureId),
@@ -3149,7 +3300,7 @@ index de737af8..e6daa961 100644
        });
        visitedFigureKeysRef.current.add(key);
      },
-@@ -146,62 +142,54 @@ export function useCanvasViewportPersistence({
+@@ -146,62 +151,54 @@ export function useCanvasViewportPersistence({
        if (!openDocuments.has(documentId)) {
          viewportStateByFigureKeyRef.current.delete(key);
          visitedFigureKeysRef.current.delete(key);
@@ -3197,7 +3348,7 @@ index de737af8..e6daa961 100644
 -        setFitToContentModeActive(true);
 -      }
 -      const didFit = fitToContent();
-+      const didCenter = centerAtActualSize();
++      const didCenter = centerOnPage();
        previousFigureViewportKeyRef.current = activeFigureViewportKey;
 -      if (didFit) {
 -        pendingFirstVisitAutoFitKeyRef.current = null;
@@ -3221,12 +3372,12 @@ index de737af8..e6daa961 100644
 -    fitToContentModeActiveRef,
 -    saveFigureViewportState,
 -    setFitToContentModeActive
-+    centerAtActualSize,
++    centerOnPage,
 +    saveFigureViewportState
    ]);
  
    useEffect(() => {
-@@ -211,11 +199,11 @@ export function useCanvasViewportPersistence({
+@@ -211,11 +208,11 @@ export function useCanvasViewportPersistence({
      if (!visitedFigureKeysRef.current.has(activeFigureViewportKey)) {
        return;
      }
@@ -3241,7 +3392,7 @@ index de737af8..e6daa961 100644
  
    const handledFitRequestRef = useRef(0);
    useEffect(() => {
-@@ -225,12 +213,8 @@ export function useCanvasViewportPersistence({
+@@ -225,12 +222,8 @@ export function useCanvasViewportPersistence({
      if (fitToContentRequestToken === handledFitRequestRef.current) {
        return;
      }
@@ -3256,7 +3407,7 @@ index de737af8..e6daa961 100644
  
    const handledZoomRequestRef = useRef(0);
    useEffect(() => {
-@@ -262,17 +246,12 @@ export function useCanvasViewportPersistence({
+@@ -262,17 +255,12 @@ export function useCanvasViewportPersistence({
      const translateX = centerX - (svgPoint.x - svgResult.viewBox.x) * nextScale;
      const translateY = centerY - (svgPoint.y - svgResult.viewBox.y) * nextScale;
  
@@ -3274,7 +3425,7 @@ index de737af8..e6daa961 100644
      svgResult,
      viewportRef,
      zoomRequestDirection,
-@@ -308,57 +287,18 @@ export function useCanvasViewportPersistence({
+@@ -308,57 +296,18 @@ export function useCanvasViewportPersistence({
      const translateX = centerX - (svgPoint.x - svgResult.viewBox.x) * nextScale;
      const translateY = centerY - (svgPoint.y - svgResult.viewBox.y) * nextScale;
  
