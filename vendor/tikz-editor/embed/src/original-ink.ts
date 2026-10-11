@@ -41,15 +41,18 @@ export function strokeEnvelope(stroke: OriginalStroke, source: string): string {
 export function originalStrokes(source: string) {
   const entries: { stroke: OriginalStroke; from: number; to: number; drawingFrom: number; drawingTo: number }[] = [];
   const keys = new Set<string>();
-  for (const match of source.matchAll(/^[ \t]*% workbench-ink:([^\r\n]+)\r?\n\\begin\{scope\}\r?\n/gm)) {
+  for (const match of source.matchAll(/^[ \t]*% workbench-ink:([^\r\n]+)\r?\n/gm)) {
     const stroke = originalStrokeSchema.parse(JSON.parse(decodeURIComponent(match[1])));
     if (keys.has(stroke.key)) throw new Error(`Duplicate original stroke key: ${stroke.key}`);
     keys.add(stroke.key);
-    const drawingFrom = match.index + match[0].length;
-    const end = `\n\\end{scope}\n% workbench-ink-end:${stroke.key}`;
-    const drawingTo = source.indexOf(end, drawingFrom);
-    if (drawingTo < 0) throw new Error(`Missing original stroke boundary: ${stroke.key}`);
-    entries.push({ stroke, from: match.index, to: drawingTo + end.length, drawingFrom, drawingTo });
+    const scopeFrom = match.index + match[0].length;
+    const scope = /^\\begin\{scope\}\r?\n/.exec(source.slice(scopeFrom));
+    if (scope === null) throw new Error(`Missing original stroke scope: ${stroke.key}`);
+    const drawingFrom = scopeFrom + scope[0].length;
+    const end = new RegExp(`\\r?\\n\\\\end\\{scope\\}\\r?\\n% workbench-ink-end:${stroke.key}(?=\\r?\\n|$)`).exec(source.slice(drawingFrom));
+    if (end === null) throw new Error(`Missing original stroke boundary: ${stroke.key}`);
+    const drawingTo = drawingFrom + end.index;
+    entries.push({ stroke, from: match.index, to: drawingTo + end[0].length, drawingFrom, drawingTo });
   }
   return entries;
 }

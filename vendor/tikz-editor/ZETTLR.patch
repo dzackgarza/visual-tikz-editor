@@ -700,7 +700,7 @@ index 681cb41..1de10d5 100644
      case "addBezier":
        return snapHint;
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df..715a554 100644
+index a3293df..f249948 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,4 @@
@@ -718,7 +718,39 @@ index a3293df..715a554 100644
  
    // Close popup when tool mode changes (unless it's a popup that can be used independently)
    useEffect(() => {
-@@ -342,8 +344,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,6 +200,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+               type="button"
+               className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
+               aria-label={toolDef.label}
++              aria-pressed={isActive}
+               disabled={unsupported}
+               onClick={() => {
+                 dispatch({ type: "SET_TOOL_MODE", mode: isActive ? "select" : mode });
+@@ -257,6 +260,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+             type="button"
+             className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
+             aria-label={toolDef.label}
++              aria-pressed={isActive}
+             aria-haspopup="dialog"
+             aria-expanded={openPopupMode === mode}
+             disabled={unsupported}
+@@ -299,6 +303,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+             type="button"
+             className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
+             aria-label={toolDef.label}
++              aria-pressed={isActive}
+             aria-haspopup="dialog"
+             aria-expanded={openPopupMode === mode}
+             disabled={unsupported}
+@@ -330,6 +335,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+           type="button"
+           className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
+           aria-label={label}
++          aria-pressed={isActive}
+           disabled={unsupported}
+           onClick={() => {
+             dispatch({ type: "SET_TOOL_MODE", mode: nextMode });
+@@ -342,8 +348,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -729,7 +761,7 @@ index a3293df..715a554 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -387,4 +389,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +393,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -877,14 +909,14 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..2f481ee 100644
+index 4e22ccf..9823a10 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -54,6 +54,9 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
  import { useSettingsStore } from "../../settings/useSettingsStore";
  import { buildSnapshotEditSourceFingerprint } from "../../source-identity";
  import { useEditorStore } from "../../store/store";
-+import { strokeEnvelope, originalStrokeSchema, originalDrawingSource } from '../../original-ink';
++import { strokeEnvelope, originalStrokeSchema, originalDrawingSource, originalStrokes, tikzStrokeColor } from '../../original-ink';
 +import { insertElementIntoSource } from 'tikz-editor/edit/element-templates';
 +import { normalizeColor } from 'tikz-editor/semantic/style/colors';
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
@@ -969,7 +1001,27 @@ index 4e22ccf..2f481ee 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -1866,6 +1913,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1819,6 +1866,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+     ROTATE_HANDLE_OFFSET_PX
+   });
+ 
++  const selectedOriginal = useMemo(() => {
++    if (snapshot.source !== source || selectedElementIds.size !== 1) return { entry: null, error: null };
++    const elements = (snapshot.scene?.elements ?? []).filter(candidate =>
++      selectedElementIds.has(candidate.sourceRef.sourceId) ||
++      (scopeOverlay.ancestorScopeIdsBySourceId.get(candidate.sourceRef.sourceId) ?? []).some(id => selectedElementIds.has(id)));
++    if (elements.length === 0) return { entry: null, error: null };
++    try {
++      const entries = originalStrokes(source).filter(entry => elements.some(element =>
++        element.sourceRef.sourceSpan.from >= entry.drawingFrom && element.sourceRef.sourceSpan.to <= entry.drawingTo));
++      return { entry: entries.length === 1 ? entries[0] : null, error: null };
++    } catch (error) { return { entry: null, error: String(error) }; }
++  }, [selectedElementIds, snapshot.scene, snapshot.source, source, scopeOverlay]);
++
+   canvasTransformRef.current = canvasTransform;
+   selectedElementIdsRef.current = selectedElementIds;
+   svgResultRef.current = svgResult;
+@@ -1866,6 +1926,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      pathDraft,
      pathSegmentDraft,
      pendingBezier,
@@ -977,7 +1029,7 @@ index 4e22ccf..2f481ee 100644
      bezierBendDraft,
      canvasTransform
    });
-@@ -2055,17 +2103,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2116,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -1002,7 +1054,7 @@ index 4e22ccf..2f481ee 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2090,10 +2134,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2090,10 +2147,10 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
  
@@ -1015,7 +1067,7 @@ index 4e22ccf..2f481ee 100644
        const firstPoint = draft.points[0];
        const lastPoint = draft.points[draft.points.length - 1];
        queueSelectionForAddedElement(
-@@ -2102,13 +2146,50 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2102,13 +2159,50 @@ export const CanvasPanel = memo(function CanvasPanel({
            pt((firstPoint.y + lastPoint.y) / 2)
          )
        );
@@ -1071,7 +1123,7 @@ index 4e22ccf..2f481ee 100644
        }
      } else {
        pendingAddedSelectionRef.current = null;
-@@ -2117,7 +2198,95 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2117,7 +2211,113 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft(null);
      setToolCursorWorld(null);
      dispatch({ type: "SET_TOOL_MODE", mode: "select" });
@@ -1165,10 +1217,28 @@ index 4e22ccf..2f481ee 100644
 +      top: clamp(top + 12, 12, Math.max(12, window.innerHeight - 180))
 +    });
 +  }, [canvasTransform, creationStrokeColor, dispatch, freehandSmoothingPx, selectedPathForFit, svgResult]);
++
++  const applyOriginalStroke = (fit: boolean) => {
++    const entry = selectedOriginal.entry;
++    if (!entry) return;
++    let next = originalDrawingSource(entry.stroke);
++    if (fit) {
++      if (entry.stroke.intent !== 'geometry') return;
++      const interpretation = interpretFreehandToolSource({
++        points: entry.stroke.samples.map(sample => makeWorldPoint(pt(sample.x), pt(sample.y))),
++        minSampleDistanceWorld: 0,
++      }, 1, freehandSmoothingPx, { strokeColor: tikzStrokeColor(entry.stroke) });
++      if (!interpretation) { setWarning('No geometric fit is available for this stroke.'); return; }
++      next = interpretation.source;
++    }
++    dispatch({ type: 'REPLACE_FREEHAND_RESULT', from: entry.drawingFrom,
++      before: source.slice(entry.drawingFrom, entry.drawingTo), after: next,
++      expectedSourceRevision: sourceRevision });
++  };
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3223,9 +3392,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3223,9 +3423,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      suppressNextBackgroundClickRef,
      svgResult,
      setDragState,
@@ -1181,11 +1251,21 @@ index 4e22ccf..2f481ee 100644
      snapshot,
      source,
      setWarning,
-@@ -3974,6 +4146,53 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4177,63 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
-+      {selectedPathForFit && !freehandResultOffer ? (
++      {selectedOriginal.error ? <div role="alert">{selectedOriginal.error}</div> : null}
++      {selectedOriginal.entry && !freehandResultOffer ? (
++        <div className={freehandPopupCss.popup} style={{ right: 12, bottom: 12 }} aria-label="Original stroke">
++          <strong>Original stroke</strong>
++          <div className={freehandPopupCss.actions}>
++            <button type="button" onClick={() => applyOriginalStroke(false)}>Restore original stroke</button>
++            <button type="button" disabled={selectedOriginal.entry.stroke.intent !== 'geometry'} onClick={() => applyOriginalStroke(true)}>Reapply original fit</button>
++          </div>
++        </div>
++      ) : null}
++      {selectedPathForFit && !selectedOriginal.entry && !freehandResultOffer ? (
 +        <button
 +          type="button"
 +          className={freehandPopupCss.reapply}

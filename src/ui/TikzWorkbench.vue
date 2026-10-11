@@ -13,7 +13,7 @@
         aria-label="Diagram view"
       >
         <button
-          v-for="provider in providers"
+          v-for="provider in providers.filter(supportsProvider)"
           :key="provider.id"
           type="button"
           :class="{ active: displayMode === provider.id }"

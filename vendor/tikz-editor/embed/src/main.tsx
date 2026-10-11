@@ -409,6 +409,7 @@ function HostBridge() {
 					reply(command);
 					return;
 				case 'workspace':
+					document.documentElement.dataset.embedWorkspace = command.workspace;
 					void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => {
 						if (command.revision !== currentHostRevision) { reply(command, 'stale-target'); return; }
 						applyWorkspace(command.workspace);
