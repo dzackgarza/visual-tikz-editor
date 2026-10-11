@@ -376,12 +376,17 @@ describe("standalone workbench host boundary", function () {
   it("cancels a resource-pending snapshot and continues with a newer drawing", async function () {
     let release!: () => void;
     const delayed = new Promise<void>(resolve => { release = resolve; });
-    await page.route('**/image-resource.svg', async route => { await delayed; await route.continue(); });
+    let exporting = false;
+    await page.route('**/image-resource.svg', async route => {
+      if (route.request().resourceType() === 'fetch') exporting = true;
+      await delayed; await route.continue();
+    });
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
-    await page.getByLabel('Authored source').fill(String.raw`\begin{tikzpicture}\node at (0,0) {\includegraphics{image-resource.svg}};\end{tikzpicture}`);
+    await page.getByLabel('Authored source').fill(String.raw`\begin{tikzpicture}\node at (0,0) {\includegraphics[width=4cm]{image-resource.svg}};\end{tikzpicture}`);
     await page.getByRole('button', { name: 'Load source', exact: true }).click();
     await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect.poll(() => exporting).toBe(true);
     await expect(page.locator('#status')).toHaveText('Awaiting snapshot');
     await page.getByRole('button', { name: 'Cancel snapshot', exact: true }).click();
     await expect(page.locator('#status')).toHaveText('Snapshot failed');
