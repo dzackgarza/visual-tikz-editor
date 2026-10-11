@@ -745,6 +745,9 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
     const saved = JSON.parse(await page.locator('#result').innerText());
     assert.equal(saved.state.tool, 'addFreehand');
+    const displayedCircle = frame.locator('[data-canvas-viewport="true"] circle[data-source-id="path:0"]');
+    await expect(displayedCircle).toBeVisible();
+    const before = await displayedCircle.boundingBox();
     await page.reload();
     await expect(page.locator('#status')).toHaveText('Loaded');
     await page.getByLabel('Saved snapshot').fill(JSON.stringify(saved));
@@ -755,6 +758,11 @@ describe("standalone workbench host boundary", function () {
     assert.deepEqual(restored.state, saved.state);
     await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
     assert.equal(await frame.locator('[data-canvas-scale]').getAttribute('data-canvas-scale'), String(saved.state.viewport.scale));
+    await expect.poll(async () => {
+      const after = await displayedCircle.boundingBox();
+      return after && before ? Math.max(...['x', 'y', 'width', 'height'].map(key =>
+        Math.abs(after[key as keyof typeof after] - before[key as keyof typeof before]))) : Infinity;
+    }).toBeLessThan(1);
   });
 
   it('copies a just-finished canvas edit before the throttled source notification', async function () {
