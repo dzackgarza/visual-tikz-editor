@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { snapshotRequestSchema } from './snapshot-protocol';
+import { originalStrokeSchema } from './original-ink';
 
 export const commandIdentitySchema = z.object({
   sessionId: z.string().uuid(),
@@ -20,6 +21,8 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('workspace'), workspace: z.enum(['default', 'canvasOnly']) }),
   z.object({ ...identity, action: z.literal('inspector'), inspector: z.boolean() }),
   z.object({ ...identity, action: z.literal('source') }),
+  z.object({ ...identity, action: z.literal('import-ink'), source: z.string(), strokes: z.array(originalStrokeSchema).min(1) }),
+  z.object({ ...identity, action: z.enum(['interpret-ink', 'restore-ink']), source: z.string(), key: z.string(), tolerance: z.number().min(4).max(32) }),
   z.object({ ...identity, action: z.literal('cancel'), targetRequestId: z.string().min(1) }),
   snapshotRequestSchema,
 ]);

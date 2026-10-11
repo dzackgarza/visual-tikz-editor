@@ -39,6 +39,8 @@ try {
 
   const embedApp = path.join(upstream, 'apps', 'zettlr-embed')
   await cp(path.join(vendor, 'embed'), embedApp, { recursive: true })
+  // The drawing tools and public host boundary use one original-ink codec.
+  await cp(path.join(vendor, 'embed/src/original-ink.ts'), path.join(upstream, 'packages/app/src/original-ink.ts'))
   await writeFile(
     path.join(embedApp, 'index.html'),
     '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>TikZ Editor</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>\n'

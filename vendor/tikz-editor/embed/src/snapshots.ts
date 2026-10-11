@@ -1,10 +1,11 @@
 import { useEditorStore } from '@tikz-editor/app/store';
-import { optimize } from 'svgo/browser';
+import { exportSvg } from './export-svg';
+import { originalStrokes } from './original-ink';
 import type { EditorSnapshotResult, SnapshotFailure, SnapshotRequest } from './snapshot-protocol';
 
 /** Wait on the editor's own scheduler; never pair source with its previous SVG. */
-export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => void) {
-  type Pending = { request: SnapshotRequest; sourceRevision: number; timer: number };
+export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => void, imageBaseUrl: () => string) {
+  type Pending = { request: SnapshotRequest; sourceRevision: number; timer: number; abort: AbortController; exporting: boolean };
   const pending = new Map<string, Pending>();
   const completed = new Set<string>();
 
@@ -12,6 +13,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
     const entry = pending.get(requestId);
     if (entry === undefined) return;
     window.clearTimeout(entry.timer);
+    entry.abort.abort();
     pending.delete(requestId);
     completed.add(requestId);
     send(reply);
@@ -32,6 +34,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         fail(requestId, 'source-changed');
         continue;
       }
+      if (entry.exporting) continue;
       if (state.pendingRequestId !== null || state.snapshot.source !== request.source) continue;
       if (state.snapshot.activeFigureId !== state.activeFigureId) continue;
       const drawing = state.snapshot.svg;
@@ -39,21 +42,28 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         fail(requestId, 'render-failed');
         continue;
       }
-      finish(requestId, {
+      let originals;
+      try { originals = originalStrokes(request.source); }
+      catch { fail(requestId, 'invalid-original-ink'); continue; }
+      entry.exporting = true;
+      const result = {
         event: 'snapshot', status: 'ready',
         sessionId: request.sessionId, revision: request.revision, requestId,
         sourceRevision, source: request.source,
-        svg: optimize(drawing.svg, {
-          plugins: [{ name: 'prefixIds', params: {
-            prefix: `figure-${request.sessionId}-${request.revision}-${sourceRevision}`,
-          } }],
-        }).data,
+        originalInk: originals.map(entry => ({
+          stroke: entry.stroke,
+          sourceIds: (state.snapshot.scene?.elements ?? [])
+            .filter(element => element.sourceRef.sourceSpan.from >= entry.drawingFrom && element.sourceRef.sourceSpan.to <= entry.drawingTo)
+            .map(element => element.sourceRef.sourceId),
+        })),
         viewBox: drawing.viewBox,
         state: {
           selection: [...state.selectedElementIds], tool: state.toolMode,
           viewport: { ...state.canvasTransform },
         },
-      });
+      } as const;
+      void exportSvg(drawing.svg, `figure-${request.sessionId}-${request.revision}-${sourceRevision}`, imageBaseUrl(), entry.abort.signal)
+        .then(svg => finish(requestId, { ...result, svg }), () => fail(requestId, 'resource-unavailable'));
     }
   }
 
@@ -67,6 +77,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
       }
       pending.set(request.requestId, {
         request, sourceRevision: useEditorStore.getState().sourceRevision,
+        abort: new AbortController(), exporting: false,
         timer: window.setTimeout(() => fail(request.requestId, 'timeout'), 10000),
       });
       if (request.sessionId !== sessionId || request.revision !== revision) {
@@ -82,7 +93,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
     },
     dispose(): void {
       unsubscribe();
-      for (const entry of pending.values()) window.clearTimeout(entry.timer);
+      for (const entry of pending.values()) { window.clearTimeout(entry.timer); entry.abort.abort(); }
       pending.clear();
       completed.clear();
     },

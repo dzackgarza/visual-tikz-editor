@@ -7,6 +7,7 @@ import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
 import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
 import { createSnapshotRequests } from './snapshots';
+import { executeInkCommand } from './ink-commands';
 
 const App = lazy(async () => {
 	const mod = await import('@tikz-editor/app');
@@ -301,7 +302,7 @@ function HostBridge() {
 	const changeTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
-		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }));
+		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }), () => imageBaseUrl);
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
 
 		const flushChange = () => {
@@ -360,6 +361,15 @@ function HostBridge() {
 				return;
 			}
 			switch (command.action) {
+				case 'import-ink':
+				case 'interpret-ink':
+				case 'restore-ink':
+					try { reply(command, executeInkCommand(command)); }
+					catch (error) {
+						postToHost({ event: 'error', message: error instanceof Error ? error.message : String(error) });
+						reply(command, 'invalid-original-ink');
+					}
+					return;
 				case 'load': {
 					if (currentHostSession !== '' &&
 						(command.sessionId !== currentHostSession || command.revision <= currentHostRevision)) {

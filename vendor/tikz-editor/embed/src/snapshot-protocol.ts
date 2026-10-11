@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { originalAssociationSchema } from './original-ink';
 
 const identity = {
   sessionId: z.string().uuid(),
@@ -22,6 +23,7 @@ export const snapshotResultSchema = z.discriminatedUnion('status', [
     sourceRevision: z.number().int().nonnegative(),
     source: z.string(),
     svg: z.string(),
+    originalInk: z.array(originalAssociationSchema),
     viewBox: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
     state: z.object({
       selection: z.array(z.string()),
@@ -33,7 +35,7 @@ export const snapshotResultSchema = z.discriminatedUnion('status', [
     event: z.literal('snapshot'),
     ...identity,
     status: z.literal('failed'),
-    error: z.enum(['stale-target', 'source-changed', 'render-failed', 'cancelled', 'timeout', 'busy']),
+    error: z.enum(['stale-target', 'source-changed', 'render-failed', 'resource-unavailable', 'invalid-original-ink', 'cancelled', 'timeout', 'busy']),
   }),
 ]);
 
