@@ -40,7 +40,7 @@ import {
   tikzEditorReplacement,
   tikzEditorSessionForBlock,
 } from "../editor-bridge";
-import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../host";
+import { requestEditorSnapshot, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../host";
 import type { TikzLivePreviewTarget } from "../live-preview";
 
 interface PreviewSession {
@@ -83,6 +83,17 @@ const session = shallowRef<PreviewSession>({
 const hostReady = ref(false);
 const loaded = ref(false);
 const errorMessage = ref("");
+const lifetime = new AbortController();
+
+function snapshot(signal: AbortSignal) {
+  if (frame.value === null || !loaded.value) throw new Error("The editor has not loaded its source");
+  const active = session.value;
+  return requestEditorSnapshot(frame.value, {
+    sessionId: active.id, revision: active.revision, source: active.source.source,
+  }, AbortSignal.any([signal, lifetime.signal]));
+}
+
+defineExpose({ snapshot });
 
 function sameBlockIdentity(a: TikzEditorSourceSession, b: TikzEditorSourceSession): boolean {
   return a.kind === b.kind && a.blockFrom === b.blockFrom;
@@ -106,6 +117,7 @@ function sendFullLoad(): void {
   loaded.value = false;
   postToEditor({
     action: "load",
+    sessionId: active.id,
     revision,
     source: active.source.source,
     autosave: 0,
@@ -298,6 +310,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  lifetime.abort("disposed");
   window.removeEventListener("message", onMessage);
 });
 </script>

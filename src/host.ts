@@ -10,6 +10,9 @@ import type { TikzRenderSuccess } from "./live-preview";
 import type { QuiverMacroProjection } from "./quiver-macros";
 import type { TikzRenderRequest, TikzRenderResult } from "./tikz-render";
 
+export type { EditorSnapshot, EditorSnapshotResult } from "../vendor/tikz-editor/embed/src/snapshot-protocol";
+export { requestEditorSnapshot } from "./editor-snapshot";
+
 export type TikzWorkbenchTheme = "light" | "dark";
 
 export interface TikzWorkbenchRendering {

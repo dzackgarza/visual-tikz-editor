@@ -5,6 +5,8 @@ import { useEditorStore } from '@tikz-editor/app/store';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
+import { snapshotRequestSchema } from './snapshot-protocol';
+import { createSnapshotRequests } from './snapshots';
 
 const App = lazy(async () => {
 	const mod = await import('@tikz-editor/app');
@@ -24,6 +26,8 @@ type HostMessage = {
 	source?: string;
 	xml?: string;
 	revision?: number;
+	sessionId?: string;
+	requestId?: string;
 	format?: string;
 	autosave?: 0 | 1 | boolean;
 	fileName?: string;
@@ -60,6 +64,7 @@ let lastSavedSource = DEFAULT_SOURCE;
 let lastKnownSvg = '';
 let currentFileName = 'document.tikz';
 let currentHostRevision = 0;
+let currentHostSession = '';
 let imageBaseUrl = '';
 let imageBaseErrorReported = false;
 const persistenceValues = new Map<string, string>();
@@ -326,6 +331,7 @@ function HostBridge() {
 	const autosaveTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
+		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }));
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
 
 		const flushChange = () => {
@@ -399,7 +405,20 @@ function HostBridge() {
 			}
 			if (!message) return;
 			const action = message.action;
+			if (action === 'snapshot') {
+				const request = snapshotRequestSchema.safeParse(message);
+				if (request.success) snapshots.request(request.data, currentHostSession, currentHostRevision);
+				return;
+			}
+			if (action === 'cancel' && typeof message.requestId === 'string') {
+				if (message.sessionId === currentHostSession && message.revision === currentHostRevision) {
+					snapshots.cancel(message.requestId);
+				}
+				return;
+			}
 			if (action === 'load') {
+				snapshots.replace();
+				currentHostSession = message.sessionId ?? '';
 				imageBaseUrl = message.imageBaseUrl ?? '';
 				imageBaseErrorReported = false;
 				if (typeof message.revision === 'number' && Number.isInteger(message.revision)) {
@@ -463,6 +482,7 @@ function HostBridge() {
 		imageObserver.observe(document.body, { childList: true, subtree: true });
 		window.addEventListener('keydown', handleKeydown, true);
 		return () => {
+			snapshots.dispose();
 			imageObserver.disconnect();
 			unsubscribe();
 			window.removeEventListener('message', handleMessage);

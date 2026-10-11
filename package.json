@@ -20,7 +20,8 @@
     "@codemirror/view": "6.43.9",
     "@tikz-editor/lang-tikz": "0.5.1",
     "viewerjs": "1.14.0",
-    "vue": "^3.5.41"
+    "vue": "^3.5.41",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
