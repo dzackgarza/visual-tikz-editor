@@ -39,7 +39,7 @@ Pass an `AbortSignal` to `requestEditorSnapshot`; aborting cancels the request. 
 
 `import-ink` accepts typed `OriginalStroke` records with figure-local keys, ordered samples, optional sensor channels and optional outlines. These records live in source comments inside their own scopes and therefore travel through source history and ordinary file storage. `interpret-ink` and `restore-ink` require the exact current source and stroke key. Strokes marked `ink` cannot be interpreted as geometry. Original-stroke controls remain available when their scope is selected after reopening. Clear **Interpret geometry** in the Freehand properties to keep new handwritten strokes outside fitting. SVG snapshots bundle image bytes and namespace definition IDs.
 
-View switches retain the visual editor instance, including its selection, viewport, tool and source undo history. The host owns document identity and persistence. Snapshot state can restore a view into a fresh session; undo history remains session-local. The complete API is still being qualified in issue #2 and has no accepted consumer pin yet.
+View switches retain the visual editor instance, including its selection, viewport, tool and source undo history. The host owns document identity and persistence. Snapshot state can restore a view into a fresh session; undo history remains session-local. Consumers pin the full commit of a reviewed release from this repository, keeping the public TypeScript API and vendored editor assets at that same revision. Release archives include the standalone build and qualification recordings.
 
 ## Build and provenance
 

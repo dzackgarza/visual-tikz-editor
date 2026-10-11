@@ -588,6 +588,20 @@ describe("standalone workbench host boundary", function () {
     await page.getByRole('button', { name: 'Hide properties', exact: true }).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const x = box.x + box.width * .4, y = box.y + box.height * .55;
+    await frame.locator('body').evaluate(() => {
+      const received: { time: number; pressure: number }[] = [];
+      (window as unknown as { receivedPen: typeof received }).receivedPen = received;
+      for (const kind of ['pointerdown', 'pointermove', 'pointerup']) {
+        window.addEventListener(kind, event => {
+          const pointer = event as PointerEvent;
+          if (pointer.pointerType !== 'pen') return;
+          const coalesced = pointer.getCoalescedEvents();
+          for (const sample of coalesced.length ? coalesced : [pointer]) {
+            received.push({ time: sample.timeStamp, pressure: sample.pressure });
+          }
+        }, true);
+      }
+    });
     const cdp = await context.newCDPSession(page);
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x + 35, y, button: 'left', buttons: 1, clickCount: 1, pointerType: 'pen', force: .5 });
     for (let i = 1; i <= 40; i++) await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + 35 * Math.cos(i * Math.PI / 20), y: y + 35 * Math.sin(i * Math.PI / 20), button: 'left', buttons: 1, pointerType: 'pen', force: .5 });
@@ -599,6 +613,11 @@ describe("standalone workbench host boundary", function () {
     const original = JSON.parse(decodeURIComponent(record[1]));
     assert.equal(original.intent, 'ink');
     assert.ok(original.samples.length >= 42);
+    const received = await frame.locator('body').evaluate(() =>
+      (window as unknown as { receivedPen: { time: number; pressure: number }[] }).receivedPen);
+    assert.deepEqual(original.samples.map((sample: { time: number; pressure: number }) =>
+      ({ time: sample.time, pressure: sample.pressure })), received,
+    'Stored originals retain every delivered pen sample in order');
     assert.equal((source.match(/ circle /g) ?? []).length, 0, 'The handwritten loop must not become a circle');
     await expect(frame.getByRole('dialog', { name: 'Freehand result' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Properties', exact: true }).click();

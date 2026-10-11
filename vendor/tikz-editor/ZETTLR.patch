@@ -1026,7 +1026,7 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..a88e169 100644
+index 4e22ccf..3ce6769 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -54,6 +54,9 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
@@ -1089,10 +1089,18 @@ index 4e22ccf..a88e169 100644
  export const CanvasPanel = memo(function CanvasPanel({
    repeatPreviewModel = null
  }: {
-@@ -913,10 +942,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -912,11 +941,35 @@ export const CanvasPanel = memo(function CanvasPanel({
+   const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
-   const [freehandDraft, setFreehandDraft] = useState<FreehandToolDraft | null>(null);
+-  const [freehandDraft, setFreehandDraft] = useState<FreehandToolDraft | null>(null);
++  const [freehandDraft, setFreehandDraftState] = useState<FreehandToolDraft | null>(null);
++  const freehandDraftRef = useRef<FreehandToolDraft | null>(null);
++  const setFreehandDraft = useCallback<StateSetter<FreehandToolDraft | null>>((update) => {
++    const next = typeof update === "function" ? update(freehandDraftRef.current) : update;
++    freehandDraftRef.current = next;
++    setFreehandDraftState(next);
++  }, []);
 +  const [freehandResultOffer, setFreehandResultOffer] = useState<FreehandResultOffer | null>(null);
 +
 +  useEffect(() => {
@@ -1118,7 +1126,26 @@ index 4e22ccf..a88e169 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -1819,6 +1866,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1157,7 +1210,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+   const dragRef = useRef<DragState | null>(null);
+   const suppressNextBackgroundClickRef = useRef(false);
+   const pathDraftRef = useRef<PathToolDraft | null>(null);
+-  const freehandDraftRef = useRef<FreehandToolDraft | null>(null);
+   const previousCanvasContextKeyRef = useRef(canvasFigureContextKey(activeDocumentId, activeFigureId));
+   const pendingAddedSelectionRef = useRef<PendingAddedSelection | null>(null);
+   const canvasTransformRef = useRef(canvasTransform);
+@@ -1321,10 +1373,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+     setDragState
+   ]);
+ 
+-  useEffect(() => {
+-    freehandDraftRef.current = freehandDraft;
+-  }, [freehandDraft]);
+-
+   const logSnapDebug = useCallback(
+     (input: SnapDebugLogInput) => {
+       if (!showDevPanel) {
+@@ -1819,6 +1867,19 @@ export const CanvasPanel = memo(function CanvasPanel({
      ROTATE_HANDLE_OFFSET_PX
    });
  
@@ -1138,7 +1165,7 @@ index 4e22ccf..a88e169 100644
    canvasTransformRef.current = canvasTransform;
    selectedElementIdsRef.current = selectedElementIds;
    svgResultRef.current = svgResult;
-@@ -1866,6 +1926,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1866,6 +1927,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      pathDraft,
      pathSegmentDraft,
      pendingBezier,
@@ -1146,7 +1173,7 @@ index 4e22ccf..a88e169 100644
      bezierBendDraft,
      canvasTransform
    });
-@@ -1874,6 +1935,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1874,6 +1936,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      baseSvgResult,
      svgResult,
      viewportSize,
@@ -1154,7 +1181,7 @@ index 4e22ccf..a88e169 100644
      dispatch,
      dispatchCanvasTransform,
      activeDocumentId,
-@@ -2055,17 +2117,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2118,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -1173,7 +1200,6 @@ index 4e22ccf..a88e169 100644
 +    const previous = freehandDraftRef.current;
 +    if (!previous) return null;
 +    const next = appendFreehandToolPoint(previous, point, event);
-+    freehandDraftRef.current = next;
 +    setFreehandDraft(next);
 +    return next.points;
    }, []);
