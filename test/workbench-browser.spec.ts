@@ -46,6 +46,87 @@ describe("standalone workbench host boundary", function () {
     if (server?.pid !== undefined) process.kill(-server.pid, "SIGTERM");
   });
 
+  it('keeps authored source through a render error and recovers in the dark tablet workspace', async function () {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.reload();
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Dark theme', exact: true }).click();
+    await page.getByRole('button', { name: 'Source', exact: true }).click();
+    const valid = String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (1cm);\end{tikzpicture}`;
+    await page.locator('.cm-content').fill(valid);
+    await page.getByRole('button', { name: 'TeX render', exact: true }).click();
+    await expect(page.getByText('Up to date', { exact: true })).toBeVisible({ timeout: 40000 });
+    const invalid = valid.replace('\\draw', '\\thisCommandDoesNotExist\\draw');
+    await page.locator('.cm-content').fill(invalid);
+    await expect(page.locator('.tikz-compiler-preview-error')).toBeVisible({ timeout: 40000 });
+    assert.equal(await page.locator('.cm-content').innerText(), invalid);
+    await page.screenshot({ path: 'test-results/workbench/dark-tablet-render-error.png' });
+    await page.locator('.cm-content').fill(valid);
+    await expect(page.getByText('Up to date', { exact: true })).toBeVisible({ timeout: 40000 });
+    await expect(page.locator('.tikz-compiler-preview-error')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Drawing canvas', exact: true }).click();
+    await expect(page.frameLocator('iframe').locator('circle[data-source-id]')).toBeInViewport();
+    assert.equal(await page.locator('.cm-content').innerText(), valid);
+  });
+
+  it('matches compiled geometry for filled primitives and transformed curves', async function () {
+    const examples = [
+      String.raw`\begin{tikzpicture}\fill[blue] (0,0) rectangle (3,2);\fill[red] (4,1) circle (.5cm);\end{tikzpicture}`,
+      String.raw`\begin{tikzpicture}\begin{scope}[rotate=25]\fill[blue] (0,0) ellipse (2cm and 1cm);\end{scope}\fill[red] (3,1) rectangle (4,2);\end{tikzpicture}`,
+    ];
+    for (const authored of examples) {
+      await page.goto(`${url}embedding.html`);
+      await expect(page.locator('#status')).toHaveText('Loaded');
+      await page.getByLabel('Authored source').fill(authored);
+      await page.getByRole('button', { name: 'Load source', exact: true }).click();
+      await expect(page.locator('#status')).toHaveText('Loaded');
+      await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+      await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+      const visualSvg = JSON.parse(await page.locator('#result').innerText()).svg as string;
+      await page.goto(url);
+      await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+      await page.locator('.cm-content').fill(authored);
+      await page.getByRole('button', { name: 'TeX render', exact: true }).click();
+      await expect(page.getByText('Up to date', { exact: true })).toBeVisible({ timeout: 40000 });
+      const compiledUri = await page.locator('.tikz-figure-viewer-source').getAttribute('src');
+      assert.ok(compiledUri);
+      const difference = await page.evaluate(async ({ visualSvg, compiledUri }) => {
+        const masks: number[][] = [];
+        for (const uri of [`data:image/svg+xml;charset=utf-8,${encodeURIComponent(visualSvg)}`, compiledUri]) {
+          const image = new Image();
+          image.src = uri;
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 512;
+          const context = canvas.getContext('2d')!;
+          context.drawImage(image, 0, 0, 512, 512);
+          const pixels = context.getImageData(0, 0, 512, 512).data;
+          const mask = Array.from({ length: 512 * 512 }, (_, i) => {
+            const r = pixels[i * 4], g = pixels[i * 4 + 1], b = pixels[i * 4 + 2];
+            return pixels[i * 4 + 3] < 128 ? 0 : r > 150 && g < 80 && b < 80 ? 1 : b > 150 && r < 80 && g < 80 ? 2 : 0;
+          });
+          const occupied = mask.flatMap((value, i) => value ? [i] : []);
+          if (occupied.length === 0) throw new Error('The rendered diagram has no expected coloured geometry');
+          let left = 511, right = 0, top = 511, bottom = 0;
+          for (const i of occupied) {
+            left = Math.min(left, i % 512);
+            right = Math.max(right, i % 512);
+            top = Math.min(top, Math.floor(i / 512));
+            bottom = Math.max(bottom, Math.floor(i / 512));
+          }
+          masks.push(Array.from({ length: 128 * 128 }, (_, i) => {
+            const x = Math.round(left + (i % 128) * (right - left) / 127);
+            const y = Math.round(top + Math.floor(i / 128) * (bottom - top) / 127);
+            return mask[y * 512 + x];
+          }));
+        }
+        const [visual, compiled] = masks;
+        return visual.filter((value, i) => value !== compiled[i]).length / visual.length;
+      }, { visualSvg, compiledUri });
+      assert.ok(difference < .03, `Visual and compiled coloured geometry differ at ${difference * 100}% of normalized pixels`);
+    }
+  });
+
   it("preserves representative trace geometry through fitting and original restoration", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
