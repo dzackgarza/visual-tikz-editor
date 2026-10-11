@@ -32,7 +32,7 @@ export function requestEditorSnapshot(
     const abort = (): void => {
       // An unmounted consumer removes listeners without creating host traffic.
       if (signal.reason !== "disposed") {
-        peer.postMessage({ action: "cancel", ...target, requestId }, origin);
+        peer.postMessage({ action: "cancel", ...target, requestId: crypto.randomUUID(), targetRequestId: requestId }, origin);
       }
       finish(failure("cancelled"));
     };

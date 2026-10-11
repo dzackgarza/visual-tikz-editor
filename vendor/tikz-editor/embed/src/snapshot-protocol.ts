@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const identity = {
-  sessionId: z.string().min(1),
+  sessionId: z.string().uuid(),
   revision: z.number().int().nonnegative(),
   requestId: z.string().min(1),
 };

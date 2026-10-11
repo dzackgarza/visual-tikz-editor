@@ -1,4 +1,5 @@
 import { useEditorStore } from '@tikz-editor/app/store';
+import { optimize } from 'svgo/browser';
 import type { EditorSnapshotResult, SnapshotFailure, SnapshotRequest } from './snapshot-protocol';
 
 /** Wait on the editor's own scheduler; never pair source with its previous SVG. */
@@ -41,7 +42,13 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
       finish(requestId, {
         event: 'snapshot', status: 'ready',
         sessionId: request.sessionId, revision: request.revision, requestId,
-        sourceRevision, source: request.source, svg: drawing.svg, viewBox: drawing.viewBox,
+        sourceRevision, source: request.source,
+        svg: optimize(drawing.svg, {
+          plugins: [{ name: 'prefixIds', params: {
+            prefix: `figure-${request.sessionId}-${request.revision}-${sourceRevision}`,
+          } }],
+        }).data,
+        viewBox: drawing.viewBox,
         state: {
           selection: [...state.selectedElementIds], tool: state.toolMode,
           viewport: { ...state.canvasTransform },

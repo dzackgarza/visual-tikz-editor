@@ -5,7 +5,7 @@ import { useEditorStore } from '@tikz-editor/app/store';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
-import { snapshotRequestSchema } from './snapshot-protocol';
+import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
 import { createSnapshotRequests } from './snapshots';
 
 const App = lazy(async () => {
@@ -20,29 +20,9 @@ type HostSettingsPatch = {
 	};
 };
 
-type HostMessage = {
-	action?: string;
-	event?: string;
-	source?: string;
-	xml?: string;
-	revision?: number;
-	sessionId?: string;
-	requestId?: string;
-	format?: string;
-	autosave?: 0 | 1 | boolean;
-	fileName?: string;
-	name?: string;
-	modified?: boolean;
-	fullscreen?: boolean;
-	settings?: HostSettingsPatch;
-	imageBaseUrl?: string;
-	workspace?: 'default' | 'canvasOnly';
-	inspector?: boolean;
-};
-
 type PendingEditorMessage = {
 	source: string;
-	svg: string;
+	sourceRevision: number;
 	revision: number;
 };
 
@@ -51,7 +31,6 @@ const SETTINGS_KEY = 'tikz-editor:settings';
 const STORAGE_HASH_KEY = 'storage';
 const SETTINGS_VERSION = 1;
 const CHANGE_THROTTLE_MS = 250;
-const AUTOSAVE_DEBOUNCE_MS = 1000;
 const TEXT_FILE_ACCEPT = '.tex,.tikz,.pgf,.svg,.ipe,text/plain,text/x-tex,text/xml,application/xml,image/svg+xml';
 const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
   \draw[thick, blue] (0,0) circle (1cm);
@@ -59,9 +38,7 @@ const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
 \end{tikzpicture}
 `;
 
-let autosaveEnabled = false;
 let lastSavedSource = DEFAULT_SOURCE;
-let lastKnownSvg = '';
 let currentFileName = 'document.tikz';
 let currentHostRevision = 0;
 let currentHostSession = '';
@@ -71,13 +48,7 @@ const persistenceValues = new Map<string, string>();
 
 function postToHost(message: Record<string, unknown>) {
 	if (window.parent === window) return;
-	window.parent.postMessage(JSON.stringify(message), new URL(document.referrer).origin);
-}
-
-function sourceFromMessage(message: HostMessage): string | null {
-	if (typeof message.source === 'string') return message.source;
-	if (typeof message.xml === 'string') return message.xml;
-	return null;
+	window.parent.postMessage(JSON.stringify({ sessionId: currentHostSession, revision: currentHostRevision, ...message }), new URL(document.referrer).origin);
 }
 
 function wantsSvg(format?: string) {
@@ -137,7 +108,9 @@ function applyHostSettings(settings?: HostSettingsPatch) {
 }
 
 function makeExportPayload(format: string | undefined) {
-	const source = useEditorStore.getState().source;
+	const state = useEditorStore.getState();
+	const source = state.source;
+	const lastKnownSvg = state.snapshot.source === source && state.pendingRequestId === null ? state.snapshot.svg?.svg ?? '' : '';
 	const requestedSvg = wantsSvg(format);
 	const data = requestedSvg ? lastKnownSvg : source;
 
@@ -295,7 +268,7 @@ function createEmbedPlatform(initialSource: string): EditorPlatform {
 			saveText: async (text, options) => {
 				lastSavedSource = text;
 				currentFileName = options?.suggestedName ?? options?.fileRef?.name ?? currentFileName;
-				postToHost({ event: 'save', revision: currentHostRevision, source: text, xml: text, svg: lastKnownSvg, fileName: currentFileName });
+				postToHost({ event: 'save', revision: currentHostRevision, source: text, xml: text, fileName: currentFileName });
 				return { status: 'saved', fileRef: makeFileRef(currentFileName) };
 			},
 			exportFile: async (content, options) => {
@@ -313,7 +286,6 @@ function createEmbedPlatform(initialSource: string): EditorPlatform {
 function loadIntoEditor(source: string, fileName = currentFileName) {
 	currentFileName = fileName;
 	lastSavedSource = source;
-	lastKnownSvg = '';
 	const store = useEditorStore.getState();
 	store.dispatch({ type: 'CODE_EDITED', source });
 	store.dispatch({ type: 'MARK_DOCUMENT_SAVED', fileRef: makeFileRef(fileName), lastKnownDiskSource: source });
@@ -324,11 +296,9 @@ function HostBridge() {
 	const [fullscreen, setFullscreen] = useState(false);
 	const fullscreenRef = useRef(false);
 	const previousSourceRef = useRef<string | null>(null);
-	const previousSvgRef = useRef<string>('');
+	const previousRenderRef = useRef(-1);
 	const pendingChangeRef = useRef<PendingEditorMessage | null>(null);
-	const pendingAutosaveRef = useRef<PendingEditorMessage | null>(null);
 	const changeTimerRef = useRef<number | null>(null);
-	const autosaveTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
 		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }));
@@ -339,47 +309,20 @@ function HostBridge() {
 			const pending = pendingChangeRef.current;
 			pendingChangeRef.current = null;
 			if (!pending) return;
-			postToHost({ event: 'change', revision: pending.revision, source: pending.source, xml: pending.source, svg: pending.svg });
+			postToHost({ event: 'change', revision: pending.revision, source: pending.source, sourceRevision: pending.sourceRevision });
 		};
 
-		const scheduleChange = (source: string, svg: string, revision: number) => {
-			pendingChangeRef.current = { source, svg, revision };
+		const scheduleChange = (source: string, sourceRevision: number, revision: number) => {
+			pendingChangeRef.current = { source, sourceRevision, revision };
 			if (changeTimerRef.current !== null) return;
 			changeTimerRef.current = window.setTimeout(flushChange, CHANGE_THROTTLE_MS);
 		};
 
-		const flushAutosave = () => {
-			autosaveTimerRef.current = null;
-			const pending = pendingAutosaveRef.current;
-			pendingAutosaveRef.current = null;
-			if (!pending) return;
-			postToHost({ event: 'autosave', revision: pending.revision, source: pending.source, xml: pending.source, svg: pending.svg });
-		};
-
-		const scheduleAutosave = (source: string, svg: string, revision: number) => {
-			pendingAutosaveRef.current = { source, svg, revision };
-			if (autosaveTimerRef.current !== null) {
-				window.clearTimeout(autosaveTimerRef.current);
-			}
-			autosaveTimerRef.current = window.setTimeout(flushAutosave, AUTOSAVE_DEBOUNCE_MS);
-		};
-
-		const flushPendingEditorMessages = () => {
-			if (changeTimerRef.current !== null) {
-				window.clearTimeout(changeTimerRef.current);
-				flushChange();
-			}
-			if (autosaveTimerRef.current !== null) {
-				window.clearTimeout(autosaveTimerRef.current);
-				flushAutosave();
-			}
-		};
-
 		const unsubscribe = useEditorStore.subscribe((state) => {
-			const nextSvg = state.snapshot.svg?.svg ?? '';
-			if (nextSvg && nextSvg !== previousSvgRef.current) {
-				previousSvgRef.current = nextSvg;
-				lastKnownSvg = nextSvg;
+			if (state.snapshot.source === state.source && state.pendingRequestId === null &&
+				state.snapshot.svg !== null && state.snapshot.revision !== previousRenderRef.current) {
+				previousRenderRef.current = state.snapshot.revision;
+				postToHost({ event: 'rendered', sourceRevision: state.sourceRevision });
 			}
 
 			if (previousSourceRef.current === null) {
@@ -388,72 +331,85 @@ function HostBridge() {
 			}
 			if (state.source === previousSourceRef.current) return;
 			previousSourceRef.current = state.source;
-			scheduleChange(state.source, lastKnownSvg, currentHostRevision);
-			if (autosaveEnabled) {
-				scheduleAutosave(state.source, lastKnownSvg, currentHostRevision);
-			}
+			scheduleChange(state.source, state.sourceRevision, currentHostRevision);
+		});
+
+		const reply = (command: HostCommand, error?: string) => postToHost({
+			event: 'reply', requestId: command.requestId, sessionId: command.sessionId,
+			revision: command.revision, action: command.action,
+			status: error === undefined ? 'ok' : 'failed', error,
 		});
 
 		const handleMessage = (event: MessageEvent) => {
 			if (window.parent === window || event.source !== window.parent) return;
 			if (event.origin !== new URL(document.referrer).origin) return;
-			let message: HostMessage | null = null;
-			if (typeof event.data === 'string') {
-				try { message = JSON.parse(event.data) as HostMessage; } catch { return; }
-			} else if (event.data && typeof event.data === 'object') {
-				message = event.data as HostMessage;
+			let data: unknown = event.data;
+			if (typeof data === 'string') {
+				try { data = JSON.parse(data); } catch { return; }
 			}
-			if (!message) return;
-			const action = message.action;
-			if (action === 'snapshot') {
-				const request = snapshotRequestSchema.safeParse(message);
-				if (request.success) snapshots.request(request.data, currentHostSession, currentHostRevision);
+			const parsed = hostCommandSchema.safeParse(data);
+			if (!parsed.success) {
+				const identity = commandIdentitySchema.safeParse(data);
+				if (identity.success) postToHost({ ...identity.data, event: 'reply', status: 'failed', error: 'invalid-command' });
 				return;
 			}
-			if (action === 'cancel' && typeof message.requestId === 'string') {
-				if (message.sessionId === currentHostSession && message.revision === currentHostRevision) {
-					snapshots.cancel(message.requestId);
-				}
+			const command = parsed.data;
+			if (command.action !== 'load' && command.action !== 'snapshot' &&
+				(command.sessionId !== currentHostSession || command.revision !== currentHostRevision)) {
+				reply(command, 'stale-target');
 				return;
 			}
-			if (action === 'load') {
-				snapshots.replace();
-				currentHostSession = message.sessionId ?? '';
-				imageBaseUrl = message.imageBaseUrl ?? '';
-				imageBaseErrorReported = false;
-				if (typeof message.revision === 'number' && Number.isInteger(message.revision)) {
-					currentHostRevision = message.revision;
+			switch (command.action) {
+				case 'load': {
+					if (currentHostSession !== '' &&
+						(command.sessionId !== currentHostSession || command.revision <= currentHostRevision)) {
+						reply(command, 'stale-target');
+						return;
+					}
+					snapshots.replace();
+					currentHostSession = command.sessionId;
+					currentHostRevision = command.revision;
+					imageBaseUrl = command.imageBaseUrl ?? '';
+					imageBaseErrorReported = false;
+					applyHostSettings(command.settings);
+					persistHostSettings(command.settings);
+					pendingChangeRef.current = null;
+					loadIntoEditor(command.source, command.fileName);
+					reply(command);
+					return;
 				}
-				applyHostSettings(message.settings);
-				persistHostSettings(message.settings);
-				autosaveEnabled = Boolean(message.autosave);
-				pendingChangeRef.current = null;
-				pendingAutosaveRef.current = null;
-				loadIntoEditor(sourceFromMessage(message) ?? DEFAULT_SOURCE, message.fileName ?? message.name ?? currentFileName);
-			} else if (action === 'settings') {
-				applyHostSettings(message.settings);
-				persistHostSettings(message.settings);
-			} else if (action === 'display') {
-				const nextFullscreen = message.fullscreen === true;
-				fullscreenRef.current = nextFullscreen;
-				setFullscreen(nextFullscreen);
-			} else if (action === 'workspace' && message.workspace) {
-				const workspace = message.workspace;
-				void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => applyWorkspace(workspace));
-			} else if (action === 'inspector' && typeof message.inspector === 'boolean') {
-				document.documentElement.dataset.embedInspector = message.inspector ? 'open' : 'closed';
-				window.dispatchEvent(new Event('tikz-embed-inspector'));
-			} else if (action === 'save') {
-				flushPendingEditorMessages();
-				const source = useEditorStore.getState().source;
-				lastSavedSource = source;
-				useEditorStore.getState().dispatch({ type: 'MARK_DOCUMENT_SAVED', fileRef: makeFileRef(currentFileName), lastKnownDiskSource: source });
-				postToHost({ event: 'save', revision: currentHostRevision, source, xml: source, svg: lastKnownSvg, fileName: currentFileName });
-			} else if (action === 'export') {
-				flushPendingEditorMessages();
-				postToHost(makeExportPayload(message.format));
-			} else if (action === 'status' && typeof message.modified === 'boolean' && !message.modified) {
-				useEditorStore.getState().dispatch({ type: 'MARK_DOCUMENT_SAVED', fileRef: makeFileRef(currentFileName), lastKnownDiskSource: useEditorStore.getState().source });
+				case 'snapshot':
+					snapshots.request(command, currentHostSession, currentHostRevision);
+					return;
+				case 'cancel':
+					snapshots.cancel(command.targetRequestId);
+					reply(command);
+					return;
+				case 'source':
+					postToHost({ event: 'reply', requestId: command.requestId, status: 'ok', action: 'source', source: useEditorStore.getState().source });
+					return;
+				case 'settings':
+					applyHostSettings(command.settings);
+					persistHostSettings(command.settings);
+					reply(command);
+					return;
+				case 'display':
+					fullscreenRef.current = command.fullscreen;
+					setFullscreen(command.fullscreen);
+					reply(command);
+					return;
+				case 'workspace':
+					void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => {
+						if (command.revision !== currentHostRevision) { reply(command, 'stale-target'); return; }
+						applyWorkspace(command.workspace);
+						reply(command);
+					}, () => reply(command, 'workspace-unavailable'));
+					return;
+				case 'inspector':
+					document.documentElement.dataset.embedInspector = command.inspector ? 'open' : 'closed';
+					window.dispatchEvent(new Event('tikz-embed-inspector'));
+					reply(command);
+					return;
 			}
 		};
 
@@ -488,7 +444,6 @@ function HostBridge() {
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('keydown', handleKeydown, true);
 			if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
-			if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current);
 		};
 	}, []);
 

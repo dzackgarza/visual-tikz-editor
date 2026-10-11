@@ -7,7 +7,7 @@ let revision = 0;
 let pending = null;
 
 function post(message) {
-  editor.contentWindow.postMessage({ ...message, sessionId, revision }, location.origin);
+  editor.contentWindow.postMessage({ requestId: crypto.randomUUID(), ...message, sessionId, revision }, location.origin);
 }
 
 function load() {

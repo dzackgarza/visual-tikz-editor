@@ -104,7 +104,10 @@ function postToEditor(message: Record<string, unknown>): void {
   if (target === undefined || target === null) {
     return;
   }
-  target.postMessage(message, new URL(props.host.editorUrl, location.href).origin);
+  target.postMessage({
+    requestId: crypto.randomUUID(), sessionId: session.value.id,
+    revision: session.value.revision, ...message,
+  }, new URL(props.host.editorUrl, location.href).origin);
 }
 
 function sendFullLoad(): void {
@@ -154,7 +157,7 @@ watch(
     const sameSource = sameIdentity && active.source.source === next.source;
 
     if (!sameIdentity) {
-      session.value = { id: crypto.randomUUID(), revision: 0, source: next };
+      session.value = { ...active, source: next };
       errorMessage.value = "";
       sendFullLoad();
       return;
