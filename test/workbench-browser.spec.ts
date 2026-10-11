@@ -67,4 +67,33 @@ describe("standalone workbench host boundary", function () {
     await page.getByRole("button", { name: "Hide properties", exact: true }).click();
     assert.equal(await sourcePane.innerText(), authored);
   });
+
+  it("keeps the drawing when another frame sends an explicit load command", async function () {
+    const sourcePane = page.locator(".cm-content");
+    await sourcePane.fill(String.raw`\begin{tikzpicture}
+\draw (0,0) circle (1cm);
+\end{tikzpicture}`);
+    await expect(page.getByText("Synced", { exact: true })).toBeVisible();
+    const authored = await sourcePane.innerText();
+    await page.evaluate(async () => {
+      const sibling = document.createElement("iframe");
+      sibling.id = "unrelated-frame";
+      sibling.src = "about:blank";
+      const loaded = new Promise(resolve => sibling.addEventListener("load", resolve, { once: true }));
+      document.body.append(sibling);
+      await loaded;
+    });
+    const sibling = page.frames().find(frame => frame.url() === "about:blank")!;
+    await sibling.evaluate(() => {
+      parent.frames[0].postMessage({
+        action: "load",
+        revision: 2,
+        source: String.raw`\begin{tikzpicture}\draw (0,0) rectangle (2,1);\end{tikzpicture}`,
+      }, parent.location.origin);
+    });
+    await page.waitForTimeout(600);
+    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    await page.getByRole("button", { name: "Hide properties", exact: true }).click();
+    assert.equal(await sourcePane.innerText(), authored);
+  });
 });
