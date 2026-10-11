@@ -147,7 +147,32 @@ describe("standalone workbench host boundary", function () {
     }, result.svg);
     assert.equal(drawing.errors, 0);
     assert.ok(drawing.paths.some(path => path?.includes("85.358")), "The exported view must contain the authored 3cm rectangle");
+    await page.screenshot({ path: "test-results/workbench/embedding-snapshot.png" });
     await page.getByRole("button", { name: "Dispose", exact: true }).click();
     await expect(page.locator("iframe")).toHaveCount(0);
+  });
+
+  it("retains the current drawing when an older load arrives from its host", async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator("#status")).toHaveText("Loaded");
+    await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
+\draw[red] (0,0) rectangle (3,2);
+\end{tikzpicture}`);
+    await page.getByRole("button", { name: "Load source", exact: true }).click();
+    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+    const accepted = JSON.parse(await page.locator("#result").innerText());
+    await page.evaluate(({ sessionId }) => {
+      document.querySelector<HTMLIFrameElement>("iframe")!.contentWindow!.postMessage({
+        action: "load", sessionId, revision: 1, requestId: crypto.randomUUID(),
+        fileName: "fixture.tikz", autosave: 0,
+        source: String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`,
+      }, location.origin);
+    }, accepted);
+    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+    const retained = JSON.parse(await page.locator("#result").innerText());
+    assert.equal(retained.source, accepted.source);
+    assert.equal(retained.svg, accepted.svg);
   });
 });
