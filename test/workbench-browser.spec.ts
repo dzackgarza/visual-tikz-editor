@@ -202,4 +202,35 @@ describe("standalone workbench host boundary", function () {
     }));
     assert.deepEqual(owners, [true, true]);
   });
+
+  it("preserves imported stroke channels and outlines after saving and reopening its source", async function () {
+    const strokes = [{
+      key: "lecture-stroke-1", intent: "geometry", color: "#112233",
+      samples: Array.from({ length: 20 }, (_, i) => ({
+        x: i * 4, y: 12 + Math.sin(i) * .2, time: i * 8,
+        pressure: .3 + i / 40, altitude: 1.1, azimuth: .7, roll: .2,
+        hoverHeight: 0, buttons: 1, capabilities: 15, id: i, tool: 0, phase: i === 0 ? 0 : 1, predicted: false,
+      })),
+      outline: { path: "M0 11L76 11L76 13L0 13Z", fill: "#112233" },
+    }];
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator("#status")).toHaveText("Loaded");
+    await page.getByLabel("Original strokes").fill(JSON.stringify(strokes));
+    await page.getByRole("button", { name: "Import strokes", exact: true }).click();
+    await expect(page.getByLabel("Authored source")).toHaveValue(/lecture-stroke-1/);
+    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+    const saved = JSON.parse(await page.locator("#result").innerText());
+    assert.deepEqual(saved.originalInk.map((entry: { stroke: unknown }) => entry.stroke), strokes);
+    await page.reload();
+    await expect(page.locator("#status")).toHaveText("Loaded");
+    await page.getByLabel("Authored source").fill(saved.source);
+    await page.getByRole("button", { name: "Load source", exact: true }).click();
+    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+    const reopened = JSON.parse(await page.locator("#result").innerText());
+    assert.equal(reopened.source, saved.source);
+    assert.deepEqual(reopened.originalInk, saved.originalInk);
+    assert.ok(reopened.svg.includes("#112233"));
+  });
 });

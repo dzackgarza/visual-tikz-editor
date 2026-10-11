@@ -27,6 +27,11 @@ function receive(event: MessageEvent) {
 }
 
 window.addEventListener('message', receive);
+document.querySelector('#import-ink')!.addEventListener('click', () => {
+  const strokes = JSON.parse(document.querySelector<HTMLTextAreaElement>('#ink')!.value);
+  editor.contentWindow!.postMessage({ action: 'import-ink', strokes, sessionId, revision,
+    requestId: crypto.randomUUID(), source: source.value }, location.origin);
+});
 document.querySelector('#load')!.addEventListener('click', load);
 document.querySelector('#snapshot')!.addEventListener('click', async () => {
   status.textContent = 'Awaiting snapshot';
