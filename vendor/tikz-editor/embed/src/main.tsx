@@ -108,6 +108,7 @@ function persistHostSettings(settings?: HostSettingsPatch) {
 
 	if (nextRaw === currentRaw) return;
 	persistenceValues.set(SETTINGS_KEY, nextRaw);
+	try { window.localStorage.setItem(SETTINGS_KEY, nextRaw); } catch {}
 	postToHost({ event: 'persistence-save', key: SETTINGS_KEY, value: nextRaw });
 }
 
@@ -248,12 +249,19 @@ function createMemoryPersistence(initialSource: string): EditorPlatform['persist
 			});
 		} catch {}
 	}
+	try {
+		const savedSettings = window.localStorage.getItem(SETTINGS_KEY);
+		if (savedSettings && !persistenceValues.has(SETTINGS_KEY)) persistenceValues.set(SETTINGS_KEY, savedSettings);
+	} catch {}
 	persistenceValues.set(WORKSPACE_KEY, makeWorkspaceSeed(initialSource));
 	return {
 		load: (key) => persistenceValues.get(key) ?? null,
 		save: (key, value) => {
 			persistenceValues.set(key, value);
-			if (key !== WORKSPACE_KEY) postToHost({ event: 'persistence-save', key, value });
+			if (key !== WORKSPACE_KEY) {
+				try { window.localStorage.setItem(key, value); } catch {}
+				postToHost({ event: 'persistence-save', key, value });
+			}
 		},
 	};
 }

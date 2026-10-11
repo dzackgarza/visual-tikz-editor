@@ -87,6 +87,164 @@ index 59fab7a..8cc20ff 100644
        },
        { kind: "separator" },
        {
+diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
+index 4850a87..4fa91b1 100644
+--- a/packages/app/src/settings/storage.ts
++++ b/packages/app/src/settings/storage.ts
+@@ -1,5 +1,5 @@
+ import type { AppSettings } from "./types";
+-import { DEFAULT_SETTINGS } from "./types";
++import { DEFAULT_SETTINGS, TOOLBAR_TOOL_IDS, type ToolbarItem, type ToolbarDock } from "./types";
+ import { getActiveEditorPlatform } from "../platform/current";
+ 
+ const STORAGE_KEY = "tikz-editor:settings";
+@@ -40,7 +40,19 @@ export function loadSettings(): AppSettings {
+       },
+       colorPicker: {
+         ...DEFAULT_SETTINGS.colorPicker,
+-        ...parsed.colorPicker
++        ...parsed.colorPicker,
++        palette: Array.isArray(parsed.colorPicker?.palette)
++          ? parsed.colorPicker.palette.filter((color): color is string => typeof color === "string")
++          : DEFAULT_SETTINGS.colorPicker.palette
++      },
++      toolbar: {
++        dock: isToolbarDock(parsed.toolbar?.dock) ? parsed.toolbar.dock : DEFAULT_SETTINGS.toolbar.dock,
++        lassoShape: parsed.toolbar?.lassoShape === "ellipse" || parsed.toolbar?.lassoShape === "rectangle" ? parsed.toolbar.lassoShape : "freehand",
++        x: typeof parsed.toolbar?.x === "number" && Number.isFinite(parsed.toolbar.x) ? parsed.toolbar.x : DEFAULT_SETTINGS.toolbar.x,
++        y: typeof parsed.toolbar?.y === "number" && Number.isFinite(parsed.toolbar.y) ? parsed.toolbar.y : DEFAULT_SETTINGS.toolbar.y,
++        items: Array.isArray(parsed.toolbar?.items)
++          ? parsed.toolbar.items.filter(isToolbarItem)
++          : DEFAULT_SETTINGS.toolbar.items
+       },
+       rendering: {
+         ...DEFAULT_SETTINGS.rendering,
+@@ -52,6 +64,16 @@ export function loadSettings(): AppSettings {
+   }
+ }
+ 
++function isToolbarDock(value: string | undefined): value is ToolbarDock {
++  return value === "left" || value === "right" || value === "top" || value === "bottom" || value === "floating";
++}
++
++function isToolbarItem(value: ToolbarItem): value is ToolbarItem {
++  if (!value || typeof value !== "object") return false;
++  if (value.kind === "separator" || value.kind === "spacer") return true;
++  return value.kind === "tool" && TOOLBAR_TOOL_IDS.some((id) => id === value.id);
++}
++
+ function clampFormatterMaxLineLength(value: number): number {
+   if (!Number.isFinite(value)) {
+     return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
+diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
+index af0a7ab..e9ae3fa 100644
+--- a/packages/app/src/settings/types.ts
++++ b/packages/app/src/settings/types.ts
+@@ -9,6 +9,15 @@ export type EditorSettings = {
+ 
+ export type ColorPickerAccuracy = "approximate" | "exact";
+ 
++export const TOOLBAR_TOOL_IDS = [
++  "select", "lasso", "erase", "addFreehand", "line", "addBezier", "addArc", "addPoint",
++  "color", "shape", "addMatrix", "addImage", "addNode", "addGrid", "addBucket", "undo", "redo", "palette"
++] as const;
++export type ToolbarToolId = (typeof TOOLBAR_TOOL_IDS)[number];
++export type ToolbarItem = { kind: "tool"; id: ToolbarToolId } | { kind: "separator" } | { kind: "spacer" };
++export type ToolbarDock = "top" | "left" | "bottom" | "right" | "floating";
++export type ToolbarSettings = { items: ToolbarItem[]; dock: ToolbarDock; x: number; y: number; lassoShape: "freehand" | "ellipse" | "rectangle" };
++
+ export type GridSize = "fine" | "standard" | "coarse";
+ 
+ export type ColorScheme = "system" | "light" | "dark";
+@@ -49,7 +58,9 @@ export type AppSettings = {
+   canvas: CanvasSettings;
+   colorPicker: {
+     accuracy: ColorPickerAccuracy;
++    palette: string[];
+   };
++  toolbar: ToolbarSettings;
+   rendering: RenderingSettings;
+ };
+ 
+@@ -87,7 +98,27 @@ export const DEFAULT_SETTINGS: AppSettings = {
+     snapHapticsEnabled: true
+   },
+   colorPicker: {
+-    accuracy: "approximate"
++    accuracy: "approximate",
++    palette: ["black", "white", "red", "orange", "yellow", "green", "blue", "violet"]
++  },
++  toolbar: {
++    dock: "left",
++    lassoShape: "freehand",
++    x: 0.5,
++    y: 0.5,
++    items: [
++      { kind: "tool", id: "select" }, { kind: "tool", id: "lasso" }, { kind: "tool", id: "erase" },
++      { kind: "separator" },
++      { kind: "tool", id: "addFreehand" }, { kind: "tool", id: "line" }, { kind: "tool", id: "addBezier" },
++      { kind: "tool", id: "addArc" }, { kind: "tool", id: "addPoint" }, { kind: "tool", id: "color" },
++      { kind: "separator" },
++      { kind: "tool", id: "shape" }, { kind: "tool", id: "addMatrix" }, { kind: "tool", id: "addImage" },
++      { kind: "separator" },
++      { kind: "tool", id: "addBucket" },
++      { kind: "spacer" },
++      { kind: "tool", id: "undo" }, { kind: "tool", id: "redo" },
++      { kind: "tool", id: "palette" }
++    ]
+   },
+   rendering: {
+     mathJaxFont: "mathjax-newcm"
+diff --git a/packages/app/src/settings/useSettingsStore.ts b/packages/app/src/settings/useSettingsStore.ts
+index 6d5ddef..a72a5e9 100644
+--- a/packages/app/src/settings/useSettingsStore.ts
++++ b/packages/app/src/settings/useSettingsStore.ts
+@@ -9,10 +9,12 @@ type SettingsStore = {
+   updateEditorSettings: (patch: Partial<AppSettings["editor"]>) => void;
+   updateCanvasSettings: (patch: Partial<AppSettings["canvas"]>) => void;
+   updateColorPickerSettings: (patch: Partial<AppSettings["colorPicker"]>) => void;
++  updateToolbarSettings: (patch: Partial<AppSettings["toolbar"]>) => void;
+   updateRenderingSettings: (patch: Partial<AppSettings["rendering"]>) => void;
+   resetGeneralSettings: () => void;
+   resetEditorSettings: () => void;
+   resetCanvasSettings: () => void;
++  resetToolbarSettings: () => void;
+ };
+ 
+ export const useSettingsStore = create<SettingsStore>((set) => ({
+@@ -57,6 +59,16 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
+       return { settings: next };
+     });
+   },
++  updateToolbarSettings: (patch) => {
++    set((state) => {
++      const next: AppSettings = {
++        ...state.settings,
++        toolbar: { ...state.settings.toolbar, ...patch }
++      };
++      saveSettings(next);
++      return { settings: next };
++    });
++  },
+   updateRenderingSettings: (patch) => {
+     set((state) => {
+       const next: AppSettings = {
+@@ -97,5 +109,15 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
+       saveSettings(next);
+       return { settings: next };
+     });
++  },
++  resetToolbarSettings: () => {
++    set((state) => {
++      const next: AppSettings = {
++        ...state.settings,
++        toolbar: { ...DEFAULT_SETTINGS.toolbar, items: [...DEFAULT_SETTINGS.toolbar.items] }
++      };
++      saveSettings(next);
++      return { settings: next };
++    });
+   }
+ }));
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
 index e0845d6..396f8a8 100644
 --- a/packages/app/src/store/reducer.ts
@@ -223,10 +381,15 @@ index e0845d6..396f8a8 100644
        const documentId = activeDocumentIdFromAction(state, action.documentId);
        workspace = updateDocument(workspace, documentId, (doc) => {
 diff --git a/packages/app/src/store/types.ts b/packages/app/src/store/types.ts
-index 450957d..16cc576 100644
+index 450957d..985e056 100644
 --- a/packages/app/src/store/types.ts
 +++ b/packages/app/src/store/types.ts
-@@ -14,6 +14,8 @@ export type ToolMode =
+@@ -11,9 +11,13 @@ import type {
+ 
+ export type ToolMode =
+   | "select"
++  | "lasso"
++  | "erase"
    | "magnify"
    | "addBucket"
    | "addNode"
@@ -235,7 +398,7 @@ index 450957d..16cc576 100644
    | "addMatrix"
    | "addShape"
    | "addPath"
-@@ -23,6 +25,7 @@ export type ToolMode =
+@@ -23,6 +27,7 @@ export type ToolMode =
    | "addRect"
    | "addEllipse"
    | "addCircle"
@@ -243,7 +406,7 @@ index 450957d..16cc576 100644
    | "addArrow"
    | "addBezier";
  export type CanvasDragKind = "element" | "resize" | "rotate" | "handle" | "pan" | "marquee" | "tool-create";
-@@ -81,7 +84,8 @@ export type HistoryEntry = {
+@@ -81,7 +86,8 @@ export type HistoryEntry = {
      | "reorder"
      | "align"
      | "distribute"
@@ -253,7 +416,7 @@ index 450957d..16cc576 100644
    label: string;
    /** Optional key used to coalesce drag updates into one undo step. */
    mergeKey?: string;
-@@ -354,6 +358,13 @@ export type EditorAction =
+@@ -354,6 +360,13 @@ export type EditorAction =
        source: string;
        changedSourceIds?: string[] | null;
      }
@@ -628,11 +791,21 @@ index ba28ddb..d702f65 100644
    );
  }
 diff --git a/packages/app/src/ui/SettingsModal.tsx b/packages/app/src/ui/SettingsModal.tsx
-index e849b25..134cf65 100644
+index e849b25..135a9c3 100644
 --- a/packages/app/src/ui/SettingsModal.tsx
 +++ b/packages/app/src/ui/SettingsModal.tsx
-@@ -7,17 +7,7 @@ import css from "./SettingsModal.module.css";
- type CategoryId = "general" | "editor" | "canvas";
+@@ -1,29 +1,23 @@
+ import { useState } from "react";
+ import { useSettingsStore } from "../settings/useSettingsStore";
+-import { EDITOR_FONT_SIZE_OPTIONS, type ColorPickerAccuracy, type ColorScheme, type GridSize, type MathJaxFont } from "../settings/types";
++import { EDITOR_FONT_SIZE_OPTIONS, TOOLBAR_TOOL_IDS, type ToolbarItem, type ToolbarToolId, type ColorPickerAccuracy, type ColorScheme, type GridSize, type MathJaxFont } from "../settings/types";
+ import { Modal } from "./Modal";
++import { ColorPicker } from "./ColorPicker";
++import { TOOL_COLOR_OPTIONS } from "./tool-config";
+ import css from "./SettingsModal.module.css";
+ 
+-type CategoryId = "general" | "editor" | "canvas";
++type CategoryId = "general" | "editor" | "canvas" | "toolbar" | "colors";
  
  const MATHJAX_FONTS: { value: MathJaxFont; label: string }[] = [
 -  { value: "mathjax-newcm",   label: "New Computer Modern (default)" },
@@ -650,11 +823,134 @@ index e849b25..134cf65 100644
  ];
  
  const CATEGORIES: { id: CategoryId; label: string }[] = [
+   { id: "general", label: "General" },
+   { id: "editor", label: "Code Editor" },
+-  { id: "canvas", label: "Canvas" }
++  { id: "canvas", label: "Canvas" },
++  { id: "toolbar", label: "Toolbar" },
++  { id: "colors", label: "Colors" }
+ ];
+ 
+ let rememberedCategory: CategoryId = "general";
+@@ -37,6 +31,7 @@ type SettingsModalProps = {
+ export function SettingsModal({ onClose }: SettingsModalProps) {
+   const [activeCategory, setActiveCategory] = useState<CategoryId>(rememberedCategory);
+   const [formatterMaxLineLengthInput, setFormatterMaxLineLengthInput] = useState<string | null>(null);
++  const [selectedPaletteIndex, setSelectedPaletteIndex] = useState<number | null>(null);
+ 
+   const selectCategory = (id: CategoryId) => {
+     rememberedCategory = id;
+@@ -47,10 +42,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+   const updateEditorSettings = useSettingsStore((s) => s.updateEditorSettings);
+   const updateCanvasSettings = useSettingsStore((s) => s.updateCanvasSettings);
+   const updateColorPickerSettings = useSettingsStore((s) => s.updateColorPickerSettings);
++  const updateToolbarSettings = useSettingsStore((s) => s.updateToolbarSettings);
+   const updateRenderingSettings = useSettingsStore((s) => s.updateRenderingSettings);
+   const resetGeneralSettings = useSettingsStore((s) => s.resetGeneralSettings);
+   const resetEditorSettings = useSettingsStore((s) => s.resetEditorSettings);
+   const resetCanvasSettings = useSettingsStore((s) => s.resetCanvasSettings);
++  const resetToolbarSettings = useSettingsStore((s) => s.resetToolbarSettings);
+   const formatterMaxLineLengthValue = formatterMaxLineLengthInput ?? String(settings.editor.formatterMaxLineLength);
+ 
+   const commitFormatterMaxLineLength = () => {
+@@ -73,9 +70,36 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+       setFormatterMaxLineLengthInput(null);
+       return;
+     }
++    if (activeCategory === "toolbar") {
++      resetToolbarSettings();
++      return;
++    }
++    if (activeCategory === "colors") {
++      updateColorPickerSettings({ palette: ["black", "white", "red", "orange", "yellow", "green", "blue", "violet"] });
++      return;
++    }
+     resetCanvasSettings();
+   };
+ 
++  const setToolbarItems = (items: ToolbarItem[]) => updateToolbarSettings({ items });
++  const updateToolbarItem = (index: number, item: ToolbarItem) => {
++    const items = [...settings.toolbar.items];
++    items[index] = item;
++    setToolbarItems(items);
++  };
++  const moveToolbarItem = (index: number, offset: number) => {
++    const items = [...settings.toolbar.items];
++    const target = index + offset;
++    if (target < 0 || target >= items.length) return;
++    [items[index], items[target]] = [items[target], items[index]];
++    setToolbarItems(items);
++  };
++  const updatePaletteColor = (index: number, color: string) => {
++    const palette = [...settings.colorPicker.palette];
++    palette[index] = color;
++    updateColorPickerSettings({ palette });
++  };
++
+   return (
+     <Modal
+       onClose={onClose}
+@@ -109,6 +133,50 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+           </nav>
+ 
+           <div className={css.content}>
++            {activeCategory === "toolbar" && <div className={css.panel}>
++              <div className={css.panelTitle}>Toolbar</div>
++              <div className={css.settingRow}>
++                <label className={css.settingLabel} htmlFor="toolbar-dock">Position</label>
++                <select id="toolbar-dock" className={css.select} value={settings.toolbar.dock} onChange={(event) => updateToolbarSettings({ dock: event.target.value as typeof settings.toolbar.dock })}>
++                  <option value="left">Left</option><option value="right">Right</option><option value="top">Top</option><option value="bottom">Bottom</option><option value="floating">Floating</option>
++                </select>
++              </div>
++              <div className={css.settingsGroup}>
++                {settings.toolbar.items.map((item, index) => <div className={css.settingRow} key={index}>
++                  <select className={css.select} aria-label={`Toolbar item ${index + 1}`} value={item.kind === "tool" ? item.id : item.kind} onChange={(event) => {
++                    const value = event.target.value;
++                    updateToolbarItem(index, value === "separator" || value === "spacer" ? { kind: value } : { kind: "tool", id: value as ToolbarToolId });
++                  }}>
++                    <option value="separator">Separator</option><option value="spacer">Space</option>
++                    {TOOLBAR_TOOL_IDS.map((id) => <option key={id} value={id}>{id === "addBezier" ? "Curves" : id.replace(/^add/, "")}</option>)}
++                  </select>
++                  <div>
++                    <button type="button" aria-label={`Move item ${index + 1} up`} disabled={index === 0} onClick={() => moveToolbarItem(index, -1)}>↑</button>
++                    <button type="button" aria-label={`Move item ${index + 1} down`} disabled={index === settings.toolbar.items.length - 1} onClick={() => moveToolbarItem(index, 1)}>↓</button>
++                    <button type="button" aria-label={`Remove item ${index + 1}`} onClick={() => setToolbarItems(settings.toolbar.items.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
++                  </div>
++                </div>)}
++              </div>
++              <div><button type="button" onClick={() => setToolbarItems([...settings.toolbar.items, { kind: "tool", id: "select" }])}>Add tool</button> <button type="button" onClick={() => setToolbarItems([...settings.toolbar.items, { kind: "separator" }])}>Add separator</button> <button type="button" onClick={() => setToolbarItems([...settings.toolbar.items, { kind: "spacer" }])}>Add space</button></div>
++              <div className={css.resetRow}><button type="button" className={css.resetButton} onClick={resetActiveCategoryToDefaults}>Reset to Defaults</button></div>
++            </div>}
++            {activeCategory === "colors" && <div className={css.panel}>
++              <div className={css.panelTitle}>Color Settings</div>
++              <div className={css.settingsGroup}>
++                {settings.colorPicker.palette.map((color, index) => <div className={css.settingRow} key={index}>
++                  <label className={css.settingLabel} htmlFor={`palette-${index}`}>Color {index + 1}</label>
++                  <input id={`palette-${index}`} className={css.numberInput} value={color} onChange={(event) => updatePaletteColor(index, event.target.value)} />
++                  <button type="button" onClick={() => setSelectedPaletteIndex(index)}>Choose…</button>
++                  <button type="button" onClick={() => updateColorPickerSettings({ palette: settings.colorPicker.palette.filter((_, colorIndex) => colorIndex !== index) })}>Remove</button>
++                </div>)}
++              </div>
++              {selectedPaletteIndex !== null && settings.colorPicker.palette[selectedPaletteIndex] !== undefined && <ColorPicker
++                ariaLabel={`Palette color ${selectedPaletteIndex + 1}`} value={settings.colorPicker.palette[selectedPaletteIndex]}
++                syntaxValue={settings.colorPicker.palette[selectedPaletteIndex]} options={TOOL_COLOR_OPTIONS}
++                onChange={(color) => updatePaletteColor(selectedPaletteIndex, color)} />}
++              <button type="button" onClick={() => updateColorPickerSettings({ palette: [...settings.colorPicker.palette, "black"] })}>Add color</button>
++              <div className={css.resetRow}><button type="button" className={css.resetButton} onClick={resetActiveCategoryToDefaults}>Reset to Defaults</button></div>
++            </div>}
+             {activeCategory === "general" && (
+               <div className={css.panel}>
+                 <div className={css.panelTitle}>General</div>
 diff --git a/packages/app/src/ui/StatusBar.tsx b/packages/app/src/ui/StatusBar.tsx
-index 681cb41..1de10d5 100644
+index 681cb41..72f510c 100644
 --- a/packages/app/src/ui/StatusBar.tsx
 +++ b/packages/app/src/ui/StatusBar.tsx
-@@ -309,12 +309,15 @@ function resolveToolCreateModifierHint(toolMode: ToolMode, keys: ModifierKeyLabe
+@@ -306,15 +306,20 @@ function resolveToolCreateModifierHint(toolMode: ToolMode, keys: ModifierKeyLabe
+     case "addGrid":
+       return `${keys.shift} draw a square grid · ${snapHint}`;
+     case "select":
++    case "lasso":
++    case "erase":
      case "magnify":
      case "addBucket":
      case "addNode":
@@ -670,8 +966,37 @@ index 681cb41..1de10d5 100644
      case "addArrow":
      case "addBezier":
        return snapHint;
+diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
+index 0ddde08..fc62acb 100644
+--- a/packages/app/src/ui/Toolbar.module.css
++++ b/packages/app/src/ui/Toolbar.module.css
+@@ -144,6 +144,24 @@
+   flex: 1;
+ }
+ 
++.embeddedTools {
++  display: flex;
++  align-items: center;
++  gap: 2px;
++  overflow: auto;
++  scrollbar-width: none;
++  touch-action: pan-x pan-y;
++}
++
++.embeddedTools::-webkit-scrollbar { display: none; }
++.embeddedItem { flex: 0 0 auto; }
++.embeddedSpacer { flex: 1 0 12px; }
++.toolbarGrip { border: 0; background: transparent; color: var(--text-muted); cursor: grab; touch-action: none; user-select: none; }
++.toolbarGrip:active { cursor: grabbing; }
++.colorSwatch { width: 22px; height: 22px; display: block; border: 1px solid var(--border); border-radius: 5px; }
++.palette { display: flex; gap: 3px; flex-wrap: wrap; max-width: 48px; }
++.paletteSwatch { width: 17px; height: 17px; padding: 0; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
++
+ .updateChip {
+   display: inline-flex;
+   align-items: center;
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df..ecc07a9 100644
+index a3293df..fc48abd 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,4 @@
@@ -680,7 +1005,7 @@ index a3293df..ecc07a9 100644
  import { RiDownloadCloudLine } from "@remixicon/react";
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
-@@ -15,7 +15,7 @@ import {
+@@ -15,9 +15,11 @@ import {
    type ToolPopupKind
  } from "./tool-config";
  import { GENERATED_NODE_SHAPE_PREVIEWS } from "./generated-node-shape-previews";
@@ -688,8 +1013,17 @@ index a3293df..ecc07a9 100644
 +import { ToolbarToolPopup, ToolbarPopupSection, ToolbarPopupChoiceList, ToolbarPopupVisualChoiceGrid } from "./ToolbarToolPopup";
  import popupCss from "./ToolbarToolPopup.module.css";
  import type { ToolMode } from "../store/types";
++import { useSettingsStore } from "../settings/useSettingsStore";
++import type { ToolbarToolId } from "../settings/types";
  import css from "./Toolbar.module.css";
-@@ -40,6 +40,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+ 
+ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -36,16 +38,27 @@ type ToolbarProps = {
+ export function Toolbar({ updateChip = null }: ToolbarProps) {
+   const toolMode = useEditorStore((s) => s.toolMode);
+   const bucketFillColor = useEditorStore((s) => s.bucketFillColor);
++  const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
+   const selectedAddShape = useEditorStore((s) => s.selectedAddShape);
    const selectedAddMatrixRows = useEditorStore((s) => s.selectedAddMatrixRows);
    const selectedAddMatrixColumns = useEditorStore((s) => s.selectedAddMatrixColumns);
    const dispatch = useEditorStore((s) => s.dispatch);
@@ -698,7 +1032,22 @@ index a3293df..ecc07a9 100644
    const projectNamedColorSwatches = useProjectNamedColorSwatches();
    const namedColorLookup = useMemo(
      () => new Map(projectNamedColorSwatches.map((swatch) => [swatch.token, swatch.cssColor] as const)),
-@@ -56,10 +58,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+     [projectNamedColorSwatches]
+   );
+-  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | null>(null);
++  const settings = useSettingsStore((s) => s.settings);
++  const updateToolbarSettings = useSettingsStore((s) => s.updateToolbarSettings);
++  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | "color" | null>(null);
++  const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
++  const dragReady = useRef(false);
++  const dragOffset = useRef({ x: 0, y: 0 });
++  const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
++  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
++  const suppressToolClick = useRef(false);
+   const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
+   const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
+   const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
+@@ -56,10 +69,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -708,11 +1057,11 @@ index a3293df..ecc07a9 100644
    // Close popup when tool mode changes (unless it's a popup that can be used independently)
    useEffect(() => {
 -    if (openPopupMode && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== toolMode) {
-+    if (openPopupMode && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== "addLine" && openPopupMode !== toolMode) {
++    if (openPopupMode && openPopupMode !== "color" && openPopupMode !== "lasso" && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== "addLine" && openPopupMode !== toolMode) {
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -111,7 +115,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +126,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -730,7 +1079,7 @@ index a3293df..ecc07a9 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +139,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +150,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -749,7 +1098,120 @@ index a3293df..ecc07a9 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -314,6 +339,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +206,112 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+     return null;
+   };
+ 
++  const groupedToolClick = (popupMode: ToolMode, modes: ToolMode[], defaultMode: ToolMode) => {
++    if (suppressToolClick.current) {
++      suppressToolClick.current = false;
++      return;
++    }
++    if (modes.includes(toolMode)) {
++      setOpenPopupMode((current) => current === popupMode ? null : popupMode);
++    } else {
++      dispatch({ type: "SET_TOOL_MODE", mode: defaultMode });
++      setOpenPopupMode(null);
++    }
++  };
++
++  const longPressHandlers = (popupMode: ToolMode) => ({
++    onPointerDown: () => {
++      if (longPressTimer.current) clearTimeout(longPressTimer.current);
++      longPressTimer.current = setTimeout(() => {
++        suppressToolClick.current = true;
++        setOpenPopupMode(popupMode);
++      }, 420);
++    },
++    onPointerUp: () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); },
++    onPointerCancel: () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }
++  });
++
++  const renderGroupedEmbeddedButton = (id: "line" | "shape" | "addMatrix" | "addBucket" | "lasso") => {
++    const popupMode: ToolMode = id === "line" ? "addLine" : id === "shape" ? "addShape" : id;
++    const modes: ToolMode[] = id === "line" ? ["addLine", "addArrow", "addPath"]
++      : id === "shape" ? ["addShape", "addRect", "addEllipse", "addCircle"] : [popupMode];
++    const toolDef = TOOL_BUTTONS.find((button) => button.mode === popupMode)!;
++    const Icon = toolDef.icon;
++    const popup = id === "lasso"
++      ? <ToolbarPopupSection title="Lasso selection"><ToolbarPopupChoiceList
++          choices={[{ id: "freehand", label: "Freehand" }, { id: "ellipse", label: "Ellipse" }, { id: "rectangle", label: "Rectangle" }]}
++          selectedId={settings.toolbar.lassoShape}
++          onSelect={(shape) => {
++            updateToolbarSettings({ lassoShape: shape as typeof settings.toolbar.lassoShape });
++            dispatch({ type: "SET_TOOL_MODE", mode: "lasso" });
++            setOpenPopupMode(null);
++          }}
++        /></ToolbarPopupSection>
++      : renderPopup(id === "line" ? "line-picker" : id === "shape" ? "shape-picker" : id === "addMatrix" ? "matrix-picker" : "bucket-color");
++    return <ToolbarToolPopup key={id} open={openPopupMode === popupMode} onClose={() => setOpenPopupMode(null)} popup={popup}>
++      <RenderedTooltip content={`${toolDef.label} · press again or hold for options`}>
++        <button type="button" className={[css.btn, modes.includes(toolMode) ? css.btnActive : ""].filter(Boolean).join(" ")}
++          aria-label={toolDef.label} aria-haspopup="dialog" aria-expanded={openPopupMode === popupMode}
++          onClick={() => groupedToolClick(popupMode, modes, id === "shape" ? "addRect" : popupMode)}
++          {...longPressHandlers(popupMode)}>
++          <Icon size={18} />
++        </button>
++      </RenderedTooltip>
++    </ToolbarToolPopup>;
++  };
++
++  const renderEmbeddedTool = (id: ToolbarToolId) => {
++    if (id === "undo" || id === "redo") {
++      const undo = id === "undo";
++      return <RenderedTooltip key={id} content={undo ? "Undo" : "Redo"}><button type="button" className={css.btn}
++        aria-label={undo ? "Undo" : "Redo"} disabled={undo ? historyIndex < 0 : historyIndex >= historyLength - 1}
++        onClick={() => dispatch({ type: undo ? "UNDO" : "REDO" })}>{undo ? "↶" : "↷"}</button></RenderedTooltip>;
++    }
++    if (id === "line" || id === "shape" || id === "addMatrix" || id === "addBucket" || id === "lasso") return renderGroupedEmbeddedButton(id);
++    if (id === "color") return <ToolbarToolPopup key={id} open={openPopupMode === "color"} onClose={() => setOpenPopupMode(null)}
++      popup={<><ToolbarPopupSection title="Drawing color"><ColorPicker ariaLabel="Drawing color" value={creationStrokeColor}
++        syntaxValue={creationStrokeColor} options={TOOL_COLOR_OPTIONS} namedColorSwatches={projectNamedColorSwatches}
++        onChange={(value) => dispatch({ type: "SET_CREATION_STROKE_COLOR", value })} /></ToolbarPopupSection>
++        <ToolbarPopupSection title="Palette"><div className={css.palette}>
++          {settings.colorPicker.palette.map((color, index) => <button key={index} type="button" className={css.paletteSwatch}
++            aria-label={`Choose ${color}`} title={color} style={{ background: cssColorForToken(color, namedColorLookup) ?? color }}
++            onClick={() => dispatch({ type: "SET_CREATION_STROKE_COLOR", value: color })} />)}
++        </div></ToolbarPopupSection></>}>
++      <button type="button" className={css.btn} aria-label={`Drawing color: ${creationStrokeColor}`} aria-haspopup="dialog"
++        aria-expanded={openPopupMode === "color"} onClick={() => setOpenPopupMode((current) => current === "color" ? null : "color")}>
++        <span className={css.colorSwatch} style={{ background: cssColorForToken(creationStrokeColor, namedColorLookup) ?? creationStrokeColor }} />
++      </button>
++    </ToolbarToolPopup>;
++    if (id === "palette") return <div key={id} className={css.palette} aria-label="Color palette">
++      {settings.colorPicker.palette.map((color, index) => <button key={index} type="button" className={css.paletteSwatch}
++        aria-label={`Use ${color}`} title={color} style={{ background: cssColorForToken(color, namedColorLookup) ?? color }}
++        onClick={() => dispatch({ type: "SET_CREATION_STROKE_COLOR", value: color })} />)}
++    </div>;
++    const toolDef = TOOL_BUTTONS.find((button) => button.mode === id);
++    return toolDef ? renderStandardButton(toolDef) : null;
++  };
++
++  const finishToolbarDrag = (clientX: number, clientY: number) => {
++    if (dragTimer.current) clearTimeout(dragTimer.current);
++    if (!dragReady.current) return;
++    dragReady.current = false;
++    setDragPoint(null);
++    const edge = 90;
++    const dock = clientX < edge ? "left" : clientX > window.innerWidth - edge ? "right"
++      : clientY < edge ? "top" : clientY > window.innerHeight - edge ? "bottom" : "floating";
++    const centerX = dock === "floating" ? clientX + dragOffset.current.x : clientX;
++    const centerY = dock === "floating" ? clientY + dragOffset.current.y : clientY;
++    updateToolbarSettings({ dock, x: Math.max(0, Math.min(1, centerX / window.innerWidth)), y: Math.max(0, Math.min(1, centerY / window.innerHeight)) });
++  };
++
++  const toolbarPosition = dragPoint
++    ? { left: dragPoint.x, top: dragPoint.y }
++    : settings.toolbar.dock === "left" ? { left: 12, top: `${settings.toolbar.y * 100}%` }
++      : settings.toolbar.dock === "right" ? { right: 12, top: `${settings.toolbar.y * 100}%` }
++        : settings.toolbar.dock === "top" ? { top: 60, left: `${settings.toolbar.x * 100}%` }
++          : settings.toolbar.dock === "bottom" ? { bottom: 12, left: `${settings.toolbar.x * 100}%` }
++            : { left: `${settings.toolbar.x * 100}%`, top: `${settings.toolbar.y * 100}%` };
++
+   const renderBucketButton = () => {
+     const mode = "addBucket" as const;
+     const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
+@@ -314,6 +456,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -771,12 +1233,51 @@ index a3293df..ecc07a9 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -342,8 +382,14 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +478,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+     const buttonTitle = unsupported
+       ? `${title}\n${capability.reason}`
+       : title;
+-    const nextMode = resolveToolbarToolMode(toolMode, mode);
++    const nextMode = embedded ? mode : resolveToolbarToolMode(toolMode, mode);
+     const isActive = toolMode === mode;
+ 
+     return (
+@@ -342,8 +499,44 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
 -  return (
 -    <div className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome">
++  if (embedded) return <div data-diagram-tools data-dock={dragPoint ? "floating" : settings.toolbar.dock} style={toolbarPosition}>
++    <button type="button" className={css.toolbarGrip} aria-label="Move toolbar" title="Hold and drag toolbar"
++      onPointerDown={(event) => {
++        event.currentTarget.setPointerCapture(event.pointerId);
++        const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
++        dragOffset.current = bounds ? { x: bounds.left + bounds.width / 2 - event.clientX, y: bounds.top + bounds.height / 2 - event.clientY } : { x: 0, y: 0 };
++        dragTimer.current = setTimeout(() => {
++          dragReady.current = true;
++          setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y });
++        }, 350);
++      }}
++      onPointerMove={(event) => { if (dragReady.current) setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y }); }}
++      onPointerUp={(event) => finishToolbarDrag(event.clientX, event.clientY)}
++      onPointerCancel={() => { if (dragTimer.current) clearTimeout(dragTimer.current); dragReady.current = false; setDragPoint(null); }}>
++      ⋮⋮
++    </button>
++    <div ref={toolbarRef} className={css.embeddedTools} onWheel={(event) => {
++      const strip = toolbarRef.current;
++      if (!strip) return;
++      if (settings.toolbar.dock === "top" || settings.toolbar.dock === "bottom") strip.scrollLeft += event.deltaX || event.deltaY;
++      else strip.scrollTop += event.deltaY || event.deltaX;
++      event.preventDefault();
++    }}>
++      {settings.toolbar.items.map((item, index) => item.kind === "separator"
++        ? <div key={index} className={css.separator} />
++        : item.kind === "spacer" ? <div key={index} className={css.embeddedSpacer} />
++          : <div key={index} className={css.embeddedItem}>{renderEmbeddedTool(item.id)}</div>)}
++    </div>
++  </div>;
++
 +  const toolbar = (
 +    <div ref={toolbarRef} className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome"
 +      onWheel={embedded ? (event) => {
@@ -788,7 +1289,7 @@ index a3293df..ecc07a9 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +400,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +547,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -802,7 +1303,7 @@ index a3293df..ecc07a9 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +416,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +563,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -811,16 +1312,11 @@ index a3293df..ecc07a9 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +441,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +588,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
-+  if (!embedded) return toolbar;
-+  return (
-+    <div data-diagram-tools>
-+      {toolbar}
-+    </div>
-+  );
++  return toolbar;
  }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.module.css b/packages/app/src/ui/ToolbarToolPopup.module.css
 index b12fedb..d4f1f6b 100644
@@ -887,7 +1383,7 @@ index b12fedb..d4f1f6b 100644
    text-align: center;
  }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
-index 8aeb413..baa3a6f 100644
+index 8aeb413..50d346d 100644
 --- a/packages/app/src/ui/ToolbarToolPopup.tsx
 +++ b/packages/app/src/ui/ToolbarToolPopup.tsx
 @@ -1,4 +1,5 @@
@@ -897,7 +1393,7 @@ index 8aeb413..baa3a6f 100644
  import css from "./ToolbarToolPopup.module.css";
  
  export function ToolbarToolPopup({
-@@ -17,6 +18,28 @@ export function ToolbarToolPopup({
+@@ -17,6 +18,35 @@ export function ToolbarToolPopup({
    popupClassName?: string;
  }) {
    const rootRef = useRef<HTMLDivElement | null>(null);
@@ -910,9 +1406,16 @@ index 8aeb413..baa3a6f 100644
 +      const anchor = rootRef.current?.getBoundingClientRect();
 +      const popup = popupRef.current;
 +      if (!anchor || !popup) return;
++      const dock = rootRef.current?.closest("[data-diagram-tools]")?.getAttribute("data-dock");
++      const left = dock === "left" ? anchor.right + 8
++        : dock === "right" ? anchor.left - popup.offsetWidth - 8
++          : anchor.left;
++      const top = dock === "left" || dock === "right"
++        ? anchor.top - 8
++        : anchor.bottom + popup.offsetHeight + 8 > window.innerHeight ? anchor.top - popup.offsetHeight - 4 : anchor.bottom + 4;
 +      setPopupPosition({
-+        left: Math.max(8, Math.min(anchor.left, window.innerWidth - popup.offsetWidth - 8)),
-+        top: anchor.bottom + 4
++        left: Math.max(8, Math.min(left, window.innerWidth - popup.offsetWidth - 8)),
++        top: Math.max(8, Math.min(top, window.innerHeight - popup.offsetHeight - 8))
 +      });
 +    }
 +    positionPopup();
@@ -926,7 +1429,7 @@ index 8aeb413..baa3a6f 100644
  
    useEffect(() => {
      if (!open) {
-@@ -28,7 +51,7 @@ export function ToolbarToolPopup({
+@@ -28,7 +58,7 @@ export function ToolbarToolPopup({
        if (!target) {
          return;
        }
@@ -935,7 +1438,7 @@ index 8aeb413..baa3a6f 100644
          onClose();
        }
      }
-@@ -55,15 +78,18 @@ export function ToolbarToolPopup({
+@@ -55,15 +85,18 @@ export function ToolbarToolPopup({
    return (
      <div className={css.root} ref={rootRef}>
        {children}
@@ -957,7 +1460,7 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..892a29f 100644
+index 4e22ccf..42be929 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -67,8 +67,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
@@ -1202,7 +1705,28 @@ index 4e22ccf..892a29f 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3223,9 +3388,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3312,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+         startWorld: world,
+         currentWorld: world,
+         additive: additiveSelection,
+-        baseSelectedIds: additiveSelection ? [...selectedElementIds] : []
++        baseSelectedIds: additiveSelection ? [...selectedElementIds] : [],
++        shape: toolMode === "lasso" ? useSettingsStore.getState().settings.toolbar.lassoShape : "rectangle",
++        points: [world]
+       };
+       setDragState(nextMarquee);
+       setMarqueeDraft(nextMarquee);
+@@ -3171,7 +3338,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+       setDragState,
+       scopeOverlay,
+       snapshot.source,
+-      source
++      source,
++      toolMode
+     ]
+   );
+ 
+@@ -3223,9 +3391,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      suppressNextBackgroundClickRef,
      svgResult,
      setDragState,
@@ -1215,7 +1739,16 @@ index 4e22ccf..892a29f 100644
      snapshot,
      source,
      setWarning,
-@@ -3974,6 +4142,53 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3913,6 +4084,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+         onHoverChange={(id: string | null) => { dispatch({ type: "SET_HOVERED_ELEMENT", id }); }}
+         nodePositionLinks={nodePositionLinks}
+         marqueeBounds={marqueeBounds}
++        marqueeShape={marqueeDraft?.shape ?? "rectangle"}
++        marqueePoints={marqueeDraft && svgResult ? marqueeDraft.points.map((point) => worldToSvgPoint(point, svgResult.viewBox)) : []}
+         selectionBoxes={selectionBoxes}
+         adornmentHighlightBoxes={adornmentHighlightBoxes}
+         selectedAdornmentConnectors={selectedAdornmentConnectors}
+@@ -3974,6 +4147,53 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -1269,6 +1802,64 @@ index 4e22ccf..892a29f 100644
        {equationModalTarget ? (
          <Suspense fallback={null}>
            <EquationModal
+diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
+index f0ff59f..4906b42 100644
+--- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
++++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
+@@ -45,7 +45,7 @@ import type {
+   TextSelectionOverlay,
+   TextSelectionOverlayBox
+ } from "./types";
+-import type { SvgBounds, WorldPoint } from "../coords/types";
++import type { SvgBounds, SvgPoint, WorldPoint } from "../coords/types";
+ import { fmt, worldToSvgY, type RulerTick, type VisibleRanges } from "./geometry";
+ import { CanvasContextMenu } from "../CanvasContextMenu";
+ import { RenderedTooltip } from "../RenderedTooltip";
+@@ -132,6 +132,8 @@ type CanvasPanelViewProps = {
+   onHoverChange: (id: string | null) => void;
+   nodePositionLinks: readonly NodePositionLinkDisplay[];
+   marqueeBounds: SvgBounds | null;
++  marqueeShape: "freehand" | "ellipse" | "rectangle";
++  marqueePoints: SvgPoint[];
+   selectionBoxes: readonly SelectionBoxDisplay[];
+   adornmentHighlightBoxes: readonly AdornmentHighlightBox[];
+   selectedAdornmentConnectors: readonly AdornmentConnectorDisplay[];
+@@ -263,6 +265,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+     onHoverChange,
+     nodePositionLinks,
+     marqueeBounds,
++    marqueeShape,
++    marqueePoints,
+     selectionBoxes,
+     adornmentHighlightBoxes,
+     selectedAdornmentConnectors,
+@@ -681,7 +685,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+                   previewArrowPoints={previewArrowPoints}
+                 />
+ 
+-                <HitRegionLayer
++                <g pointerEvents={toolMode === "lasso" ? "none" : undefined}><HitRegionLayer
+                   hitRegions={hitRegions}
+                   hoveredElementId={hoveredElementId}
+                   toolMode={toolMode}
+@@ -692,7 +696,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+                   onElementContextMenu={onElementContextMenu}
+                   onElementDoubleClick={onElementDoubleClick}
+                   onHoverChange={onHoverChange}
+-                />
++                /></g>
+ 
+                 <NodePositionLinkOverlay
+                   links={nodePositionLinks}
+@@ -701,6 +705,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+ 
+                 <SelectionOverlay
+                   marqueeBounds={marqueeBounds}
++                  marqueeShape={marqueeShape}
++                  marqueePoints={marqueePoints}
+                   selectionBoxes={selectionBoxes}
+                   adornmentHighlightBoxes={adornmentHighlightBoxes}
+                   adornmentConnectors={selectedAdornmentConnectors}
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
 index 0000000..22aee53
@@ -1567,11 +2158,163 @@ index a7b0a7e..61a3c8e 100644
  function polylineLength(points: readonly WorldPoint[]): number {
    let length = 0;
    for (let i = 1; i < points.length; i += 1) {
+diff --git a/packages/app/src/ui/canvas-panel/overlays.tsx b/packages/app/src/ui/canvas-panel/overlays.tsx
+index 13b3ad2..6174979 100644
+--- a/packages/app/src/ui/canvas-panel/overlays.tsx
++++ b/packages/app/src/ui/canvas-panel/overlays.tsx
+@@ -1,6 +1,6 @@
+ import { Fragment, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactElement } from "react";
+ import type { EditHandle, NodeAnchorTarget } from "tikz-editor/semantic/types";
+-import type { WorldPoint } from "../coords/types";
++import type { SvgPoint, WorldPoint } from "../coords/types";
+ import type { ResizeRole } from "tikz-editor/edit/actions";
+ import type { SnapLine } from "tikz-editor/edit/snapping";
+ import type { SvgViewBox } from "tikz-editor/svg/types";
+@@ -714,6 +714,7 @@ export function HitRegionLayer({
+         const cursor =
+           cursorByTargetId
+             ? cursorOverride ?? "default"
++          : toolMode === "erase" ? "crosshair"
+           : toolMode === "select"
+             ? region.shape === "rect" && region.matrixEdgeSelection
+               ? region.matrixEdgeSelection.cursor
+@@ -732,7 +733,7 @@ export function HitRegionLayer({
+         const className = [css.hitRegion, isHovered ? css.hitRegionHovered : ""].filter(Boolean).join(" ");
+         const bucketUsesFillHitArea = toolMode === "addBucket" && shouldUseBucketFillHitArea(region);
+         const pointerEvents =
+-          toolMode === "select"
++          toolMode === "select" || toolMode === "erase"
+             ? region.pointerMode === "stroke"
+               ? "stroke"
+               : region.shape === "rect"
+@@ -751,7 +752,7 @@ export function HitRegionLayer({
+               : "none";
+ 
+         const onEnter = () => {
+-          if (toolMode === "select") {
++          if (toolMode === "select" || toolMode === "erase") {
+             onHoverChange(region.targetId);
+             return;
+           }
+@@ -760,7 +761,7 @@ export function HitRegionLayer({
+           }
+         };
+         const onLeave = () => {
+-          if (toolMode === "select" || toolMode === "addBucket") onHoverChange(null);
++          if (toolMode === "select" || toolMode === "erase" || toolMode === "addBucket") onHoverChange(null);
+         };
+ 
+         if (region.shape === "path") {
+@@ -901,12 +902,16 @@ function shouldUseBucketFillHitArea(region: HitRegion): boolean {
+ 
+ export function SelectionOverlay({
+   marqueeBounds,
++  marqueeShape,
++  marqueePoints,
+   selectionBoxes,
+   adornmentHighlightBoxes,
+   adornmentConnectors,
+   selectionStrokeWidth
+ }: {
+   marqueeBounds: AdornmentHighlightBox["bounds"] | null;
++  marqueeShape: "freehand" | "ellipse" | "rectangle";
++  marqueePoints: SvgPoint[];
+   selectionBoxes: ReadonlyArray<SelectionBoxDisplay>;
+   adornmentHighlightBoxes: ReadonlyArray<AdornmentHighlightBox>;
+   adornmentConnectors: ReadonlyArray<AdornmentConnectorDisplay>;
+@@ -969,7 +974,21 @@ export function SelectionOverlay({
+             strokeWidth={selectionStrokeWidth}
+           />
+         ))}
+-        {marqueeBounds && (
++        {marqueeBounds && marqueeShape === "freehand" && marqueePoints.length > 1 && <polygon
++          className={css.marqueeRect}
++          points={marqueePoints.map((point) => `${point.x},${point.y}`).join(" ")}
++          fill="none"
++          strokeWidth={selectionStrokeWidth}
++        />}
++        {marqueeBounds && marqueeShape === "ellipse" && <ellipse
++          className={css.marqueeRect}
++          cx={(marqueeBounds.minX + marqueeBounds.maxX) / 2}
++          cy={(marqueeBounds.minY + marqueeBounds.maxY) / 2}
++          rx={Math.max(0.001, (marqueeBounds.maxX - marqueeBounds.minX) / 2)}
++          ry={Math.max(0.001, (marqueeBounds.maxY - marqueeBounds.minY) / 2)}
++          strokeWidth={selectionStrokeWidth}
++        />}
++        {marqueeBounds && marqueeShape === "rectangle" && (
+           <rect
+             className={css.marqueeRect}
+             x={marqueeBounds.minX}
+diff --git a/packages/app/src/ui/canvas-panel/scope-overlay.ts b/packages/app/src/ui/canvas-panel/scope-overlay.ts
+index 0766ca9..1c23b82 100644
+--- a/packages/app/src/ui/canvas-panel/scope-overlay.ts
++++ b/packages/app/src/ui/canvas-panel/scope-overlay.ts
+@@ -228,19 +228,48 @@ export function resolveScopeAwareMarqueeSelection(input: {
+   selectionBounds: SvgBounds;
+   sourceBoundsById: SourceBoundsMap;
+   scopeOverlay: ScopeOverlayIndex;
++  shape?: "freehand" | "ellipse" | "rectangle";
++  points?: SvgPoint[];
+ }): string[] {
+-  const { selectionBounds, sourceBoundsById, scopeOverlay } = input;
++  const { selectionBounds, sourceBoundsById, scopeOverlay, shape = "rectangle", points = [] } = input;
+   const selectedScopeIds = new Set<string>();
+ 
++  const containsBounds = (bounds: SvgBounds): boolean => {
++    if (!boundsContainedWithin(bounds, selectionBounds)) return false;
++    if (shape === "rectangle") return true;
++    const corners = [
++      [bounds.minX, bounds.minY], [bounds.minX, bounds.maxY],
++      [bounds.maxX, bounds.minY], [bounds.maxX, bounds.maxY]
++    ];
++    if (shape === "ellipse") {
++      const cx = (selectionBounds.minX + selectionBounds.maxX) / 2;
++      const cy = (selectionBounds.minY + selectionBounds.maxY) / 2;
++      const rx = (selectionBounds.maxX - selectionBounds.minX) / 2;
++      const ry = (selectionBounds.maxY - selectionBounds.minY) / 2;
++      return rx > 0 && ry > 0 && corners.every(([x, y]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1);
++    }
++    if (points.length < 3) return false;
++    // Franklin's PNPOLY crossing test: https://wrfranklin.org/Research/Short_Notes/pnpoly.html
++    return corners.every(([x, y]) => {
++      let inside = false;
++      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
++        const a = points[i];
++        const b = points[j];
++        if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
++      }
++      return inside;
++    });
++  };
++
+   for (const [scopeId, bounds] of scopeOverlay.boundsByScopeId) {
+-    if (boundsContainedWithin(bounds, selectionBounds)) {
++    if (containsBounds(bounds)) {
+       selectedScopeIds.add(scopeId);
+     }
+   }
+ 
+   const selectedIds: string[] = [];
+   for (const [sourceId, bounds] of sourceBoundsById) {
+-    if (!boundsContainedWithin(bounds, selectionBounds)) {
++    if (!containsBounds(bounds)) {
+       continue;
+     }
+     const ancestors = scopeOverlay.ancestorScopeIdsBySourceId.get(sourceId) ?? [];
 diff --git a/packages/app/src/ui/canvas-panel/types.ts b/packages/app/src/ui/canvas-panel/types.ts
-index dac6b0b..20eb1bf 100644
+index dac6b0b..c8774b0 100644
 --- a/packages/app/src/ui/canvas-panel/types.ts
 +++ b/packages/app/src/ui/canvas-panel/types.ts
-@@ -269,6 +269,8 @@ export type PendingBezier = {
+@@ -217,6 +217,8 @@ export type DragState =
+       currentWorld: WorldPoint;
+       additive: boolean;
+       baseSelectedIds: string[];
++      shape: "freehand" | "ellipse" | "rectangle";
++      points: WorldPoint[];
+     }
+   | {
+       kind: "tool-create";
+@@ -269,6 +271,8 @@ export type PendingBezier = {
    endWorld: WorldPoint;
  };
  
@@ -1647,11 +2390,85 @@ index de0ccae..37c85eb 100644
  
    return {
      toolPreview
+diff --git a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
+index 0c9bdf4..1b63e0e 100644
+--- a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
++++ b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
+@@ -8,6 +8,7 @@ import {
+   worldBounds,
+   worldTransform,
+   clientPoint,
++  svgBounds,
+   pt,
+   px
+ } from "tikz-editor/coords/index";
+@@ -156,14 +157,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+       world: WorldPoint,
+       currentSvg: { viewBox: SvgViewBox }
+     ) {
+-      const selection = boundsFromPoints(
+-        worldToSvgPoint(drag.startWorld, currentSvg.viewBox),
+-        worldToSvgPoint(world, currentSvg.viewBox)
+-      );
++      const svgPoints = drag.points.map((point) => worldToSvgPoint(point, currentSvg.viewBox));
++      if (drag.shape === "freehand") svgPoints.push(worldToSvgPoint(world, currentSvg.viewBox));
++      const selection = drag.shape === "freehand"
++        ? svgBounds(
++          pt(Math.min(...svgPoints.map((point) => point.x))),
++          pt(Math.min(...svgPoints.map((point) => point.y))),
++          pt(Math.max(...svgPoints.map((point) => point.x))),
++          pt(Math.max(...svgPoints.map((point) => point.y)))
++        )
++        : boundsFromPoints(worldToSvgPoint(drag.startWorld, currentSvg.viewBox), worldToSvgPoint(world, currentSvg.viewBox));
+       const hitIds = resolveScopeAwareMarqueeSelection({
+         selectionBounds: selection,
+         sourceBoundsById: sourceBoundsSvgRef.current,
+-        scopeOverlay
++        scopeOverlay,
++        shape: drag.shape,
++        points: svgPoints
+       });
+       const nextIds = drag.additive
+         ? [...new Set([...drag.baseSelectedIds, ...hitIds])]
+@@ -476,8 +485,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+         setNodeAnchorOverlay(null);
+         setDragTooltip(null);
+         drag.currentWorld = world;
++        if (drag.shape === "freehand" && distanceSquared(world, drag.points[drag.points.length - 1]) > 0.25) drag.points.push(world);
+         setMarqueeDraft({ ...drag });
+-        if (distanceSquared(world, drag.startWorld) > 0.25) {
++        if (distanceSquared(world, drag.startWorld) > 0.25 || drag.points.length > 2) {
+           commitMarqueeSelection(drag, world, currentSvg);
+         }
+         setSnapLines([]);
+@@ -940,7 +950,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+         setDragTooltip(null);
+         const finalWorld = world ?? drag.currentWorld;
+         const deltaSq = distanceSquared(finalWorld, drag.startWorld);
+-        const isClickOnly = deltaSq <= 0.25;
++        const isClickOnly = deltaSq <= 0.25 && drag.points.length <= 2;
+ 
+         if (isClickOnly) {
+           if (!drag.additive) {
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
-index c69a45a..81e67af 100644
+index c69a45a..3ae414d 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
-@@ -445,7 +445,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -389,6 +389,13 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+   const onElementPointerDown = useCallback(
+     (event: ReactPointerEvent<SVGElement>, targetId: string, region?: HitRegion) => {
+       if (!svgResult) return;
++      if (toolMode === "erase" && event.button === 0) {
++        event.preventDefault();
++        event.stopPropagation();
++        const elementId = typeof region?.sourceId === "string" ? region.sourceId : targetId;
++        dispatch({ type: "APPLY_EDIT_ACTION", action: { kind: "deleteElement", elementId } });
++        return;
++      }
+       if (toolMode === "addBucket") {
+         if (event.button !== 0) {
+           return;
+@@ -445,7 +452,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
          return;
        }
  
@@ -1663,7 +2480,7 @@ index c69a45a..81e67af 100644
        if (!additiveSelection && textTarget) {
          const draggedIds = alreadySelected && selectedElementIds.size > 0 ? [...selectedElementIds] : [resolvedTargetId];
          const supportsDeferredTextDrag = snapshot.editHandles.some(
-@@ -569,6 +572,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -569,6 +579,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        startElementDrag,
        scopeOverlay,
        snapshot.editHandles,
@@ -1671,8 +2488,29 @@ index c69a45a..81e67af 100644
        svgResult,
        toolMode,
        viewportRef
+diff --git a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
+index 8078a5d..cb93720 100644
+--- a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
++++ b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
+@@ -636,9 +636,13 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+ 
+   const marqueeBounds = useMemo(() => {
+     if (!svgResult || !marqueeDraft) return null;
+-    return boundsFromPoints(
+-      worldToSvgPoint(marqueeDraft.startWorld, svgResult.viewBox),
+-      worldToSvgPoint(marqueeDraft.currentWorld, svgResult.viewBox)
++    const points = marqueeDraft.shape === "freehand" ? marqueeDraft.points : [marqueeDraft.startWorld, marqueeDraft.currentWorld];
++    const svgPoints = points.map((point) => worldToSvgPoint(point, svgResult.viewBox));
++    return svgBounds(
++      pt(Math.min(...svgPoints.map((point) => point.x))),
++      pt(Math.min(...svgPoints.map((point) => point.y))),
++      pt(Math.max(...svgPoints.map((point) => point.x))),
++      pt(Math.max(...svgPoints.map((point) => point.y)))
+     );
+   }, [marqueeDraft, svgResult]);
+ 
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b..e5a72a1 100644
+index 709cc1b..7b6e649 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 @@ -13,6 +13,7 @@ import { isToolCreateMode } from "../tool-config";
@@ -1736,18 +2574,36 @@ index 709cc1b..e5a72a1 100644
            toolMode === "addMatrix" ||
            (isToolCreateMode(toolMode) && toolMode !== "addFreehand"));
  
+@@ -223,7 +243,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+         suppressNextBackgroundClickRef.current = false;
+         return;
+       }
+-      if (toolMode !== "select" || event.target !== event.currentTarget) {
++      if ((toolMode !== "select" && toolMode !== "lasso") || event.target !== event.currentTarget) {
+         return;
+       }
+       if (event.shiftKey || event.ctrlKey || event.metaKey) {
 @@ -267,8 +287,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
 -      const canPan = event.button === 1 || (event.button === 0 && event.altKey);
 +      const canPan = event.button === 1 || (event.button === 0 && event.altKey) ||
-+        (event.pointerType === "touch" && toolMode !== "select");
++        (event.pointerType === "touch" && toolMode !== "select" && toolMode !== "lasso");
        if (canPan) {
 +        setFitToContentModeActive(false);
          const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
          setDragState({
            kind: "pan",
+@@ -280,7 +302,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+         return;
+       }
+ 
+-      if (event.button === 0 && toolMode !== "select") {
++      if (event.button === 0 && toolMode !== "select" && toolMode !== "lasso" && toolMode !== "erase") {
+         const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
+         const world = clientToWorldPoint(clientPoint, interactionSvgRef.current, svgResult.viewBox);
+         if (!world) {
 @@ -351,6 +373,37 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          setToolCursorWorld(resolvedStart);
          event.preventDefault();
@@ -1821,6 +2677,15 @@ index 709cc1b..e5a72a1 100644
              at: nodeAt
            });
            if (!ok.sourceChanged) {
+@@ -609,7 +672,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+         return;
+       }
+ 
+-      if (toolMode === "select" && event.button === 0 && event.target === event.currentTarget) {
++      if ((toolMode === "select" || toolMode === "lasso") && event.button === 0 && event.target === event.currentTarget) {
+         if (event.pointerType === "touch") {
+           const pending = pendingTouchViewportRef.current;
+           if (!event.isPrimary || (pending && pending.pointerId !== event.pointerId)) {
 @@ -657,6 +720,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        logSnapDebug,
        queueSelectionForAddedElement,
@@ -1838,11 +2703,29 @@ index 709cc1b..e5a72a1 100644
        toolMode,
        toolCursorWorld,
        snapGuideInput,
+@@ -704,7 +770,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+       if (event.button !== 0 || event.target !== event.currentTarget) {
+         return;
+       }
+-      if (toolMode !== "select") {
++      if (toolMode !== "select" && toolMode !== "lasso") {
+         if (toolMode !== "magnify") {
+           onInteractionPointerDown(event as unknown as ReactPointerEvent<SVGSVGElement>);
+         }
 diff --git a/packages/app/src/ui/capabilities.ts b/packages/app/src/ui/capabilities.ts
-index b20b72b..c9deb6f 100644
+index b20b72b..0baae5b 100644
 --- a/packages/app/src/ui/capabilities.ts
 +++ b/packages/app/src/ui/capabilities.ts
-@@ -34,6 +34,10 @@ const TOOL_CHECKS: Record<ToolMode, readonly CapabilityCheck[]> = {
+@@ -26,6 +26,8 @@ const TOOL_CHECKS: Record<ToolMode, readonly CapabilityCheck[]> = {
+   select: [
+     { feature: "path_statement", layers: ["parser", "semantic", "svg", "edit"], label: "selection/move pipeline" }
+   ],
++  lasso: [],
++  erase: [],
+   magnify: [],
+   addBucket: [
+     { feature: "options_structured", layers: ["edit"], label: "fill option editing" }
+@@ -34,6 +36,10 @@ const TOOL_CHECKS: Record<ToolMode, readonly CapabilityCheck[]> = {
      { feature: "path_statement", layers: ["parser", "semantic", "svg"], label: "node statement pipeline" },
      { feature: "svg_text", layers: ["semantic", "svg"], label: "text node rendering" }
    ],
@@ -1853,7 +2736,7 @@ index b20b72b..c9deb6f 100644
    addMatrix: [
      { feature: "matrix_node", layers: ["parser", "semantic", "svg", "edit"], label: "matrix of nodes pipeline" }
    ],
-@@ -95,6 +99,9 @@ const TOOL_CHECKS: Record<ToolMode, readonly CapabilityCheck[]> = {
+@@ -95,6 +101,9 @@ const TOOL_CHECKS: Record<ToolMode, readonly CapabilityCheck[]> = {
    ],
    addCircle: [
      { feature: "shape_circle", layers: ["parser", "semantic", "svg"], label: "circle shape rendering" }
@@ -2061,7 +2944,7 @@ index 4e8f0b6..4f6458b 100644
        const { from, to: normalizedTo } = normalizeRange(d.from, d.to, docLength);
        let to = normalizedTo;
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870..8c09bbe 100644
+index 0101870..52d01a3 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
 @@ -2,6 +2,7 @@ import React from "react";
@@ -2103,7 +2986,7 @@ index 0101870..8c09bbe 100644
  function BucketIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-@@ -166,7 +184,7 @@ export type ToolButtonDef = {
+@@ -166,15 +184,19 @@ export type ToolButtonDef = {
    separatorBefore?: true;
  };
  
@@ -2112,8 +2995,11 @@ index 0101870..8c09bbe 100644
  
  export const TOOL_COLOR_OPTIONS = BASIC_PICKER_COLORS;
  
-@@ -175,6 +193,8 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
+ // Tool buttons in display order (bucket moved to end)
+ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
    { mode: "select",     label: "Select",   title: "Select (V)",   shortcut: "v", icon: SelectIcon },
++  { mode: "lasso",      label: "Lasso",    title: "Lasso selection",       icon: PathIcon },
++  { mode: "erase",      label: "Eraser",   title: "Erase an element",      icon: RectIcon },
    { mode: "magnify",    label: "Magnify",  title: "Magnify (M)",  shortcut: "m", icon: MagnifyIcon },
    { mode: "addNode",    label: "Node",     title: "Node (N)",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
 +  { mode: "addPoint",   label: "Point",    title: "Point",                    icon: PointIcon },
@@ -2121,7 +3007,7 @@ index 0101870..8c09bbe 100644
    { mode: "addShape",   label: "Shape",    title: "Shape (S)",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
    { mode: "addMatrix",  label: "Matrix",   title: "Matrix",                      icon: MatrixIcon,   popupKind: "matrix-picker" },
    { mode: "addLine",    label: "Line",     title: "Line (L)",     shortcut: "l", icon: LineIcon,     separatorBefore: true },
-@@ -186,6 +206,7 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
+@@ -186,6 +208,7 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
    { mode: "addRect",    label: "Rect",     title: "Rectangle (R)", shortcut: "r", icon: RectIcon },
    { mode: "addEllipse", label: "Ellipse",  title: "Ellipse (E)",  shortcut: "e", icon: EllipseIcon },
    { mode: "addCircle",  label: "Circle",   title: "Circle (C)",   shortcut: "c", icon: CircleIcon },
@@ -2129,7 +3015,7 @@ index 0101870..8c09bbe 100644
    { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
  ];
  
-@@ -214,7 +235,8 @@ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
+@@ -214,7 +237,8 @@ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
  const TOOL_CREATE_MODE_SET = new Set<ToolCreateMode>(TOOL_CREATE_MODES);
  
  export function toolModeFromShortcut(key: string): ToolMode | null {
@@ -2139,7 +3025,7 @@ index 0101870..8c09bbe 100644
  }
  
  export function resolveToolbarToolMode(currentMode: ToolMode, clickedMode: ToolMode): ToolMode {
-@@ -262,6 +284,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -262,6 +286,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addEllipse: "Hold Shift to constrain to a circle",
    addGrid: "Hold Shift to constrain to a square",
    addCircle: "Drag from center to edge",
@@ -2147,7 +3033,7 @@ index 0101870..8c09bbe 100644
    addPath: "Click to add points, drag to bend. Click start to close, or double-click/press Enter/Esc to finish.",
    addFreehand: "Press and drag to draw",
    addBezier: "Two drags: endpoints then curve",
-@@ -270,10 +293,12 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -270,14 +295,16 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addShape: "Drag to set size",
    addMatrix: "Pick rows/columns, then click to place",
    addNode: "Click to place text",
@@ -2161,6 +3047,11 @@ index 0101870..8c09bbe 100644
  }
  
  export function toolSupportsStroke(mode: ToolMode): boolean {
+-  return mode !== "select" && mode !== "magnify" && mode !== "addBucket" && mode !== "addMatrix";
++  return mode !== "select" && mode !== "lasso" && mode !== "erase" && mode !== "magnify" && mode !== "addBucket" && mode !== "addMatrix";
+ }
+ 
+ export function toolSupportsFill(mode: ToolMode): boolean {
 diff --git a/packages/core/src/edit/actions/resize-element.ts b/packages/core/src/edit/actions/resize-element.ts
 index 07f3731..bd1a575 100644
 --- a/packages/core/src/edit/actions/resize-element.ts
