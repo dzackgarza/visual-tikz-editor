@@ -1,3 +1,19 @@
+diff --git a/src/parser.mjs b/src/parser.mjs
+index 06a13bd..dd16833 100644
+--- a/src/parser.mjs
++++ b/src/parser.mjs
+@@ -563,8 +563,9 @@ export class Parser {
+             label = "";
+             let whitespace = "";
+             while (true) {
+-                label += this.code.match(/^\S+/)[0];
+-                this.code = this.code.replace(/^\S+/, "");
++                const token = this.code.match(/^(?:(?!\\end\{tikzcd\})\S)+/)[0];
++                label += token;
++                this.code = this.code.slice(token.length);
+                 whitespace = this.eat_whitespace() || "";
+                 if (!this.is_finished() && !this.check(this.col_delim) && !this.check("\\\\")
+                     && !this.check("\\ar[") && !this.check("\\arrow[") && !this.check("\\end")
 diff --git a/src/ui.mjs b/src/ui.mjs
 index 1c7718a..fe2fa02 100644
 --- a/src/ui.mjs
@@ -367,7 +383,7 @@ index 1c7718a..fe2fa02 100644
          UI.display_error("KaTeX failed to load.");
 diff --git a/src/zettlr-host.css b/src/zettlr-host.css
 new file mode 100644
-index 0000000..4b06695
+index 0000000..72f7f70
 --- /dev/null
 +++ b/src/zettlr-host.css
 @@ -0,0 +1,104 @@
