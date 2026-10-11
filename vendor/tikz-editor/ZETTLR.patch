@@ -2023,6 +2023,92 @@ index 709cc1b..4275482 100644
        toolMode,
        toolCursorWorld,
        snapGuideInput,
+diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
+index 43f0125..a3d654c 100644
+--- a/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
++++ b/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
+@@ -175,6 +175,8 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+     if (!viewport) return;
+ 
+     const activeTouchPointers = new Map<number, ClientPoint>();
++    const activePens = new Set<number>();
++    const ignoredTouches = new Set<number>();
+     let pinchGesture:
+       | {
+           baseScale: number;
+@@ -288,6 +290,21 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+     };
+ 
+     const onPointerDown = (event: PointerEvent) => {
++      if (event.pointerType === "pen") {
++        activePens.add(event.pointerId);
++        for (const id of activeTouchPointers.keys()) ignoredTouches.add(id);
++        activeTouchPointers.clear();
++        pinchGesture = null;
++        clearPendingTouchViewport();
++        if (dragRef.current?.kind === "pan" || dragRef.current?.kind === "marquee") setDragState(null);
++        return;
++      }
++      if (event.pointerType === "touch" && activePens.size > 0) {
++        ignoredTouches.add(event.pointerId);
++        event.preventDefault();
++        event.stopImmediatePropagation();
++        return;
++      }
+       if (event.pointerType !== "touch") {
+         return;
+       }
+@@ -305,6 +322,11 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+     };
+ 
+     const onPointerMove = (event: PointerEvent) => {
++      if (ignoredTouches.has(event.pointerId)) {
++        event.preventDefault();
++        event.stopImmediatePropagation();
++        return;
++      }
+       if (event.pointerType !== "touch" || !activeTouchPointers.has(event.pointerId)) {
+         return;
+       }
+@@ -317,6 +339,12 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+     };
+ 
+     const onPointerUp = (event: PointerEvent) => {
++      activePens.delete(event.pointerId);
++      if (ignoredTouches.delete(event.pointerId)) {
++        event.preventDefault();
++        event.stopImmediatePropagation();
++        return;
++      }
+       if (event.pointerType !== "touch" || !activeTouchPointers.has(event.pointerId)) {
+         return;
+       }
+@@ -329,17 +357,17 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+     };
+ 
+     viewport.addEventListener("wheel", onWheel, { passive: false });
+-    viewport.addEventListener("pointerdown", onPointerDown, { passive: false });
+-    window.addEventListener("pointermove", onPointerMove, { passive: false });
+-    window.addEventListener("pointerup", onPointerUp, { passive: false });
+-    window.addEventListener("pointercancel", onPointerUp, { passive: false });
++    viewport.addEventListener("pointerdown", onPointerDown, { passive: false, capture: true });
++    window.addEventListener("pointermove", onPointerMove, { passive: false, capture: true });
++    window.addEventListener("pointerup", onPointerUp, { passive: false, capture: true });
++    window.addEventListener("pointercancel", onPointerUp, { passive: false, capture: true });
+ 
+     return () => {
+       viewport.removeEventListener("wheel", onWheel);
+-      viewport.removeEventListener("pointerdown", onPointerDown);
+-      window.removeEventListener("pointermove", onPointerMove);
+-      window.removeEventListener("pointerup", onPointerUp);
+-      window.removeEventListener("pointercancel", onPointerUp);
++      viewport.removeEventListener("pointerdown", onPointerDown, true);
++      window.removeEventListener("pointermove", onPointerMove, true);
++      window.removeEventListener("pointerup", onPointerUp, true);
++      window.removeEventListener("pointercancel", onPointerUp, true);
+       activeTouchPointers.clear();
+       pinchGesture = null;
+     };
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 index de737af..bb50208 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
