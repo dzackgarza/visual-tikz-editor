@@ -101,16 +101,52 @@ index 59fab7a8..24322aa9 100644
        },
        {
 diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
-index af9d6c30..182e7c67 100644
+index af9d6c30..d04b4379 100644
 --- a/packages/app/src/app-menu/types.ts
 +++ b/packages/app/src/app-menu/types.ts
-@@ -88,5 +88,5 @@ export const APP_MENU_COMMAND_IDS = {
+@@ -46,4 +46,5 @@ export const APP_MENU_COMMAND_IDS = {
+   DISTRIBUTE_VERTICAL: "edit.distribute-vertical",
+   PATH_SPLIT: "path.split",
++  PATH_SIMPLIFY: "path.simplify",
+   PATH_JOIN: "path.join",
+   PATH_REVERSE: "path.reverse",
+@@ -88,5 +89,5 @@ export const APP_MENU_COMMAND_IDS = {
    TOGGLE_GRID: "view.toggle-grid",
    TOGGLE_TRANSPARENCY_GRID: "view.toggle-transparency-grid",
 -  TOGGLE_INFINITE_CANVAS: "view.toggle-infinite-canvas",
 +  TOGGLE_OUTPUT_BOUNDS: "view.toggle-output-bounds",
    TOGGLE_SNAP_GRID: "view.toggle-snap-grid",
    TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
+diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
+index bc368718..6e9834aa 100644
+--- a/packages/app/src/context-menu/canvas-context-menu.ts
++++ b/packages/app/src/context-menu/canvas-context-menu.ts
+@@ -412,7 +412,11 @@ function buildPathPointSelectionItems(includeFlattenForeach: boolean): readonly
+ }
+ 
+-function buildSingleSelectionItems(includeFlattenForeach: boolean, includePathSubmenu: boolean): readonly AppMenuItem[] {
++function buildSingleSelectionItems(includeFlattenForeach: boolean, includePathSubmenu: boolean, includeSimplifyPath = false): readonly AppMenuItem[] {
+   return [
+     ...buildSelectionCommandItems(includeFlattenForeach),
++    ...(includeSimplifyPath ? [
++      { kind: "command", commandId: APP_MENU_COMMAND_IDS.PATH_SIMPLIFY, label: "Simplify path" } as const,
++      { kind: "separator" } as const
++    ] : []),
+     ...buildSingleSelectionSubmenuItems(includePathSubmenu)
+   ];
+@@ -493,4 +497,5 @@ export function buildCanvasContextMenuDefinition(
+     nodePositioningAction?: "position-relative" | "convert-absolute" | null;
+     includePathSubmenuForSingleSelection?: boolean;
++    includeSimplifyPathForSingleSelection?: boolean;
+     includeFlattenForeach?: boolean;
+     includeMatrixMultiRemoveRow?: boolean;
+@@ -504,5 +509,5 @@ export function buildCanvasContextMenuDefinition(
+   const includeFlattenForeach = options.includeFlattenForeach === true;
+   const includePathSubmenuForSingleSelection = options.includePathSubmenuForSingleSelection === true;
+-  const selectionSingleItems = buildSingleSelectionItems(includeFlattenForeach, includePathSubmenuForSingleSelection);
++  const selectionSingleItems = buildSingleSelectionItems(includeFlattenForeach, includePathSubmenuForSingleSelection, options.includeSimplifyPathForSingleSelection === true);
+   const selectionSingleNodeItems = buildSelectionSingleNodeItems(
+     options.includeEditEquationForSingleNode === true,
 diff --git a/packages/app/src/index.ts b/packages/app/src/index.ts
 index 1672d1d6..6b94a124 100644
 --- a/packages/app/src/index.ts
@@ -564,6 +600,46 @@ index 5818d92b..60cb63aa 100644
 -    setPendingAutoFit(true);
    };
  
+diff --git a/packages/app/src/ui/CanvasContextMenu.tsx b/packages/app/src/ui/CanvasContextMenu.tsx
+index 0e491d69..9c59c4ba 100644
+--- a/packages/app/src/ui/CanvasContextMenu.tsx
++++ b/packages/app/src/ui/CanvasContextMenu.tsx
+@@ -145,13 +145,4 @@ export function CanvasContextMenu({
+   const [inheritedStyle, setInheritedStyle] = useState<ContextMenuInheritedStyle>({});
+ 
+-  useEffect(() => {
+-    if (!open) {
+-      return;
+-    }
+-    setPosition((current) =>
+-      current.x === anchor.x && current.y === anchor.y ? current : anchor
+-    );
+-  }, [anchor, open, target]);
+-
+   useLayoutEffect(() => {
+     if (!open) {
+@@ -165,4 +156,5 @@ export function CanvasContextMenu({
+     }
+ 
++    const containerRect = container.getBoundingClientRect();
+     const nextPosition = clampContextMenuAnchor(
+       anchor,
+@@ -172,6 +164,6 @@ export function CanvasContextMenu({
+       },
+       {
+-        width: container.clientWidth,
+-        height: container.clientHeight
++        width: Math.min(container.clientWidth, window.innerWidth - containerRect.left),
++        height: Math.min(container.clientHeight, window.innerHeight - containerRect.top)
+       }
+     );
+@@ -194,5 +186,5 @@ export function CanvasContextMenu({
+         : nextInheritedStyle
+     );
+-  }, [anchor, containerRef, open, target]);
++  }, [anchor, containerRef, inheritedStyle, open, target]);
+ 
+   useEffect(() => {
 diff --git a/packages/app/src/ui/ColorPicker.module.css b/packages/app/src/ui/ColorPicker.module.css
 index dd74530a..d2302d09 100644
 --- a/packages/app/src/ui/ColorPicker.module.css
@@ -1916,7 +1992,7 @@ index cf4cf2cf..50d8677f 100644
  }
  
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..017b838a 100644
+index 4e22ccfa..e32ab5bb 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -68,6 +68,12 @@ import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useC
@@ -2075,13 +2151,19 @@ index 4e22ccfa..017b838a 100644
 -  );
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
-@@ -1301,5 +1349,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1133,4 +1181,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+     onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
+     onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
++    onSimplifySelectedPath: selectedPathForFit ? () => simplifySelectedPath() : undefined,
+     onOpenEditEquation: handleOpenEditEquationCommand,
+     activeHandleIdOverride: contextMenuHandleIdOverride
+@@ -1301,5 +1350,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
 -    setExpandedDensePathSourceId(null);
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
-@@ -1510,21 +1557,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1510,21 +1558,4 @@ export const CanvasPanel = memo(function CanvasPanel({
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
 -  const densePathSourceIds = useMemo(() => {
@@ -2103,31 +2185,31 @@ index 4e22ccfa..017b838a 100644
 -
    const pathSelectionHint = useMemo(() => {
      if (
-@@ -1542,5 +1572,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1542,5 +1573,4 @@ export const CanvasPanel = memo(function CanvasPanel({
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
 -      collapsedDensePathSourceIds,
        parseOptions: editParseOptions
      });
-@@ -1548,5 +1577,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1548,5 +1578,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      activeCanvasDragKind,
      activeSourceScrubSourceId,
 -    collapsedDensePathSourceIds,
      editParseOptions,
      selectedElementIds,
-@@ -1811,5 +1839,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1811,5 +1840,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      selectedElementIds,
 -    collapsedDensePathSourceIds,
      svgResult,
      canvasTransform,
-@@ -1823,5 +1850,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1823,5 +1851,4 @@ export const CanvasPanel = memo(function CanvasPanel({
    selectedElementIdsRef.current = selectedElementIds;
    svgResultRef.current = svgResult;
 -  fitToContentModeActiveRef.current = fitToContentModeActive;
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
-@@ -1863,8 +1889,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1863,8 +1890,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      selectedAddShape,
      freehandDraft,
 -    freehandSmoothingPx,
@@ -2137,7 +2219,7 @@ index 4e22ccfa..017b838a 100644
 +    arcDraft,
      bezierBendDraft,
      canvasTransform
-@@ -1881,7 +1907,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1881,7 +1908,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      tabOrder,
      canvasTransform,
 -    fitToContentModeActive,
@@ -2145,7 +2227,7 @@ index 4e22ccfa..017b838a 100644
 -    setFitToContentModeActive,
      viewportRef,
      canvasTransformRef,
-@@ -1891,9 +1914,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1891,9 +1915,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestToken,
      zoomScaleRequestValue,
 -    activeCanvasDragKind,
@@ -2155,7 +2237,7 @@ index 4e22ccfa..017b838a 100644
 -    lastEditChangeToken,
      MIN_SCALE,
      MAX_SCALE
-@@ -2057,14 +2075,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2057,14 +2076,10 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const appendFreehandSamplePoint = useCallback((point: WorldPoint): WorldPoint[] | null => {
 -    let nextPoints: WorldPoint[] | null = null;
@@ -2176,7 +2258,7 @@ index 4e22ccfa..017b838a 100644
 +    return nextDraft.points;
    }, []);
  
-@@ -2087,12 +2101,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2087,12 +2102,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        setFreehandDraft(null);
        setToolCursorWorld(null);
 -      dispatch({ type: "SET_TOOL_MODE", mode: "select" });
@@ -2191,7 +2273,7 @@ index 4e22ccfa..017b838a 100644
 +    if (interpretation) {
        const firstPoint = draft.points[0];
        const lastPoint = draft.points[draft.points.length - 1];
-@@ -2105,9 +2118,32 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2105,9 +2119,32 @@ export const CanvasPanel = memo(function CanvasPanel({
        const ok = applyActionWithFeedback({
          kind: "pasteStatements",
 -        snippets: [snippet],
@@ -2225,7 +2307,7 @@ index 4e22ccfa..017b838a 100644
 +        });
        }
      } else {
-@@ -2117,6 +2153,92 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2117,6 +2154,92 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft(null);
      setToolCursorWorld(null);
 -    dispatch({ type: "SET_TOOL_MODE", mode: "select" });
@@ -2320,31 +2402,31 @@ index 4e22ccfa..017b838a 100644
 +  }, [canvasTransform.scale, dispatch, freehandSmoothingPx, rangeStartIndex, selectedAnchorIndex, selectedPathForFit, sourceRevision]);
  
    const finalizePathDraft = useCallback(
-@@ -2133,5 +2255,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2133,5 +2256,4 @@ export const CanvasPanel = memo(function CanvasPanel({
          setPathDraft(null);
          setToolCursorWorld(null);
 -        dispatch({ type: "SET_TOOL_MODE", mode: "select" });
          return;
        }
-@@ -2142,5 +2263,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2142,5 +2264,4 @@ export const CanvasPanel = memo(function CanvasPanel({
            setPathDraft(null);
            setToolCursorWorld(null);
 -          dispatch({ type: "SET_TOOL_MODE", mode: "select" });
            return;
          }
-@@ -2159,5 +2279,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2159,5 +2280,4 @@ export const CanvasPanel = memo(function CanvasPanel({
            setPathDraft(null);
            setToolCursorWorld(null);
 -          dispatch({ type: "SET_TOOL_MODE", mode: "select" });
            return;
          }
-@@ -2174,5 +2293,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2174,5 +2294,4 @@ export const CanvasPanel = memo(function CanvasPanel({
        setPathDraft(null);
        setToolCursorWorld(null);
 -      dispatch({ type: "SET_TOOL_MODE", mode: "select" });
      },
      [applyActionWithFeedback, creationStrokeColor, dispatch, setDragState]
-@@ -3065,7 +3183,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3065,7 +3184,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState,
      resolveEditableTextTarget,
 -    densePathSourceIds,
@@ -2352,7 +2434,7 @@ index 4e22ccfa..017b838a 100644
 -    setExpandedDensePathSourceId,
      scopeOverlay,
      focusedScopeId,
-@@ -3148,5 +3263,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3148,5 +3264,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          currentWorld: world,
          additive: additiveSelection,
 -        baseSelectedIds: additiveSelection ? [...selectedElementIds] : []
@@ -2361,7 +2443,7 @@ index 4e22ccfa..017b838a 100644
 +        points: [world]
        };
        setDragState(nextMarquee);
-@@ -3172,5 +3289,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3172,5 +3290,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        scopeOverlay,
        snapshot.source,
 -      source
@@ -2369,33 +2451,33 @@ index 4e22ccfa..017b838a 100644
 +      toolMode
      ]
    );
-@@ -3227,4 +3345,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3227,4 +3346,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      interactionSvgRef,
      pendingBezier,
 +    arcDraft,
 +    setArcDraft,
      snapshot,
      source,
-@@ -3307,4 +3427,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3307,4 +3428,5 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMarqueeDraft,
      selectedElementIds,
 +    activeHandleId,
      applyActionWithFeedback,
      snapshot,
-@@ -3335,6 +3456,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3335,6 +3457,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      svgResult,
      svgResultRef,
 -    fitToContentModeActive,
 -    fitToContentModeActiveRef,
      sourceBoundsSvg,
      sourceBoundsSvgRef,
-@@ -3346,5 +3465,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3346,5 +3466,4 @@ export const CanvasPanel = memo(function CanvasPanel({
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
 -    setFitToContentModeActive
    });
  
-@@ -3450,23 +3568,4 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3450,23 +3569,4 @@ export const CanvasPanel = memo(function CanvasPanel({
    });
  
 -  useEffect(() => {
@@ -2419,7 +2501,7 @@ index 4e22ccfa..017b838a 100644
 -
    useEffect(() => {
      if (toolMode === "select") {
-@@ -3707,13 +3806,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3707,13 +3807,13 @@ export const CanvasPanel = memo(function CanvasPanel({
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
 -  const curveControlStrokeWidth = 1.1 / Math.max(canvasTransform.scale, 1e-3);
@@ -2441,20 +2523,32 @@ index 4e22ccfa..017b838a 100644
 +  const snapStrokeWidth = 1;
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
-@@ -3887,4 +3986,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3820,4 +3920,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+         nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
+         includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
++        includeSimplifyPathForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection === true && selectedPathForFit !== null,
+         includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
+         includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
+@@ -3832,4 +3933,5 @@ export const CanvasPanel = memo(function CanvasPanel({
+       contextMenuState?.nodePositioningAction,
+       contextMenuState?.includePathSubmenuForSingleSelection,
++      selectedPathForFit,
+       contextMenuState?.includeFlattenForeach,
+       contextMenuState?.includeMatrixMultiInsertRowAbove,
+@@ -3887,4 +3989,5 @@ export const CanvasPanel = memo(function CanvasPanel({
          onInteractionPointerLeave={onInteractionPointerLeave}
          gridLines={gridLines}
 +        gridOpacity={gridOpacity}
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
-@@ -3914,4 +4014,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3914,4 +4017,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          nodePositionLinks={nodePositionLinks}
          marqueeBounds={marqueeBounds}
 +        marqueeShape={marqueeDraft?.shape ?? "rectangle"}
 +        marqueePoints={marqueeDraft && svgResult ? marqueeDraft.points.map((point) => worldToSvgPoint(point, svgResult.viewBox)) : []}
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
-@@ -3975,4 +4077,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3975,4 +4080,77 @@ export const CanvasPanel = memo(function CanvasPanel({
          RULER_SIZE={RULER_SIZE}
        />
 +      {selectedPathForFit && !freehandResultOffer ? (
@@ -2465,7 +2559,6 @@ index 4e22ccfa..017b838a 100644
 +            bottom: Math.max(12, window.innerHeight - (viewportRef.current?.getBoundingClientRect().bottom ?? window.innerHeight) + 12)
 +          }}
 +        >
-+          <button type="button" onClick={simplifySelectedPath}>Simplify path</button>
 +          {selectedAnchorIndex !== null ? (
 +            <button type="button" onClick={() => setRangeStart({
 +              sourceId: selectedPathForFit.path.sourceRef.sourceId,
@@ -4422,7 +4515,7 @@ index b20b72be..0baae5b3 100644
    ]
  };
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
-index 3ab44838..71ad101c 100644
+index 3ab44838..4d916354 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts
 +++ b/packages/app/src/ui/editor-command-runtime.ts
 @@ -99,5 +99,4 @@ type RuntimeInput = {
@@ -4431,13 +4524,34 @@ index 3ab44838..71ad101c 100644
 -  fitToContentModeActive: boolean;
    showGrid: boolean;
    showTransparencyGrid: boolean;
-@@ -168,5 +167,4 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -130,4 +129,5 @@ type RuntimeInput = {
+   onPositionNodeRelativeTo?: () => void;
+   onConvertNodePositionToAbsolute?: () => void;
++  onSimplifySelectedPath?: () => void;
+   onShowCompiledPicture?: () => void;
+   onOpenSettings?: () => void;
+@@ -168,5 +168,4 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      dirty,
      fileRef,
 -    fitToContentModeActive,
      showGrid,
      showTransparencyGrid,
-@@ -885,10 +883,5 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -199,4 +198,5 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+     onPositionNodeRelativeTo,
+     onConvertNodePositionToAbsolute,
++    onSimplifySelectedPath,
+     onShowCompiledPicture,
+     onOpenSettings,
+@@ -800,4 +800,8 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+       }
+     },
++    [APP_MENU_COMMAND_IDS.PATH_SIMPLIFY]: {
++      enabled: onSimplifySelectedPath != null,
++      run: () => onSimplifySelectedPath?.()
++    },
+     [APP_MENU_COMMAND_IDS.PATH_JOIN]: {
+       enabled: availability["path-join"].enabled,
+@@ -885,10 +889,5 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      [APP_MENU_COMMAND_IDS.FIT_TO_CONTENT]: {
        enabled: snapshot.svg != null,
 -      checked: fitToContentModeActive,
@@ -4448,7 +4562,7 @@ index 3ab44838..71ad101c 100644
 -        }
          dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
        }
-@@ -912,7 +905,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -912,7 +911,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" }); }
      },
 -    [APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS]: {
@@ -4458,24 +4572,42 @@ index 3ab44838..71ad101c 100644
 +      checked: showDocumentBounds,
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "documentBounds" }); }
      },
-@@ -1127,5 +1120,4 @@ export function useEditorCommandRuntime(
+@@ -1099,4 +1098,5 @@ export function useEditorCommandRuntime(
+     onPositionNodeRelativeTo?: () => void;
+     onConvertNodePositionToAbsolute?: () => void;
++    onSimplifySelectedPath?: () => void;
+     onShowCompiledPicture?: () => void;
+     onOpenSettings?: () => void;
+@@ -1127,5 +1127,4 @@ export function useEditorCommandRuntime(
    const dirty = useEditorStore((s) => s.documents[s.activeDocumentId]?.dirty ?? false);
    const fileRef = useEditorStore((s) => s.documents[s.activeDocumentId]?.fileRef ?? null);
 -  const fitToContentModeActive = useEditorStore((s) => s.fitToContentModeActive);
    const showGrid = useEditorStore((s) => s.showGrid);
    const showTransparencyGrid = useEditorStore((s) => s.showTransparencyGrid);
-@@ -1204,5 +1196,4 @@ export function useEditorCommandRuntime(
+@@ -1204,5 +1203,4 @@ export function useEditorCommandRuntime(
          dirty,
          fileRef,
 -        fitToContentModeActive,
          showGrid,
          showTransparencyGrid,
-@@ -1257,5 +1248,4 @@ export function useEditorCommandRuntime(
+@@ -1235,4 +1233,5 @@ export function useEditorCommandRuntime(
+         onPositionNodeRelativeTo: options.onPositionNodeRelativeTo,
+         onConvertNodePositionToAbsolute: options.onConvertNodePositionToAbsolute,
++        onSimplifySelectedPath: options.onSimplifySelectedPath,
+         onShowCompiledPicture: options.onShowCompiledPicture,
+         onOpenSettings: options.onOpenSettings,
+@@ -1257,5 +1256,4 @@ export function useEditorCommandRuntime(
        dirty,
        fileRef,
 -      fitToContentModeActive,
        showGrid,
        showTransparencyGrid,
+@@ -1288,4 +1286,5 @@ export function useEditorCommandRuntime(
+       options.onPositionNodeRelativeTo,
+       options.onConvertNodePositionToAbsolute,
++      options.onSimplifySelectedPath,
+       options.onShowCompiledPicture,
+       options.onOpenSettings,
 diff --git a/packages/app/src/ui/source-panel/SourcePanel.module.css b/packages/app/src/ui/source-panel/SourcePanel.module.css
 index f7e5e9b6..7503251d 100644
 --- a/packages/app/src/ui/source-panel/SourcePanel.module.css
