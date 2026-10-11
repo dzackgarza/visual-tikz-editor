@@ -14,6 +14,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 \draw[blue] (0,0) circle (1cm);
 \end{tikzpicture}</textarea></label>
 <button id="load">Load source</button>
+<button id="copy-source">Copy current source</button>
 <button id="snapshot">Snapshot</button>
 <button id="cancel">Cancel snapshot</button>
 <label>Original strokes<textarea id="ink">[]</textarea></label>
@@ -24,6 +25,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 <label>Saved snapshot<textarea id="saved-snapshot"></textarea></label>
 <button id="load-snapshot">Load snapshot</button>
 <button id="dispose">Dispose</button>
+<output id="command-result"></output>
 <output id="status">Loading editor</output>
 <iframe id="editor" title="Embedded drawing" src="/tikz-editor/index.html"></iframe>
 <pre id="result"></pre>

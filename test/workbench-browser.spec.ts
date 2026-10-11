@@ -3,6 +3,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { chromium, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+import { geometryTraces } from "./geometry-traces";
+
 describe("standalone workbench host boundary", function () {
   let server: ChildProcess;
   let browser: Browser;
@@ -42,6 +44,66 @@ describe("standalone workbench host boundary", function () {
   after(async function () {
     await browser?.close();
     if (server?.pid !== undefined) process.kill(-server.pid, "SIGTERM");
+  });
+
+  it("preserves representative trace geometry through fitting and original restoration", async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    for (const trace of geometryTraces) {
+      await page.getByLabel('Authored source').fill(String.raw`\begin{tikzpicture}
+% corpus authored comment
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Load source', exact: true }).click();
+      const stroke = { key: trace.name, intent: trace.intent ?? 'geometry', color: '#204080',
+        samples: trace.points.map(([x, y], i) => ({ x, y, time: i * 8, pressure: .4 + .1 * Math.sin(i) })) };
+      await page.getByLabel('Original strokes').fill(JSON.stringify([stroke]));
+      await page.getByRole('button', { name: 'Import strokes', exact: true }).click();
+      await expect(page.locator('#command-result')).toHaveText('import-ink:ok:');
+      await expect(page.getByLabel('Authored source')).toHaveValue(new RegExp(`workbench-ink-end:${trace.name}`));
+      const original = await page.getByLabel('Authored source').inputValue();
+      await page.getByLabel('Stroke key').fill(trace.name);
+      await page.getByRole('button', { name: 'Interpret stroke', exact: true }).click();
+      await expect(page.locator('#command-result')).toHaveText(trace.intent === 'ink' ? 'interpret-ink:failed:ink-is-not-geometry' : 'interpret-ink:ok:');
+      // Read current bytes through the public source operation before snapshotting.
+      await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
+      await expect(page.locator('#command-result')).toHaveText('source:ok:');
+      await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+      await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+      const accepted = JSON.parse(await page.locator('#result').innerText());
+      assert.ok(accepted.source.includes(trace.primitive), trace.name);
+      assert.deepEqual(accepted.originalInk[0].stroke, stroke, trace.name);
+      if (trace.unchanged) assert.equal(accepted.source, original, trace.name);
+      const error = await page.evaluate(({ svg, points, viewBox }) => {
+        const holder = document.createElement('div');
+        holder.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden';
+        holder.innerHTML = svg;
+        document.body.append(holder);
+        const root = holder.querySelector('svg')!;
+        const inverse = root.getScreenCTM()!.inverse();
+        const rendered: { x: number; y: number }[] = [];
+        for (const element of root.querySelectorAll<SVGGeometryElement>('path,circle,ellipse,rect,line,polyline,polygon')) {
+          if (element.closest('defs')) continue;
+          const length = element.getTotalLength();
+          const transform = inverse.multiply(element.getScreenCTM()!);
+          for (let d = 0; d <= length; d += .4) rendered.push(element.getPointAtLength(d).matrixTransform(transform));
+          rendered.push(element.getPointAtLength(length).matrixTransform(transform));
+        }
+        holder.remove();
+        const raw = points.map(([x, y]) => ({ x, y: 2 * viewBox.y + viewBox.height - y }));
+        const inputError = Math.max(...raw.map(p => Math.min(...rendered.map(q => Math.hypot(p.x - q.x, p.y - q.y)))));
+        const distance = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+          return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+        };
+        const outputError = Math.max(...rendered.map(p => Math.min(...raw.slice(1).map((b, i) => distance(p, raw[i], b)))));
+        return Math.max(inputError, outputError);
+      }, { svg: accepted.svg, points: trace.points, viewBox: accepted.viewBox });
+      assert.ok(error <= trace.error + .3, `${trace.name}: bidirectional geometric error ${error} exceeds ${trace.error}`);
+      await page.getByRole('button', { name: 'Restore stroke', exact: true }).click();
+      await expect(page.locator('#command-result')).toHaveText('restore-ink:ok:');
+      await expect(page.getByLabel('Authored source')).toHaveValue(original);
+    }
   });
 
   it("keeps authored source when a notification names a load operation", async function () {

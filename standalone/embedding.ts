@@ -1,4 +1,4 @@
-import { requestEditorSnapshot, type HostCommand } from '../src/host';
+import { requestEditorSource, requestEditorSnapshot, type HostCommand } from '../src/host';
 
 const editor = document.querySelector<HTMLIFrameElement>('#editor')!;
 const source = document.querySelector<HTMLTextAreaElement>('#source')!;
@@ -25,6 +25,7 @@ function receive(event: MessageEvent) {
   if (message.event === 'init') load();
   if (message.event === 'loaded' && message.revision === revision) status.textContent = 'Loaded';
   if (message.event === 'change' && message.revision === revision) source.value = message.source;
+  if (message.event === 'reply') document.querySelector('#command-result')!.textContent = `${message.action}:${message.status}:${message.error ?? ''}`;
   if (message.event === 'reply' && message.status === 'failed') status.textContent = message.error;
 }
 
@@ -65,4 +66,11 @@ document.querySelector('#dispose')!.addEventListener('click', () => {
   lifetime.abort('disposed');
   editor.remove();
   status.textContent = 'Disposed';
+});
+
+document.querySelector('#copy-source')!.addEventListener('click', async () => {
+  try {
+    source.value = await requestEditorSource(editor, { sessionId, revision }, lifetime.signal);
+    await navigator.clipboard.writeText(source.value);
+  } catch (error) { status.textContent = String(error); }
 });
