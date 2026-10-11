@@ -175,4 +175,31 @@ describe("standalone workbench host boundary", function () {
     assert.equal(retained.source, accepted.source);
     assert.equal(retained.svg, accepted.svg);
   });
+
+  it("keeps exported clipping local to each independently edited diagram", async function () {
+    const exports: string[] = [];
+    for (const source of [
+      String.raw`\begin{tikzpicture}\clip (0,0) circle (.5);\fill[red] (-1,-1) rectangle (1,1);\end{tikzpicture}`,
+      String.raw`\begin{tikzpicture}\clip (0,0) rectangle (1,1);\fill[blue] (-1,-1) rectangle (1,1);\end{tikzpicture}`,
+    ]) {
+      await page.goto(`${url}embedding.html`);
+      await expect(page.locator("#status")).toHaveText("Loaded");
+      await page.getByLabel("Authored source").fill(source);
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
+      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
+      exports.push(JSON.parse(await page.locator("#result").innerText()).svg);
+    }
+    await page.goto(`${url}svg-viewer.html`);
+    for (const svg of exports) {
+      await page.getByLabel("Exported SVG").fill(svg);
+      await page.getByRole("button", { name: "Append diagram" }).click();
+    }
+    const owners = await page.locator("figure").evaluateAll(figures => figures.map(figure => {
+      const clipped = figure.querySelector("[clip-path]")!;
+      const reference = /^url\(#(.+)\)$/.exec(clipped.getAttribute("clip-path")!)![1];
+      return document.getElementById(reference)!.closest("figure") === figure;
+    }));
+    assert.deepEqual(owners, [true, true]);
+  });
 });
