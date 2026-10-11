@@ -15,6 +15,7 @@ export const geometryTraces: Trace[] = [
   { name: 'sharp-corner', points: polygon([[20, 20], [85, 20], [85, 95]]), primitive: '\\draw', error: 8 },
   { name: 'self-intersection', points: sample(80, t => [85 + 60 * Math.sin(t * 2 * Math.PI), 75 + 40 * Math.sin(t * 4 * Math.PI)]), primitive: '\\draw', error: 8 },
   { name: 'irregular-curve', points: sample(65, t => [20 + 140 * t, 75 + 28 * Math.sin(t * 8) + 7 * Math.sin(t * 19)]), primitive: ' controls ', error: 8 },
+  { name: 'sparse-corner', points: [[20, 20], [85, 20], [85, 95]], primitive: '\\draw', error: 0.1, unchanged: true },
   { name: 'short-uncertain-stroke', points: [[20, 20], [21, 25], [23, 18]], primitive: '\\draw', error: 0.1, unchanged: true },
   { name: 'handwritten-loop', points: sample(40, t => [65 + 30 * Math.cos(t * 6.2), 75 + 30 * Math.sin(t * 6.2)]), primitive: '\\draw', error: 0.1, unchanged: true, intent: 'ink' },
 ];
