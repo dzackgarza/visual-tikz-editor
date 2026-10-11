@@ -241,6 +241,16 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByLabel("Authored source")).toHaveValue(saved.source);
     await page.frameLocator("iframe").locator('[data-canvas-viewport="true"]').press("Control+z");
     await expect(page.getByLabel("Authored source")).toHaveValue(fitted);
+    const frame = page.frameLocator('#editor');
+    await frame.locator('[data-canvas-viewport="true"]').scrollIntoViewIfNeeded();
+    const line = (await frame.locator(`path[data-source-id="${reopened.originalInk[0].sourceIds[0]}"]`).first().boundingBox())!;
+    // A horizontal SVG line has a zero-height DOM box, but its painted stroke
+    // is hittable. Send the real pointer to its midpoint.
+    await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
+    await frame.getByRole('button', { name: 'Restore original stroke', exact: true }).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(saved.source);
+    await frame.getByRole('button', { name: 'Reapply original fit', exact: true }).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(fitted);
   });
 
   it("exports an image resource that renders outside its document while offline", async function () {
