@@ -373,6 +373,49 @@ describe("standalone workbench host boundary", function () {
     assert.ok(samples.some((sample: { tiltX: number; tiltY: number }) => sample.tiltX === 12 && sample.tiltY === -8));
   });
 
+  it('keeps palm contact out of pen drawing and supports finger pan and pinch afterward', async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    const frame = page.frameLocator('#editor');
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    const x = box.x + box.width * .3, y = box.y + box.height * .55;
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1, pointerType: 'pen', force: .5 });
+    for (let i = 1; i <= 20; i++) {
+      if (i === 5) await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 3, x: x + 160, y: y + 50, radiusX: 35, radiusY: 30 }] });
+      if (i === 10) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 3, x: x + 180, y: y + 70, radiusX: 35, radiusY: 30 }] });
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + i * 5, y, button: 'left', buttons: 1, pointerType: 'pen', force: .5 });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + 100, y, button: 'left', buttons: 0, clickCount: 1, pointerType: 'pen' });
+    await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(/workbench-ink:/);
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const drawn = JSON.parse(await page.locator('#result').innerText());
+    assert.equal(drawn.originalInk.length, 1);
+    assert.ok(drawn.originalInk[0].stroke.samples.length >= 22, 'Palm contact must not replace the pen drag');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 4, x, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 4, x: x + 55, y: y + 35 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const panned = JSON.parse(await page.locator('#result').innerText());
+    assert.equal(panned.source, drawn.source);
+    assert.notDeepEqual(panned.state.viewport, drawn.state.viewport);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 5, x, y }, { id: 6, x: x + 80, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 5, x: x - 30, y }, { id: 6, x: x + 110, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    const pinched = JSON.parse(await page.locator('#result').innerText());
+    assert.equal(pinched.source, drawn.source);
+    assert.ok(pinched.state.viewport.scale > panned.state.viewport.scale);
+    await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it("cancels a resource-pending snapshot and continues with a newer drawing", async function () {
     let release!: () => void;
     const delayed = new Promise<void>(resolve => { release = resolve; });
