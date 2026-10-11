@@ -91,12 +91,11 @@ describe("standalone workbench host boundary", function () {
         holder.remove();
         const raw = points.map(([x, y]) => ({ x, y: 2 * viewBox.y + viewBox.height - y }));
         const inputError = Math.max(...raw.map(p => Math.min(...rendered.map(q => Math.hypot(p.x - q.x, p.y - q.y)))));
-        const distance = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
-          const dx = b.x - a.x, dy = b.y - a.y;
+        const outputError = Math.max(...rendered.map(p => Math.min(...raw.slice(1).map((b, i) => {
+          const a = raw[i], dx = b.x - a.x, dy = b.y - a.y;
           const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
           return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
-        };
-        const outputError = Math.max(...rendered.map(p => Math.min(...raw.slice(1).map((b, i) => distance(p, raw[i], b)))));
+        }))));
         return Math.max(inputError, outputError);
       }, { svg: accepted.svg, points: trace.points, viewBox: accepted.viewBox });
       assert.ok(error <= trace.error + .3, `${trace.name}: bidirectional geometric error ${error} exceeds ${trace.error}`);
