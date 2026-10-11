@@ -72,7 +72,7 @@ index f20fa9c3..63ab7235 100644
      "pptx2tikz": "^1.3.0",
      "react": "^19.0.0",
 diff --git a/packages/app/src/app-menu/default-menu.ts b/packages/app/src/app-menu/default-menu.ts
-index 59fab7a8..721bde35 100644
+index 59fab7a8..24322aa9 100644
 --- a/packages/app/src/app-menu/default-menu.ts
 +++ b/packages/app/src/app-menu/default-menu.ts
 @@ -113,5 +113,6 @@ export const APP_MENU_DEFINITION = [
@@ -83,7 +83,15 @@ index 59fab7a8..721bde35 100644
 +        platforms: ["desktop"]
        },
        { kind: "separator" },
-@@ -505,6 +506,6 @@ export const APP_MENU_DEFINITION = [
+@@ -467,6 +468,5 @@ export const APP_MENU_DEFINITION = [
+         kind: "command",
+         commandId: APP_MENU_COMMAND_IDS.FIT_TO_CONTENT,
+-        label: "Fit to Content",
+-        accelerator: "CmdOrCtrl+0"
++        label: "Fit to Content"
+       },
+       {
+@@ -505,6 +505,6 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
 -        commandId: APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS,
@@ -103,6 +111,15 @@ index af9d6c30..182e7c67 100644
 +  TOGGLE_OUTPUT_BOUNDS: "view.toggle-output-bounds",
    TOGGLE_SNAP_GRID: "view.toggle-snap-grid",
    TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
+diff --git a/packages/app/src/index.ts b/packages/app/src/index.ts
+index 1672d1d6..6b94a124 100644
+--- a/packages/app/src/index.ts
++++ b/packages/app/src/index.ts
+@@ -1,3 +1,4 @@
+ export { App } from "./ui/App";
++export { CANVAS_ZOOM_BASE_SCALE } from "./store/workspace-state.js";
+ export { APP_MENU_COMMAND_IDS, APP_MENU_DEFINITION } from "./app-menu/index.js";
+ export { CANVAS_CONTEXT_MENU_DEFINITION } from "./context-menu/index.js";
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
 index 4850a87e..250a50fb 100644
 --- a/packages/app/src/settings/storage.ts

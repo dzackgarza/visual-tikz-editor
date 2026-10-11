@@ -399,6 +399,15 @@ async function save(): Promise<boolean> {
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey &&
+      (event.key === "-" || event.key === "=" || event.key === "+" || event.key === "0")) {
+    const editor = window.document.querySelector<HTMLIFrameElement>("iframe[src*='tikz-editor']");
+    if (editor?.contentWindow) {
+      event.preventDefault();
+      editor.contentWindow.postMessage({ action: "zoom", direction: event.key === "0" ? "reset" : event.key === "-" ? "out" : "in" }, "*");
+    }
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key === "s") {
     event.preventDefault();
     void save();

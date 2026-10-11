@@ -2,6 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setActiveEditorPlatform } from '@tikz-editor/app/platform/current';
 import { useEditorStore } from '@tikz-editor/app/store';
+import { CANVAS_ZOOM_BASE_SCALE } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
@@ -30,6 +31,7 @@ type HostMessage = {
 	name?: string;
 	modified?: boolean;
 	fullscreen?: boolean;
+	direction?: 'in' | 'out' | 'reset';
 	settings?: HostSettingsPatch;
 	imageBaseUrl?: string;
 	workspace?: 'default' | 'canvasOnly';
@@ -424,6 +426,10 @@ function HostBridge() {
 				const nextFullscreen = message.fullscreen === true;
 				fullscreenRef.current = nextFullscreen;
 				setFullscreen(nextFullscreen);
+			} else if (action === 'zoom' && message.direction === 'reset') {
+				useEditorStore.getState().dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: CANVAS_ZOOM_BASE_SCALE });
+			} else if (action === 'zoom' && (message.direction === 'in' || message.direction === 'out')) {
+				useEditorStore.getState().dispatch({ type: 'REQUEST_ZOOM', direction: message.direction });
 			} else if (action === 'workspace' && message.workspace) {
 				const workspace = message.workspace;
 				void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => applyWorkspace(workspace));
@@ -445,6 +451,12 @@ function HostBridge() {
 		};
 
 		const handleKeydown = (event: KeyboardEvent) => {
+			if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '0') {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				useEditorStore.getState().dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: CANVAS_ZOOM_BASE_SCALE });
+				return;
+			}
 			if (event.key !== 'Escape' || !fullscreenRef.current) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
