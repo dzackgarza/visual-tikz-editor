@@ -78,7 +78,8 @@
       <component
         v-for="provider in providers.filter((candidate) => candidate.id !== 'tikz' && visitedEditors.has(candidate.id))"
         v-if="unavailableMessage === ''"
-        v-show="displayMode === provider.id"
+        :class="{ 'tikz-live-preview-retained': displayMode !== provider.id }"
+        :inert="displayMode !== provider.id"
         :is="provider.component"
         :ref="(handle: unknown) => setEditorHandle(provider.id, handle)"
         :key="`${provider.id}\0${targetIdentity(props.target)}`"
@@ -398,11 +399,20 @@ onBeforeUnmount(() => {
 }
 
 .tikz-live-preview-content {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Retained iframe layouts must keep nonzero dimensions while another view is active. */
+.tikz-live-preview-retained {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .tikz-live-preview-provider {

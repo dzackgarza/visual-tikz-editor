@@ -135,9 +135,6 @@ function sendFullLoad(): void {
       },
     },
   });
-  postToEditor({ action: "display", fullscreen: props.fullscreen });
-  postToEditor({ action: "workspace", workspace: "canvasOnly" });
-  postToEditor({ action: "inspector", inspector: props.showInspector === true });
 }
 
 function sendTheme(): void {
@@ -245,6 +242,9 @@ function onMessage(event: MessageEvent): void {
     case "init":
       hostReady.value = true;
       sendFullLoad();
+      postToEditor({ action: "display", fullscreen: props.fullscreen });
+      postToEditor({ action: "workspace", workspace: "canvasOnly" });
+      postToEditor({ action: "inspector", inspector: props.showInspector === true });
       break;
     case "loaded":
       if (message.revision !== session.value.revision) {
