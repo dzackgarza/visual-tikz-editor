@@ -2993,10 +2993,16 @@ index a7b0a7e2..61a3c8ee 100644
    let length = 0;
    for (let i = 1; i < points.length; i += 1) {
 diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
-index 5660d6d8..a65f5b93 100644
+index 5660d6d8..4ca2001f 100644
 --- a/packages/app/src/ui/canvas-panel/geometry.ts
 +++ b/packages/app/src/ui/canvas-panel/geometry.ts
-@@ -15,6 +15,7 @@ import type { ClientPoint, SvgPoint, TextRectLocalPoint, ViewportPoint, WorldPoi
+@@ -1,4 +1,5 @@
+ import { PT_PER_CM } from "tikz-editor/edit/format";
++import { pickGridStepPt } from "tikz-editor/edit/snapping";
+ import { GRID_MINOR_TARGET_PX } from "tikz-editor/edit/snapping/types";
+ import type { SvgViewBox } from "tikz-editor/svg/types";
+ import { svgPoint, viewportPoint, pt, px } from "tikz-editor/coords/index";
+@@ -15,6 +16,7 @@ import type { ClientPoint, SvgPoint, TextRectLocalPoint, ViewportPoint, WorldPoi
  import type { WorldVector } from "tikz-editor/coords/index";
  
  export type RulerTick = {
@@ -3004,7 +3010,7 @@ index 5660d6d8..a65f5b93 100644
    viewportPos: number;
    major: boolean;
    label?: string;
-@@ -71,6 +72,7 @@ export function buildTicks(
+@@ -71,6 +73,7 @@ export function buildTicks(
    for (const worldValue of values) {
      const major = isMultipleOfStep(worldValue, majorStep);
      ticks.push({
@@ -3012,6 +3018,28 @@ index 5660d6d8..a65f5b93 100644
        viewportPos: mapWorldToViewport(worldValue),
        major,
        label: major ? formatCm(worldValue / PT_PER_CM) : undefined
+@@ -210,20 +213,8 @@ export function svgToWorldPoint(point: SvgPoint, viewBox: Pick<SvgViewBox, "y" |
+   return typedSvgToWorld(point, viewBox as SvgViewBox);
+ }
+ 
+-export function pickStepPt(scale: number, targetPixels: number): number {
+-  const cmSteps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
+-  const minStepPt = targetPixels / Math.max(scale, 1e-6);
+-
+-  for (const cmStep of cmSteps) {
+-    const pt = cmStep * PT_PER_CM;
+-    if (pt >= minStepPt) return pt;
+-  }
+-
+-  return cmSteps[cmSteps.length - 1] * PT_PER_CM;
+-}
+-
+ export function resolveOverlayGridSteps(scale: number, minorTargetPx: number = GRID_MINOR_TARGET_PX): OverlayGridSteps {
+-  const minorStep = pickStepPt(scale, minorTargetPx);
++  const minorStep = pickGridStepPt(scale, minorTargetPx);
+   return {
+     minorStep,
+     majorStep: minorStep * OVERLAY_MAJOR_STEP_MULTIPLE
 diff --git a/packages/app/src/ui/canvas-panel/overlays.tsx b/packages/app/src/ui/canvas-panel/overlays.tsx
 index 13b3ad2b..7a587c97 100644
 --- a/packages/app/src/ui/canvas-panel/overlays.tsx
@@ -3262,7 +3290,7 @@ index de0ccae2..37c85ebd 100644
    return {
      toolPreview
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
-index 0c9bdf4f..df0d26c8 100644
+index 0c9bdf4f..e3a2e699 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 @@ -8,6 +8,7 @@ import {
@@ -3273,7 +3301,15 @@ index 0c9bdf4f..df0d26c8 100644
    pt,
    px
  } from "tikz-editor/coords/index";
-@@ -156,14 +157,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -19,6 +20,7 @@ import { parseLength } from "tikz-editor/semantic/coords/parse-length";
+ import { intersectRayWithPolygon } from "tikz-editor/semantic/nodes/shape-geometry";
+ import {
+   snapHandlePosition,
++  snapGridPointer,
+   snapSelectionTranslation,
+   snapToolPointer,
+   type SnapLine
+@@ -156,14 +158,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        world: WorldPoint,
        currentSvg: { viewBox: SvgViewBox }
      ) {
@@ -3301,7 +3337,7 @@ index 0c9bdf4f..df0d26c8 100644
        });
        const nextIds = drag.additive
          ? [...new Set([...drag.baseSelectedIds, ...hitIds])]
-@@ -459,15 +468,24 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -459,15 +469,24 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          if (nextWorldPoints) {
            drag.points = nextWorldPoints;
          }
@@ -3309,7 +3345,7 @@ index 0c9bdf4f..df0d26c8 100644
 -        setSnapLines([]);
 -        maybeTriggerSnapFeedback(false);
 +        const snapped = drag.snapContext
-+          ? snapToolPointer({
++          ? snapGridPointer({
 +              context: drag.snapContext,
 +              pointer: world,
 +              kind: "line-end",
@@ -3330,7 +3366,7 @@ index 0c9bdf4f..df0d26c8 100644
          });
          return;
        }
-@@ -476,8 +494,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -476,8 +495,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setNodeAnchorOverlay(null);
          setDragTooltip(null);
          drag.currentWorld = world;
@@ -3341,7 +3377,7 @@ index 0c9bdf4f..df0d26c8 100644
            commitMarqueeSelection(drag, world, currentSvg);
          }
          setSnapLines([]);
-@@ -940,7 +959,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -940,7 +960,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setDragTooltip(null);
          const finalWorld = world ?? drag.currentWorld;
          const deltaSq = distanceSquared(finalWorld, drag.startWorld);
@@ -3350,7 +3386,7 @@ index 0c9bdf4f..df0d26c8 100644
  
          if (isClickOnly) {
            if (!drag.additive) {
-@@ -1157,13 +1176,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1157,13 +1177,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setDragTooltip(null);
          let nextWorldPoints: WorldPoint[] | null = null;
          if (world) {
@@ -3360,7 +3396,7 @@ index 0c9bdf4f..df0d26c8 100644
 -          }
 -          setToolCursorWorld(world);
 +          const snapped = drag.snapContext
-+            ? snapToolPointer({
++            ? snapGridPointer({
 +                context: drag.snapContext,
 +                pointer: world,
 +                kind: "line-end",
@@ -3519,9 +3555,17 @@ index 8078a5d4..cb937209 100644
    }, [marqueeDraft, svgResult]);
  
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..ecd32280 100644
+index 709cc1b9..d6657374 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
+@@ -1,6 +1,6 @@
+ import { useCallback, useEffect, type MouseEvent as ReactMouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+ import { viewportPoint, clientPoint as makeClientPoint, worldPoint, pt, px } from "tikz-editor/coords/index";
+-import { buildSnapContext, resolveSnapSettings, snapToolPointer, type SnapGuideInput, type SnapLine, type SnapSettingsPatch } from "tikz-editor/edit/snapping";
++import { buildSnapContext, resolveSnapSettings, snapGridPointer, snapToolPointer, type SnapGuideInput, type SnapLine, type SnapSettingsPatch } from "tikz-editor/edit/snapping";
+ import type { NodeAnchorTarget } from "tikz-editor/semantic/types";
+ import type { ClientPoint, WorldBounds, WorldPoint } from "../coords/types";
+ import type { CanvasTransform, ToolMode } from "../../store/types";
 @@ -13,6 +13,7 @@ import { isToolCreateMode } from "../tool-config";
  import { formatTooltipCoordinateRows } from "./interaction-helpers";
  import type { MatrixCellAnchorHint } from "./endpoint-anchor-snap";
@@ -3613,15 +3657,17 @@ index 709cc1b9..ecd32280 100644
            ? buildSnapContext({
                sceneElements: snapshot.scene.elements,
                selectedSourceIds: [],
-@@ -327,7 +345,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -327,8 +345,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                viewportWorld: viewportWorldBounds
              })
            : null;
 -        const startSnapResult = toolSnapContext && shouldSnapToolStart
+-          ? snapToolPointer({
 +        const startSnapResult = toolSnapContext
-           ? snapToolPointer({
++          ? (toolMode === "addFreehand" ? snapGridPointer : snapToolPointer)({
                context: toolSnapContext,
                pointer: world,
+               kind: toolMode === "addPath" ? "line-end" : "node",
 @@ -351,6 +369,37 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          setToolCursorWorld(resolvedStart);
          event.preventDefault();
@@ -4626,6 +4672,48 @@ index 3f807ed2..2a5ee7d8 100644
      case "filledCircle": {
        const radiusPt = circleRadiusPt(at, template.edge);
        return `\\fill ${atCoord} circle (${formatNumber(radiusPt * CM_PER_PT)}cm);`;
+diff --git a/packages/core/src/edit/snapping/grid-snaps.ts b/packages/core/src/edit/snapping/grid-snaps.ts
+index 7eccc2f5..ea517003 100644
+--- a/packages/core/src/edit/snapping/grid-snaps.ts
++++ b/packages/core/src/edit/snapping/grid-snaps.ts
+@@ -5,7 +5,7 @@ import { SNAP_EPSILON } from "./geometry.js";
+ import { roundSnapValue } from "./point-snaps.js";
+ import type { Axis, AxisMinOffset, AxisSnapBuckets } from "./types.js";
+ 
+-const GRID_STEPS_CM = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
++const GRID_STEPS_CM = [1, 2, 5, 10, 20, 50];
+ const PT_PER_CM = 28.4527559055;
+ 
+ export function pickGridStepPt(scale: number, targetPixels: number): number {
+diff --git a/packages/core/src/edit/snapping/index.ts b/packages/core/src/edit/snapping/index.ts
+index 9ff1d00f..54d9ea1a 100644
+--- a/packages/core/src/edit/snapping/index.ts
++++ b/packages/core/src/edit/snapping/index.ts
+@@ -161,6 +161,24 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
+   });
+ }
+ 
++export function snapGridPointer(input: SnapToolPointerInput): SnapResult {
++  const settings = effectiveSettings(input.context, input.settings);
++  if (!settings.grid.enabled || shouldBypassSnapping(settings, input.modifiers)) {
++    return snapToolPointer(input);
++  }
++
++  const step = pickGridStepPt(input.context.zoom, settings.grid.minorTargetPx);
++  const snappedPoint = worldPoint(
++    pt(Math.round(input.pointer.x / step) * step),
++    pt(Math.round(input.pointer.y / step) * step)
++  );
++  return {
++    offset: worldPoint(pt(snappedPoint.x - input.pointer.x), pt(snappedPoint.y - input.pointer.y)),
++    snappedPoint,
++    lines: [{ type: "pointer", axis: "x", from: snappedPoint, to: input.pointer }]
++  };
++}
++
+ function snapPointerWithPointsAndGrid({
+   context,
+   settings,
 diff --git a/packages/core/src/render/index.ts b/packages/core/src/render/index.ts
 index 11af4026..20e7e86f 100644
 --- a/packages/core/src/render/index.ts
