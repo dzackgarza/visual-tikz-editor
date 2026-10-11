@@ -11,14 +11,19 @@
           <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
         </div>
       </details>
+      <button type="button" :aria-pressed="sourceOpen" @click="sourceOpen = !sourceOpen">
+        {{ sourceOpen ? 'Hide source' : 'Source' }}
+      </button>
       <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
         {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
       </button>
+      <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
     </header>
-    <main v-if="document !== null && target !== null">
+    <main v-if="document !== null && target !== null" :class="{ 'source-closed': !sourceOpen }">
       <SourceEditor
+        v-show="sourceOpen"
         class="tikz-standalone-source"
         :source="source"
         :theme="theme"
@@ -68,6 +73,7 @@ const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
 const inspectorOpen = ref(false);
+const sourceOpen = ref(window.matchMedia("(min-width: 901px)").matches);
 const theme = ref<TikzWorkbenchTheme>(
   window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
 );
@@ -245,6 +251,15 @@ function toggleInspector(): void {
   inspectorOpen.value = !inspectorOpen.value;
 }
 
+async function copySource(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(source.value);
+    hostError.value = "";
+  } catch (error) {
+    host.reportError("Could not copy source", error);
+  }
+}
+
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("beforeunload", onBeforeUnload);
@@ -295,7 +310,7 @@ body,
   position: relative;
   z-index: 20;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 8px;
@@ -375,6 +390,10 @@ main {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(240px, 40%) minmax(0, 1fr);
+}
+
+main.source-closed {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .tikz-standalone-source {
