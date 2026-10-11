@@ -118,5 +118,18 @@ print(confirm(Atspi.get_desktop(0)))
     await expect(page.locator('.document-bar strong')).toHaveText('authored.tikz');
     assert.equal(await page.locator('.cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
     await expect(page.frameLocator('iframe').locator('path[data-source-id]')).toHaveCount(1);
+    await page.locator('.file-menu summary').click();
+    const frame = page.frameLocator('iframe');
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .65);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + bounds.width * .35 + 100, bounds.y + bounds.height * .65 + 30, { steps: 12 });
+    await page.mouse.up();
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => readFile(diagramPath, 'utf8')).toContain('workbench-ink:');
+    const edited = await page.locator('.cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n'));
+    assert.equal(await readFile(diagramPath, 'utf8'), edited);
+    await expect(page.locator('.tikz-standalone-status')).toHaveText('Saved');
   });
 });
