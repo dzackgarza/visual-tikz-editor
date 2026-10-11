@@ -120,6 +120,8 @@ describe("standalone workbench host boundary", function () {
       window.parent.postMessage(JSON.stringify({ event: 'change', sessionId: crypto.randomUUID(), revision,
         source: String.raw`\begin{tikzpicture}\draw (0,0) rectangle (3,2);\end{tikzpicture}` }), location.origin);
     }, loaded);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), authored);
