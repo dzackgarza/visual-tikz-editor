@@ -63,7 +63,7 @@ describe("standalone workbench host boundary", function () {
       const original = await page.getByLabel('Authored source').inputValue();
       await page.getByLabel('Stroke key').fill(trace.name);
       await page.getByRole('button', { name: 'Interpret stroke', exact: true }).click();
-      await expect(page.locator('#command-result')).toHaveText(trace.intent === 'ink' ? 'interpret-ink:failed:ink-is-not-geometry' : 'interpret-ink:ok:');
+      await expect(page.locator('#command-result')).toHaveText(trace.intent === 'ink' ? 'interpret-ink:failed:ink-is-not-geometry' : trace.unchanged ? 'interpret-ink:failed:no-fit' : 'interpret-ink:ok:');
       // Read current bytes through the public source operation before snapshotting.
       await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
       await expect(page.locator('#command-result')).toHaveText('source:ok:');
