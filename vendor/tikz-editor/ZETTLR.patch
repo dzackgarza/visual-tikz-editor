@@ -1074,10 +1074,24 @@ index 828d4bfb..1ac9eac5 100644
        })),
      tabOrder: [...state.tabOrder],
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..e37b3b84 100644
+index 5818d92b..2fedee85 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
-@@ -298,7 +298,6 @@ export function App() {
+@@ -262,6 +262,13 @@ export function App() {
+     canvasInvert: s.settings.general.canvasInvert,
+     mathJaxFont: s.settings.rendering.mathJaxFont
+   })));
++  const latticeLockPreference = useSettingsStore((state) => state.settings.canvas.latticeLock);
++  useEffect(() => {
++    const current = useEditorStore.getState();
++    if (current.snapModes.latticeLock !== latticeLockPreference) {
++      current.dispatch({ type: "TOGGLE_SNAP_MODE", mode: "latticeLock" });
++    }
++  }, [latticeLockPreference]);
+   const platform = getActiveEditorPlatform();
+   const menuTarget = menuTargetFromPlatformId(platform.id);
+   const menuDefinition = useMemo(() => filterAppMenuDefinitionForTarget(APP_MENU_DEFINITION, menuTarget), [menuTarget]);
+@@ -298,7 +305,6 @@ export function App() {
    } | null>(null);
    const [svgExportSvgResult, setSvgExportSvgResult] = useState<EmitSvgResult | null>(null);
    const [pngExportSvgResult, setPngExportSvgResult] = useState<EmitSvgResult | null>(null);
@@ -1085,7 +1099,7 @@ index 5818d92b..e37b3b84 100644
    const [pendingClose, setPendingClose] = useState<{ intent: CloseIntent; dirtyDocumentIds: string[] } | null>(null);
    const [pendingFileConflict, setPendingFileConflict] = useState<PendingFileConflict | null>(null);
    const requestCloseIntentRef = useRef<(intent: CloseIntent) => void>(() => {});
-@@ -1534,7 +1533,6 @@ export function App() {
+@@ -1534,7 +1540,6 @@ export function App() {
          };
        },
        setCanvasTransform: (transform) => {
@@ -1093,7 +1107,7 @@ index 5818d92b..e37b3b84 100644
          requestAnimationFrame(() => {
            dispatch({ type: "SET_CANVAS_TRANSFORM", transform });
          });
-@@ -1596,17 +1594,6 @@ export function App() {
+@@ -1596,17 +1601,6 @@ export function App() {
      });
    }, [platform.id, snapshot.source, source]);
  
@@ -1111,7 +1125,7 @@ index 5818d92b..e37b3b84 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1770,7 +1757,7 @@ export function App() {
+@@ -1770,7 +1764,7 @@ export function App() {
  
          if (!e.shiftKey && key === "c") {
            // If canvas is focused, let the native copy event fire there.
@@ -1120,7 +1134,7 @@ index 5818d92b..e37b3b84 100644
              return;
            }
            // If there's a text selection anywhere, let native copy work for it.
-@@ -1786,7 +1773,7 @@ export function App() {
+@@ -1786,7 +1780,7 @@ export function App() {
  
          if (!e.shiftKey && key === "x") {
            // If canvas is focused, let the native cut event fire there.
@@ -1129,7 +1143,7 @@ index 5818d92b..e37b3b84 100644
              return;
            }
            // If there's a text selection anywhere, let native cut work for it.
-@@ -1802,7 +1789,7 @@ export function App() {
+@@ -1802,7 +1796,7 @@ export function App() {
  
          if (!e.shiftKey && key === "v") {
            // If canvas is focused, let the native paste event fire there (supports DataTransfer).
@@ -1138,7 +1152,7 @@ index 5818d92b..e37b3b84 100644
              return;
            }
            // Otherwise, paste directly via async clipboard API.
-@@ -1872,7 +1859,6 @@ export function App() {
+@@ -1872,7 +1866,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -1146,7 +1160,7 @@ index 5818d92b..e37b3b84 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1877,6 @@ export function App() {
+@@ -1891,7 +1884,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -1154,7 +1168,7 @@ index 5818d92b..e37b3b84 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +2015,17 @@ export function App() {
+@@ -2030,13 +2022,17 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -1173,7 +1187,7 @@ index 5818d92b..e37b3b84 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,11 +2038,11 @@ export function App() {
+@@ -2049,11 +2045,11 @@ export function App() {
              : null
          }
        />
@@ -1187,7 +1201,7 @@ index 5818d92b..e37b3b84 100644
        <div className={css.body}>
          <DockLayout
            repeatPreviewModel={repeatPreviewModel}
-@@ -2064,7 +2053,7 @@ export function App() {
+@@ -2064,7 +2060,7 @@ export function App() {
        </div>
        <StatusBar />
        <Suspense fallback={null}>
