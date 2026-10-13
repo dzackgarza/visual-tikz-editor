@@ -2,7 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setActiveEditorPlatform } from '@tikz-editor/app/platform/current';
 import { useEditorStore } from '@tikz-editor/app/store';
-import { CANVAS_ZOOM_BASE_SCALE } from '@tikz-editor/app';
+import { CANVAS_ZOOM_BASE_SCALE, getEditorSettings, reloadEditorSettings, updateEditorGeneralSettings } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import type { ToolMode } from '@tikz-editor/app/store/types';
@@ -35,7 +35,6 @@ type PendingEditorMessage = {
 const WORKSPACE_KEY = 'tikz-editor:workspace';
 const SETTINGS_KEY = 'tikz-editor:settings';
 const STORAGE_HASH_KEY = 'storage';
-const SETTINGS_VERSION = 1;
 const CHANGE_THROTTLE_MS = 250;
 const TEXT_FILE_ACCEPT = '.tex,.tikz,.pgf,.svg,.ipe,text/plain,text/x-tex,text/xml,application/xml,image/svg+xml';
 const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
@@ -88,57 +87,8 @@ function wantsSvg(format?: string) {
 	return typeof format === 'string' && format.toLowerCase().includes('svg');
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return value != null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function persistHostSettings(settings?: HostSettingsPatch) {
-	if (!settings?.general) return;
-
-	const currentRaw = persistenceValues.get(SETTINGS_KEY);
-	let currentSettings: Record<string, unknown> = {};
-	try {
-		const parsed = currentRaw ? JSON.parse(currentRaw) as unknown : null;
-		if (isRecord(parsed) && isRecord(parsed.settings)) {
-			currentSettings = parsed.settings;
-		}
-	} catch {}
-
-	const currentGeneral = isRecord(currentSettings.general) ? currentSettings.general : {};
-	const nextRaw = JSON.stringify({
-		settingsVersion: SETTINGS_VERSION,
-		settings: {
-			...currentSettings,
-			general: {
-				...currentGeneral,
-				...settings.general,
-			},
-		},
-	});
-
-	if (nextRaw === currentRaw) return;
-	persistenceValues.set(SETTINGS_KEY, nextRaw);
-	try { window.localStorage.setItem(SETTINGS_KEY, nextRaw); } catch {}
-	postToHost({ event: 'persistence-save', key: SETTINGS_KEY, value: nextRaw });
-}
-
 function applyHostSettings(settings?: HostSettingsPatch) {
-	const general = settings?.general;
-	if (!general) return;
-
-	if (general.colorScheme === 'light' || general.colorScheme === 'dark') {
-		document.documentElement.dataset.colorScheme = general.colorScheme;
-	} else if (general.colorScheme === 'system') {
-		delete document.documentElement.dataset.colorScheme;
-	}
-
-	if (typeof general.canvasInvert === 'boolean') {
-		if (general.canvasInvert) {
-			document.documentElement.dataset.canvasInvert = 'true';
-		} else {
-			delete document.documentElement.dataset.canvasInvert;
-		}
-	}
+  if (settings?.general) updateEditorGeneralSettings(settings.general);
 }
 
 function makeExportPayload(format: string | undefined) {
@@ -467,7 +417,6 @@ function HostBridge() {
 					imageBaseUrl = command.imageBaseUrl ?? '';
 					imageBaseErrorReported = false;
 					applyHostSettings(command.settings);
-					persistHostSettings(command.settings);
 					pendingChangeRef.current = null;
 					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: restoredState ? { source: command.source, transform: restoredState.viewport, fitToContent: restoredState.fitToContent } : null });
 					loadIntoEditor(command.source, command.fileName);
@@ -518,7 +467,6 @@ function HostBridge() {
 					reply(command); return;
 				case 'settings':
 					applyHostSettings(command.settings);
-					persistHostSettings(command.settings);
 					reply(command);
 					return;
 				case 'display':
@@ -625,11 +573,13 @@ function HostBridge() {
 }
 
 setActiveEditorPlatform(createEmbedPlatform(DEFAULT_SOURCE));
+reloadEditorSettings();
 
 Object.defineProperty(window, 'visualTikzEditorDebug', {
 	value: () => {
 		const state = useEditorStore.getState();
 		return {
+			settings: getEditorSettings(),
 			source: state.source,
 			sourceRevision: state.sourceRevision,
 			figureId: state.activeFigureId,
