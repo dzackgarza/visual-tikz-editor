@@ -9307,6 +9307,33 @@ index 3ab44838..aa2c8fce 100644
        options.onShowCompiledPicture,
        options.onOpenSettings,
        options.onCheckForUpdates,
+diff --git a/packages/app/src/ui/editor-commands.ts b/packages/app/src/ui/editor-commands.ts
+index e3ffc872..3a088d9c 100644
+--- a/packages/app/src/ui/editor-commands.ts
++++ b/packages/app/src/ui/editor-commands.ts
+@@ -98,6 +98,10 @@ export async function copySelection(
+   if (!payload) {
+     return false;
+   }
++  const clipboard = getActiveEditorPlatform().clipboard;
++  if (clipboard?.nativeText === true && typeof clipboard.writeBundle !== "function") {
++    return writeClipboardPayload(payload);
++  }
+   const svgText = await buildSelectionSvg(payload.snippets);
+   const browserWrite = await writeClipboardPayload(payload, { svgText });
+   const desktopWrite = await writeDesktopClipboardBundle(payload, svgText);
+@@ -300,6 +304,11 @@ function runPasteFromPayload(context: PasteCommandContext, payload: TikzClipboar
+       ...payload,
+       pasteCount: pasteCount + 1
+     };
++    const clipboard = getActiveEditorPlatform().clipboard;
++    if (clipboard?.nativeText === true && typeof clipboard.writeBundle !== "function") {
++      void writeClipboardPayload(nextPayload);
++      return true;
++    }
+     void buildSelectionSvg(nextPayload.snippets).then(async (svgText) => {
+       const browserWrite = await writeClipboardPayload(nextPayload, { svgText });
+       if (!browserWrite) {
 diff --git a/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx b/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx
 new file mode 100644
 index 00000000..3c97d2b1
