@@ -34,7 +34,8 @@ function receive(event: MessageEvent) {
     acceptedSource = message.source;
     source.value = acceptedSource;
   }
-  if (message.event === 'reply') document.querySelector('#command-result')!.textContent = `${message.action}:${message.status}:${message.error ?? ''}`;
+  if (message.event === 'reply' && message.action !== 'workspace')
+    document.querySelector('#command-result')!.textContent = `${message.action}:${message.status}:${message.error ?? ''}`;
   if (message.event === 'reply' && message.status === 'failed') status.textContent = message.error;
 }
 

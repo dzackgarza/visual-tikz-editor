@@ -352,7 +352,10 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`);
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
     await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
+    await expect.poll(() => frame.locator('[data-source-id]').count()).toBeGreaterThan(1);
+    await expect(page.locator('.tikz-standalone-status')).toContainText('Synced');
     await freehandButton(page).click();
+    await expect(freehandButton(page)).toHaveAttribute('aria-pressed', 'true');
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(box.x + box.width * .55, box.y + box.height * .3);
     await page.mouse.down();
