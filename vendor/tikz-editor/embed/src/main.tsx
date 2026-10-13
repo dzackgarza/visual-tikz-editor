@@ -571,6 +571,12 @@ Object.defineProperty(window, 'visualTikzEditorDebug', {
 			scene: state.snapshot.scene,
 			editHandles: state.snapshot.editHandles,
 			historyIndex: state.historyIndex,
+			canvasAids: state.canvasAids,
+			snapModes: state.snapModes,
+			diagnostics: state.diagnostics,
+			developerLogs: state.developerLogs,
+			snapDebug: state.snapDebug,
+			incremental: state.snapshot.incremental,
 		};
 	},
 });
