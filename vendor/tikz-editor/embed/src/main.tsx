@@ -589,9 +589,11 @@ Object.defineProperty(window, 'visualTikzEditorDebug', {
 			viewport: state.canvasTransform,
 			pendingRequestId: state.pendingRequestId,
 			snapshotSource: state.snapshot.source,
+			snapshot: state.snapshot,
 			scene: state.snapshot.scene,
 			editHandles: state.snapshot.editHandles,
 			historyIndex: state.historyIndex,
+			historyLength: state.history.length,
 			canvasAids: { grid: state.showGrid, rulers: state.showRulers, documentBounds: state.showDocumentBounds },
 			snapModes: state.snapModes,
 			diagnostics: {
