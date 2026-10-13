@@ -8,7 +8,7 @@
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -32,6 +32,16 @@ let untitledExtension = ".tikz";
 const packageRoot = process.env.TIKZ_WORKBENCH_ASSETS ?? path.resolve(import.meta.dir, "..");
 const pageRoot = path.join(packageRoot, "standalone", "dist");
 const home = os.homedir();
+const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
+if (!path.isAbsolute(configHome)) throw new Error("XDG_CONFIG_HOME must be an absolute path");
+const preferencesPath = path.join(configHome, "visual-tikz-editor", "preferences.json");
+const preferencesFile = Bun.file(preferencesPath);
+const preferences: Record<string, string> = await preferencesFile.exists() ? await preferencesFile.json() : {};
+if (preferences === null || Array.isArray(preferences) || typeof preferences !== "object" ||
+    Object.values(preferences).some(value => typeof value !== "string")) {
+  throw new Error(`Invalid workbench preferences: ${preferencesPath}`);
+}
+let preferenceWrite = Promise.resolve();
 const cacheHome = process.env.XDG_CACHE_HOME || path.join(home, ".cache");
 if (!path.isAbsolute(cacheHome)) throw new Error("XDG_CACHE_HOME must be an absolute path");
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".svg"]);
@@ -169,6 +179,25 @@ const server = Bun.serve({
   async fetch(request) {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/document") return await handleDocument(request);
+    if (pathname === "/api/preferences" && request.method === "GET") return Response.json(preferences);
+    if (pathname === "/api/preferences" && request.method === "PUT") {
+      const entry = await request.json() as { key: string; value: string };
+      if (typeof entry.key !== "string" || typeof entry.value !== "string" ||
+          entry.key === "tikz-editor:workspace" ||
+          !(entry.key.startsWith("tikz-editor:") || entry.key === "visual-tikz-editor:theme")) {
+        return new Response("Invalid preference", { status: 400 });
+      }
+      const write = preferenceWrite.then(async () => {
+        const next = { ...preferences, [entry.key]: entry.value };
+        await mkdir(path.dirname(preferencesPath), { recursive: true });
+        await writeFile(`${preferencesPath}.pending`, JSON.stringify(next));
+        await rename(`${preferencesPath}.pending`, preferencesPath);
+        Object.assign(preferences, next);
+      });
+      preferenceWrite = write;
+      await write;
+      return new Response(null, { status: 204 });
+    }
     if (pathname === "/api/new" && request.method === "POST") {
       const kind = await request.text();
       if (kind !== "tikzpicture" && kind !== "tikzcd") return new Response("Choose tikzpicture or tikzcd", { status: 400 });

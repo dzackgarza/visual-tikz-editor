@@ -110,6 +110,16 @@ interface StandaloneDocument {
 const document = shallowRef<StandaloneDocument | null>(null);
 const documentKey = ref(0);
 const sourceSelection = ref<{ from: number; to: number } | null>(null);
+let preferenceWrite = Promise.resolve();
+const preferences: Record<string, string> = {};
+function savePreference(key: string, value: string): Promise<void> {
+  preferenceWrite = preferenceWrite.then(async () => {
+    const response = await fetch("/api/preferences", { method: "PUT", body: JSON.stringify({ key, value }) });
+    if (!response.ok) throw new Error(await response.text());
+    preferences[key] = value;
+  });
+  return preferenceWrite;
+}
 type ViewId = "code" | "preview" | "canvas" | "quiver";
 type Side = "left" | "right";
 const viewLabels: Record<ViewId, string> = { code: "Code", preview: "Preview", canvas: "Canvas", quiver: "Quiver" };
@@ -246,6 +256,7 @@ async function responseText(response: Response): Promise<string> {
 }
 
 const host: TikzWorkbenchHost = {
+  savePreference,
   ...(nativeWindow ? { clipboard: { readText, writeText } } : {}),
   selectSource: (from, to) => {
     if (isVisible("code")) sourceSelection.value = { from, to };
@@ -311,6 +322,12 @@ async function applyDocument(response: Response): Promise<void> {
 
 async function load(): Promise<void> {
   try {
+    const response = await fetch("/api/preferences");
+    Object.assign(preferences, JSON.parse(await responseText(response)) as Record<string, string>);
+    const editorUrl = new URL("/tikz-editor/index.html", window.location.href);
+    editorUrl.hash = new URLSearchParams({ storage: JSON.stringify(preferences) }).toString();
+    host.editorUrl = editorUrl.href;
+    theme.value = preferences["visual-tikz-editor:theme"] === "dark" ? "dark" : "light";
     await applyDocument(await fetch("/api/document"));
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
@@ -337,6 +354,7 @@ async function mayLeaveDocument(action: "closing" | "continuing"): Promise<boole
 }
 
 async function requestExit(): Promise<void> {
+  await preferenceWrite;
   if (nativeWindow) await getCurrentWindow().close();
 }
 
@@ -429,7 +447,8 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
 
 function toggleTheme(): void {
   theme.value = theme.value === "light" ? "dark" : "light";
-  window.localStorage.setItem("visual-tikz-editor:theme", theme.value);
+  void savePreference("visual-tikz-editor:theme", theme.value)
+    .catch(error => host.reportError("Could not save the theme", error));
 }
 
 function toggleInspector(): void {
@@ -441,9 +460,8 @@ onMounted(() => {
   window.addEventListener("beforeunload", onBeforeUnload);
   if (nativeWindow) {
     void getCurrentWindow().onCloseRequested((event) => {
-      if (!dirty.value) return;
       event.preventDefault();
-      void mayLeaveDocument("closing").then(async (leave) => {
+      void preferenceWrite.then(() => mayLeaveDocument("closing")).then(async (leave) => {
         if (!leave) return;
         allowUnload = true;
         try {
@@ -452,7 +470,7 @@ onMounted(() => {
           allowUnload = false;
           host.reportError("Could not close the window", error);
         }
-      });
+      }).catch(error => host.reportError("Could not finish saving before closing", error));
     }).then((unlisten) => { unlistenClose = unlisten; }).catch((error) => {
       host.reportError("Could not guard unsaved changes", error);
     });

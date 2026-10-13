@@ -42,5 +42,7 @@ export interface TikzWorkbenchHost {
   selectSource?: (from: number, to: number) => void;
   /** Native clipboard services when the host runs in a desktop window. */
   clipboard?: { readText: () => Promise<string>; writeText: (text: string) => Promise<void> };
+  /** Persist editor preferences independently of the source document. */
+  savePreference?: (key: string, value: string) => Promise<void>;
   reportError: (message: string, error: unknown) => void;
 }

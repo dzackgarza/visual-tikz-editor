@@ -61,6 +61,8 @@ interface TikzEditorHostMessage {
   to?: number;
   requestId?: string;
   text?: string;
+  key?: string;
+  value?: string;
 }
 
 const props = defineProps<{
@@ -247,6 +249,12 @@ function onMessage(event: MessageEvent): void {
   }
 
   switch (message.event) {
+    case "persistence-save":
+      if (typeof message.key === "string" && typeof message.value === "string" && props.host.savePreference !== undefined) {
+        void props.host.savePreference(message.key, message.value)
+          .catch(error => props.host.reportError("Could not save editor preferences", error));
+      }
+      break;
     case "init":
       hostReady.value = true;
       sendFullLoad();
