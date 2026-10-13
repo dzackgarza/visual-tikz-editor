@@ -7,6 +7,7 @@ struct Host(Mutex<Option<CommandChild>>);
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let assets = app.path().resource_dir()?;
             let file = std::env::args().nth(1);

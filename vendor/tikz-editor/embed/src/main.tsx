@@ -36,6 +36,7 @@ type HostMessage = {
 	imageBaseUrl?: string;
 	workspace?: 'default' | 'canvasOnly';
 	inspector?: boolean;
+	nativeClipboard?: boolean;
 };
 
 type PendingEditorMessage = {
@@ -62,6 +63,36 @@ let lastSavedSource = DEFAULT_SOURCE;
 let lastKnownSvg = '';
 let currentFileName = 'document.tikz';
 let currentHostRevision = 0;
+let nativeClipboard = false;
+const clipboardRequests = new Map<string, {
+	resolve: (text: string) => void;
+	reject: (error: Error) => void;
+	timer: ReturnType<typeof setTimeout>;
+}>();
+
+function requestNativeClipboard(operation: 'read' | 'write', text?: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const requestId = crypto.randomUUID();
+		const timer = setTimeout(() => {
+			clipboardRequests.delete(requestId);
+			reject(new Error('The native clipboard did not answer within 10 seconds.'));
+		}, 10_000);
+		clipboardRequests.set(requestId, { resolve, reject, timer });
+		postToHost({ event: `clipboard-${operation}`, requestId, text });
+	});
+}
+
+window.addEventListener('message', (event: MessageEvent) => {
+	if (event.source !== window.parent || event.origin !== new URL(document.referrer).origin) return;
+	const result = event.data as { event?: string; requestId?: string; text?: string; error?: string };
+	if (result?.event !== 'clipboard-result' || typeof result.requestId !== 'string') return;
+	const request = clipboardRequests.get(result.requestId);
+	if (!request) return;
+	clearTimeout(request.timer);
+	clipboardRequests.delete(result.requestId);
+	if (typeof result.error === 'string') request.reject(new Error(result.error));
+	else request.resolve(typeof result.text === 'string' ? result.text : '');
+});
 let imageBaseUrl = '';
 let imageBaseErrorReported = false;
 const persistenceValues = new Map<string, string>();
@@ -273,8 +304,11 @@ function createEmbedPlatform(initialSource: string): EditorPlatform {
 		id: 'zettlr-embed',
 		persistence: createMemoryPersistence(initialSource),
 		clipboard: {
-			readText: async () => navigator.clipboard?.readText?.() ?? '',
-			writeText: async (text) => { await navigator.clipboard?.writeText?.(text); },
+			readText: async () => nativeClipboard ? requestNativeClipboard('read') : navigator.clipboard.readText(),
+			writeText: async (text) => {
+				if (nativeClipboard) await requestNativeClipboard('write', text);
+				else await navigator.clipboard.writeText(text);
+			},
 		},
 		menu: {
 			usesNativeMenuBar: false,
@@ -379,7 +413,23 @@ function HostBridge() {
 			}
 		};
 
+		let previousSelection = '';
 		const unsubscribe = useEditorStore.subscribe((state) => {
+			if (state.snapshot.source === state.source) {
+				const handle = state.activeHandleId === null ? undefined : state.snapshot.editHandles.find(item => item.id === state.activeHandleId);
+				const spans = handle ? [handle.sourceRef.sourceSpan] : (state.snapshot.scene?.elements ?? [])
+					.filter(item => state.selectedElementIds.has(item.sourceRef.sourceId))
+					.map(item => item.sourceRef.sourceSpan);
+				if (spans.length > 0) {
+					const from = Math.min(...spans.map(span => span.from));
+					const to = Math.max(...spans.map(span => span.to));
+					const selection = JSON.stringify([state.sourceRevision, from, to, state.activeHandleId]);
+					if (selection !== previousSelection) {
+						previousSelection = selection;
+						postToHost({ event: 'source-selection', revision: currentHostRevision, source: state.source, from, to });
+					}
+				} else previousSelection = '';
+			}
 			const nextSvg = state.snapshot.svg?.svg ?? '';
 			if (nextSvg && nextSvg !== previousSvgRef.current) {
 				previousSvgRef.current = nextSvg;
@@ -408,6 +458,7 @@ function HostBridge() {
 			if (!message) return;
 			const action = message.action || message.event;
 			if (action === 'load') {
+				nativeClipboard = message.nativeClipboard === true;
 				imageBaseUrl = message.imageBaseUrl ?? '';
 				imageBaseErrorReported = false;
 				if (typeof message.revision === 'number' && Number.isInteger(message.revision)) {
@@ -503,6 +554,26 @@ function HostBridge() {
 }
 
 setActiveEditorPlatform(createEmbedPlatform(DEFAULT_SOURCE));
+
+Object.defineProperty(window, 'visualTikzEditorDebug', {
+	value: () => {
+		const state = useEditorStore.getState();
+		return {
+			source: state.source,
+			sourceRevision: state.sourceRevision,
+			figureId: state.activeFigureId,
+			tool: state.toolMode,
+			selection: [...state.selectedElementIds],
+			handle: state.activeHandleId,
+			viewport: state.canvasTransform,
+			pendingRequestId: state.pendingRequestId,
+			snapshotSource: state.snapshot.source,
+			scene: state.snapshot.scene,
+			editHandles: state.snapshot.editHandles,
+			historyIndex: state.historyIndex,
+		};
+	},
+});
 
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>

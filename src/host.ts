@@ -38,5 +38,9 @@ export interface TikzWorkbenchHost {
   imageBaseUrl: (docPath: string) => string;
   /** The page of the pinned visual editor (vendor/tikz-editor/src/index.html). */
   editorUrl: string;
+  /** Navigate an available source editor without taking focus from the canvas. */
+  selectSource?: (from: number, to: number) => void;
+  /** Native clipboard services when the host runs in a desktop window. */
+  clipboard?: { readText: () => Promise<string>; writeText: (text: string) => Promise<void> };
   reportError: (message: string, error: unknown) => void;
 }

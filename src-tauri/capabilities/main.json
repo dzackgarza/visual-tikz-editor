@@ -12,6 +12,8 @@
   "permissions": [
     "core:window:allow-close",
     "core:window:allow-destroy",
-    "core:event:default"
+    "core:event:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text"
   ]
 }

@@ -57,6 +57,10 @@ interface TikzEditorHostMessage {
   message?: string;
   title?: string;
   kind?: string;
+  from?: number;
+  to?: number;
+  requestId?: string;
+  text?: string;
 }
 
 const props = defineProps<{
@@ -111,6 +115,7 @@ function sendFullLoad(): void {
     autosave: 0,
     fileName: props.target.docPath === "" ? "diagram.tikz" : props.target.docPath,
     imageBaseUrl: props.host.imageBaseUrl(props.target.docPath),
+    nativeClipboard: props.host.clipboard !== undefined,
     settings: {
       general: {
         colorScheme: props.theme,
@@ -229,6 +234,18 @@ function onMessage(event: MessageEvent): void {
     return;
   }
 
+  if (message.event === "clipboard-read" || message.event === "clipboard-write") {
+    const request = message;
+    const clipboard = props.host.clipboard;
+    if (clipboard === undefined || typeof request.requestId !== "string") return;
+    const operation = request.event === "clipboard-read"
+      ? clipboard.readText()
+      : typeof request.text === "string" ? clipboard.writeText(request.text) : Promise.reject(new Error("Clipboard text is missing"));
+    void operation.then((text) => postToEditor({ event: "clipboard-result", requestId: request.requestId, text }))
+      .catch((error) => postToEditor({ event: "clipboard-result", requestId: request.requestId, error: error instanceof Error ? error.message : String(error) }));
+    return;
+  }
+
   switch (message.event) {
     case "init":
       hostReady.value = true;
@@ -268,6 +285,16 @@ function onMessage(event: MessageEvent): void {
     case "inspector-closed":
       emit("inspectorClosed");
       break;
+    case "source-selection": {
+      if (message.revision !== session.value.revision || typeof message.source !== "string") break;
+      applyEditorSource(message.source, message.revision);
+      const active = session.value.source;
+      if (active.source !== message.source ||
+          !Number.isInteger(message.from) || !Number.isInteger(message.to) ||
+          message.from! < 0 || message.to! < message.from! || message.to! > active.source.length) break;
+      props.host.selectSource?.(active.sourceFrom + message.from!, active.sourceFrom + message.to!);
+      break;
+    }
   }
 }
 

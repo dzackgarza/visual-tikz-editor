@@ -54,7 +54,7 @@
       <div ref="paneHost" class="pane-host" :class="{ split: bothOpen }"
         :style="bothOpen ? { gridTemplateColumns: `${splitPercent}% 6px minmax(0, 1fr)` } : undefined">
         <div v-if="visited.has('code')" v-show="isVisible('code')" class="view-pane" :style="paneStyle('code')">
-          <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" @change="source = $event" />
+          <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" :selection="sourceSelection" @change="source = $event" />
         </div>
         <div v-for="view in workbenchViews" :key="view" v-show="isVisible(view)" class="view-pane" :style="paneStyle(view)">
           <TikzWorkbench v-if="visited.has(view)" :key="`${documentKey}-${view}`"
@@ -91,6 +91,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
@@ -108,6 +109,7 @@ interface StandaloneDocument {
 
 const document = shallowRef<StandaloneDocument | null>(null);
 const documentKey = ref(0);
+const sourceSelection = ref<{ from: number; to: number } | null>(null);
 type ViewId = "code" | "preview" | "canvas" | "quiver";
 type Side = "left" | "right";
 const viewLabels: Record<ViewId, string> = { code: "Code", preview: "Preview", canvas: "Canvas", quiver: "Quiver" };
@@ -244,6 +246,10 @@ async function responseText(response: Response): Promise<string> {
 }
 
 const host: TikzWorkbenchHost = {
+  ...(nativeWindow ? { clipboard: { readText, writeText } } : {}),
+  selectSource: (from, to) => {
+    if (isVisible("code")) sourceSelection.value = { from, to };
+  },
   readSource: (from, to) => source.value.slice(from, to),
   writeSource: (from, to, insert) => {
     source.value = source.value.slice(0, from) + insert + source.value.slice(to);
@@ -289,6 +295,7 @@ async function applyDocument(response: Response): Promise<void> {
   document.value = metadata(response);
   source.value = text;
   savedSource.value = text;
+  sourceSelection.value = null;
   documentKey.value++;
   newKindOpen.value = !document.value.saved && text === "";
   const preferred: ViewId = rawTikzEnvironment(text) === "tikzcd" || document.value.path.endsWith(".tikzcd") ? "quiver" : "canvas";
