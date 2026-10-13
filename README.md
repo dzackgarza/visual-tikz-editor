@@ -13,13 +13,13 @@ bun install --frozen-lockfile
 just run
 ```
 
-Open the local URL printed by `just run`. The app starts with a new `tikzpicture` in the drawing canvas. The **File** menu holds New, Open, Save, and Save As. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
+Open the local URL printed by `just run`. The app starts with a new `tikzpicture` in the drawing canvas. The New dialog offers `tikzpicture` and `tikzcd`; `tikzcd` opens Quiver. The **File** menu holds New, Open, Save, and Save As. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
 
-The workbench offers a **TeX render** view of the same source. It uses the local `pandoc`, `pdflatex`, and `pdf2svg` tools with the Pandoc filter and standalone template under `~/.pandoc`. The filter must support renderer protocol 3 (available in `pandoc-config` revision `f6e2e4c` and later). The standalone Quiver canvas starts with standard KaTeX macros; an embedding host supplies its document's macro definitions through the host interface. Desktop opens with source beside the diagram; tablet widths open with the canvas. **Source** and **Properties** toggle independently without replacing the editor. **Copy source** copies the authored source without saving the file. The light theme is the default; the theme button saves the chosen appearance locally.
+## Linux desktop package
 
-## Desktop package
+Run `just package` to build a Debian package in `src-tauri/target/release/bundle/deb/`. The desktop host supplies native clipboard access. It contains a Tauri window, a compiled Bun file host, the editor assets, an application icon, and a desktop entry. Install the package with your system package manager, or run `just install-desktop` to sync a user installation under `XDG_DATA_HOME` (default `~/.local/share`). The user install stores the app in `visual-tikz-editor/`, the entry in `applications/`, and the icon in `icons/`. Run the installer again after a new build to update those files. Launch **Visual TikZ Editor** from the application menu or pass a `.tikz` or `.tikzcd` file to its command. The drawing view works without TeX; the optional **TeX render** view uses the tools and `~/.pandoc` configuration described below.
 
-Run `just package` to build the Linux Debian package in `src-tauri/target/release/bundle/deb/`. The desktop host supplies native clipboard access. `just install-desktop` installs the built app and menu entry under `XDG_DATA_HOME` (default `~/.local/share`).
+The workbench offers a **TeX render** view of the same source. It uses the local `pandoc`, `pdflatex`, and `pdf2svg` tools with the Pandoc filter and standalone template under `~/.pandoc`. The filter must support renderer protocol 3 (available in `pandoc-config` revision `f6e2e4c` and later). The standalone Quiver canvas starts with standard KaTeX macros; an embedding host supplies its document's macro definitions through the host interface. Code, preview, canvas, and Quiver have icons on two sidebars. Drag icons between the sidebars. Click an icon to open its view, or click the active icon to close it. One open view fills the center; two open views have a movable divider. The canvas toolbar opens **Properties**, **Layers**, and **Settings**. Its grip moves and docks the toolbar, and **Insert** holds drawing tools and equation insertion. **Copy source** copies the authored source without saving the file. The light theme is the default; the theme button saves the chosen appearance locally.
 
 ## Embed the workbench
 
@@ -33,9 +33,6 @@ Mount `src/ui/TikzWorkbench.vue` with `target`, `host`, and `theme`. Set `initia
 | `imageBaseUrl` | Resolve figure image paths. |
 | `editorUrl` | Serve the pinned drawing editor page under `vendor/`. |
 | `requestSave` | Handle an explicit editor Save gesture when the host offers file saving. |
-| `selectSource` | Highlight a canvas selection in an open code editor. |
-| `clipboard` | Read and write the native clipboard. |
-| `savePreference` | Persist editor preferences across launches. |
 | `reportError` | Report an integration error. |
 
 The source document is authoritative. The editor bridges reject stale source writes. The host must keep source identity and save transactions consistent with its own document model.
@@ -53,5 +50,3 @@ View switches retain the visual editor instance, including its selection, viewpo
 `just build` builds the standalone page. `just test-commit` checks Vue and TypeScript. `just test` runs the workbench's Mocha tests on Node.js. The source under `vendor/tikz-editor` and `vendor/quiver` comes from pinned upstream revisions plus maintained patches. Each `PROVENANCE.toml` records the source revision. `just update-tikz-editor-vendor` and `just update-quiver-vendor` rebuild those assets.
 
 The workbench is GPL-3.0. The bundled editors and their third-party assets retain their own license files. See [LICENSE](LICENSE) and the vendor provenance records.
-
-Editor preferences and palette collections are saved in `XDG_CONFIG_HOME/visual-tikz-editor/preferences.json` (default `~/.config/visual-tikz-editor/preferences.json`). In the drawing iframe, `window.visualTikzEditorDebug()` exposes the live source, scene, selection, viewport, snapping settings, and diagnostics.

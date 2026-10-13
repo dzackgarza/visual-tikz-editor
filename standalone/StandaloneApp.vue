@@ -54,7 +54,7 @@
         <div v-if="visited.has('code')" v-show="isVisible('code')" class="view-pane" :style="paneStyle('code')">
           <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" :selection="sourceSelection" @change="source = $event" />
         </div>
-        <div v-for="view in workbenchViews" :key="view" v-show="isVisible(view)" class="view-pane" :style="paneStyle(view)">
+        <div v-for="view in workbenchViews" :key="view" class="view-pane" :class="{ 'pane-hidden': !isVisible(view) }" :style="paneStyle(view)">
           <TikzWorkbench v-if="visited.has(view)" :ref="(handle) => setWorkbench(view, handle)" :key="`${documentKey}-${view}`"
             class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
             :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
@@ -730,6 +730,8 @@ body,
 }
 
 .view-pane > * { width: 100%; height: 100%; }
+
+.view-pane.pane-hidden { visibility: hidden; pointer-events: none; }
 
 .pane-divider {
   grid-column: 2;

@@ -32,8 +32,8 @@ describe('standalone native file workflow', function () {
   }
 
   async function chooseFile(name: string): Promise<void> {
-    const { stdout } = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'zenity'], { env: desktopEnv, timeout: 10000 });
-    const id = stdout.trim().split('\n')[0];
+    const { stdout } = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'xdg-desktop-portal-gtk'], { env: desktopEnv, timeout: 10000 });
+    const id = stdout.trim().split('\n').at(-1)!;
     await execute('xdotool', ['windowfocus', '--sync', id], { env: desktopEnv });
     await execute('import', ['-window', 'root', `test-results/workbench/native-${name}-dialog.png`], { env: desktopEnv });
     await execute('xdotool', ['key', '--clearmodifiers', 'ctrl+l'], { env: desktopEnv });
@@ -41,23 +41,8 @@ describe('standalone native file workflow', function () {
     await execute('xdotool', ['type', '--clearmodifiers', '--delay', '1', diagramPath], { env: desktopEnv });
     await execute('xdotool', ['key', '--clearmodifiers', 'Return'], { env: desktopEnv });
     if (name === 'open') {
-      // GTK resolves the typed path asynchronously before enabling confirmation.
-      await expect.poll(async () => {
-        const result = await execute('/usr/bin/python3', ['-c', `
-import gi
-gi.require_version('Atspi', '2.0')
-from gi.repository import Atspi
-
-def confirm(node):
-    if node.get_role_name() == 'push button' and node.get_name() == 'OK':
-        if node.get_state_set().contains(Atspi.StateType.SENSITIVE):
-            return node.do_action(0)
-    return any(confirm(node.get_child_at_index(i)) for i in range(node.get_child_count()))
-
-print(confirm(Atspi.get_desktop(0)))
-`], { env: desktopEnv, timeout: 10000 });
-        return result.stdout.trim();
-      }, { timeout: 15000 }).toBe('True');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await execute('xdotool', ['key', '--clearmodifiers', 'Return'], { env: desktopEnv });
     }
   }
 
@@ -68,7 +53,7 @@ print(confirm(Atspi.get_desktop(0)))
       displayServer.once('exit', code => reject(new Error(`Display exited: ${code}`)));
       displayServer.stdout!.once('data', data => resolve(`:${String(data).trim()}`));
     });
-    desktopEnv = Object.fromEntries(Object.entries({ ...process.env, DISPLAY: display, GDK_BACKEND: "x11", GSK_RENDERER: "cairo" }).filter((entry): entry is [string, string] => entry[1] !== undefined));
+    desktopEnv = Object.fromEntries(Object.entries({ ...process.env, DISPLAY: display, GDK_BACKEND: "x11", GSK_RENDERER: "cairo", GTK_USE_PORTAL: "0" }).filter((entry): entry is [string, string] => entry[1] !== undefined));
     sessionBus = spawn('dbus-daemon', ['--session', '--nofork', '--print-address=1'], { env: desktopEnv, stdio: ['ignore', 'pipe', 'inherit'] });
     desktopEnv.DBUS_SESSION_BUS_ADDRESS = await new Promise<string>((resolve, reject) => {
       sessionBus.once('error', reject);
@@ -99,28 +84,29 @@ print(confirm(Atspi.get_desktop(0)))
 \draw[blue] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
     await page.goto(url);
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'TikZ picture', exact: true }).click();
+    await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+    await expect(page.locator('.cm-content')).toBeVisible({ timeout: 30_000 });
     await page.locator('.cm-content').fill(authored);
     await page.getByRole('button', { name: 'File', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Save As…', exact: true }).click();
     await chooseFile('save');
     await expect.poll(() => existsSync(diagramPath)).toBe(true);
     assert.equal(await readFile(diagramPath, 'utf8'), authored);
-    await expect(page.locator('.tikz-standalone-status')).toHaveText('Saved');
+    await expect(page.locator('.tikz-standalone-status')).toContainText('Saved');
     await page.goto('about:blank');
     process.kill(-server.pid!, 'SIGTERM');
     await new Promise(resolve => server.once('exit', resolve));
     await startServer();
     await page.goto(url);
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
-    await page.getByRole('button', { name: 'File', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Open…', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Open existing…', exact: true })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'Open existing…', exact: true }).click();
     await chooseFile('open');
     await expect(page.locator('.document-bar strong')).toHaveText('authored.tikz');
+    await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
     assert.equal(await page.locator('.cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
-    await expect(page.frameLocator('iframe').locator('path[data-source-id]')).toHaveCount(1);
-    const frame = page.frameLocator('iframe');
-    await page.getByRole('button', { name: 'Draw', exact: true }).click();
+    await expect(page.frameLocator('iframe[title="TikZ visual editor"]').locator('path[data-source-id]')).toHaveCount(1);
+    const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
     const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .65);
     await page.mouse.down();
@@ -132,38 +118,40 @@ print(confirm(Atspi.get_desktop(0)))
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
     const edited = await page.evaluate(() => navigator.clipboard.readText());
     assert.equal(await readFile(diagramPath, 'utf8'), edited);
-    await expect(page.locator('.tikz-standalone-status')).toHaveText('Saved');
+    await expect(page.locator('.tikz-standalone-status')).toContainText('Saved');
     await page.getByRole('button', { name: 'File', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Open…', exact: true }).click();
-    const dialog = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'zenity'], { env: desktopEnv, timeout: 10000 });
-    await execute('xdotool', ['windowfocus', '--sync', dialog.stdout.trim().split('\n')[0]], { env: desktopEnv });
+    const dialog = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'xdg-desktop-portal-gtk'], { env: desktopEnv, timeout: 10000 });
+    await execute('xdotool', ['windowfocus', '--sync', dialog.stdout.trim().split('\n').at(-1)!], { env: desktopEnv });
     const cancelled = page.waitForResponse(response => response.url().endsWith('/api/open'));
     await execute('xdotool', ['key', '--clearmodifiers', 'Escape'], { env: desktopEnv });
     assert.equal((await cancelled).status(), 204);
-    await expect(page.locator('.tikz-standalone-status')).toHaveText('Saved');
+    await expect(page.locator('.tikz-standalone-status')).toContainText('Saved');
     assert.equal(await readFile(diagramPath, 'utf8'), edited);
     await page.locator('.cm-content').fill(String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`);
-    await expect(page.getByRole('button', { name: 'Quiver canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await frame.locator('.vertex').nth(1).click();
-    await frame.locator('.label-input').fill('C');
-    await frame.locator('.label-input').press('Control+s');
+    await page.getByRole('button', { name: 'Quiver: right sidebar', exact: true }).click();
+    const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+    await quiver.locator('.vertex').nth(1).click();
+    await quiver.locator('.label-input').fill('C');
+    await quiver.locator('.label-input').press('Control+s');
     await expect.poll(() => readFile(diagramPath, 'utf8')).toMatch(/\\begin\{tikzcd\}[\s\S]*\bC\b/);
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
-    assert.equal(await readFile(diagramPath, 'utf8'), await page.evaluate(() => navigator.clipboard.readText()));
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(await readFile(diagramPath, 'utf8'));
   });
   it('saves completed canvas and Quiver edits after an immediate rendered-view switch', async function () {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     for (const provider of ['visual', 'quiver']) {
+      await page.request.post(`${url}api/new`, { data: provider === 'visual' ? 'tikzpicture' : 'tikzcd' });
       await page.goto(url);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const authored = provider === 'visual'
         ? String.raw`\begin{tikzpicture}\draw (0,0) -- (2,1);\end{tikzpicture}`
         : String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
       await page.locator('.cm-content').fill(authored);
-      const frame = page.frameLocator('iframe');
-      await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+      const frame = page.frameLocator(provider === 'visual' ? 'iframe[title="TikZ visual editor"]' : 'iframe[title="Quiver diagram editor"]');
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', );
       diagramPath = join(await mkdtemp(join(tmpdir(), 'workbench-render-save-')), `${provider}.tikz`);
       if (provider === 'visual') {
-        await page.getByRole('button', { name: 'Draw', exact: true }).click();
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height / 2);
         await page.mouse.down();
@@ -171,7 +159,7 @@ print(confirm(Atspi.get_desktop(0)))
         await page.mouse.up();
         await page.evaluate(() => {
           const buttons = [...document.querySelectorAll('button')];
-          buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
+          buttons.find(button => button.getAttribute('aria-label') === 'Preview: right sidebar')!.click();
           buttons.find(button => button.textContent?.trim() === 'File')!.click();
         });
       } else {
@@ -180,7 +168,7 @@ print(confirm(Atspi.get_desktop(0)))
           input.value = 'Completed';
           input.dispatchEvent(new Event('input', { bubbles: true }));
           const buttons = [...window.parent.document.querySelectorAll('button')];
-          buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
+          buttons.find(button => button.getAttribute('aria-label') === 'Preview: right sidebar')!.click();
           buttons.find(button => button.textContent?.trim() === 'File')!.click();
         });
       }
