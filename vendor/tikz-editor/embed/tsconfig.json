@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node",
+      "vite/client"
+    ]
+  },
+  "include": [
+    "src",
+    "../../packages/app/src",
+    "../../packages/core/src",
+    "../../packages/lang-tikz/src",
+    "../../packages/lezer-tikz/src"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../test",
+    "../../packages/core/dist"
+  ]
+}

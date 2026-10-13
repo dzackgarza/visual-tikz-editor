@@ -46,8 +46,9 @@ try {
   run('bun', [ 'install', '--no-save' ], upstream)
   run('bunx', [ 'lezer-generator', '--typeScript', 'src/grammar/tikz.grammar', '-o', 'src/grammar/tikz-parser.ts' ], path.join(upstream, 'packages/lezer-tikz'))
   for (const name of [ 'lezer-tikz', 'lang-tikz', 'core' ]) {
-    run('bunx', [ 'tsc', '-p', path.join(upstream, `packages/${name}/tsconfig.json`) ], upstream)
+    run('bunx', [ '--package', 'typescript@5.9.3', 'tsc', '-p', path.join(upstream, `packages/${name}/tsconfig.json`) ], upstream)
   }
+  run('bunx', [ '--package', 'typescript@5.9.3', 'tsc', '--noEmit', '-p', path.join(embedApp, 'tsconfig.json') ], upstream)
   run('bun', [ 'run', 'build' ], embedApp)
 
   const staged = path.join(temporary, 'src')
