@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { snapshotRequestSchema, editorStateSchema } from './snapshot-protocol';
+import { snapshotRequestSchema, editorStateSchema, toolModeSchema } from './snapshot-protocol';
 import { originalStrokeSchema } from './original-ink';
 
 export const commandIdentitySchema = z.object({
@@ -12,11 +12,7 @@ const settings = z.object({ general: z.object({
   colorScheme: z.enum(['system', 'light', 'dark']).optional(),
   canvasInvert: z.boolean().optional(),
 }).optional() });
-export const toolModeSchema = z.enum([
-  'select', 'magnify', 'addFreehand', 'addLine', 'addArrow', 'addNode', 'addPoint',
-  'addImage', 'addCircle', 'addRect', 'addEllipse', 'addArc', 'addPath', 'addBezier',
-  'addShape', 'addMatrix', 'addGrid', 'addBucket',
-]);
+export { toolModeSchema } from './snapshot-protocol';
 
 export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('load'), source: z.string(), fileName: z.string(),

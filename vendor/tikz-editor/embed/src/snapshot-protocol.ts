@@ -7,12 +7,16 @@ const identity = {
   requestId: z.string().min(1),
 };
 
+export const toolModeSchema = z.enum([
+  'select', 'lasso', 'erase', 'magnify', 'addFreehand', 'addLine', 'addArrow', 'addNode', 'addPoint',
+  'addImage', 'addCircle', 'addRect', 'addEllipse', 'addArc', 'addPath', 'addBezier',
+  'addShape', 'addMatrix', 'addGrid', 'addBucket',
+]);
+
 export const editorStateSchema = z.object({
   activeFigureId: z.string().min(1),
   selection: z.array(z.string()),
-  tool: z.enum(['select', 'magnify', 'addBucket', 'addNode', 'addPoint', 'addImage', 'addMatrix',
-    'addShape', 'addPath', 'addFreehand', 'addLine', 'addGrid', 'addRect', 'addEllipse',
-    'addCircle', 'addArc', 'addArrow', 'addBezier']),
+  tool: toolModeSchema,
   viewport: z.object({ scale: z.number().positive(), translateX: z.number(), translateY: z.number() }),
   fitToContent: z.boolean(),
   interpretGeometry: z.boolean(),

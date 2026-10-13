@@ -1,5 +1,11 @@
+import type { HostCommand } from "../vendor/tikz-editor/embed/src/commands";
+
+export type EditorToolMode = Extract<HostCommand, { action: "tool" }>["tool"];
+
 export const EDITOR_TOOLS = [
   { mode: "select", label: "Select", icon: "pi pi-arrow-up-left" },
+  { mode: "lasso", label: "Lasso", icon: "pi pi-circle-dashed" },
+  { mode: "erase", label: "Erase", icon: "pi pi-eraser" },
   { mode: "magnify", label: "Zoom", icon: "pi pi-search" },
   { mode: "addFreehand", label: "Draw", icon: "pi pi-pencil" },
   { mode: "addLine", label: "Line", icon: "pi pi-minus" },
@@ -17,9 +23,7 @@ export const EDITOR_TOOLS = [
   { mode: "addMatrix", label: "Matrix", icon: "pi pi-table" },
   { mode: "addGrid", label: "Grid", icon: "pi pi-th-large" },
   { mode: "addBucket", label: "Fill", icon: "pi pi-palette" },
-] as const;
-
-export type EditorToolMode = (typeof EDITOR_TOOLS)[number]["mode"];
+] as const satisfies readonly { mode: EditorToolMode; label: string; icon: string }[];
 
 export interface EditorShapeOption {
   value: string;
