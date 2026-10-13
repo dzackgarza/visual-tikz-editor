@@ -12,9 +12,6 @@
           <button v-if="nativeWindow" type="button" @click="requestExit">Exit</button>
         </div>
       </details>
-      <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
-        {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
-      </button>
       <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}<template v-if="editorStatus !== ''"> · {{ editorStatus }}</template></span>
@@ -60,9 +57,8 @@
         <div v-for="view in workbenchViews" :key="view" v-show="isVisible(view)" class="view-pane" :style="paneStyle(view)">
           <TikzWorkbench v-if="visited.has(view)" :ref="(handle) => setWorkbench(view, handle)" :key="`${documentKey}-${view}`"
             class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
-            :show-inspector="inspectorOpen" :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
-            :initial-mode="modeForView(view)" @status="onEditorStatus(view, $event)"
-            @inspector-closed="inspectorOpen = false" />
+            :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
+            :initial-mode="modeForView(view)" @status="onEditorStatus(view, $event)" />
         </div>
         <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
           aria-orientation="vertical" :aria-valuenow="Math.round(splitPercent)" aria-valuemin="15" aria-valuemax="85"
@@ -225,7 +221,6 @@ async function currentSource(): Promise<string> {
 const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
-const inspectorOpen = ref(false);
 const theme = ref<TikzWorkbenchTheme>(
   window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
 );
@@ -464,9 +459,7 @@ function toggleTheme(): void {
     .catch(error => host.reportError("Could not save the theme", error));
 }
 
-function toggleInspector(): void {
-  inspectorOpen.value = !inspectorOpen.value;
-}
+
 
 async function copySource(): Promise<void> {
   try {

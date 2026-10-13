@@ -444,8 +444,9 @@ function HostBridge() {
 					}
 					return;
 				case 'load': {
-					if (command.state && !parseTikzForEdit(command.source, { activeFigureId: command.state.activeFigureId })
-						.figures.some(figure => figure.id === command.state!.activeFigureId)) {
+					const restoredState = command.state;
+					if (restoredState && !parseTikzForEdit(command.source, { activeFigureId: restoredState.activeFigureId })
+						.figures.some(figure => figure.id === restoredState.activeFigureId)) {
 						reply(command, 'invalid-command');
 						return;
 					}
@@ -467,19 +468,19 @@ function HostBridge() {
 					applyHostSettings(command.settings);
 					persistHostSettings(command.settings);
 					pendingChangeRef.current = null;
-					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: command.state ? { source: command.source, transform: command.state.viewport, fitToContent: command.state.fitToContent } : null });
+					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: restoredState ? { source: command.source, transform: restoredState.viewport, fitToContent: restoredState.fitToContent } : null });
 					loadIntoEditor(command.source, command.fileName);
 					const finishLoad = () => {
 						const state = useEditorStore.getState();
 						if (state.snapshot.source !== command.source ||
-							(command.state && !state.snapshot.figures.some(figure => figure.id === command.state.activeFigureId))) return;
+							(restoredState && !state.snapshot.figures.some(figure => figure.id === restoredState.activeFigureId))) return;
 						pendingLoad?.();
 						pendingLoad = null;
-						if (command.state) {
-							state.dispatch({ type: 'SET_ACTIVE_FIGURE', figureId: command.state.activeFigureId });
-							state.dispatch({ type: 'SET_TOOL_MODE', mode: command.state.tool });
-							state.dispatch({ type: 'SET_FREEHAND_INTERPRETATION', enabled: command.state.interpretGeometry });
-							state.dispatch({ type: 'SELECT_RANGE', ids: command.state.selection });
+						if (restoredState) {
+							state.dispatch({ type: 'SET_ACTIVE_FIGURE', figureId: restoredState.activeFigureId });
+							state.dispatch({ type: 'SET_TOOL_MODE', mode: restoredState.tool });
+							state.dispatch({ type: 'SET_FREEHAND_INTERPRETATION', enabled: restoredState.interpretGeometry });
+							state.dispatch({ type: 'SELECT_RANGE', ids: restoredState.selection });
 						}
 						postToHost({ event: 'loaded', revision: command.revision });
 						reply(command);

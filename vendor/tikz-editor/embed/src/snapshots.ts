@@ -2,7 +2,7 @@ import { useEditorStore } from '@tikz-editor/app/store';
 import { worldToSvgBounds } from 'tikz-editor/coords/index';
 import { exportSvg } from './export-svg';
 import { originalStrokes } from './original-ink';
-import type { EditorSnapshotResult, SnapshotFailure, SnapshotRequest } from './snapshot-protocol';
+import type { EditorSnapshot, EditorSnapshotResult, SnapshotFailure, SnapshotRequest } from './snapshot-protocol';
 
 /** Wait on the editor's own scheduler; never pair source with its previous SVG. */
 export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => void, imageBaseUrl: () => string) {
@@ -54,7 +54,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
       if (activeFigure === undefined) { fail(requestId, 'render-failed'); continue; }
       originals = originals.filter(original => original.from >= activeFigure.span.from && original.to <= activeFigure.span.to);
       entry.exporting = true;
-      const result = {
+      const result: Omit<EditorSnapshot, "svg"> = {
         event: 'snapshot', status: 'ready',
         sessionId: request.sessionId, revision: request.revision, requestId,
         sourceRevision, source: request.source,
@@ -73,7 +73,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
           fitToContent: state.fitToContentModeActive,
           interpretGeometry: state.freehandInterpretGeometry,
         },
-      } as const;
+      };
       void exportSvg(drawing.svg, `figure-${request.sessionId}-${request.revision}-${sourceRevision}`, imageBaseUrl(), entry.abort.signal)
         .then(svg => finish(requestId, { ...result, svg }), () => fail(requestId, 'resource-unavailable'));
     }
