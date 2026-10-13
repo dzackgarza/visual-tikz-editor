@@ -11,5 +11,7 @@ describe('paper TikZ projection', function () {
     assert.equal(paperSource(source), '\\begin{tikzpicture}\n\\begin{scope}\n\\draw (0,0) -- (1,1);\n\\end{scope}\n\\end{tikzpicture}\n');
     assert.equal(paperSource('\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}'),
       '\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}');
+    assert.equal(paperSource('% workbench-ink-end:orphan\n\\draw (0,0) -- (1,1);'),
+      '% workbench-ink-end:orphan\n\\draw (0,0) -- (1,1);');
   });
 });
