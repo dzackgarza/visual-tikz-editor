@@ -5,7 +5,7 @@
       <details class="file-menu">
         <summary>File</summary>
         <div class="file-menu-items">
-          <button type="button" :disabled="document === null" @click="newDocument">New diagram</button>
+          <button type="button" :disabled="document === null" @click="newDocument">New tikzpicture or tikzcd…</button>
           <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
           <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
           <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
@@ -31,7 +31,7 @@
     </div>
     <div v-if="newKindOpen" class="new-kind-backdrop">
       <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="new-kind-title">
-        <h2 id="new-kind-title">New diagram</h2>
+        <h2 id="new-kind-title">New tikzpicture or tikzcd</h2>
         <p>Choose a diagram type.</p>
         <div class="new-kind-options">
           <button type="button" @click="createDocument('tikzpicture')">tikzpicture</button>
@@ -227,7 +227,9 @@ const status = computed(() => {
   if (hostError.value !== "") return hostError.value;
   if (document.value === null) return loadError.value === "" ? "Loading…" : "Load failed";
   if (!document.value.saved)
-    return source.value === savedSource.value ? "New diagram" : "Unsaved changes";
+    return source.value === savedSource.value
+      ? `New ${document.value.path.endsWith(".tikzcd") ? "tikzcd" : "tikzpicture"}`
+      : "Unsaved changes";
   return dirty.value ? "Unsaved changes" : "Saved";
 });
 
