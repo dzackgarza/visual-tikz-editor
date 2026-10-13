@@ -38,7 +38,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         fail(requestId, 'source-changed');
         continue;
       }
-      if (state.activeFigureId !== entry.activeFigureId) { fail(requestId, 'stale-target'); continue; }
+      if (entry.activeFigureId !== null && state.activeFigureId !== entry.activeFigureId) { fail(requestId, 'stale-target'); continue; }
       if (entry.exporting || state.pendingViewportRestore !== null) continue;
       if (state.pendingRequestId !== null || state.snapshot.source !== request.source) continue;
       if (state.snapshot.activeFigureId !== state.activeFigureId) continue;
@@ -97,9 +97,10 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         send({ ...request, event: 'snapshot', status: 'failed', error: 'busy' });
         return;
       }
+      const state = useEditorStore.getState();
       pending.set(request.requestId, {
-        request, sourceRevision: useEditorStore.getState().sourceRevision,
-        activeFigureId: useEditorStore.getState().activeFigureId,
+        request, sourceRevision: state.sourceRevision,
+        activeFigureId: state.snapshot.source === request.source ? state.activeFigureId : null,
         abort: new AbortController(), exporting: false,
         timer: window.setTimeout(() => fail(request.requestId, 'timeout'), 10000),
       });

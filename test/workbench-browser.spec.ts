@@ -488,40 +488,34 @@ describe("standalone workbench host boundary", function () {
   });
 
   it('cancels a pending workspace command before it can change the editor', async function () {
-    let release!: () => void;
-    const delayed = new Promise<void>(resolve => { release = resolve; });
     await page.addInitScript(() => window.addEventListener('message', event => {
       const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
       if (message?.event === 'loaded') (window as unknown as { loadedEditor: unknown }).loadedEditor = message;
     }));
-    await page.route('**/workspace-apply-*.js', async route => { await delayed; await route.continue(); });
-    try {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator('#status')).toHaveText('Loaded');
-      const accepted = { ...await page.evaluate(() => (window as unknown as { loadedEditor: { sessionId: string; revision: number } }).loadedEditor), source: await page.getByLabel('Authored source').inputValue() };
-      await page.evaluate(({ sessionId, revision }) => {
-        const editor = document.querySelector<HTMLIFrameElement>('#editor')!;
-        const output = document.createElement('pre');
-        output.id = 'workspace-result';
-        document.querySelector('section')!.append(output);
-        window.addEventListener('message', event => {
-          if (event.source !== editor.contentWindow || event.origin !== location.origin) return;
-          const reply = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-          if (reply.event === 'reply' && reply.requestId === 'cancelled-workspace') output.textContent = JSON.stringify(reply);
-        });
-        editor.contentWindow!.postMessage({ action: 'workspace', workspace: 'default', sessionId, revision, requestId: 'cancelled-workspace' }, location.origin);
-        editor.contentWindow!.postMessage({ action: 'cancel', targetRequestId: 'cancelled-workspace', sessionId, revision, requestId: crypto.randomUUID() }, location.origin);
-      }, accepted);
-      await expect(page.locator('#workspace-result')).not.toBeEmpty();
-      const reply = JSON.parse(await page.locator('#workspace-result').innerText());
-      assert.equal(reply.status, 'failed');
-      assert.equal(reply.error, 'cancelled');
-      release();
-      await expect(page.frameLocator('#editor').getByRole('menuitem', { name: 'File', exact: true })).toBeHidden();
-      await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
-      await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
-      assert.equal(JSON.parse(await page.locator('#result').innerText()).source, accepted.source);
-    } finally { release(); }
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    const accepted = { ...await page.evaluate(() => (window as unknown as { loadedEditor: { sessionId: string; revision: number } }).loadedEditor), source: await page.getByLabel('Authored source').inputValue() };
+    await page.evaluate(({ sessionId, revision }) => {
+      const editor = document.querySelector<HTMLIFrameElement>('#editor')!;
+      const output = document.createElement('pre');
+      output.id = 'workspace-result';
+      document.querySelector('section')!.append(output);
+      window.addEventListener('message', event => {
+        if (event.source !== editor.contentWindow || event.origin !== location.origin) return;
+        const reply = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (reply.event === 'reply' && reply.requestId === 'cancelled-workspace') output.textContent = JSON.stringify(reply);
+      });
+      editor.contentWindow!.postMessage({ action: 'workspace', workspace: 'default', sessionId, revision, requestId: 'cancelled-workspace' }, location.origin);
+      editor.contentWindow!.postMessage({ action: 'cancel', targetRequestId: 'cancelled-workspace', sessionId, revision, requestId: crypto.randomUUID() }, location.origin);
+    }, accepted);
+    await expect(page.locator('#workspace-result')).not.toBeEmpty();
+    const reply = JSON.parse(await page.locator('#workspace-result').innerText());
+    assert.equal(reply.status, 'failed');
+    assert.equal(reply.error, 'cancelled');
+    await expect(page.frameLocator('#editor').getByRole('menuitem', { name: 'File', exact: true })).toBeHidden();
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    assert.equal(JSON.parse(await page.locator('#result').innerText()).source, accepted.source);
   });
 
   it("retains the current drawing when an older load arrives from its host", async function () {
@@ -692,7 +686,7 @@ describe("standalone workbench host boundary", function () {
     const fittedDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(fitted.source)![1];
     assert.notEqual(fittedDrawing, originalDrawing);
     await frame.locator('[data-canvas-viewport="true"]').press('Control+z');
-    await expect(page.getByLabel('Authored source')).not.toHaveValue(fitted.source);
+    await expect(page.getByLabel('Authored source')).toHaveValue(fitted.source.replace(fittedDrawing, originalDrawing));
     const restored = await hostSnapshot();
     assert.equal(/\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(restored.source)![1], originalDrawing);
     assert.deepEqual(restored.originalInk, fitted.originalInk);
@@ -963,6 +957,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator('#status')).toHaveText('Loaded');
     await page.getByLabel('Authored source').fill(String.raw`\begin{tikzpicture}\node at (0,0) {\includegraphics[width=4cm]{image-resource.svg}};\end{tikzpicture}`);
     await page.getByRole('button', { name: 'Load source', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Loaded', { timeout: 15000 });
     await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
     await expect.poll(() => exporting).toBe(true);
     await expect(page.locator('#status')).toHaveText('Awaiting snapshot');
