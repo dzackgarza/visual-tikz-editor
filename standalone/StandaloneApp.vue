@@ -34,8 +34,8 @@
         <h2 id="new-kind-title">New diagram</h2>
         <p>Choose a diagram type.</p>
         <div class="new-kind-options">
-          <button type="button" @click="createDocument('tikzpicture')">TikZ picture</button>
-          <button type="button" @click="createDocument('tikzcd')">TikZ commutative diagram</button>
+          <button type="button" @click="createDocument('tikzpicture')">tikzpicture</button>
+          <button type="button" @click="createDocument('tikzcd')">tikzcd</button>
         </div>
         <button type="button" class="new-kind-cancel" @click="openDocument">Open existing…</button>
         <button v-if="document?.saved || source !== ''" type="button" class="new-kind-cancel" @click="newKindOpen = false">Cancel</button>
