@@ -292,7 +292,6 @@ function loadIntoEditor(source: string, fileName = currentFileName) {
 	const store = useEditorStore.getState();
 	store.dispatch({ type: 'CODE_EDITED', source });
 	store.dispatch({ type: 'MARK_DOCUMENT_SAVED', fileRef: makeFileRef(fileName), lastKnownDiskSource: source });
-	postToHost({ event: 'loaded', revision: currentHostRevision });
 }
 
 function HostBridge() {
@@ -305,6 +304,7 @@ function HostBridge() {
 
 	useEffect(() => {
 		const pendingCommands = new Map<string, { command: HostCommand; timer: number }>();
+		let pendingFigureRestore: (() => void) | null = null;
 		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }), () => imageBaseUrl);
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
 
@@ -389,6 +389,8 @@ function HostBridge() {
 						reply(command, 'stale-target');
 						return;
 					}
+					pendingFigureRestore?.();
+					pendingFigureRestore = null;
 					snapshots.replace();
 					for (const pending of pendingCommands.values()) reply(pending.command, 'stale-target');
 					currentHostSession = command.sessionId;
@@ -401,12 +403,24 @@ function HostBridge() {
 					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: command.state ? { source: command.source, transform: command.state.viewport, fitToContent: command.state.fitToContent } : null });
 					loadIntoEditor(command.source, command.fileName);
 					if (command.state) {
-						const { dispatch } = useEditorStore.getState();
-						dispatch({ type: 'SET_ACTIVE_FIGURE', figureId: command.state.activeFigureId });
-						dispatch({ type: 'SET_TOOL_MODE', mode: command.state.tool });
-						dispatch({ type: 'SET_FREEHAND_INTERPRETATION', enabled: command.state.interpretGeometry });
-						dispatch({ type: 'SELECT_RANGE', ids: command.state.selection });
+						const restore = () => {
+							const state = useEditorStore.getState();
+							if (state.snapshot.source !== command.source ||
+								!state.snapshot.figures.some(figure => figure.id === command.state!.activeFigureId)) return;
+							pendingFigureRestore?.();
+							pendingFigureRestore = null;
+							state.dispatch({ type: 'SET_ACTIVE_FIGURE', figureId: command.state!.activeFigureId });
+							state.dispatch({ type: 'SET_TOOL_MODE', mode: command.state!.tool });
+							state.dispatch({ type: 'SET_FREEHAND_INTERPRETATION', enabled: command.state!.interpretGeometry });
+							state.dispatch({ type: 'SELECT_RANGE', ids: command.state!.selection });
+							postToHost({ event: 'loaded', revision: command.revision });
+							reply(command);
+						};
+						pendingFigureRestore = useEditorStore.subscribe(restore);
+						restore();
+						return;
 					}
+					postToHost({ event: 'loaded', revision: command.revision });
 					reply(command);
 					return;
 				}
@@ -481,6 +495,7 @@ function HostBridge() {
 		imageObserver.observe(document.body, { childList: true, subtree: true });
 		window.addEventListener('keydown', handleKeydown, true);
 		return () => {
+			pendingFigureRestore?.();
 			snapshots.dispose();
 			for (const pending of pendingCommands.values()) window.clearTimeout(pending.timer);
 			pendingCommands.clear();

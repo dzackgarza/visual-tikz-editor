@@ -49,6 +49,7 @@ for (const action of ['interpret-ink', 'restore-ink'] as const) {
 document.querySelector('#load')!.addEventListener('click', load);
 document.querySelector('#load-snapshot')!.addEventListener('click', () => {
   const snapshot = JSON.parse(document.querySelector<HTMLTextAreaElement>('#saved-snapshot')!.value);
+  status.textContent = 'Loading';
   source.value = snapshot.source;
   acceptedSource = snapshot.source;
   revision++;

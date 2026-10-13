@@ -1026,20 +1026,21 @@ index 8aeb413..baa3a6f 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccf..3ce6769 100644
+index 4e22ccf..2ecf12b 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-@@ -54,6 +54,9 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
+@@ -54,6 +54,10 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
  import { useSettingsStore } from "../../settings/useSettingsStore";
  import { buildSnapshotEditSourceFingerprint } from "../../source-identity";
  import { useEditorStore } from "../../store/store";
 +import { strokeEnvelope, originalStrokeSchema, originalDrawingSource, originalStrokes, tikzStrokeColor } from '../../original-ink';
 +import { insertElementIntoSource } from 'tikz-editor/edit/element-templates';
++import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
 +import { normalizeColor } from 'tikz-editor/semantic/style/colors';
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
  import { resolveBucketFillEdit } from "./bucket-fill";
  import { recordDragPatchModeFullReason } from "./drag-patch-mode-debug";
-@@ -67,8 +70,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
+@@ -67,8 +71,13 @@ import { CanvasPanelView } from "./CanvasPanelView";
  import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
  import {
  appendFreehandToolPoint,
@@ -1054,7 +1055,7 @@ index 4e22ccf..3ce6769 100644
  import {
  clamp,
  clientToSvgPoint,
-@@ -119,6 +127,7 @@ type SnapDebugPoint
+@@ -119,6 +128,7 @@ type SnapDebugPoint
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -1062,7 +1063,7 @@ index 4e22ccf..3ce6769 100644
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
-@@ -757,6 +766,26 @@ function computeAutoScaleForImportedTikz(
+@@ -757,6 +767,26 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -1089,7 +1090,7 @@ index 4e22ccf..3ce6769 100644
  export const CanvasPanel = memo(function CanvasPanel({
    repeatPreviewModel = null
  }: {
-@@ -912,11 +941,35 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -912,11 +942,35 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
@@ -1126,7 +1127,7 @@ index 4e22ccf..3ce6769 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -1157,7 +1210,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1157,7 +1211,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
    const pathDraftRef = useRef<PathToolDraft | null>(null);
@@ -1134,7 +1135,7 @@ index 4e22ccf..3ce6769 100644
    const previousCanvasContextKeyRef = useRef(canvasFigureContextKey(activeDocumentId, activeFigureId));
    const pendingAddedSelectionRef = useRef<PendingAddedSelection | null>(null);
    const canvasTransformRef = useRef(canvasTransform);
-@@ -1321,10 +1373,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1374,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -1145,7 +1146,7 @@ index 4e22ccf..3ce6769 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1819,6 +1867,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1819,6 +1868,19 @@ export const CanvasPanel = memo(function CanvasPanel({
      ROTATE_HANDLE_OFFSET_PX
    });
  
@@ -1165,7 +1166,7 @@ index 4e22ccf..3ce6769 100644
    canvasTransformRef.current = canvasTransform;
    selectedElementIdsRef.current = selectedElementIds;
    svgResultRef.current = svgResult;
-@@ -1866,6 +1927,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1866,6 +1928,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      pathDraft,
      pathSegmentDraft,
      pendingBezier,
@@ -1173,7 +1174,7 @@ index 4e22ccf..3ce6769 100644
      bezierBendDraft,
      canvasTransform
    });
-@@ -1874,6 +1936,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1874,6 +1937,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      baseSvgResult,
      svgResult,
      viewportSize,
@@ -1181,7 +1182,7 @@ index 4e22ccf..3ce6769 100644
      dispatch,
      dispatchCanvasTransform,
      activeDocumentId,
-@@ -2055,17 +2118,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2119,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -1205,7 +1206,7 @@ index 4e22ccf..3ce6769 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2141,182 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2142,190 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -1257,15 +1258,23 @@ index 4e22ccf..3ce6769 100644
 +      )
 +    );
 +    const before = useEditorStore.getState();
-+    const after = insertElementIntoSource(before.source, strokeEnvelope(original, interpretation.rawSource),
-+      before.snapshot.figures.find(figure => figure.id === before.activeFigureId)?.span);
++    const parsed = parseTikzForEdit(before.source, { activeFigureId: before.activeFigureId });
++    if (parsed.activeFigureId === null) {
++      setWarning('Select a figure before drawing.');
+       pendingAddedSelectionRef.current = null;
++      setFreehandDraft(null);
++      return;
++    }
++    const after = insertElementIntoSource(before.source, strokeEnvelope(original, interpretation.rawSource), parsed.figure.span);
 +    dispatch({ type: 'REPLACE_FREEHAND_RESULT', from: 0, before: before.source, after,
 +      expectedSourceRevision: before.sourceRevision });
 +    if (useEditorStore.getState().source === before.source) {
-       pendingAddedSelectionRef.current = null;
++      pendingAddedSelectionRef.current = null;
 +    } else if (interpretation.source !== interpretation.rawSource) {
 +      const rawState = useEditorStore.getState();
-+      const from = rawState.source.lastIndexOf(interpretation.rawSource);
++      const inserted = originalStrokes(rawState.source).find(entry => entry.stroke.key === original.key);
++      if (!inserted) throw new Error(`Inserted stroke ${original.key} has no provenance record`);
++      const from = inserted.drawingFrom;
 +      dispatch({
 +        type: "REPLACE_FREEHAND_RESULT",
 +        from,
@@ -1411,7 +1420,7 @@ index 4e22ccf..3ce6769 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -3223,9 +3422,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3223,9 +3431,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      suppressNextBackgroundClickRef,
      svgResult,
      setDragState,
@@ -1424,7 +1433,7 @@ index 4e22ccf..3ce6769 100644
      snapshot,
      source,
      setWarning,
-@@ -3974,6 +4176,63 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4185,63 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -2680,7 +2689,7 @@ index 07f3731..bd1a575 100644
    const intrinsicWorldHeight = floorBounds.maxY - floorBounds.minY;
    const intrinsicLocal = nodeLinearTransform
 diff --git a/packages/core/src/edit/element-templates.ts b/packages/core/src/edit/element-templates.ts
-index 3f807ed..2a5ee7d 100644
+index 3f807ed..cb48a6c 100644
 --- a/packages/core/src/edit/element-templates.ts
 +++ b/packages/core/src/edit/element-templates.ts
 @@ -19,6 +19,8 @@ export type ElementTemplate =
@@ -2717,6 +2726,28 @@ index 3f807ed..2a5ee7d 100644
      case "filledCircle": {
        const radiusPt = circleRadiusPt(at, template.edge);
        return `\\fill ${atCoord} circle (${formatNumber(radiusPt * CM_PER_PT)}cm);`;
+@@ -145,6 +165,7 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+   }
+ 
+   const resolvedEnd = resolveTikzpictureEndToken(source, figureSpan);
++  if (figureSpan && resolvedEnd === null) throw new Error("The active figure has no closing token");
+   const endToken = resolvedEnd?.token ?? "\\end{tikzpicture}";
+   const endIndex = resolvedEnd?.from ?? source.lastIndexOf(endToken);
+   if (endIndex < 0) {
+@@ -160,8 +181,11 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+   const endIndent = source.slice(endLineStart, endIndex).match(/^[ \t]*/)?.[0] ?? "";
+   const bodyIndent = `${endIndent}  `;
+ 
+-  const before = source.slice(0, endLineStart);
+-  const after = source.slice(endLineStart);
++  // A closing token may share its line with authored drawing or another
++  // figure. Only move insertion back over whitespace, never authored bytes.
++  const insertionFrom = /^[ \t]*$/.test(source.slice(endLineStart, endIndex)) ? endLineStart : endIndex;
++  const before = source.slice(0, insertionFrom);
++  const after = source.slice(insertionFrom);
+   const needsLeadingNewline = before.length > 0 && !before.endsWith("\n");
+   const prefix = needsLeadingNewline ? "\n" : "";
+ 
 diff --git a/packages/core/src/render/index.ts b/packages/core/src/render/index.ts
 index 11af402..20e7e86 100644
 --- a/packages/core/src/render/index.ts

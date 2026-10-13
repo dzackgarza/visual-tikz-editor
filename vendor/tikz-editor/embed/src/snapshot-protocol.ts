@@ -8,6 +8,7 @@ const identity = {
 };
 
 export const editorStateSchema = z.object({
+  activeFigureId: z.string().min(1),
   selection: z.array(z.string()),
   tool: z.enum(['select', 'magnify', 'addBucket', 'addNode', 'addPoint', 'addImage', 'addMatrix',
     'addShape', 'addPath', 'addFreehand', 'addLine', 'addGrid', 'addRect', 'addEllipse',

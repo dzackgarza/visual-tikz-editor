@@ -624,6 +624,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator('#status')).toHaveText('Loaded');
     await page.getByLabel('Saved snapshot').fill(JSON.stringify(later));
     await page.getByRole('button', { name: 'Load snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Loaded');
     const reopened = await hostSnapshot();
     assert.equal(reopened.state.activeFigureId, later.state.activeFigureId);
     assert.equal(reopened.source, later.source);
@@ -666,17 +667,21 @@ describe("standalone workbench host boundary", function () {
       await expect(frame.getByRole('button', {name: 'Restore stroke', exact: true})).toBeVisible();
     };
     await draw();
+    const fittedSource = await page.getByLabel('Authored source').inputValue();
     await frame.getByRole('button', {name: 'Restore stroke', exact: true}).click();
+    await expect(page.getByLabel('Authored source')).not.toHaveValue(fittedSource);
     const raw = await hostSnapshot();
     const originalDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(raw.source)![1];
     const duplicateFigure = second.replace('\\end{tikzpicture}', `${originalDrawing}\n\\end{tikzpicture}`);
     const duplicateSource = `${first}\n${duplicateFigure}`;
     await page.getByLabel('Saved snapshot').fill(JSON.stringify({...before, source: duplicateSource}));
     await page.getByRole('button', {name: 'Load snapshot', exact: true}).click();
+    await expect(page.locator('#status')).toHaveText('Loaded');
     await expect(page.getByLabel('Authored source')).toHaveValue(duplicateSource);
     await frame.getByRole('button', {name: 'Figure 2', exact: true}).click();
     const laterBeforeDraw = await hostSnapshot();
     await page.getByRole('button', {name: 'Load snapshot', exact: true}).click();
+    await expect(page.locator('#status')).toHaveText('Loaded');
     await hostSnapshot();
     await draw();
     const fitted = await hostSnapshot();
@@ -687,6 +692,7 @@ describe("standalone workbench host boundary", function () {
     const fittedDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(fitted.source)![1];
     assert.notEqual(fittedDrawing, originalDrawing);
     await frame.locator('[data-canvas-viewport="true"]').press('Control+z');
+    await expect(page.getByLabel('Authored source')).not.toHaveValue(fitted.source);
     const restored = await hostSnapshot();
     assert.equal(/\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(restored.source)![1], originalDrawing);
     assert.deepEqual(restored.originalInk, fitted.originalInk);

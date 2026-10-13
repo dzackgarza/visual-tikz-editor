@@ -1,3 +1,5 @@
+import { insertElementIntoSource } from 'tikz-editor/edit/element-templates';
+import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
 import { useEditorStore } from '@tikz-editor/app/store';
 import { interpretFreehandToolSource } from '@tikz-editor/app/freehand';
 import { pt, worldPoint } from 'tikz-editor/coords/index';
@@ -8,6 +10,8 @@ import { originalStrokes, strokeEnvelope, originalDrawingSource, tikzStrokeColor
 export function executeInkCommand(command: Extract<HostCommand, { action: 'import-ink' | 'interpret-ink' | 'restore-ink' }>): CommandFailure | undefined {
   const state = useEditorStore.getState();
   if (command.source !== state.source) return 'source-changed';
+  const parsed = parseTikzForEdit(state.source, { activeFigureId: state.activeFigureId });
+  if (parsed.activeFigureId === null) return 'unsupported-source';
   const originals = originalStrokes(state.source);
   let next: string;
   if (command.action === 'import-ink') {
@@ -16,12 +20,11 @@ export function executeInkCommand(command: Extract<HostCommand, { action: 'impor
       if (keys.has(stroke.key)) return 'duplicate-stroke-key';
       keys.add(stroke.key);
     }
-    const end = state.source.lastIndexOf('\\end{tikzpicture}');
-    if (end < 0) return 'unsupported-source';
-    next = state.source.slice(0, end) + command.strokes.map(stroke => strokeEnvelope(stroke, originalDrawingSource(stroke))).join('') + state.source.slice(end);
+    next = insertElementIntoSource(state.source,
+      command.strokes.map(stroke => strokeEnvelope(stroke, originalDrawingSource(stroke))).join(''), parsed.figure.span);
   } else {
     const entry = originals.find(entry => entry.stroke.key === command.key);
-    if (entry === undefined) return 'missing-stroke';
+    if (entry === undefined || entry.from < parsed.figure.span.from || entry.to > parsed.figure.span.to) return 'missing-stroke';
     let drawing = originalDrawingSource(entry.stroke);
     if (command.action === 'interpret-ink') {
       if (entry.stroke.intent !== 'geometry') return 'ink-is-not-geometry';

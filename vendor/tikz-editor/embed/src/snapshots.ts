@@ -6,7 +6,7 @@ import type { EditorSnapshotResult, SnapshotFailure, SnapshotRequest } from './s
 
 /** Wait on the editor's own scheduler; never pair source with its previous SVG. */
 export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => void, imageBaseUrl: () => string) {
-  type Pending = { request: SnapshotRequest; sourceRevision: number; timer: number; abort: AbortController; exporting: boolean };
+  type Pending = { request: SnapshotRequest; sourceRevision: number; activeFigureId: string | null; timer: number; abort: AbortController; exporting: boolean };
   const pending = new Map<string, Pending>();
   const completed = new Map<string, { request: SnapshotRequest; reply: EditorSnapshotResult }>();
   const sameRequest = (a: SnapshotRequest, b: SnapshotRequest) =>
@@ -38,6 +38,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         fail(requestId, 'source-changed');
         continue;
       }
+      if (state.activeFigureId !== entry.activeFigureId) { fail(requestId, 'stale-target'); continue; }
       if (entry.exporting || state.pendingViewportRestore !== null) continue;
       if (state.pendingRequestId !== null || state.snapshot.source !== request.source) continue;
       if (state.snapshot.activeFigureId !== state.activeFigureId) continue;
@@ -49,6 +50,9 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
       let originals;
       try { originals = originalStrokes(request.source); }
       catch { fail(requestId, 'invalid-original-ink'); continue; }
+      const activeFigure = state.snapshot.figures.find(figure => figure.id === state.activeFigureId);
+      if (activeFigure === undefined) { fail(requestId, 'render-failed'); continue; }
+      originals = originals.filter(original => original.from >= activeFigure.span.from && original.to <= activeFigure.span.to);
       entry.exporting = true;
       const result = {
         event: 'snapshot', status: 'ready',
@@ -63,6 +67,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         localBounds: state.snapshot.scene?.bounds ? worldToSvgBounds(state.snapshot.scene.bounds, drawing.viewBox) : null,
         viewBox: drawing.viewBox,
         state: {
+          activeFigureId: activeFigure.id,
           selection: [...state.selectedElementIds], tool: state.toolMode,
           viewport: { ...state.canvasTransform },
           fitToContent: state.fitToContentModeActive,
@@ -94,6 +99,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
       }
       pending.set(request.requestId, {
         request, sourceRevision: useEditorStore.getState().sourceRevision,
+        activeFigureId: useEditorStore.getState().activeFigureId,
         abort: new AbortController(), exporting: false,
         timer: window.setTimeout(() => fail(request.requestId, 'timeout'), 10000),
       });
