@@ -56,7 +56,7 @@
     </header>
 
     <div class="tikz-live-preview-content">
-      <nav v-if="displayMode === 'visual' && props.showModeSwitcher !== false" class="tikz-tool-rail" aria-label="Drawing tools">
+      <nav v-if="displayMode === 'visual'" class="tikz-tool-rail" aria-label="Drawing tools">
         <button
           v-for="tool in primaryTools"
           :key="tool.mode"

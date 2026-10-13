@@ -6,9 +6,7 @@ import { chromium, expect, type Browser, type BrowserContext, type Page } from "
 import { geometryTraces } from "./geometry-traces";
 import type { EditorSnapshot } from '../src/host';
 
-const freehandButton = (page: Page) => page.url().endsWith('/embedding.html')
-  ? page.getByRole('button', { name: 'Draw', exact: true })
-  : page.frameLocator('iframe[src*="tikz-editor"]').getByRole('button', { name: 'Freehand', exact: true });
+const freehandButton = (page: Page) => page.getByRole('button', { name: 'Draw', exact: true });
 
 describe("standalone workbench host boundary", function () {
   let server: ChildProcess;
@@ -24,6 +22,7 @@ describe("standalone workbench host boundary", function () {
       const result = JSON.parse(await page.locator('#result').innerText());
       if (result.status === 'ready') return result as EditorSnapshot;
       if (result.error !== 'source-changed') throw new Error(`Snapshot failed: ${result.error}`);
+      await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
     }
     throw new Error('Source changed during three consecutive snapshot requests');
   }
@@ -355,9 +354,9 @@ describe("standalone workbench host boundary", function () {
     await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
     await freehandButton(page).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-    await page.mouse.move(box.x + 90, box.y + box.height / 2);
+    await page.mouse.move(box.x + box.width * .55, box.y + box.height * .3);
     await page.mouse.down();
-    await page.mouse.move(box.x + 180, box.y + box.height / 2 + 25, { steps: 12 });
+    await page.mouse.move(box.x + box.width * .55 + 90, box.y + box.height * .3 + 25, { steps: 12 });
     await page.mouse.up();
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
@@ -525,7 +524,7 @@ describe("standalone workbench host boundary", function () {
     }, accepted);
     await expect(page.locator('#workspace-result')).not.toBeEmpty();
     const reply = JSON.parse(await page.locator('#workspace-result').innerText());
-    assert.equal(reply.status, 'failed');
+    assert.equal(reply.status, 'failed', await page.locator('#command-result').innerText());
     assert.equal(reply.error, 'cancelled');
     await expect(page.frameLocator('#editor').getByRole('menuitem', { name: 'File', exact: true })).toBeHidden();
     await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
@@ -783,13 +782,12 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByLabel("Authored source")).toHaveValue(fitted);
     const frame = page.frameLocator('#editor');
     await frame.locator('[data-canvas-viewport="true"]').scrollIntoViewIfNeeded();
+    await frame.locator('[data-canvas-viewport="true"]').press('v');
     const line = (await frame.locator(`path[data-source-id="${reopened.originalInk[0].sourceIds[0]}"]`).first().boundingBox())!;
     // A horizontal SVG line has a zero-height DOM box, but its painted stroke
     // is hittable. Send the real pointer to its midpoint.
     await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
-    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
-    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
-    const selected = JSON.parse(await page.locator('#result').innerText());
+    const selected = await hostSnapshot();
     assert.equal(selected.state.selection.length, 1);
     await frame.getByRole('button', { name: 'Restore original stroke', exact: true }).click();
     await expect(page.getByLabel('Authored source')).toHaveValue(saved.source);
@@ -850,7 +848,6 @@ describe("standalone workbench host boundary", function () {
   it('lets the author keep handwritten ink outside geometric interpretation', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const frame = page.frameLocator('iframe');
-    await freehandButton(page).click();
     await page.getByRole('button', { name: 'Properties', exact: true }).click();
     await frame.getByRole('checkbox', { name: 'Interpret geometry', exact: true }).uncheck();
     await page.getByRole('button', { name: 'Hide properties', exact: true }).click();
@@ -1037,7 +1034,6 @@ describe("standalone workbench host boundary", function () {
   it('copies a just-finished canvas edit before the throttled source notification', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
-    await freehandButton(page).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(box.x + box.width / 3, box.y + box.height / 2);
     await page.mouse.down();
@@ -1062,6 +1058,7 @@ describe("standalone workbench host boundary", function () {
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
       await page.locator('.cm-content').fill(authored);
+      await page.getByRole('button', { name: 'Quiver: right sidebar', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Quiver: right sidebar', exact: true })).toHaveAttribute('aria-pressed', 'true');
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced');
       await page.getByRole('button', { name: 'Preview: right sidebar', exact: true }).click();
@@ -1098,14 +1095,11 @@ describe("standalone workbench host boundary", function () {
       await sourcePane.fill(authored);
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', );
       const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
-      await freehandButton(page).click();
-      await expect(freehandButton(page)).toHaveAttribute('aria-pressed', 'true');
       await page.getByRole('button', { name: 'Preview: right sidebar', exact: true }).click();
       await expect(page.locator('.tikz-standalone-status')).toContainText('Up to date', { timeout: 40000 });
       assert.equal(await sourcePane.innerText(), authored);
       await page.screenshot({ path: `test-results/workbench/rendered-${width}.png` });
       await page.getByRole('button', { name: 'Canvas: right sidebar', exact: true }).click();
-      await expect(freehandButton(page)).toHaveAttribute('aria-pressed', 'true');
       const viewport = frame.locator('[data-canvas-viewport="true"]');
       const bounds = (await viewport.boundingBox())!;
       await page.mouse.move(bounds.x + bounds.width / 3, bounds.y + bounds.height / 2);

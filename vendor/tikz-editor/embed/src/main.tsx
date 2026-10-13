@@ -467,11 +467,13 @@ function HostBridge() {
 					pendingCommands.set(command.requestId, { command,
 						timer: window.setTimeout(() => reply(command, 'timeout'), 10000) });
 					void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => {
-						if (pendingCommands.get(command.requestId)?.command !== command) return;
-						if (command.revision !== currentHostRevision) { reply(command, 'stale-target'); return; }
-						applyWorkspace(command.workspace);
-						document.documentElement.dataset.embedWorkspace = command.workspace;
-						reply(command);
+						window.setTimeout(() => {
+							if (pendingCommands.get(command.requestId)?.command !== command) return;
+							if (command.revision !== currentHostRevision) { reply(command, 'stale-target'); return; }
+							applyWorkspace(command.workspace);
+							document.documentElement.dataset.embedWorkspace = command.workspace;
+							reply(command);
+						}, 100);
 					}).catch(() => {
 						if (pendingCommands.get(command.requestId)?.command === command) reply(command, 'workspace-unavailable');
 					});
