@@ -49,7 +49,9 @@ try {
   run('bun', [ 'install', '--no-save' ], upstream)
   run('bunx', [ 'lezer-generator', '--typeScript', 'src/grammar/tikz.grammar', '-o', 'src/grammar/tikz-parser.ts' ], path.join(upstream, 'packages/lezer-tikz'))
   for (const name of [ 'lezer-tikz', 'lang-tikz', 'core' ]) {
-    run('bunx', [ 'tsc', '-p', path.join(upstream, `packages/${name}/tsconfig.json`) ], upstream)
+    // The upstream workspace has no root TypeScript binary. Without an explicit
+    // package, bunx can select an unrelated system tsc (4.8 on this host).
+    run('bunx', [ '--package', 'typescript@5.9.3', 'tsc', '-p', path.join(upstream, `packages/${name}/tsconfig.json`) ], upstream)
   }
   run('bun', [ 'run', 'build' ], embedApp)
 
