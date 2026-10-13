@@ -29,6 +29,7 @@ import { hostCommandSchema } from '../vendor/tikz-editor/embed/src/commands';
 import type { TikzWorkbenchHost } from '../src/host';
 import type { TikzLivePreviewTarget } from '../src/live-preview';
 import { contiguousSourceLineRanges } from '../src/source-block';
+import { paperSource } from '../src/paper-source';
 import TikzWorkbench from '../src/ui/TikzWorkbench.vue';
 import SourceEditor from './SourceEditor.vue';
 
@@ -65,7 +66,8 @@ const host: TikzWorkbenchHost = {
   },
   editorUrl: new URL('../tikz-editor/index.html', location.href).href,
   imageBaseUrl: () => '',
-  requestSave: () => post({ event: 'save', source: source.value, fileName: fileName.value }),
+  requestSave: () => post({ event: 'save', source: source.value,
+    paperSource: paperSource(source.value), fileName: fileName.value }),
   reportError: (message, cause) => {
     error.value = `${message}: ${cause instanceof Error ? cause.message : String(cause)}`;
     post({ event: 'error', message: error.value });
@@ -75,7 +77,8 @@ const host: TikzWorkbenchHost = {
 watch(source, value => {
   if (!loaded) return;
   sourceRevision.value++;
-  post({ event: 'change', source: value, sourceRevision: sourceRevision.value });
+  post({ event: 'change', source: value, paperSource: paperSource(value),
+    sourceRevision: sourceRevision.value });
 });
 
 async function currentSource(): Promise<string> {
@@ -107,7 +110,7 @@ async function onMessage(event: MessageEvent): Promise<void> {
     error.value = '';
     await nextTick();
     loaded = true;
-    post({ event: 'loaded' });
+    post({ event: 'loaded', paperSource: paperSource(source.value) });
     post({ event: 'reply', action: 'load', requestId: command.requestId, status: 'ok' });
     return;
   }
@@ -118,7 +121,8 @@ async function onMessage(event: MessageEvent): Promise<void> {
   if (command.action === 'source') {
     try {
       const value = await currentSource();
-      post({ event: 'reply', action: 'source', requestId: command.requestId, status: 'ok', source: value });
+      post({ event: 'reply', action: 'source', requestId: command.requestId,
+        status: 'ok', source: value, paperSource: paperSource(value) });
     } catch (cause) {
       post({ event: 'reply', action: 'source', requestId: command.requestId, status: 'failed',
         error: cause instanceof Error ? cause.message : String(cause) });
