@@ -9,6 +9,7 @@ import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './co
 import { createSnapshotRequests } from './snapshots';
 import type { CommandFailure } from './events';
 import { executeInkCommand } from './ink-commands';
+import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
 
 const App = lazy(async () => {
 	const mod = await import('@tikz-editor/app');
@@ -378,6 +379,11 @@ function HostBridge() {
 					}
 					return;
 				case 'load': {
+					if (command.state && !parseTikzForEdit(command.source, { activeFigureId: command.state.activeFigureId })
+						.figures.some(figure => figure.id === command.state!.activeFigureId)) {
+						reply(command, 'invalid-command');
+						return;
+					}
 					if (currentHostSession !== '' &&
 						(command.sessionId !== currentHostSession || command.revision <= currentHostRevision)) {
 						reply(command, 'stale-target');
@@ -396,6 +402,7 @@ function HostBridge() {
 					loadIntoEditor(command.source, command.fileName);
 					if (command.state) {
 						const { dispatch } = useEditorStore.getState();
+						dispatch({ type: 'SET_ACTIVE_FIGURE', figureId: command.state.activeFigureId });
 						dispatch({ type: 'SET_TOOL_MODE', mode: command.state.tool });
 						dispatch({ type: 'SET_FREEHAND_INTERPRETATION', enabled: command.state.interpretGeometry });
 						dispatch({ type: 'SELECT_RANGE', ids: command.state.selection });
