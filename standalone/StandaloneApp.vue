@@ -2,7 +2,7 @@
   <div class="tikz-standalone" :class="theme">
     <header class="document-bar">
       <strong>{{ fileName }}</strong>
-      <details class="file-menu">
+      <details class="file-menu" @click="closeFileMenu">
         <summary>File</summary>
         <div class="file-menu-items">
           <button type="button" :disabled="document === null" @click="newDocument">New tikzpicture or tikzcd…</button>
@@ -126,6 +126,12 @@ const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["p
 const active = reactive<Record<Side, ViewId | null>>({ left: null, right: "canvas" });
 const visited = reactive(new Set<ViewId>());
 const newKindOpen = ref(false);
+function closeFileMenu(event: MouseEvent): void {
+  if (event.target instanceof Element && event.target.closest("button") &&
+      event.currentTarget instanceof HTMLDetailsElement) {
+    event.currentTarget.open = false;
+  }
+}
 const nativeWindow = isTauri();
 const unsavedPrompt = ref<"closing" | "continuing" | null>(null);
 let resolvePrompt: ((choice: "save" | "discard" | "cancel") => void) | null = null;
