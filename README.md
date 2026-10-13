@@ -13,7 +13,7 @@ bun install --frozen-lockfile
 just run
 ```
 
-Open the local URL printed by `just run`. The app starts with a new `tikzpicture` in the drawing canvas. The New dialog offers `tikzpicture` and `tikzcd`; `tikzcd` opens Quiver. The **File** menu holds New, Open, Save, and Save As. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
+Open the local URL printed by `just run`. The New dialog offers `tikzpicture`, which opens the drawing canvas, and `tikzcd`, which opens Quiver. The **File** menu holds New, Open, Save, and Save As. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
 
 ## Linux desktop package
 
