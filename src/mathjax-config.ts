@@ -24,6 +24,7 @@ export type MathJaxMacro = string | readonly [string, number] | readonly [string
 export const mathJaxPackages = [
   "base",
   "ams",
+  "boldsymbol",
   "configmacros",
   "mhchem",
   "newcommand",
