@@ -70,7 +70,6 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
           activeFigureId: activeFigure.id,
           selection: [...state.selectedElementIds], tool: state.toolMode,
           viewport: { ...state.canvasTransform },
-          fitToContent: state.fitToContentModeActive,
           interpretGeometry: state.freehandInterpretGeometry,
         },
       } as const;

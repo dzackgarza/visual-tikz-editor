@@ -10,11 +10,10 @@ const identity = {
 export const editorStateSchema = z.object({
   activeFigureId: z.string().min(1),
   selection: z.array(z.string()),
-  tool: z.enum(['select', 'magnify', 'addBucket', 'addNode', 'addPoint', 'addImage', 'addMatrix',
+  tool: z.enum(['select', 'magnify', 'lasso', 'addBucket', 'addNode', 'addPoint', 'addImage', 'addMatrix',
     'addShape', 'addPath', 'addFreehand', 'addLine', 'addGrid', 'addRect', 'addEllipse',
     'addCircle', 'addArc', 'addArrow', 'addBezier']),
   viewport: z.object({ scale: z.number().positive(), translateX: z.number(), translateY: z.number() }),
-  fitToContent: z.boolean(),
   interpretGeometry: z.boolean(),
 });
 

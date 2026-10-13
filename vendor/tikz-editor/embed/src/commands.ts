@@ -13,7 +13,7 @@ const settings = z.object({ general: z.object({
   canvasInvert: z.boolean().optional(),
 }).optional() });
 export const toolModeSchema = z.enum([
-  'select', 'magnify', 'addFreehand', 'addLine', 'addArrow', 'addNode', 'addPoint',
+  'select', 'magnify', 'lasso', 'addFreehand', 'addLine', 'addArrow', 'addNode', 'addPoint',
   'addImage', 'addCircle', 'addRect', 'addEllipse', 'addArc', 'addPath', 'addBezier',
   'addShape', 'addMatrix', 'addGrid', 'addBucket',
 ]);

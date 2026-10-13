@@ -48,10 +48,8 @@ describe('hosted workbench', function () {
         source, fileName: 'figure.tikz', autosave: 0,
       }), location.origin);
     }, { sessionId, source });
-    await expect(hosted.getByRole('button', { name: 'Draw', exact: true })).toBeVisible();
     const canvas = hosted.frameLocator('iframe[title="TikZ visual editor"]');
     await expect(canvas.locator('[data-source-id]').first()).toBeVisible();
-    await hosted.getByRole('button', { name: 'Draw', exact: true }).click();
     const box = (await canvas.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(box.x + box.width * .4, box.y + box.height * .45);
     await page.mouse.down();

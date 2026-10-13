@@ -1,6 +1,7 @@
 export const EDITOR_TOOLS = [
   { mode: "select", label: "Select", icon: "pi pi-arrow-up-left" },
   { mode: "magnify", label: "Zoom", icon: "pi pi-search" },
+  { mode: "lasso", label: "Lasso", icon: "pi pi-stop" },
   { mode: "addFreehand", label: "Draw", icon: "pi pi-pencil" },
   { mode: "addLine", label: "Line", icon: "pi pi-minus" },
   { mode: "addArrow", label: "Arrow", icon: "pi pi-arrow-right" },

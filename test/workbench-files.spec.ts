@@ -99,7 +99,9 @@ print(confirm(Atspi.get_desktop(0)))
 \draw[blue] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
     await page.goto(url);
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'TikZ picture', exact: true }).click();
+    await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+    await expect(page.locator('.cm-content')).toBeVisible({ timeout: 30_000 });
     await page.locator('.cm-content').fill(authored);
     await page.getByRole('button', { name: 'File', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Save As…', exact: true }).click();
@@ -112,15 +114,16 @@ print(confirm(Atspi.get_desktop(0)))
     await new Promise(resolve => server.once('exit', resolve));
     await startServer();
     await page.goto(url);
-    await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Open existing…', exact: true })).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: 'File', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Open…', exact: true }).click();
     await chooseFile('open');
     await expect(page.locator('.document-bar strong')).toHaveText('authored.tikz');
+    await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
     assert.equal(await page.locator('.cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
-    await expect(page.frameLocator('iframe').locator('path[data-source-id]')).toHaveCount(1);
-    const frame = page.frameLocator('iframe');
-    await page.getByRole('button', { name: 'Draw', exact: true }).click();
+    await expect(page.frameLocator('iframe[title="TikZ visual editor"]').locator('path[data-source-id]')).toHaveCount(1);
+    const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
+    await page.frameLocator('iframe[src*="tikz-editor"]').getByRole('button', { name: 'Freehand', exact: true }).click();
     const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .65);
     await page.mouse.down();
@@ -143,10 +146,11 @@ print(confirm(Atspi.get_desktop(0)))
     await expect(page.locator('.tikz-standalone-status')).toHaveText('Saved');
     assert.equal(await readFile(diagramPath, 'utf8'), edited);
     await page.locator('.cm-content').fill(String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`);
-    await expect(page.getByRole('button', { name: 'Quiver canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await frame.locator('.vertex').nth(1).click();
-    await frame.locator('.label-input').fill('C');
-    await frame.locator('.label-input').press('Control+s');
+    await page.getByRole('button', { name: 'Quiver: right sidebar', exact: true }).click();
+    const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+    await quiver.locator('.vertex').nth(1).click();
+    await quiver.locator('.label-input').fill('C');
+    await quiver.locator('.label-input').press('Control+s');
     await expect.poll(() => readFile(diagramPath, 'utf8')).toMatch(/\\begin\{tikzcd\}[\s\S]*\bC\b/);
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
     assert.equal(await readFile(diagramPath, 'utf8'), await page.evaluate(() => navigator.clipboard.readText()));
@@ -154,16 +158,18 @@ print(confirm(Atspi.get_desktop(0)))
   it('saves completed canvas and Quiver edits after an immediate rendered-view switch', async function () {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     for (const provider of ['visual', 'quiver']) {
+      await page.request.post(`${url}api/new`, { data: provider === 'visual' ? 'tikzpicture' : 'tikzcd' });
       await page.goto(url);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const authored = provider === 'visual'
         ? String.raw`\begin{tikzpicture}\draw (0,0) -- (2,1);\end{tikzpicture}`
         : String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
       await page.locator('.cm-content').fill(authored);
-      const frame = page.frameLocator('iframe');
-      await expect(page.getByText('Synced', { exact: true })).toBeVisible();
+      const frame = page.frameLocator(provider === 'visual' ? 'iframe[title="TikZ visual editor"]' : 'iframe[title="Quiver diagram editor"]');
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', );
       diagramPath = join(await mkdtemp(join(tmpdir(), 'workbench-render-save-')), `${provider}.tikz`);
       if (provider === 'visual') {
-        await page.getByRole('button', { name: 'Draw', exact: true }).click();
+        await page.frameLocator('iframe[src*="tikz-editor"]').getByRole('button', { name: 'Freehand', exact: true }).click();
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height / 2);
         await page.mouse.down();
@@ -171,7 +177,7 @@ print(confirm(Atspi.get_desktop(0)))
         await page.mouse.up();
         await page.evaluate(() => {
           const buttons = [...document.querySelectorAll('button')];
-          buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
+          buttons.find(button => button.getAttribute('aria-label') === 'Preview: right sidebar')!.click();
           buttons.find(button => button.textContent?.trim() === 'File')!.click();
         });
       } else {
@@ -180,7 +186,7 @@ print(confirm(Atspi.get_desktop(0)))
           input.value = 'Completed';
           input.dispatchEvent(new Event('input', { bubbles: true }));
           const buttons = [...window.parent.document.querySelectorAll('button')];
-          buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
+          buttons.find(button => button.getAttribute('aria-label') === 'Preview: right sidebar')!.click();
           buttons.find(button => button.textContent?.trim() === 'File')!.click();
         });
       }

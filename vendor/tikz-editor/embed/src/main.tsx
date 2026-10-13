@@ -419,7 +419,7 @@ function HostBridge() {
 					applyHostSettings(command.settings);
 					persistHostSettings(command.settings);
 					pendingChangeRef.current = null;
-					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: command.state ? { source: command.source, transform: command.state.viewport, fitToContent: command.state.fitToContent } : null });
+					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: command.state ? { source: command.source, transform: command.state.viewport } : null });
 					loadIntoEditor(command.source, command.fileName);
 					const finishLoad = () => {
 						const state = useEditorStore.getState();
