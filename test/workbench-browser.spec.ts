@@ -14,9 +14,14 @@ describe("standalone workbench host boundary", function () {
   let url: string;
 
   async function hostSnapshot(): Promise<EditorSnapshot> {
-    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
-    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
-    return JSON.parse(await page.locator('#result').innerText());
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+      await expect(page.locator('#status')).toHaveText(/Snapshot ready|Snapshot failed/, { timeout: 12000 });
+      const result = JSON.parse(await page.locator('#result').innerText());
+      if (result.status === 'ready') return result as EditorSnapshot;
+      if (result.error !== 'source-changed') throw new Error(`Snapshot failed: ${result.error}`);
+    }
+    throw new Error('Source changed during three consecutive snapshot requests');
   }
 
   async function paintedGeometry(svg: string): Promise<string[][]> {
