@@ -173,11 +173,31 @@ index af9d6c30..d04b4379 100644
    TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
    TOGGLE_SNAP_OBJECT_POINTS: "view.toggle-snap-object-points",
 diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
-index bc368718..6e9834aa 100644
+index bc368718..b5d8f0d2 100644
 --- a/packages/app/src/context-menu/canvas-context-menu.ts
 +++ b/packages/app/src/context-menu/canvas-context-menu.ts
-@@ -411,9 +411,13 @@ function buildPathPointSelectionItems(includeFlattenForeach: boolean): readonly
-   ];
+@@ -393,27 +393,17 @@ function buildSingleSelectionSubmenuItems(includePathSubmenu: boolean): readonly
+   return items;
+ }
+ 
+-const PATH_POINT_SELECTION_SUBMENU_ITEMS: readonly AppMenuItem[] = [
+-  {
+-    kind: "submenu",
+-    label: "Path",
+-    items: PATH_ITEMS
+-  },
+-  ...PATH_REORDER_TAIL_ITEMS
+-];
+-
+-function buildPathPointSelectionItems(includeFlattenForeach: boolean): readonly AppMenuItem[] {
+-  return [
+-    ...PATH_POINT_ITEMS,
+-    { kind: "separator" },
+-    ...buildSelectionCommandItems(includeFlattenForeach),
+-    ...PATH_POINT_SELECTION_SUBMENU_ITEMS
+-  ];
++function buildPathPointSelectionItems(): readonly AppMenuItem[] {
++  return PATH_POINT_ITEMS;
  }
  
 -function buildSingleSelectionItems(includeFlattenForeach: boolean, includePathSubmenu: boolean): readonly AppMenuItem[] {
@@ -191,7 +211,7 @@ index bc368718..6e9834aa 100644
      ...buildSingleSelectionSubmenuItems(includePathSubmenu)
    ];
  }
-@@ -492,6 +496,7 @@ export function buildCanvasContextMenuDefinition(
+@@ -492,6 +482,7 @@ export function buildCanvasContextMenuDefinition(
      includeEditEquationForSingleNode?: boolean;
      nodePositioningAction?: "position-relative" | "convert-absolute" | null;
      includePathSubmenuForSingleSelection?: boolean;
@@ -199,7 +219,7 @@ index bc368718..6e9834aa 100644
      includeFlattenForeach?: boolean;
      includeMatrixMultiRemoveRow?: boolean;
      includeMatrixMultiRemoveColumn?: boolean;
-@@ -503,7 +508,7 @@ export function buildCanvasContextMenuDefinition(
+@@ -503,13 +494,13 @@ export function buildCanvasContextMenuDefinition(
  ) {
    const includeFlattenForeach = options.includeFlattenForeach === true;
    const includePathSubmenuForSingleSelection = options.includePathSubmenuForSingleSelection === true;
@@ -208,6 +228,13 @@ index bc368718..6e9834aa 100644
    const selectionSingleNodeItems = buildSelectionSingleNodeItems(
      options.includeEditEquationForSingleNode === true,
      options.nodePositioningAction,
+     includeFlattenForeach
+   );
+-  const pathPointSelectionItems = buildPathPointSelectionItems(includeFlattenForeach);
++  const pathPointSelectionItems = buildPathPointSelectionItems();
+   const selectionMultiItems = withMatrixMultiItems(buildMultiSelectionItems(includeFlattenForeach), options);
+   const singleMatrixItems = buildSingleSelectionItems(includeFlattenForeach, false);
+ 
 diff --git a/packages/app/src/index.ts b/packages/app/src/index.ts
 index 1672d1d6..6b94a124 100644
 --- a/packages/app/src/index.ts
@@ -3409,7 +3436,7 @@ index 0ddde08e..ccab61f1 100644
 +[data-dock="bottom"] .embeddedTools .palette,
 +[data-dock="floating"] .embeddedTools .palette { flex-direction: row; max-width: 176px; max-height: 44px; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..fc9050fe 100644
+index a3293df2..b6d3291c 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,5 @@
@@ -3498,12 +3525,30 @@ index a3293df2..fc9050fe 100644
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +88,71 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +88,88 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
 +  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
 +  const toolbarRef = useRef<HTMLDivElement>(null);
++  const [safeRect, setSafeRect] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
++  useLayoutEffect(() => {
++    if (!embedded) return;
++    const viewport = document.querySelector<HTMLElement>("[data-canvas-viewport]");
++    if (!viewport) return;
++    function measureCanvas() {
++      // The viewport occupies grid row/column 2, beyond the visible ruler cells.
++      const bounds = viewport!.getBoundingClientRect();
++      const next = { left: bounds.left + 8, right: bounds.right - 8, top: bounds.top + 8, bottom: bounds.bottom - 8 };
++      setSafeRect((current) => current?.left === next.left && current.right === next.right && current.top === next.top && current.bottom === next.bottom ? current : next);
++    }
++    measureCanvas();
++    const observer = new ResizeObserver(measureCanvas);
++    observer.observe(viewport);
++    if (viewport.parentElement) observer.observe(viewport.parentElement);
++    window.addEventListener("resize", measureCanvas);
++    return () => { observer.disconnect(); window.removeEventListener("resize", measureCanvas); };
++  }, [embedded]);
 +
 +  useLayoutEffect(() => {
 +    // Show the destination before release, as in Visual Studio's docking guide:
@@ -3545,16 +3590,15 @@ index a3293df2..fc9050fe 100644
 +  }, [dockPreview]);
 +
 +  useLayoutEffect(() => {
-+    if (!embedded || dragPoint) return;
++    if (!embedded || dragPoint || !safeRect) return;
 +    const toolbar = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
 +    if (!toolbar) return;
 +    function keepToolbarVisible() {
 +      const bounds = toolbar!.getBoundingClientRect();
-+      const margin = 32;
-+      const minX = Math.min(0.5, (bounds.width / 2 + margin) / window.innerWidth);
-+      const minY = Math.min(0.5, (bounds.height / 2 + margin) / window.innerHeight);
-+      const x = Math.max(minX, Math.min(1 - minX, settings.toolbar.x));
-+      const y = Math.max(minY, Math.min(1 - minY, settings.toolbar.y));
++      const x = Math.max((safeRect!.left + bounds.width / 2) / window.innerWidth,
++        Math.min((safeRect!.right - bounds.width / 2) / window.innerWidth, settings.toolbar.x));
++      const y = Math.max((safeRect!.top + bounds.height / 2) / window.innerHeight,
++        Math.min((safeRect!.bottom - bounds.height / 2) / window.innerHeight, settings.toolbar.y));
 +      if (Math.abs(x - settings.toolbar.x) > 0.001 || Math.abs(y - settings.toolbar.y) > 0.001) updateToolbarSettings({ x, y });
 +    }
 +    keepToolbarVisible();
@@ -3562,7 +3606,7 @@ index a3293df2..fc9050fe 100644
 +    observer.observe(toolbar);
 +    window.addEventListener("resize", keepToolbarVisible);
 +    return () => { observer.disconnect(); window.removeEventListener("resize", keepToolbarVisible); };
-+  }, [embedded, dragPoint, settings.toolbar, updateToolbarSettings]);
++  }, [embedded, dragPoint, safeRect, settings.toolbar, updateToolbarSettings]);
  
    // Close popup when tool mode changes (unless it's a popup that can be used independently)
    useEffect(() => {
@@ -3571,7 +3615,7 @@ index a3293df2..fc9050fe 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -92,7 +185,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -92,7 +202,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
    const renderPopup = (popupKind: ToolPopupKind) => {
      if (popupKind === "bucket-color") {
        return (
@@ -3580,7 +3624,7 @@ index a3293df2..fc9050fe 100644
            <ColorPicker
              ariaLabel="Bucket fill color"
              value={bucketFillColor}
-@@ -111,7 +204,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +221,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -3598,7 +3642,7 @@ index a3293df2..fc9050fe 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +228,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +245,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -3617,7 +3661,7 @@ index a3293df2..fc9050fe 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +284,157 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +301,171 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -3754,28 +3798,42 @@ index a3293df2..fc9050fe 100644
 +    const height = bounds?.height ?? 44;
 +    const requestedX = dock === "floating" ? clientX + dragOffset.current.x : clientX;
 +    const requestedY = dock === "floating" ? clientY + dragOffset.current.y : clientY;
-+    const centerX = Math.max(32 + width / 2, Math.min(window.innerWidth - 8 - width / 2, requestedX));
-+    const centerY = Math.max(32 + height / 2, Math.min(window.innerHeight - 56 - height / 2, requestedY));
++    const centerX = Math.max((safeRect?.left ?? 0) + width / 2, Math.min((safeRect?.right ?? window.innerWidth) - width / 2, requestedX));
++    const centerY = Math.max((safeRect?.top ?? 0) + height / 2, Math.min((safeRect?.bottom ?? window.innerHeight) - height / 2, requestedY));
 +    updateToolbarSettings({ dock, x: Math.max(0, Math.min(1, centerX / window.innerWidth)), y: Math.max(0, Math.min(1, centerY / window.innerHeight)) });
 +  };
 +
-+  const dragBounds = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]")?.getBoundingClientRect();
-+  const visibleDragPoint = dragPoint ? {
-+    x: Math.max(32 + (dragBounds?.width ?? 44) / 2, Math.min(window.innerWidth - 8 - (dragBounds?.width ?? 44) / 2, dragPoint.x)),
-+    y: Math.max(32 + (dragBounds?.height ?? 44) / 2, Math.min(window.innerHeight - 56 - (dragBounds?.height ?? 44) / 2, dragPoint.y))
-+  } : null;
-+  const toolbarPosition = visibleDragPoint
-+    ? { left: visibleDragPoint.x, top: visibleDragPoint.y }
-+    : settings.toolbar.dock === "left" ? { left: 44, top: `${settings.toolbar.y * 100}%` }
-+      : settings.toolbar.dock === "right" ? { right: 44, top: `${settings.toolbar.y * 100}%` }
-+        : settings.toolbar.dock === "top" ? { top: 60, left: `${settings.toolbar.x * 100}%` }
-+          : settings.toolbar.dock === "bottom" ? { bottom: 56, left: `${settings.toolbar.x * 100}%` }
-+            : { left: `${settings.toolbar.x * 100}%`, top: `${settings.toolbar.y * 100}%` };
++  const toolbarElement = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
++  const bounds = toolbarElement?.getBoundingClientRect();
++  const parentBounds = toolbarElement?.offsetParent?.getBoundingClientRect();
++  const width = Math.min(bounds?.width ?? 44, safeRect ? safeRect.right - safeRect.left : window.innerWidth);
++  const height = Math.min(bounds?.height ?? 44, safeRect ? safeRect.bottom - safeRect.top : window.innerHeight);
++  const requestedX = dragPoint?.x ?? settings.toolbar.x * window.innerWidth;
++  const requestedY = dragPoint?.y ?? settings.toolbar.y * window.innerHeight;
++  const centerX = safeRect ? Math.max(safeRect.left + width / 2, Math.min(safeRect.right - width / 2, requestedX)) : requestedX;
++  const centerY = safeRect ? Math.max(safeRect.top + height / 2, Math.min(safeRect.bottom - height / 2, requestedY)) : requestedY;
++  const parentX = parentBounds?.left ?? 0, parentY = parentBounds?.top ?? 0;
++  const dock = dragPoint ? "floating" : settings.toolbar.dock;
++  const toolbarPosition = {
++    ...(dock === "left" ? { left: (safeRect?.left ?? 44) - parentX, top: centerY - parentY }
++      : dock === "right" ? { left: (safeRect?.right ?? window.innerWidth) - width - parentX, top: centerY - parentY }
++        : dock === "top" ? { left: centerX - parentX, top: (safeRect?.top ?? 60) - parentY }
++          : dock === "bottom" ? { left: centerX - parentX, top: (safeRect?.bottom ?? window.innerHeight) - height - parentY }
++            : { left: centerX - parentX, top: centerY - parentY }),
++    maxWidth: safeRect ? safeRect.right - safeRect.left : undefined,
++    maxHeight: safeRect ? safeRect.bottom - safeRect.top : undefined,
++    visibility: safeRect ? "visible" as const : "hidden" as const
++  };
++  const verticalDock = dock === "left" || dock === "right";
++  const toolStripSize = safeRect ? {
++    maxHeight: verticalDock ? Math.max(44, safeRect.bottom - safeRect.top - 56) : 44,
++    maxWidth: verticalDock ? 44 : Math.max(44, safeRect.right - safeRect.left - 56)
++  } : undefined;
 +
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +463,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +494,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -3787,7 +3845,7 @@ index a3293df2..fc9050fe 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +523,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +554,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -3795,7 +3853,7 @@ index a3293df2..fc9050fe 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +566,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +597,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -3803,7 +3861,7 @@ index a3293df2..fc9050fe 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +582,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +613,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -3825,7 +3883,7 @@ index a3293df2..fc9050fe 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +604,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +635,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -3833,7 +3891,7 @@ index a3293df2..fc9050fe 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +612,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +643,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -3845,7 +3903,7 @@ index a3293df2..fc9050fe 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +625,71 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +656,71 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -3881,7 +3939,7 @@ index a3293df2..fc9050fe 100644
 +    <button type="button" data-toolbar-grip className={css.toolbarGrip} aria-label="Move toolbar" title="Drag toolbar">
 +      ⋮⋮
 +    </button>
-+    <div ref={toolbarRef} className={css.embeddedTools} onWheel={(event) => {
++    <div ref={toolbarRef} className={css.embeddedTools} style={toolStripSize} onWheel={(event) => {
 +      const strip = toolbarRef.current;
 +      if (!strip) return;
 +      if (settings.toolbar.dock === "top" || settings.toolbar.dock === "bottom") strip.scrollLeft += event.deltaX || event.deltaY;
@@ -3919,7 +3977,7 @@ index a3293df2..fc9050fe 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +700,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +731,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -3933,7 +3991,7 @@ index a3293df2..fc9050fe 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +716,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +747,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -3942,7 +4000,7 @@ index a3293df2..fc9050fe 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +741,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +772,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -4095,7 +4153,7 @@ index 8aeb4133..50d346db 100644
      </div>
    );
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-index cf4cf2cf..50d8677f 100644
+index cf4cf2cf..106a922d 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 @@ -94,14 +94,14 @@
@@ -4152,7 +4210,7 @@ index cf4cf2cf..50d8677f 100644
  :global([data-canvas-invert]) .svgLayer {
    background: #e8e8e8;
    filter: invert(1) hue-rotate(180deg);
-@@ -323,59 +328,22 @@
+@@ -323,59 +328,34 @@
  }
  
  .gridMinor {
@@ -4169,22 +4227,28 @@ index cf4cf2cf..50d8677f 100644
  
  .gridAxis {
 -  stroke: color-mix(in srgb, var(--accent-dark) 40%, transparent);
-+  stroke: color-mix(in srgb, var(--accent-dark) 70%, transparent);
++  stroke: #3c4650;
    vector-effect: non-scaling-stroke;
  }
  
 -:global([data-color-scheme="dark"]) .gridMinor {
 -  stroke: rgba(85, 82, 76, 0.2);
--}
--
++.gridAxisLabel {
++  fill: #3c4650;
+ }
+ 
 -:global([data-color-scheme="dark"]) .gridMajor {
 -  stroke: rgba(69, 65, 59, 0.32);
--}
--
++:global([data-canvas-invert]) .gridAxis {
++  stroke: #c3b9af;
+ }
+ 
 -:global([data-color-scheme="dark"]) .gridAxis {
 -  stroke: rgba(37, 34, 116, 0.5);
--}
--
++:global([data-canvas-invert]) .gridAxisLabel {
++  fill: #c3b9af;
+ }
+ 
  @media (min-resolution: 2dppx) {
 -  .gridMinor {
 -    stroke: rgba(85, 82, 76, 0.12);
@@ -4217,7 +4281,7 @@ index cf4cf2cf..50d8677f 100644
  
  .hitRegions {
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..f9d5f429 100644
+index 4e22ccfa..e460cd72 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,16 @@ preflightPositionNodeRelativeToAction,
@@ -4238,6 +4302,15 @@ index 4e22ccfa..f9d5f429 100644
  import { renderTikzToSvg } from "tikz-editor/render/index";
  import type {
  EditHandlePositioningContext,
+@@ -46,7 +50,7 @@ getKnuthPlassLineRangeFromPoint
+ import { createMathJaxNodeTextEngine,getActiveMathJaxOutputJax } from "tikz-editor/text/mathjax-engine";
+ import type { NodeTextEngine,NodeTextLayoutKind } from "tikz-editor/text/types";
+ import { useShallow } from "zustand/react/shallow";
+-import type { AppMenuCommandId } from "../../app-menu";
++import { APP_MENU_COMMAND_IDS, type AppMenuCommandId } from "../../app-menu";
+ import { buildCanvasContextMenuDefinition } from "../../context-menu";
+ import { getSharedEditAnalysisSession,getSharedEditAnalysisView } from "../../edit-analysis-manager";
+ import { getActiveEditorPlatform } from "../../platform/current";
 @@ -54,6 +58,7 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
  import { useSettingsStore } from "../../settings/useSettingsStore";
  import { buildSnapshotEditSourceFingerprint } from "../../source-identity";
@@ -4390,7 +4463,7 @@ index 4e22ccfa..f9d5f429 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -912,11 +969,104 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -912,11 +969,106 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
@@ -4406,6 +4479,8 @@ index 4e22ccfa..f9d5f429 100644
 +  const [hoveredHandleId, setHoveredHandleId] = useState<string | null>(null);
 +  const [lockedCurveId, setLockedCurveId] = useState<string | null>(null);
 +  const [selectedNodeIndices, setSelectedNodeIndices] = useState<Set<number>>(new Set());
++  const selectedNodeIndicesRef = useRef(selectedNodeIndices);
++  selectedNodeIndicesRef.current = selectedNodeIndices;
 +  const [touchNodeSelection, setTouchNodeSelection] = useState(false);
 +  const { autoSmoothNodes, autoApplyFit, preserveOriginal, simplificationUnits, smoothingUnits } = useSettingsStore(useShallow((state) => ({
 +    autoSmoothNodes: state.settings.canvas.freehandAutoSmoothNodes,
@@ -4496,7 +4571,7 @@ index 4e22ccfa..f9d5f429 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1083,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1085,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -4505,7 +4580,7 @@ index 4e22ccfa..f9d5f429 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1094,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1096,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -4519,7 +4594,7 @@ index 4e22ccfa..f9d5f429 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1132,6 +1273,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,6 +1275,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -4527,7 +4602,7 @@ index 4e22ccfa..f9d5f429 100644
      onOpenEditEquation: handleOpenEditEquationCommand,
      activeHandleIdOverride: contextMenuHandleIdOverride
    });
-@@ -1157,7 +1299,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1157,7 +1301,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
    const pathDraftRef = useRef<PathToolDraft | null>(null);
@@ -4535,7 +4610,7 @@ index 4e22ccfa..f9d5f429 100644
    const previousCanvasContextKeyRef = useRef(canvasFigureContextKey(activeDocumentId, activeFigureId));
    const pendingAddedSelectionRef = useRef<PendingAddedSelection | null>(null);
    const canvasTransformRef = useRef(canvasTransform);
-@@ -1166,6 +1307,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1166,6 +1309,12 @@ export const CanvasPanel = memo(function CanvasPanel({
    const sourceBoundsSvgRef = useRef<SourceBoundsMap>(new Map<string, SvgBounds>());
    const liveResizeFramesRef = useRef(new Map<string, ReturnType<typeof resolveResizeFrameForSource>>());
    const previousViewBoxRef = useRef<SvgViewBox | null>(null);
@@ -4548,7 +4623,7 @@ index 4e22ccfa..f9d5f429 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1300,7 +1447,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1449,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -4556,7 +4631,7 @@ index 4e22ccfa..f9d5f429 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1467,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1469,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -4567,7 +4642,7 @@ index 4e22ccfa..f9d5f429 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1651,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1653,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -4591,7 +4666,7 @@ index 4e22ccfa..f9d5f429 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1666,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1668,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -4605,7 +4680,7 @@ index 4e22ccfa..f9d5f429 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1810,7 +1933,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,7 +1935,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -4613,7 +4688,7 @@ index 4e22ccfa..f9d5f429 100644
      svgResult,
      canvasTransform,
      marqueeDraft,
-@@ -1819,10 +1941,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1819,10 +1943,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      ROTATE_HANDLE_OFFSET_PX
    });
  
@@ -4637,7 +4712,7 @@ index 4e22ccfa..f9d5f429 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,6 +1972,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,6 +1974,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -4646,7 +4721,7 @@ index 4e22ccfa..f9d5f429 100644
      showGuides,
      guides,
      guidePreview,
-@@ -1857,32 +1993,41 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,32 +1995,41 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -4692,7 +4767,7 @@ index 4e22ccfa..f9d5f429 100644
      viewportRef,
      canvasTransformRef,
      fitToContentRequestToken,
-@@ -1890,11 +2035,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1890,11 +2037,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomRequestDirection,
      zoomScaleRequestToken,
      zoomScaleRequestValue,
@@ -4704,7 +4779,7 @@ index 4e22ccfa..f9d5f429 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -2055,17 +2195,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2197,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -4729,7 +4804,7 @@ index 4e22ccfa..f9d5f429 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2219,221 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2221,221 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -4975,7 +5050,7 @@ index 4e22ccfa..f9d5f429 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2448,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2450,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -4983,7 +5058,7 @@ index 4e22ccfa..f9d5f429 100644
          return;
        }
  
-@@ -2141,7 +2456,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2458,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -4991,7 +5066,7 @@ index 4e22ccfa..f9d5f429 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2472,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2474,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -4999,7 +5074,7 @@ index 4e22ccfa..f9d5f429 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,7 +2486,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,7 +2488,6 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -5007,7 +5082,7 @@ index 4e22ccfa..f9d5f429 100644
      },
      [applyActionWithFeedback, creationStrokeColor, dispatch, setDragState]
    );
-@@ -3064,9 +3376,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3378,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -5017,7 +5092,7 @@ index 4e22ccfa..f9d5f429 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3147,7 +3456,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3458,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -5028,7 +5103,7 @@ index 4e22ccfa..f9d5f429 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3482,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3484,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -5038,7 +5113,7 @@ index 4e22ccfa..f9d5f429 100644
      ]
    );
  
-@@ -3192,6 +3504,53 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3506,62 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -5063,6 +5138,7 @@ index 4e22ccfa..f9d5f429 100644
 +        setDragState(null);
 +        setMarqueeDraft(null);
 +        suppressNextBackgroundClickRef.current = true;
++        if (selectedNodeIndicesRef.current.size > 1) { setCurveActionsOpen(true); return; }
 +        openContextMenuRef.current(makeClientPoint(px(press.x), px(press.y)), press.sourceId,
 +          press.sourceId ? useEditorStore.getState().activeHandleId : null);
 +      }, 550) };
@@ -5083,16 +5159,24 @@ index 4e22ccfa..f9d5f429 100644
 +    };
 +  }, [setDragState, sourceRevision, toolMode]);
 +
++  const activeSelectionHandle = activeHandleId ? snapshot.editHandles.find((handle) => handle.id === activeHandleId) : null;
++  const pointCommandContext = activeSelectionHandle?.kind === "path-point";
++  const controlCommandContext = activeSelectionHandle?.kind === "path-control" || activeSelectionHandle?.kind === "path-bend";
++  const selectionCommandsApplicable = selectedNodeIndices.size <= 1 && !controlCommandContext && (!pointCommandContext || [
++    APP_MENU_COMMAND_IDS.PATH_DELETE_POINT, APP_MENU_COMMAND_IDS.PATH_POINT_CORNER,
++    APP_MENU_COMMAND_IDS.PATH_POINT_SMOOTH, APP_MENU_COMMAND_IDS.PATH_SPLIT
++  ].some((id) => commandRuntime.bindings[id].enabled));
++
 +  const openSelectionCommands = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
 +    const sourceId = [...selectedElementIds][0] ?? null;
 +    openCanvasContextMenuAt(makeClientPoint(px(event.clientX), px(event.clientY)), sourceId,
-+      selectedElementIds.size === 1 ? activeHandleId : null);
-+  }, [activeHandleId, openCanvasContextMenuAt, selectedElementIds]);
++      selectedElementIds.size === 1 && pointCommandContext ? activeHandleId : null);
++  }, [activeHandleId, openCanvasContextMenuAt, pointCommandContext, selectedElementIds]);
 +
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3226,6 +3585,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3226,6 +3596,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      canvasTransform,
      interactionSvgRef,
      pendingBezier,
@@ -5101,7 +5185,7 @@ index 4e22ccfa..f9d5f429 100644
      snapshot,
      source,
      setWarning,
-@@ -3267,6 +3628,212 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,6 +3639,212 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -5314,7 +5398,7 @@ index 4e22ccfa..f9d5f429 100644
    const handleBackgroundClick = useCallback(
      (event: ReactMouseEvent<HTMLDivElement | SVGSVGElement>) => {
        if (pendingNodePositionTargetPick && event.target === event.currentTarget) {
-@@ -3274,9 +3841,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3274,9 +3852,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          clearPendingNodePositionTargetPick();
          return;
        }
@@ -5331,7 +5415,7 @@ index 4e22ccfa..f9d5f429 100644
    );
  
    const {
-@@ -3306,6 +3879,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +3890,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -5339,7 +5423,7 @@ index 4e22ccfa..f9d5f429 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3334,8 +3908,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3334,8 +3919,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      selectedElementIdsRef,
      svgResult,
      svgResultRef,
@@ -5348,7 +5432,7 @@ index 4e22ccfa..f9d5f429 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -3345,7 +3917,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3345,7 +3928,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomSpeed,
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
@@ -5356,7 +5440,7 @@ index 4e22ccfa..f9d5f429 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,25 +4020,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,25 +4031,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -5382,7 +5466,7 @@ index 4e22ccfa..f9d5f429 100644
    useEffect(() => {
      if (toolMode === "select") {
        setPathDraft(null);
-@@ -3706,15 +4258,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4269,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -5406,7 +5490,7 @@ index 4e22ccfa..f9d5f429 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4371,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4382,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -5414,7 +5498,7 @@ index 4e22ccfa..f9d5f429 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4384,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4395,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -5422,7 +5506,7 @@ index 4e22ccfa..f9d5f429 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3863,7 +4417,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4428,19 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -5443,7 +5527,7 @@ index 4e22ccfa..f9d5f429 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4446,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4457,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -5458,11 +5542,12 @@ index 4e22ccfa..f9d5f429 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3907,12 +4475,20 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3907,12 +4486,27 @@ export const CanvasPanel = memo(function CanvasPanel({
          editableTextRegionKeys={editableTextRegionKeys}
          draggableSourceIds={draggableSourceIds}
          hitRegionCursorByTargetId={pendingNodePositionHitRegionCursorByTargetId}
 -        onElementPointerDown={onElementPointerDown}
+-        onElementContextMenu={onElementContextMenu}
 +        onElementPointerDown={(event, sourceId, region) => {
 +          if (toolMode === "erase" || lockedElementIds.has(sourceId)) { event.preventDefault(); event.stopPropagation(); return; }
 +          if (lockedCurveId && sourceId !== lockedCurveId) { event.stopPropagation(); return; }
@@ -5470,7 +5555,14 @@ index 4e22ccfa..f9d5f429 100644
 +          dispatch({ type: "SET_ACTIVE_HANDLE", handleId: null });
 +          onElementPointerDown(event, sourceId, region);
 +        }}
-         onElementContextMenu={onElementContextMenu}
++        onElementContextMenu={(event, sourceId, region, handleId) => {
++          const handle = handleId ? snapshot.editHandles.find((candidate) => candidate.id === handleId) : null;
++          if (selectedNodeIndices.size > 1) { event.preventDefault(); event.stopPropagation(); setCurveActionsOpen(true); return; }
++          if (handle?.kind === "path-control" || handle?.kind === "path-bend") {
++            event.preventDefault(); event.stopPropagation(); dispatch({ type: "SET_ACTIVE_HANDLE", handleId: handle.id }); return;
++          }
++          onElementContextMenu(event, sourceId, region, handleId);
++        }}
          onElementDoubleClick={onElementDoubleClick}
          onHoverChange={(id: string | null) => { dispatch({ type: "SET_HOVERED_ELEMENT", id }); }}
          nodePositionLinks={nodePositionLinks}
@@ -5480,7 +5572,7 @@ index 4e22ccfa..f9d5f429 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4496,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4514,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -5490,7 +5582,7 @@ index 4e22ccfa..f9d5f429 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4509,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4527,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -5520,7 +5612,7 @@ index 4e22ccfa..f9d5f429 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3974,6 +4566,97 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4584,97 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -5546,9 +5638,9 @@ index 4e22ccfa..f9d5f429 100644
 +          return { left: Math.max(viewport.left + 4, viewport.left + canvasTransform.translateX + (x - svgResult.viewBox.x) * canvasTransform.scale + 8),
 +            top: Math.max(viewport.top + 4, viewport.top + canvasTransform.translateY + (y - svgResult.viewBox.y) * canvasTransform.scale + 8) };
 +        })()}>
-+          <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>
-+            {selectedElementIds.size === 1 ? "Selection actions" : `${selectedElementIds.size} selected · Actions`}
-+          </button>
++          {selectionCommandsApplicable ? <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>
++            {pointCommandContext ? "Point actions" : selectedElementIds.size === 1 ? "Selection actions" : `${selectedElementIds.size} selected · Actions`}
++          </button> : null}
 +          {recoverableFreehand ? <button type="button" onClick={restoreOriginalFreehand}>Restore original stroke</button> : null}
 +        </div>
 +      ) : null}
@@ -5568,9 +5660,9 @@ index 4e22ccfa..f9d5f429 100644
 +          <button type="button" aria-expanded={curveActionsOpen} onClick={() => setCurveActionsOpen(!curveActionsOpen)}>
 +            {lockedCurveId ? "Locked curve · " : ""}{selectedNodeIndices.size ? `${selectedNodeIndices.size} selected nodes` : "Curve actions"}
 +          </button>
-+          <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>
-+            {selectedNodeIndices.size === 1 ? "All point actions" : "All selection actions"}
-+          </button>
++          {selectionCommandsApplicable ? <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>
++            {pointCommandContext ? "Point actions" : "More curve actions"}
++          </button> : null}
 +          {recoverableFreehand ? <button type="button" onClick={restoreOriginalFreehand}>Restore original stroke</button> : null}
 +          {curveActionsOpen ? <>
 +            <button type="button" onClick={() => setLockedCurveId(lockedCurveId ? null : selectedCurve.path.sourceRef.sourceId)}>{lockedCurveId ? "Unlock selection" : "Lock selection"}</button>
@@ -5619,7 +5711,7 @@ index 4e22ccfa..f9d5f429 100644
          <Suspense fallback={null}>
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
-index f0ff59f8..a47579fc 100644
+index f0ff59f8..e2863948 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 @@ -45,7 +45,7 @@ import type {
@@ -5704,6 +5796,15 @@ index f0ff59f8..a47579fc 100644
      onHandlePointerDown,
      onResizeHandlePointerDown,
      onRotateHandlePointerDown,
+@@ -383,7 +401,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+   return (
+     <div className={css.panel}>
+       <div className={[css.canvasGrid, showRulers ? "" : css.canvasGridNoRulers].filter(Boolean).join(" ")}>
+-        {showRulers ? <div className={css.rulerCorner} data-select="chrome">cm</div> : null}
++        {showRulers ? <div className={css.rulerCorner} data-select="chrome" aria-label="Source lattice coordinates" title="Source lattice coordinates">x,y</div> : null}
+ 
+         {showRulers ? (
+           <div className={css.topRulerSlot} data-select="chrome">
 @@ -511,6 +529,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  onFallback={onSvgPatchFallback}
                  hostRef={svgLayerHostRef}
@@ -5765,13 +5866,13 @@ index f0ff59f8..a47579fc 100644
                        />
                      ))}
 +                    {gridLines.verticalAxisX != null && (
-+                      <text x={8 / canvasTransform.scale} y={gridLines.yMin + 20 / canvasTransform.scale} fontSize={12 / canvasTransform.scale} fill="currentColor">y</text>
++                      <text x={8 / canvasTransform.scale} y={gridLines.yMin + 20 / canvasTransform.scale} fontSize={12 / canvasTransform.scale} className={css.gridAxisLabel}>y</text>
 +                    )}
 +                    {gridLines.horizontalAxisY != null && (
-+                      <text x={(gridLines.xMax) - 18 / canvasTransform.scale} y={gridLines.horizontalAxisY - 8 / canvasTransform.scale} fontSize={12 / canvasTransform.scale} fill="currentColor">x</text>
++                      <text x={(gridLines.xMax) - 18 / canvasTransform.scale} y={gridLines.horizontalAxisY - 8 / canvasTransform.scale} fontSize={12 / canvasTransform.scale} className={css.gridAxisLabel}>x</text>
 +                    )}
 +                    {gridLines.verticalAxisX != null && gridLines.horizontalAxisY != null && (
-+                      <text x={6 / canvasTransform.scale} y={gridLines.horizontalAxisY + 15 / canvasTransform.scale} fontSize={11 / canvasTransform.scale} fill="currentColor">0</text>
++                      <text x={6 / canvasTransform.scale} y={gridLines.horizontalAxisY + 15 / canvasTransform.scale} fontSize={11 / canvasTransform.scale} className={css.gridAxisLabel}>(0,0)</text>
 +                    )}
                      {gridLines.verticalAxisX != null && (
                        <line
