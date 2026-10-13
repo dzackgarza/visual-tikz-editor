@@ -2,15 +2,8 @@
   <div class="tikz-standalone" :class="theme">
     <header class="document-bar">
       <strong>{{ fileName }}</strong>
-      <details class="file-menu">
-        <summary>File</summary>
-        <div class="file-menu-items">
-          <button type="button" :disabled="document === null" @click="newDocument">New diagram</button>
-          <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
-          <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
-          <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
-        </div>
-      </details>
+      <Button label="File" icon="pi pi-folder" text aria-haspopup="true" aria-controls="file-menu" @click="toggleFileMenu" />
+      <Menu id="file-menu" ref="fileMenu" :model="fileItems" popup />
       <button type="button" :aria-pressed="sourceOpen" @click="sourceOpen = !sourceOpen">
         {{ sourceOpen ? 'Hide source' : 'Source' }}
       </button>
@@ -52,7 +45,7 @@
  * serves the pinned editor pages.
  */
 
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
@@ -60,6 +53,8 @@ import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-bl
 import type { TikzRenderResult } from "../src/tikz-render";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
 import SourceEditor from "./SourceEditor.vue";
+import Button from "primevue/button";
+import Menu from "primevue/menu";
 
 interface StandaloneDocument {
   path: string;
@@ -76,6 +71,17 @@ const loadError = ref("");
 const hostError = ref("");
 const inspectorOpen = ref(false);
 const sourceOpen = ref(window.matchMedia("(min-width: 901px)").matches);
+const fileMenu = ref<InstanceType<typeof Menu> | null>(null);
+const fileItems = computed(() => [
+  { label: "New diagram", disabled: document.value === null, command: newDocument },
+  { label: "Open…", disabled: document.value === null, command: openDocument },
+  { separator: true },
+  { label: "Save", disabled: document.value === null || !dirty.value, command: save },
+  { label: "Save As…", disabled: document.value === null, command: saveAs },
+]);
+function toggleFileMenu(event: Event): void {
+  fileMenu.value?.toggle(event);
+}
 const theme = ref<TikzWorkbenchTheme>(
   window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
 );
@@ -108,6 +114,9 @@ const target = computed<TikzLivePreviewTarget | null>(() => {
     docPath: document.value.path,
     authoredSource: text,
   };
+});
+
+watch(() => target.value?.language, (language) => {
 });
 
 async function responseText(response: Response): Promise<string> {
@@ -332,6 +341,28 @@ body,
   white-space: nowrap;
 }
 
+.document-views {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.document-views :deep(.p-button) {
+  min-height: 40px;
+  padding-inline: 10px;
+  font-size: 14px;
+}
+
+.document-views :deep(.p-button:disabled) { display: none; }
+
+.document-views :deep(.p-button.p-button-primary) {
+  background: var(--ribbon);
+  color: #fff;
+}
+
 .document-bar button,
 .file-menu summary {
   display: inline-flex;
@@ -401,6 +432,7 @@ main.source-closed {
 }
 
 .tikz-standalone-source {
+  height: 100%;
   border-right: 1px solid color-mix(in srgb, currentColor 20%, transparent);
   background: var(--paper);
 }
@@ -431,8 +463,5 @@ main.source-closed {
     display: none;
   }
 
-  main {
-    grid-template-columns: minmax(220px, 42%) minmax(0, 1fr);
-  }
 }
 </style>

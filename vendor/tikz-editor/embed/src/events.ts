@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { commandIdentitySchema } from './commands';
+import { commandIdentitySchema, toolModeSchema } from './commands';
 import { snapshotResultSchema } from './snapshot-protocol';
 
 export const commandFailureSchema = z.enum([
@@ -10,7 +10,7 @@ export const commandFailureSchema = z.enum([
 export type CommandFailure = z.infer<typeof commandFailureSchema>;
 
 const action = z.enum(['load', 'settings', 'display', 'workspace', 'inspector', 'source',
-  'import-ink', 'interpret-ink', 'restore-ink', 'cancel']);
+  'tool', 'tool-option', 'import-ink', 'interpret-ink', 'restore-ink', 'cancel']);
 const identity = commandIdentitySchema.shape;
 export const commandReplySchema = z.discriminatedUnion('status', [
   z.object({ ...identity, event: z.literal('reply'), status: z.literal('ok'), action,
@@ -40,6 +40,8 @@ export const editorNotificationSchema = z.discriminatedUnion('event', [
   z.object({ ...notificationIdentity, event: z.literal('error'), message: z.string() }),
   z.object({ ...notificationIdentity, event: z.literal('close-request') }),
   z.object({ ...notificationIdentity, event: z.literal('inspector-closed') }),
+  z.object({ ...notificationIdentity, event: z.literal('tool'), tool: toolModeSchema }),
+  z.object({ ...notificationIdentity, event: z.literal('tool-options'), shapes: z.array(z.object({ value: z.string(), label: z.string() })) }),
   z.object({ ...notificationIdentity, event: z.literal('export'), format: z.string(), source: z.string(),
     svg: z.string(), data: z.unknown(), error: z.string().optional() }),
 ]);

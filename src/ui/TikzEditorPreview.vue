@@ -43,6 +43,7 @@ import {
 import { requestEditorSource, requestEditorSnapshot, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../host";
 import { editorNotificationSchema, type EditorNotification } from "../../vendor/tikz-editor/embed/src/events";
 import type { TikzLivePreviewTarget } from "../live-preview";
+import type { EditorShapeOption, EditorToolMode } from "../editor-tools";
 
 interface PreviewSession {
   id: string;
@@ -64,6 +65,8 @@ const emit = defineEmits<{
   (e: "inspectorClosed"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
+  (e: "tool", tool: EditorToolMode): void;
+  (e: "toolOptions", shapes: EditorShapeOption[]): void;
 }>();
 
 const frame = ref<HTMLIFrameElement | null>(null);
@@ -73,6 +76,7 @@ const session = shallowRef<PreviewSession>({
   source: tikzEditorSessionForBlock(props.target),
 });
 const hostReady = ref(false);
+const pendingTool = ref<EditorToolMode | null>(null);
 const loaded = ref(false);
 const errorMessage = ref("");
 const lifetime = new AbortController();
@@ -95,7 +99,6 @@ async function currentSource(signal: AbortSignal): Promise<string> {
   return session.value.source.source;
 }
 
-defineExpose({ snapshot, currentSource });
 
 function sameBlockIdentity(a: TikzEditorSourceSession, b: TikzEditorSourceSession): boolean {
   return a.kind === b.kind && a.blockFrom === b.blockFrom;
@@ -111,6 +114,21 @@ function postToEditor(message: Record<string, unknown>): void {
     revision: session.value.revision, ...message,
   }, new URL(props.host.editorUrl, location.href).origin);
 }
+
+function selectTool(tool: EditorToolMode): void {
+  pendingTool.value = tool;
+  if (loaded.value) postToEditor({ action: "tool", tool });
+}
+
+function configureTool(option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number): void {
+  postToEditor({ action: "tool-option", option, value });
+}
+
+function configureMatrix(rows: number, columns: number): void {
+  postToEditor({ action: "tool-option", option: "matrix", rows, columns });
+}
+
+defineExpose({ snapshot, currentSource, selectTool, configureTool, configureMatrix });
 
 function sendFullLoad(): void {
   if (!hostReady.value) {
@@ -252,6 +270,7 @@ function onMessage(event: MessageEvent): void {
       }
       loaded.value = true;
       errorMessage.value = "";
+      if (pendingTool.value !== null) postToEditor({ action: "tool", tool: pendingTool.value });
       break;
     case "change": {
       applyEditorSource(message.source, message.revision);
@@ -278,6 +297,12 @@ function onMessage(event: MessageEvent): void {
       break;
     case "inspector-closed":
       emit("inspectorClosed");
+      break;
+    case "tool":
+      if (message.tool !== undefined) emit("tool", message.tool);
+      break;
+    case "tool-options":
+      if (message.shapes !== undefined) emit("toolOptions", message.shapes);
       break;
   }
 }

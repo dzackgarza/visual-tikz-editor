@@ -5,7 +5,7 @@
     aria-label="TikZ workbench"
     :data-tikz-language="props.target.language"
   >
-    <header class="tikz-live-preview-header">
+    <header v-if="props.showHeader !== false" class="tikz-live-preview-header">
       <span class="tikz-live-preview-label">View:</span>
       <div
         class="tikz-live-preview-modes"
@@ -54,6 +54,71 @@
     </header>
 
     <div class="tikz-live-preview-content">
+      <nav v-if="displayMode === 'visual'" class="tikz-tool-rail" aria-label="Drawing tools">
+        <button
+          v-for="tool in primaryTools"
+          :key="tool.mode"
+          type="button"
+          :title="tool.label"
+          :aria-label="tool.label"
+          :aria-pressed="activeTool === tool.mode"
+          @click="selectTool(tool.mode)"
+        >
+          <i :class="tool.icon" aria-hidden="true" />
+          <span class="tikz-tool-label">{{ tool.label }}</span>
+        </button>
+        <button
+          type="button"
+          title="More drawing tools"
+          aria-label="More drawing tools"
+          :aria-pressed="secondaryTools.some((tool) => tool.mode === activeTool)"
+          @click="moreToolsPopover?.toggle($event)"
+        >
+          <i class="pi pi-ellipsis-h" aria-hidden="true" />
+        </button>
+        <button
+          v-if="['addFreehand', 'addBucket', 'addShape', 'addMatrix'].includes(activeTool)"
+          type="button"
+          title="Tool settings"
+          aria-label="Tool settings"
+          @click="toolSettingsPopover?.toggle($event)"
+        ><i class="pi pi-sliders-h" aria-hidden="true" /></button>
+      </nav>
+      <Popover ref="moreToolsPopover" :class="{ 'tikz-popover-dark': props.theme === 'dark' }" aria-label="More drawing tools">
+        <div class="tikz-more-tools">
+          <button
+            v-for="tool in secondaryTools"
+            :key="tool.mode"
+            type="button"
+            :aria-pressed="activeTool === tool.mode"
+            @click="selectTool(tool.mode); moreToolsPopover?.hide()"
+          ><i :class="tool.icon" aria-hidden="true" />{{ tool.label }}</button>
+        </div>
+      </Popover>
+      <Popover ref="toolSettingsPopover" :class="{ 'tikz-popover-dark': props.theme === 'dark' }" aria-label="Tool settings">
+        <div class="tikz-tool-settings">
+          <strong>{{ activeTool === 'addBucket' ? 'Fill' : activeTool === 'addShape' ? 'Shape' : activeTool === 'addMatrix' ? 'Matrix' : 'Draw' }} settings</strong>
+          <template v-if="activeTool === 'addBucket' || activeTool === 'addFreehand'">
+            <label for="tikz-tool-color">{{ activeTool === 'addBucket' ? 'Fill color' : 'Stroke color' }}</label>
+            <Select id="tikz-tool-color" :model-value="activeTool === 'addBucket' ? fillColor : strokeColor" :options="toolColors" @update:model-value="setToolColor" />
+            <span class="tikz-stroke-preview" :style="{ borderColor: activeTool === 'addBucket' ? (fillColor === 'blue!60' ? 'blue' : fillColor) : strokeColor }" aria-hidden="true" />
+          </template>
+          <template v-if="activeTool === 'addFreehand'">
+            <label for="tikz-smoothing">Smoothing {{ smoothing }} px</label>
+            <input id="tikz-smoothing" v-model.number="smoothing" type="range" min="4" max="32" @input="configureTool('smoothing', smoothing)" />
+          </template>
+          <template v-if="activeTool === 'addShape'">
+            <label for="tikz-shape">Shape</label>
+            <Select id="tikz-shape" v-model="shape" :options="shapeOptions" option-label="label" option-value="value" @update:model-value="(value: string) => configureTool('shape', value)" />
+          </template>
+          <template v-if="activeTool === 'addMatrix'">
+            <label for="tikz-matrix-rows">Rows</label>
+            <input id="tikz-matrix-rows" v-model.number="matrixRows" type="number" min="1" max="8" @change="configureMatrix" />
+            <label for="tikz-matrix-columns">Columns</label>
+            <input id="tikz-matrix-columns" v-model.number="matrixColumns" type="number" min="1" max="10" @change="configureMatrix" />
+          </template>
+        </div>
+      </Popover>
       <div v-if="unavailableMessage !== ''" class="tikz-live-preview-unavailable" role="alert">
         <strong>{{ activeProvider.label }} cannot edit this diagram</strong>
         <button type="button" @click="copyUnavailableMessage">Copy error</button>
@@ -93,6 +158,8 @@
         @inspector-closed="emit('inspectorClosed')"
         @status="onProviderStatus(provider.id, $event)"
         @busy="onProviderBusy(provider.id, $event)"
+        @tool="activeTool = $event"
+        @tool-options="shapeOptions = $event"
       />
     </div>
   </aside>
@@ -116,19 +183,24 @@
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import "primeicons/primeicons.css";
+import Popover from "primevue/popover";
+import Select from "primevue/select";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../host";
 import type { TikzLivePreviewTarget } from "../live-preview";
 import { defaultTikzPreviewMode, type TikzPreviewModeId } from "../preview-modes";
 import { TIKZ_PREVIEW_PROVIDERS, type TikzPreviewProvider } from "./providers";
+import { EDITOR_TOOLS, type EditorShapeOption, type EditorToolMode } from "../editor-tools";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   target: TikzLivePreviewTarget;
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
   initialMode?: TikzPreviewModeId;
   requestedMode?: TikzPreviewModeId;
   showInspector?: boolean;
-}>();
+  showHeader?: boolean;
+}>(), { showHeader: true });
 
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
@@ -162,11 +234,17 @@ const copyError = ref("");
 // Rendered output is a view of the source, not its editor. Retain the last
 // editor as the read target so Save/Copy includes its unpublished changes.
 const sourceEditor = ref<TikzPreviewModeId>(requestedMode.value);
-type EditorHandle = { currentSource?: (signal: AbortSignal) => Promise<string> };
+type EditorHandle = {
+  currentSource?: (signal: AbortSignal) => Promise<string>;
+  selectTool?: (tool: EditorToolMode) => void;
+  configureTool?: (option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number) => void;
+  configureMatrix?: (rows: number, columns: number) => void;
+};
 const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
 function setEditorHandle(id: TikzPreviewModeId, handle: unknown): void {
   if (handle === null) editorHandles.delete(id);
   else editorHandles.set(id, handle as EditorHandle);
+  if (id === "visual") editorHandle.value = handle as EditorHandle | null;
 }
 async function currentSource(signal: AbortSignal): Promise<string> {
   signal.throwIfAborted();
@@ -176,6 +254,44 @@ async function currentSource(signal: AbortSignal): Promise<string> {
 }
 defineExpose({ currentSource });
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
+const editorHandle = ref<EditorHandle | null>(null);
+const activeTool = ref<EditorToolMode>("select");
+const moreToolsPopover = ref<InstanceType<typeof Popover> | null>(null);
+const toolSettingsPopover = ref<InstanceType<typeof Popover> | null>(null);
+const toolColors: string[] = ["black", "white", "red", "green", "blue", "blue!60", "cyan", "magenta", "yellow", "orange", "violet", "purple", "teal", "brown"];
+const strokeColor = ref<string>("black");
+const fillColor = ref<string>("blue!60");
+const smoothing = ref(16);
+const shapeOptions = ref<EditorShapeOption[]>([]);
+const shape = ref("rectangle");
+const matrixRows = ref(2);
+const matrixColumns = ref(2);
+watch(activeTool, () => toolSettingsPopover.value?.hide());
+const primaryTools = EDITOR_TOOLS.filter((tool) => ["select", "magnify", "addFreehand", "addLine", "addArrow", "addNode", "addCircle", "addPath"].includes(tool.mode));
+const secondaryTools = EDITOR_TOOLS.filter((tool) => !primaryTools.includes(tool));
+function selectTool(tool: EditorToolMode): void {
+  activeTool.value = tool;
+  editorHandle.value?.selectTool?.(tool);
+}
+function configureTool(option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number): void {
+  editorHandle.value?.configureTool?.(option, value);
+}
+function configureMatrix(): void {
+  if (!Number.isInteger(matrixRows.value) || matrixRows.value < 1 || matrixRows.value > 8 ||
+      !Number.isInteger(matrixColumns.value) || matrixColumns.value < 1 || matrixColumns.value > 10) {
+    throw new Error("Matrix size must be 1–8 rows and 1–10 columns");
+  }
+  editorHandle.value?.configureMatrix?.(matrixRows.value, matrixColumns.value);
+}
+function setToolColor(value: string): void {
+  if (activeTool.value === "addBucket") {
+    fillColor.value = value;
+    configureTool("fillColor", value);
+  } else {
+    strokeColor.value = value;
+    configureTool("strokeColor", value);
+  }
+}
 const providers: readonly TikzPreviewProvider[] = TIKZ_PREVIEW_PROVIDERS;
 const displayMode = requestedMode;
 const activeProvider = computed(() => {
@@ -423,6 +539,90 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.tikz-tool-rail {
+  position: absolute;
+  z-index: 10;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: 0 3px 14px #1c24302b;
+}
+
+.tikz-tool-rail button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tikz-tool-rail button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--accent);
+}
+
+.tikz-tool-rail button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tikz-more-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 4px;
+  font-family: system-ui, sans-serif;
+}
+
+.tikz-more-tools button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tikz-more-tools button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--accent);
+}
+
+.tikz-tool-settings {
+  display: grid;
+  gap: 8px;
+  min-width: 180px;
+  color: var(--text);
+  font: 14px system-ui, sans-serif;
+}
+
+.tikz-tool-settings select,
+.tikz-tool-settings input { min-height: 36px; }
+.tikz-stroke-preview { width: 100%; border-top: 4px solid; }
+
+.tikz-tool-rail i { font-size: 1.1rem; }
+.tikz-tool-label { display: none; }
+.tikz-tool-rail button:hover .tikz-tool-label,
+.tikz-tool-rail button:focus-visible .tikz-tool-label { display: inline; }
+
 .tikz-live-preview-provider {
   flex: 1 1 auto;
   width: 100%;
@@ -448,5 +648,16 @@ onBeforeUnmount(() => {
   --text: #f3f2ed;
   --accent: #b44243;
   background: #1d242b;
+}
+</style>
+
+<style>
+.tikz-popover-dark {
+  --p-popover-background: #313b45;
+  --p-popover-color: #f3f2ed;
+  --p-popover-border-color: #4f5863;
+  --p-select-background: #252c34;
+  --p-select-color: #f3f2ed;
+  --p-select-border-color: #4f5863;
 }
 </style>

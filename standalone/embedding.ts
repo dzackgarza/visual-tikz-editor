@@ -3,6 +3,7 @@ import { requestEditorSource, requestEditorSnapshot, type HostCommand } from '..
 const editor = document.querySelector<HTMLIFrameElement>('#editor')!;
 const source = document.querySelector<HTMLTextAreaElement>('#source')!;
 const status = document.querySelector<HTMLOutputElement>('#status')!;
+const draw = document.querySelector<HTMLButtonElement>('#draw')!;
 const result = document.querySelector<HTMLPreElement>('#result')!;
 const sessionId = crypto.randomUUID();
 let revision = 0;
@@ -25,7 +26,10 @@ function receive(event: MessageEvent) {
   if (event.source !== editor.contentWindow || event.origin !== location.origin) return;
   const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
   if (message.event === 'init') load();
-  if (message.event === 'loaded' && message.revision === revision) status.textContent = 'Loaded';
+  if (message.event === 'loaded' && message.revision === revision &&
+      (status.textContent === 'Loading' || status.textContent === 'Loading editor')) status.textContent = 'Loaded';
+  if (message.event === 'tool' && message.sessionId === sessionId && message.revision === revision)
+    draw.setAttribute('aria-pressed', String(message.tool === 'addFreehand'));
   if (message.event === 'change' && message.sessionId === sessionId && message.revision === revision && source.value === acceptedSource) {
     acceptedSource = message.source;
     source.value = acceptedSource;
@@ -47,6 +51,7 @@ for (const action of ['interpret-ink', 'restore-ink'] as const) {
   });
 }
 document.querySelector('#load')!.addEventListener('click', load);
+draw.addEventListener('click', () => post({ action: 'tool', tool: 'addFreehand', sessionId, revision, requestId: crypto.randomUUID() }));
 document.querySelector('#load-snapshot')!.addEventListener('click', () => {
   const snapshot = JSON.parse(document.querySelector<HTMLTextAreaElement>('#saved-snapshot')!.value);
   status.textContent = 'Loading';

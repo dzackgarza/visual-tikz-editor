@@ -87,7 +87,7 @@ describe("standalone workbench host boundary", function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
     const frame = page.frameLocator('iframe');
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const canvas = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(canvas.x + 90, canvas.y + canvas.height / 2);
     await page.mouse.down();
@@ -338,7 +338,7 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`);
     const frame = page.frameLocator('iframe');
     await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(box.x + 90, box.y + box.height / 2);
     await page.mouse.down();
@@ -650,7 +650,7 @@ describe("standalone workbench host boundary", function () {
     await page.getByRole('button', { name: 'Load source', exact: true }).click();
     const frame = page.frameLocator('#editor');
     await frame.getByRole('button', { name: 'Figure 1', exact: true }).click();
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const before = await hostSnapshot();
     const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const draw = async () => {
@@ -809,7 +809,7 @@ describe("standalone workbench host boundary", function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
     const frame = page.frameLocator('#editor');
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const viewport = frame.locator('[data-canvas-viewport="true"]');
     await viewport.scrollIntoViewIfNeeded();
     const bounds = (await viewport.boundingBox())!;
@@ -835,7 +835,7 @@ describe("standalone workbench host boundary", function () {
   it('lets the author keep handwritten ink outside geometric interpretation', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const frame = page.frameLocator('iframe');
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     await page.getByRole('button', { name: 'Properties', exact: true }).click();
     await frame.getByRole('checkbox', { name: 'Interpret geometry', exact: true }).uncheck();
     await page.getByRole('button', { name: 'Hide properties', exact: true }).click();
@@ -882,7 +882,7 @@ describe("standalone workbench host boundary", function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const frame = page.frameLocator('#editor');
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const x = box.x + box.width * .3, y = box.y + box.height * .55;
     const cdp = await context.newCDPSession(page);
@@ -897,14 +897,14 @@ describe("standalone workbench host boundary", function () {
     assert.equal(result.originalInk.length, 1);
     assert.ok(result.originalInk[0].stroke.samples.length >= 3);
     assert.ok(result.svg.includes(`data-source-id="${result.originalInk[0].sourceIds[0]}"`));
-    await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Draw', exact: true })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('keeps palm contact out of pen drawing and supports finger pan and pinch afterward', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const frame = page.frameLocator('#editor');
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const x = box.x + box.width * .3, y = box.y + box.height * .55;
     const cdp = await context.newCDPSession(page);
@@ -925,7 +925,7 @@ describe("standalone workbench host boundary", function () {
     assert.equal(drawn.originalInk.length, 1);
     assert.ok(drawn.originalInk[0].stroke.samples.length >= 22, 'Palm contact must not replace the pen drag');
     await frame.getByRole('button', { name: 'Keep', exact: true }).click();
-    await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Draw', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 4, x, y }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 4, x: x + 55, y: y + 35 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
@@ -942,7 +942,7 @@ describe("standalone workbench host boundary", function () {
     const pinched = JSON.parse(await page.locator('#result').innerText());
     assert.equal(pinched.source, drawn.source);
     assert.ok(pinched.state.viewport.scale > panned.state.viewport.scale);
-    await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Draw', exact: true })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it("cancels a resource-pending snapshot and continues with a newer drawing", async function () {
@@ -979,14 +979,14 @@ describe("standalone workbench host boundary", function () {
   it('offers only supported views and keeps file ownership in the standalone host', async function () {
     await expect(page.getByRole('button', { name: 'Quiver canvas', exact: true })).toHaveCount(0);
     await expect(page.frameLocator('iframe').getByRole('menuitem', { name: 'File', exact: true })).toBeHidden();
-    await expect(page.locator('.file-menu summary')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'File', exact: true })).toBeVisible();
   });
 
   it('restores its accepted tool and viewport in a fresh editor session', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const frame = page.frameLocator('#editor');
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const viewport = frame.locator('[data-canvas-viewport="true"]');
     await viewport.scrollIntoViewIfNeeded();
     const box = (await viewport.boundingBox())!;
@@ -1011,7 +1011,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
     const restored = JSON.parse(await page.locator('#result').innerText());
     assert.deepEqual(restored.state, saved.state);
-    await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Draw', exact: true })).toHaveAttribute('aria-pressed', 'true');
     assert.equal(await frame.locator('[data-canvas-scale]').getAttribute('data-canvas-scale'), String(saved.state.viewport.scale));
     await expect.poll(async () => {
       const after = await displayedCircle.boundingBox();
@@ -1023,7 +1023,7 @@ describe("standalone workbench host boundary", function () {
   it('copies a just-finished canvas edit before the throttled source notification', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const frame = page.frameLocator('iframe');
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(box.x + box.width / 3, box.y + box.height / 2);
     await page.mouse.down();
@@ -1084,14 +1084,14 @@ describe("standalone workbench host boundary", function () {
       await sourcePane.fill(authored);
       await expect(page.getByText('Synced', { exact: true })).toBeVisible();
       const frame = page.frameLocator('iframe');
-      await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
-      await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await page.getByRole('button', { name: 'Draw', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Draw', exact: true })).toHaveAttribute('aria-pressed', 'true');
       await page.getByRole('button', { name: 'TeX render', exact: true }).click();
       await expect(page.getByText('Up to date', { exact: true })).toBeVisible({ timeout: 40000 });
       assert.equal(await sourcePane.innerText(), authored);
       await page.screenshot({ path: `test-results/workbench/rendered-${width}.png` });
       await page.getByRole('button', { name: 'Drawing canvas', exact: true }).click();
-      await expect(frame.getByRole('button', { name: 'Freehand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('button', { name: 'Draw', exact: true })).toHaveAttribute('aria-pressed', 'true');
       const viewport = frame.locator('[data-canvas-viewport="true"]');
       const bounds = (await viewport.boundingBox())!;
       await page.mouse.move(bounds.x + bounds.width / 3, bounds.y + bounds.height / 2);

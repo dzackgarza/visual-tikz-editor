@@ -101,8 +101,8 @@ print(confirm(Atspi.get_desktop(0)))
     await page.goto(url);
     await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
     await page.locator('.cm-content').fill(authored);
-    await page.locator('.file-menu summary').click();
-    await page.getByRole('button', { name: 'Save As…', exact: true }).click();
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Save As…', exact: true }).click();
     await chooseFile('save');
     await expect.poll(() => existsSync(diagramPath)).toBe(true);
     assert.equal(await readFile(diagramPath, 'utf8'), authored);
@@ -113,15 +113,14 @@ print(confirm(Atspi.get_desktop(0)))
     await startServer();
     await page.goto(url);
     await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 30_000 });
-    await page.locator('.file-menu summary').click();
-    await page.getByRole('button', { name: 'Open…', exact: true }).click();
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Open…', exact: true }).click();
     await chooseFile('open');
     await expect(page.locator('.document-bar strong')).toHaveText('authored.tikz');
     assert.equal(await page.locator('.cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
     await expect(page.frameLocator('iframe').locator('path[data-source-id]')).toHaveCount(1);
-    await page.locator('.file-menu summary').click();
     const frame = page.frameLocator('iframe');
-    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    await page.getByRole('button', { name: 'Draw', exact: true }).click();
     const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .65);
     await page.mouse.down();
@@ -134,8 +133,8 @@ print(confirm(Atspi.get_desktop(0)))
     const edited = await page.evaluate(() => navigator.clipboard.readText());
     assert.equal(await readFile(diagramPath, 'utf8'), edited);
     await expect(page.locator('.tikz-standalone-status')).toHaveText('Saved');
-    await page.locator('.file-menu summary').click();
-    await page.getByRole('button', { name: 'Open…', exact: true }).click();
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Open…', exact: true }).click();
     const dialog = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'zenity'], { env: desktopEnv, timeout: 10000 });
     await execute('xdotool', ['windowfocus', '--sync', dialog.stdout.trim().split('\n')[0]], { env: desktopEnv });
     const cancelled = page.waitForResponse(response => response.url().endsWith('/api/open'));
@@ -143,7 +142,6 @@ print(confirm(Atspi.get_desktop(0)))
     assert.equal((await cancelled).status(), 204);
     await expect(page.locator('.tikz-standalone-status')).toHaveText('Saved');
     assert.equal(await readFile(diagramPath, 'utf8'), edited);
-    await page.locator('.file-menu summary').click();
     await page.locator('.cm-content').fill(String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`);
     await expect(page.getByRole('button', { name: 'Quiver canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await frame.locator('.vertex').nth(1).click();
@@ -165,16 +163,16 @@ print(confirm(Atspi.get_desktop(0)))
       await expect(page.getByText('Synced', { exact: true })).toBeVisible();
       diagramPath = join(await mkdtemp(join(tmpdir(), 'workbench-render-save-')), `${provider}.tikz`);
       if (provider === 'visual') {
-        await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+        await page.getByRole('button', { name: 'Draw', exact: true }).click();
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        await page.mouse.move(bounds.x + 80, bounds.y + bounds.height / 2);
+        await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height / 2);
         await page.mouse.down();
-        await page.mouse.move(bounds.x + 180, bounds.y + bounds.height / 2 + 25, { steps: 12 });
+        await page.mouse.move(bounds.x + bounds.width * .35 + 100, bounds.y + bounds.height / 2 + 25, { steps: 12 });
         await page.mouse.up();
         await page.evaluate(() => {
           const buttons = [...document.querySelectorAll('button')];
           buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
-          buttons.find(button => button.textContent?.trim() === 'Save As…')!.click();
+          buttons.find(button => button.textContent?.trim() === 'File')!.click();
         });
       } else {
         await frame.locator('.vertex').nth(1).click();
@@ -183,9 +181,10 @@ print(confirm(Atspi.get_desktop(0)))
           input.dispatchEvent(new Event('input', { bubbles: true }));
           const buttons = [...window.parent.document.querySelectorAll('button')];
           buttons.find(button => button.textContent?.trim() === 'TeX render')!.click();
-          buttons.find(button => button.textContent?.trim() === 'Save As…')!.click();
+          buttons.find(button => button.textContent?.trim() === 'File')!.click();
         });
       }
+      await page.getByRole('menuitem', { name: 'Save As…', exact: true }).click();
       await chooseFile('save');
       await expect.poll(() => existsSync(diagramPath)).toBe(true);
       const browserWindow = await execute('xdotool', ['search', '--onlyvisible', '--class', 'chromium'], { env: desktopEnv });
