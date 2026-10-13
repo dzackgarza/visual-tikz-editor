@@ -3497,7 +3497,7 @@ index 0ddde08e..ccab61f1 100644
 +[data-dock="bottom"] .embeddedTools .palette,
 +[data-dock="floating"] .embeddedTools .palette { flex-direction: row; max-width: 176px; max-height: 44px; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..4d0f246a 100644
+index a3293df2..97e90eee 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,5 @@
@@ -3527,7 +3527,7 @@ index a3293df2..4d0f246a 100644
  import css from "./Toolbar.module.css";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
-@@ -26,26 +28,56 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,26 +28,58 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -3579,6 +3579,8 @@ index a3293df2..4d0f246a 100644
 +  const [dockPreview, setDockPreview] = useState<{ dock: ToolbarDock; x: number; y: number } | null>(null);
 +  const dragReady = useRef(false);
 +  const dragOffset = useRef({ x: 0, y: 0 });
++  const dragPointer = useRef<{ x: number; y: number } | null>(null);
++  const dragGripAnchor = useRef({ x: 0, y: 0 });
 +  const dockGhost = useRef<HTMLElement | null>(null);
 +  const suppressDragClick = useRef(false);
 +  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3586,13 +3588,33 @@ index a3293df2..4d0f246a 100644
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +88,99 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +90,119 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
 +  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
 +  const toolbarRef = useRef<HTMLDivElement>(null);
 +  const [safeRect, setSafeRect] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
++  const refreshDragOffset = () => {
++    const toolbar = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
++    const grip = toolbar?.querySelector<HTMLElement>("[data-toolbar-grip]");
++    if (!toolbar || !grip) return;
++    const bounds = toolbar.getBoundingClientRect();
++    const gripBounds = grip.getBoundingClientRect();
++    dragOffset.current = {
++      x: bounds.width / 2 - (gripBounds.left - bounds.left) - dragGripAnchor.current.x,
++      y: bounds.height / 2 - (gripBounds.top - bounds.top) - dragGripAnchor.current.y
++    };
++  };
++  useLayoutEffect(() => {
++    if (!dragPoint || !dragReady.current || !dragPointer.current) return;
++    // Docking changes the strip orientation. Keep the contacted point of the grip
++    // under the pointer using the geometry of the newly committed layout.
++    refreshDragOffset();
++    const next = { x: dragPointer.current.x + dragOffset.current.x, y: dragPointer.current.y + dragOffset.current.y };
++    if (Math.abs(next.x - dragPoint.x) > 0.5 || Math.abs(next.y - dragPoint.y) > 0.5) setDragPoint(next);
++  }, [dragPoint]);
++
 +  useEffect(() => {
 +    if (!embedded) return;
 +    let viewport: HTMLElement | null = null;
@@ -3687,7 +3709,7 @@ index a3293df2..4d0f246a 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -92,7 +213,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -92,7 +235,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
    const renderPopup = (popupKind: ToolPopupKind) => {
      if (popupKind === "bucket-color") {
        return (
@@ -3696,7 +3718,7 @@ index a3293df2..4d0f246a 100644
            <ColorPicker
              ariaLabel="Bucket fill color"
              value={bucketFillColor}
-@@ -111,7 +232,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +254,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -3714,7 +3736,7 @@ index a3293df2..4d0f246a 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +256,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +278,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -3733,7 +3755,7 @@ index a3293df2..4d0f246a 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +312,171 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +334,173 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -3859,6 +3881,8 @@ index a3293df2..4d0f246a 100644
 +
 +  const finishToolbarDrag = (clientX: number, clientY: number) => {
 +    if (!dragReady.current) return;
++    refreshDragOffset();
++    dragPointer.current = null;
 +    dragReady.current = false;
 +    suppressDragClick.current = true;
 +    setTimeout(() => { suppressDragClick.current = false; }, 0);
@@ -3905,7 +3929,7 @@ index a3293df2..4d0f246a 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +505,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +529,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -3917,7 +3941,7 @@ index a3293df2..4d0f246a 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +565,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +589,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -3925,7 +3949,7 @@ index a3293df2..4d0f246a 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +608,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +632,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -3933,7 +3957,7 @@ index a3293df2..4d0f246a 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +624,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +648,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -3955,7 +3979,7 @@ index a3293df2..4d0f246a 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +646,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +670,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -3963,7 +3987,7 @@ index a3293df2..4d0f246a 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +654,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +678,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -3975,7 +3999,7 @@ index a3293df2..4d0f246a 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +667,71 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +691,76 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -3984,8 +4008,10 @@ index a3293df2..4d0f246a 100644
 +  if (embedded) return <><div data-diagram-tools data-dock={dragPoint ? "floating" : settings.toolbar.dock} style={toolbarPosition}
 +    onPointerDown={(event) => {
 +      if (event.button !== 0 || !(event.target as HTMLElement).closest('[data-toolbar-grip]')) return;
-+      const bounds = event.currentTarget.getBoundingClientRect();
-+      dragOffset.current = { x: bounds.left + bounds.width / 2 - event.clientX, y: bounds.top + bounds.height / 2 - event.clientY };
++      const gripBounds = event.currentTarget.querySelector<HTMLElement>("[data-toolbar-grip]")!.getBoundingClientRect();
++      dragGripAnchor.current = { x: event.clientX - gripBounds.left, y: event.clientY - gripBounds.top };
++      dragPointer.current = { x: event.clientX, y: event.clientY };
++      refreshDragOffset();
 +      const toolbar = event.currentTarget;
 +      const pointerId = event.pointerId;
 +      dragReady.current = true;
@@ -3996,6 +4022,8 @@ index a3293df2..4d0f246a 100644
 +    }}
 +    onPointerMove={(event) => {
 +      if (dragReady.current) {
++        dragPointer.current = { x: event.clientX, y: event.clientY };
++        refreshDragOffset();
 +        setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y });
 +        setDockPreview({ dock: dockAt(event.clientX, event.clientY), x: event.clientX, y: event.clientY });
 +      }
@@ -4003,6 +4031,7 @@ index a3293df2..4d0f246a 100644
 +    }}
 +    onPointerUp={(event) => finishToolbarDrag(event.clientX, event.clientY)}
 +    onPointerCancel={() => {
++      dragPointer.current = null;
 +      dragReady.current = false;
 +      setDragPoint(null);
 +      setDockPreview(null);
@@ -4049,7 +4078,7 @@ index a3293df2..4d0f246a 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +742,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +771,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -4063,7 +4092,7 @@ index a3293df2..4d0f246a 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +758,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +787,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -4072,7 +4101,7 @@ index a3293df2..4d0f246a 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +783,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +812,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
