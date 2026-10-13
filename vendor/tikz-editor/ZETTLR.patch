@@ -245,6 +245,19 @@ index 1672d1d6..6b94a124 100644
  export { APP_MENU_COMMAND_IDS, APP_MENU_DEFINITION } from "./app-menu/index.js";
  export { CANVAS_CONTEXT_MENU_DEFINITION } from "./context-menu/index.js";
  export { setActiveEditorPlatform, getActiveEditorPlatform } from "./platform/current.js";
+diff --git a/packages/app/src/platform/types.ts b/packages/app/src/platform/types.ts
+index 20b8b673..faf832b4 100644
+--- a/packages/app/src/platform/types.ts
++++ b/packages/app/src/platform/types.ts
+@@ -12,6 +12,8 @@ export type PlatformPersistence = {
+ };
+ 
+ export type PlatformClipboard = {
++  /** Text transfers are provided by the native host rather than DOM clipboard events. */
++  readonly nativeText?: boolean;
+   readText?: () => Promise<string>;
+   writeText?: (text: string) => Promise<void>;
+   readCustomText?: (
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
 index 4850a87e..48491dc5 100644
 --- a/packages/app/src/settings/storage.ts
@@ -1040,7 +1053,7 @@ index 828d4bfb..1ac9eac5 100644
        })),
      tabOrder: [...state.tabOrder],
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..6d9ac6be 100644
+index 5818d92b..e37b3b84 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
 @@ -298,7 +298,6 @@ export function App() {
@@ -1077,6 +1090,33 @@ index 5818d92b..6d9ac6be 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
+@@ -1770,7 +1757,7 @@ export function App() {
+ 
+         if (!e.shiftKey && key === "c") {
+           // If canvas is focused, let the native copy event fire there.
+-          if (canvasShortcutContext) {
++          if (canvasShortcutContext && platform.clipboard?.nativeText !== true) {
+             return;
+           }
+           // If there's a text selection anywhere, let native copy work for it.
+@@ -1786,7 +1773,7 @@ export function App() {
+ 
+         if (!e.shiftKey && key === "x") {
+           // If canvas is focused, let the native cut event fire there.
+-          if (canvasShortcutContext) {
++          if (canvasShortcutContext && platform.clipboard?.nativeText !== true) {
+             return;
+           }
+           // If there's a text selection anywhere, let native cut work for it.
+@@ -1802,7 +1789,7 @@ export function App() {
+ 
+         if (!e.shiftKey && key === "v") {
+           // If canvas is focused, let the native paste event fire there (supports DataTransfer).
+-          if (canvasShortcutContext) {
++          if (canvasShortcutContext && platform.clipboard?.nativeText !== true) {
+             return;
+           }
+           // Otherwise, paste directly via async clipboard API.
 @@ -1872,7 +1859,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
@@ -9013,6 +9053,55 @@ index b20b72be..0baae5b3 100644
    ]
  };
  
+diff --git a/packages/app/src/ui/editor-clipboard.ts b/packages/app/src/ui/editor-clipboard.ts
+index 44b105be..f1cfbce3 100644
+--- a/packages/app/src/ui/editor-clipboard.ts
++++ b/packages/app/src/ui/editor-clipboard.ts
+@@ -1,3 +1,4 @@
++import { getActiveEditorPlatform } from "../platform/current";
+ import { renderTikzToSvg } from "tikz-editor/render/index";
+ import { serializeSvgModel, serializeSvgModelAsync } from "tikz-editor/svg/index";
+ 
+@@ -158,6 +159,20 @@ export function readClipboardPayloadFromDataTransfer(
+ export async function readClipboardPayloadFromSystemClipboard(): Promise<
+   { kind: "success"; payload: TikzClipboardPayload } | { kind: "failure"; reason: ClipboardReadFailureReason }
+ > {
++  const clipboard = getActiveEditorPlatform().clipboard;
++  if (clipboard?.nativeText === true) {
++    if (typeof clipboard.readText !== "function") return { kind: "failure", reason: "unavailable" };
++    try {
++      const plainText = await clipboard.readText();
++      if (plainText.length === 0) return { kind: "failure", reason: "empty" };
++      const payload = parseClipboardPayloadFromPlainText(plainText);
++      return payload ? { kind: "success", payload } : { kind: "failure", reason: "invalid" };
++    } catch (error) {
++      logClipboardDebug("Native clipboard read failed.", { error: describeError(error) });
++      return { kind: "failure", reason: "blocked" };
++    }
++  }
++
+   if (typeof navigator === "undefined" || !navigator.clipboard) {
+     return { kind: "failure", reason: "unavailable" };
+   }
+@@ -389,6 +404,18 @@ export async function writeClipboardPayload(
+   payload: TikzClipboardPayload,
+   options: { svgText?: string | null } = {}
+ ): Promise<boolean> {
++  const clipboard = getActiveEditorPlatform().clipboard;
++  if (clipboard?.nativeText === true) {
++    if (typeof clipboard.writeText !== "function") return false;
++    try {
++      await clipboard.writeText(payload.plainText);
++      return true;
++    } catch (error) {
++      logClipboardDebug("Native clipboard write failed.", { error: describeError(error) });
++      return false;
++    }
++  }
++
+   if (typeof navigator === "undefined" || !navigator.clipboard) {
+     logClipboardDebug("Clipboard write unavailable: navigator.clipboard missing.");
+     return false;
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
 index 3ab44838..aa2c8fce 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts

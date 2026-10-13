@@ -283,6 +283,7 @@ function createEmbedPlatform(initialSource: string): EditorPlatform {
 		id: 'zettlr-embed',
 		persistence: createMemoryPersistence(initialSource),
 		clipboard: {
+			get nativeText() { return nativeClipboard; },
 			readText: async () => nativeClipboard ? requestNativeClipboard('read') : navigator.clipboard.readText(),
 			writeText: async (text) => {
 				if (nativeClipboard) await requestNativeClipboard('write', text);
