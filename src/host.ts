@@ -10,6 +10,14 @@ import type { TikzRenderSuccess } from "./live-preview";
 import type { QuiverMacroProjection } from "./quiver-macros";
 import type { TikzRenderRequest, TikzRenderResult } from "./tikz-render";
 
+export type { EditorSnapshot, EditorSnapshotResult } from "../vendor/tikz-editor/embed/src/snapshot-protocol";
+export { requestEditorSource } from "./editor-source";
+export { requestEditorSnapshot } from "./editor-snapshot";
+export { editorEventSchema, editorNotificationSchema, commandReplySchema } from "../vendor/tikz-editor/embed/src/events";
+export type { EditorEvent, EditorNotification, CommandReply, CommandFailure } from "../vendor/tikz-editor/embed/src/events";
+export type { HostCommand } from "../vendor/tikz-editor/embed/src/commands";
+export type { OriginalStroke } from "../vendor/tikz-editor/embed/src/original-ink";
+
 export type TikzWorkbenchTheme = "light" | "dark";
 
 export interface TikzWorkbenchRendering {
@@ -38,5 +46,7 @@ export interface TikzWorkbenchHost {
   imageBaseUrl: (docPath: string) => string;
   /** The page of the pinned visual editor (vendor/tikz-editor/src/index.html). */
   editorUrl: string;
+  /** Explicit Save gesture from the editor; only the document owner persists it. */
+  requestSave?: () => void;
   reportError: (message: string, error: unknown) => void;
 }

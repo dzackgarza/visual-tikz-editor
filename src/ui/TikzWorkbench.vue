@@ -13,7 +13,7 @@
         aria-label="Diagram view"
       >
         <button
-          v-for="provider in providers"
+          v-for="provider in providers.filter(supportsProvider)"
           :key="provider.id"
           type="button"
           :class="{ active: displayMode === provider.id }"
@@ -143,10 +143,11 @@
       <component
         v-for="provider in providers.filter((candidate) => candidate.id !== 'tikz' && visitedEditors.has(candidate.id))"
         v-if="unavailableMessage === ''"
-        v-show="displayMode === provider.id"
+        :class="{ 'tikz-live-preview-retained': displayMode !== provider.id }"
+        :inert="displayMode !== provider.id"
         :is="provider.component"
+        :ref="(handle: unknown) => setEditorHandle(provider.id, handle)"
         :key="`${provider.id}\0${targetIdentity(props.target)}`"
-        :ref="(handle: EditorHandle | null) => setProviderHandle(provider.id, handle)"
         class="tikz-live-preview-provider"
         :target="props.target"
         :host="props.host"
@@ -191,7 +192,7 @@ import { defaultTikzPreviewMode, type TikzPreviewModeId } from "../preview-modes
 import { TIKZ_PREVIEW_PROVIDERS, type TikzPreviewProvider } from "./providers";
 import { EDITOR_TOOLS, type EditorShapeOption, type EditorToolMode } from "../editor-tools";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   target: TikzLivePreviewTarget;
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
@@ -199,7 +200,7 @@ const props = defineProps<{
   requestedMode?: TikzPreviewModeId;
   showInspector?: boolean;
   showHeader?: boolean;
-}>();
+}>(), { showHeader: true });
 
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
@@ -230,12 +231,29 @@ const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({
   visual: false,
 });
 const copyError = ref("");
-const previewHandle = ref<{ refresh?: () => void } | null>(null);
+// Rendered output is a view of the source, not its editor. Retain the last
+// editor as the read target so Save/Copy includes its unpublished changes.
+const sourceEditor = ref<TikzPreviewModeId>(requestedMode.value);
 type EditorHandle = {
-  selectTool: (tool: EditorToolMode) => void;
-  configureTool: (option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number) => void;
-  configureMatrix: (rows: number, columns: number) => void;
+  currentSource?: (signal: AbortSignal) => Promise<string>;
+  selectTool?: (tool: EditorToolMode) => void;
+  configureTool?: (option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number) => void;
+  configureMatrix?: (rows: number, columns: number) => void;
 };
+const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
+function setEditorHandle(id: TikzPreviewModeId, handle: unknown): void {
+  if (handle === null) editorHandles.delete(id);
+  else editorHandles.set(id, handle as EditorHandle);
+  if (id === "visual") editorHandle.value = handle as EditorHandle | null;
+}
+async function currentSource(signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted();
+  const editor = editorHandles.get(sourceEditor.value);
+  if (editor?.currentSource) return editor.currentSource(signal);
+  return props.target.source;
+}
+defineExpose({ currentSource });
+const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const editorHandle = ref<EditorHandle | null>(null);
 const activeTool = ref<EditorToolMode>("select");
 const moreToolsPopover = ref<InstanceType<typeof Popover> | null>(null);
@@ -251,22 +269,19 @@ const matrixColumns = ref(2);
 watch(activeTool, () => toolSettingsPopover.value?.hide());
 const primaryTools = EDITOR_TOOLS.filter((tool) => ["select", "magnify", "addFreehand", "addLine", "addArrow", "addNode", "addCircle", "addPath"].includes(tool.mode));
 const secondaryTools = EDITOR_TOOLS.filter((tool) => !primaryTools.includes(tool));
-function setProviderHandle(id: TikzPreviewModeId, handle: EditorHandle | null): void {
-  if (id === "visual") editorHandle.value = handle;
-}
 function selectTool(tool: EditorToolMode): void {
   activeTool.value = tool;
-  editorHandle.value?.selectTool(tool);
+  editorHandle.value?.selectTool?.(tool);
 }
 function configureTool(option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number): void {
-  editorHandle.value?.configureTool(option, value);
+  editorHandle.value?.configureTool?.(option, value);
 }
 function configureMatrix(): void {
   if (!Number.isInteger(matrixRows.value) || matrixRows.value < 1 || matrixRows.value > 8 ||
       !Number.isInteger(matrixColumns.value) || matrixColumns.value < 1 || matrixColumns.value > 10) {
     throw new Error("Matrix size must be 1–8 rows and 1–10 columns");
   }
-  editorHandle.value?.configureMatrix(matrixRows.value, matrixColumns.value);
+  editorHandle.value?.configureMatrix?.(matrixRows.value, matrixColumns.value);
 }
 function setToolColor(value: string): void {
   if (activeTool.value === "addBucket") {
@@ -332,6 +347,7 @@ watch(
   () => targetIdentity(props.target),
   () => {
     requestedMode.value = props.requestedMode ?? props.initialMode ?? defaultMode();
+    sourceEditor.value = requestedMode.value;
     visitedEditors.value =
       requestedMode.value === "tikz" ? new Set() : new Set([requestedMode.value]);
     providerStatus.value = { tikz: "", quiver: "", visual: "" };
@@ -352,7 +368,10 @@ watch(
   (mode) => {
     activeStatus.value = mode === "tikz" ? "" : providerStatus.value[mode];
     activeBusy.value = mode === "tikz" ? false : providerBusy.value[mode];
-    if (mode !== "tikz") visitedEditors.value = new Set([...visitedEditors.value, mode]);
+    if (mode !== "tikz") {
+      sourceEditor.value = mode;
+      visitedEditors.value = new Set([...visitedEditors.value, mode]);
+    }
     emit("mode", mode);
   },
   { immediate: true },
@@ -510,6 +529,14 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Retained iframe layouts must keep nonzero dimensions while another view is active. */
+.tikz-live-preview-retained {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .tikz-tool-rail {

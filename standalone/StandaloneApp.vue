@@ -2,39 +2,38 @@
   <div class="tikz-standalone" :class="theme">
     <header class="document-bar">
       <strong>{{ fileName }}</strong>
-      <div class="document-views" role="group" aria-label="Diagram view">
-        <Button label="Render" text :disabled="target?.language !== 'tikz'" :severity="activeMode === 'tikz' ? 'primary' : 'secondary'" @click="activeMode = 'tikz'" />
-        <Button label="Quiver" text :disabled="target?.language !== 'tikzcd'" :severity="activeMode === 'quiver' ? 'primary' : 'secondary'" @click="activeMode = 'quiver'" />
-        <Button label="Draw" text :disabled="target?.language !== 'tikz'" :severity="activeMode === 'visual' ? 'primary' : 'secondary'" @click="activeMode = 'visual'" />
-      </div>
       <Button label="File" icon="pi pi-folder" text aria-haspopup="true" aria-controls="file-menu" @click="toggleFileMenu" />
       <Menu id="file-menu" ref="fileMenu" :model="fileItems" popup />
+      <button type="button" :aria-pressed="sourceOpen" @click="sourceOpen = !sourceOpen">
+        {{ sourceOpen ? 'Hide source' : 'Source' }}
+      </button>
       <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
         {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
       </button>
+      <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
     </header>
-    <Splitter v-if="document !== null && target !== null" class="workspace-splitter" layout="horizontal">
-      <SplitterPanel :size="40" :min-size="25">
-        <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" @change="source = $event" />
-      </SplitterPanel>
-      <SplitterPanel :size="60" :min-size="35">
-        <TikzWorkbench
-          :key="documentKey"
-          class="tikz-standalone-workbench"
-          :target="target"
-          :host="host"
-          :theme="theme"
-          :show-inspector="inspectorOpen"
-          :show-header="false"
-          :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
-          :requested-mode="activeMode"
-          @mode="activeMode = $event"
-          @inspector-closed="inspectorOpen = false"
-        />
-      </SplitterPanel>
-    </Splitter>
+    <main v-if="document !== null && target !== null" :class="{ 'source-closed': !sourceOpen }">
+      <SourceEditor
+        v-show="sourceOpen"
+        class="tikz-standalone-source"
+        :source="source"
+        :theme="theme"
+        @change="source = $event"
+      />
+      <TikzWorkbench
+        ref="workbench"
+        :key="documentKey"
+        class="tikz-standalone-workbench"
+        :target="target"
+        :host="host"
+        :theme="theme"
+        :show-inspector="inspectorOpen"
+        :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
+        @inspector-closed="inspectorOpen = false"
+      />
+    </main>
     <pre v-else-if="loadError !== ''" class="tikz-standalone-error" role="alert">{{ loadError }}</pre>
   </div>
 </template>
@@ -52,13 +51,10 @@ import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
-import type { TikzPreviewModeId } from "../src/preview-modes";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
 import SourceEditor from "./SourceEditor.vue";
 import Button from "primevue/button";
 import Menu from "primevue/menu";
-import Splitter from "primevue/splitter";
-import SplitterPanel from "primevue/splitterpanel";
 
 interface StandaloneDocument {
   path: string;
@@ -69,11 +65,12 @@ interface StandaloneDocument {
 const document = shallowRef<StandaloneDocument | null>(null);
 const documentKey = ref(0);
 const source = ref("");
+const workbench = ref<InstanceType<typeof TikzWorkbench> | null>(null);
 const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
 const inspectorOpen = ref(false);
-const activeMode = ref<TikzPreviewModeId>("visual");
+const sourceOpen = ref(window.matchMedia("(min-width: 901px)").matches);
 const fileMenu = ref<InstanceType<typeof Menu> | null>(null);
 const fileItems = computed(() => [
   { label: "New diagram", disabled: document.value === null, command: newDocument },
@@ -120,8 +117,6 @@ const target = computed<TikzLivePreviewTarget | null>(() => {
 });
 
 watch(() => target.value?.language, (language) => {
-  if (language === "tikzcd") activeMode.value = "quiver";
-  if (language === "tikz" && activeMode.value === "quiver") activeMode.value = "visual";
 });
 
 async function responseText(response: Response): Promise<string> {
@@ -154,6 +149,7 @@ const host: TikzWorkbenchHost = {
   },
   imageBaseUrl: () => new URL("/tikz-image/", location.href).href,
   editorUrl: "/tikz-editor/index.html",
+  requestSave: () => { void save(); },
   reportError: (message, error) => {
     hostError.value = `${message}: ${error instanceof Error ? error.message : String(error)}`;
     console.error(message, error);
@@ -175,7 +171,6 @@ async function applyDocument(response: Response): Promise<void> {
   const text = await responseText(response);
   document.value = metadata(response);
   source.value = text;
-  activeMode.value = document.value.path.endsWith(".tikzcd") || rawTikzEnvironment(text) === "tikzcd" ? "quiver" : "visual";
   savedSource.value = text;
   documentKey.value++;
   hostError.value = "";
@@ -212,8 +207,8 @@ async function openDocument(): Promise<void> {
 }
 
 async function saveAs(): Promise<void> {
-  const text = source.value;
   try {
+    const text = await workbench.value!.currentSource(new AbortController().signal);
     const response = await fetch("/api/save-as", { method: "POST", body: text });
     if (response.status === 204) return;
     await responseText(response);
@@ -229,8 +224,8 @@ async function save(): Promise<void> {
   const current = document.value;
   if (current === null) return;
   if (!current.saved) return await saveAs();
-  const text = source.value;
   try {
+    const text = await workbench.value!.currentSource(new AbortController().signal);
     const response = await fetch("/api/document", {
       method: "PUT",
       headers: { "if-match": current.revision },
@@ -266,6 +261,16 @@ function toggleTheme(): void {
 
 function toggleInspector(): void {
   inspectorOpen.value = !inspectorOpen.value;
+}
+
+async function copySource(): Promise<void> {
+  try {
+    const text = await workbench.value?.currentSource(new AbortController().signal) ?? source.value;
+    await navigator.clipboard.writeText(text);
+    hostError.value = "";
+  } catch (error) {
+    host.reportError("Could not copy source", error);
+  }
 }
 
 onMounted(() => {
@@ -318,7 +323,7 @@ body,
   position: relative;
   z-index: 20;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 8px;
@@ -415,15 +420,15 @@ body,
   overflow-wrap: anywhere;
 }
 
-.workspace-splitter {
+main {
   flex: 1 1 auto;
   min-height: 0;
-  border: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 40%) minmax(0, 1fr);
 }
 
-.workspace-splitter :deep(.p-splitterpanel) {
-  min-width: 0;
-  min-height: 0;
+main.source-closed {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .tikz-standalone-source {

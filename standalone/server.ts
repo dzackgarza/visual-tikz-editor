@@ -93,7 +93,8 @@ async function selectFile(mode: "open" | "save"): Promise<string | null> {
     new Response(dialog.stdout).text(),
     new Response(dialog.stderr).text(),
   ]);
-  if (status === 1 && error.trim() === "") return null;
+  // Zenity exit 1 means Cancel, including when GTK also emits a warning.
+  if (status === 1) return null;
   if (status !== 0) throw new Error(`File dialog failed: ${error.trim()}`);
   const selected = output.trim();
   if (!DIAGRAM_EXTENSIONS.has(path.extname(selected))) {

@@ -23,13 +23,17 @@ ui.settings.set("quiver.autosave", false);
 ui.settings.set("export.centre_diagram", false);
 ui.settings.set("export.standalone", false);
 
+const host_origin = new URL(document.referrer).origin;
 let session_id = null;
+let revision = 0;
+let current_source = "";
+let source_dirty = false;
 let suppress_change = false;
 let emit_timer = null;
 let fullscreen = false;
 
 function post(message) {
-    window.parent.postMessage({ ...message, sessionId: session_id }, "*");
+    window.parent.postMessage({ sessionId: session_id, revision, ...message }, host_origin);
 }
 
 function diagnostic_text(message) {
@@ -75,6 +79,10 @@ function export_source() {
 }
 
 function load_source(source, macros, theme) {
+    if (emit_timer !== null) clearTimeout(emit_timer);
+    emit_timer = null;
+    current_source = source;
+    source_dirty = false;
     suppress_change = true;
     try {
         ui.reset();
@@ -103,10 +111,19 @@ function load_source(source, macros, theme) {
     }
 }
 
+function read_source() {
+    if (source_dirty) {
+        current_source = export_source();
+        source_dirty = false;
+    }
+    return current_source;
+}
+
 window.addEventListener("zettlr-quiver-change", () => {
     if (suppress_change) {
         return;
     }
+    source_dirty = true;
     if (emit_timer !== null) {
         clearTimeout(emit_timer);
     }
@@ -116,7 +133,7 @@ window.addEventListener("zettlr-quiver-change", () => {
     emit_timer = setTimeout(() => {
         emit_timer = null;
         try {
-            post({ type: "zettlr-quiver:change", source: export_source() });
+            post({ type: "zettlr-quiver:change", source: read_source() });
         } catch (error) {
             post({
                 type: "zettlr-quiver:error",
@@ -127,19 +144,39 @@ window.addEventListener("zettlr-quiver-change", () => {
 });
 
 window.addEventListener("message", (event) => {
-    if (event.source !== window.parent || event.data === null || typeof event.data !== "object") {
+    if (event.source !== window.parent || event.origin !== host_origin || event.data === null || typeof event.data !== "object") {
         return;
     }
     const message = event.data;
-    if (message.type === "zettlr-quiver:load") {
-        session_id = message.sessionId;
-        load_source(String(message.source ?? ""), message.macros ?? {}, message.theme);
-    } else if (message.type === "zettlr-quiver:theme") {
-        if (message.theme === "dark" || message.theme === "light") {
-            ui.switch_theme(message.theme);
+    if (message.action === "source") {
+        if (typeof message.sessionId !== "string" || !Number.isSafeInteger(message.revision) ||
+            typeof message.requestId !== "string") return;
+        const identity = { event: "reply", action: "source", sessionId: message.sessionId,
+            revision: message.revision, requestId: message.requestId };
+        if (message.sessionId !== session_id || message.revision !== revision) {
+            post({ ...identity, status: "failed", error: "stale-target" });
+            return;
         }
-    } else if (message.type === "zettlr-quiver:source") {
-        load_source(String(message.source ?? ""), message.macros ?? {}, ui.theme);
+        try {
+            post({ ...identity, status: "ok", source: read_source() });
+        } catch {
+            post({ ...identity, status: "failed", error: "edit-rejected" });
+        }
+        return;
+    }
+    if (typeof message.sessionId !== "string" || !Number.isSafeInteger(message.revision)) return;
+    if (message.type === "zettlr-quiver:load" || message.type === "zettlr-quiver:source") {
+        if (typeof message.source !== "string" || message.revision <= 0) return;
+        if (message.sessionId === session_id && message.revision <= revision) return;
+        if (message.type === "zettlr-quiver:source" && message.sessionId !== session_id) return;
+        session_id = message.sessionId;
+        revision = message.revision;
+        load_source(message.source, message.macros ?? {}, message.theme ?? ui.theme);
+        return;
+    }
+    if (message.sessionId !== session_id || message.revision !== revision) return;
+    if (message.type === "zettlr-quiver:theme") {
+        if (message.theme === "dark" || message.theme === "light") ui.switch_theme(message.theme);
     } else if (message.type === "zettlr-quiver:display") {
         fullscreen = message.fullscreen === true;
         document.body.classList.toggle("zettlr-fullscreen", fullscreen);
@@ -153,6 +190,13 @@ window.addEventListener("keydown", (event) => {
         event.preventDefault();
         event.stopImmediatePropagation();
         post({ type: "zettlr-quiver:close-request" });
+        return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        post({ type: "zettlr-quiver:save" });
         return;
     }
 

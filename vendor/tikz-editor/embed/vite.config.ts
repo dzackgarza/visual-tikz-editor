@@ -12,6 +12,7 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: [
+			{ find: /^@tikz-editor\/app\/freehand$/, replacement: path.resolve(__dirname, '../../packages/app/src/ui/canvas-panel/freehand-tool.ts') },
 			{ find: /^@tikz-editor\/app$/, replacement: path.resolve(__dirname, '../../packages/app/src/index.ts') },
 			{ find: /^@tikz-editor\/app\/store$/, replacement: path.resolve(__dirname, '../../packages/app/src/store/store.ts') },
 			{ find: /^@tikz-editor\/app\/app-menu$/, replacement: path.resolve(__dirname, '../../packages/app/src/app-menu/index.ts') },

@@ -563,8 +563,9 @@ export class Parser {
             label = "";
             let whitespace = "";
             while (true) {
-                label += this.code.match(/^\S+/)[0];
-                this.code = this.code.replace(/^\S+/, "");
+                const token = this.code.match(/^(?:(?!\\end\{tikzcd\})\S)+/)[0];
+                label += token;
+                this.code = this.code.slice(token.length);
                 whitespace = this.eat_whitespace() || "";
                 if (!this.is_finished() && !this.check(this.col_delim) && !this.check("\\\\")
                     && !this.check("\\ar[") && !this.check("\\arrow[") && !this.check("\\end")

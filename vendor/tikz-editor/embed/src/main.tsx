@@ -7,6 +7,11 @@ import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import type { ToolMode } from '@tikz-editor/app/store/types';
 import { NODE_SHAPE_OPTIONS } from 'tikz-editor/edit/inspector';
 import './styles.css';
+import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
+import { createSnapshotRequests } from './snapshots';
+import type { CommandFailure } from './events';
+import { executeInkCommand } from './ink-commands';
+import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
 
 const App = lazy(async () => {
 	const mod = await import('@tikz-editor/app');
@@ -20,32 +25,9 @@ type HostSettingsPatch = {
 	};
 };
 
-type HostMessage = {
-	action?: string;
-	event?: string;
-	source?: string;
-	xml?: string;
-	revision?: number;
-	format?: string;
-	autosave?: 0 | 1 | boolean;
-	fileName?: string;
-	name?: string;
-	modified?: boolean;
-	fullscreen?: boolean;
-	settings?: HostSettingsPatch;
-	imageBaseUrl?: string;
-	workspace?: 'default' | 'canvasOnly';
-	inspector?: boolean;
-	tool?: ToolMode;
-	option?: 'smoothing' | 'strokeColor' | 'fillColor' | 'shape' | 'matrix';
-	value?: string | number;
-	rows?: number;
-	columns?: number;
-};
-
 type PendingEditorMessage = {
 	source: string;
-	svg: string;
+	sourceRevision: number;
 	revision: number;
 };
 
@@ -54,7 +36,6 @@ const SETTINGS_KEY = 'tikz-editor:settings';
 const STORAGE_HASH_KEY = 'storage';
 const SETTINGS_VERSION = 1;
 const CHANGE_THROTTLE_MS = 250;
-const AUTOSAVE_DEBOUNCE_MS = 1000;
 const TEXT_FILE_ACCEPT = '.tex,.tikz,.pgf,.svg,.ipe,text/plain,text/x-tex,text/xml,application/xml,image/svg+xml';
 const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
   \draw[thick, blue] (0,0) circle (1cm);
@@ -62,23 +43,17 @@ const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
 \end{tikzpicture}
 `;
 
-let autosaveEnabled = false;
 let lastSavedSource = DEFAULT_SOURCE;
-let lastKnownSvg = '';
 let currentFileName = 'document.tikz';
 let currentHostRevision = 0;
+let currentHostSession = '';
 let imageBaseUrl = '';
 let imageBaseErrorReported = false;
 const persistenceValues = new Map<string, string>();
 
 function postToHost(message: Record<string, unknown>) {
-	window.parent?.postMessage(JSON.stringify(message), '*');
-}
-
-function sourceFromMessage(message: HostMessage): string | null {
-	if (typeof message.source === 'string') return message.source;
-	if (typeof message.xml === 'string') return message.xml;
-	return null;
+	if (window.parent === window) return;
+	window.parent.postMessage(JSON.stringify({ sessionId: currentHostSession, revision: currentHostRevision, ...message }), new URL(document.referrer).origin);
 }
 
 function wantsSvg(format?: string) {
@@ -138,7 +113,9 @@ function applyHostSettings(settings?: HostSettingsPatch) {
 }
 
 function makeExportPayload(format: string | undefined) {
-	const source = useEditorStore.getState().source;
+	const state = useEditorStore.getState();
+	const source = state.source;
+	const lastKnownSvg = state.snapshot.source === source && state.pendingRequestId === null ? state.snapshot.svg?.svg ?? '' : '';
 	const requestedSvg = wantsSvg(format);
 	const data = requestedSvg ? lastKnownSvg : source;
 
@@ -296,7 +273,7 @@ function createEmbedPlatform(initialSource: string): EditorPlatform {
 			saveText: async (text, options) => {
 				lastSavedSource = text;
 				currentFileName = options?.suggestedName ?? options?.fileRef?.name ?? currentFileName;
-				postToHost({ event: 'save', revision: currentHostRevision, source: text, xml: text, svg: lastKnownSvg, fileName: currentFileName });
+				postToHost({ event: 'save', revision: currentHostRevision, source: text, xml: text, fileName: currentFileName });
 				return { status: 'saved', fileRef: makeFileRef(currentFileName) };
 			},
 			exportFile: async (content, options) => {
@@ -314,25 +291,24 @@ function createEmbedPlatform(initialSource: string): EditorPlatform {
 function loadIntoEditor(source: string, fileName = currentFileName) {
 	currentFileName = fileName;
 	lastSavedSource = source;
-	lastKnownSvg = '';
 	const store = useEditorStore.getState();
 	store.dispatch({ type: 'CODE_EDITED', source });
 	store.dispatch({ type: 'MARK_DOCUMENT_SAVED', fileRef: makeFileRef(fileName), lastKnownDiskSource: source });
-	postToHost({ event: 'loaded', revision: currentHostRevision });
 }
 
 function HostBridge() {
 	const [fullscreen, setFullscreen] = useState(false);
 	const fullscreenRef = useRef(false);
 	const previousSourceRef = useRef<string | null>(null);
+	const previousRenderRef = useRef(-1);
 	const previousToolRef = useRef<ToolMode | null>(null);
-	const previousSvgRef = useRef<string>('');
 	const pendingChangeRef = useRef<PendingEditorMessage | null>(null);
-	const pendingAutosaveRef = useRef<PendingEditorMessage | null>(null);
 	const changeTimerRef = useRef<number | null>(null);
-	const autosaveTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
+		const pendingCommands = new Map<string, { command: HostCommand; timer: number }>();
+		let pendingLoad: (() => void) | null = null;
+		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }), () => imageBaseUrl);
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
 		postToHost({ event: 'tool', tool: useEditorStore.getState().toolMode });
 		postToHost({ event: 'tool-options', shapes: NODE_SHAPE_OPTIONS });
@@ -342,40 +318,13 @@ function HostBridge() {
 			const pending = pendingChangeRef.current;
 			pendingChangeRef.current = null;
 			if (!pending) return;
-			postToHost({ event: 'change', revision: pending.revision, source: pending.source, xml: pending.source, svg: pending.svg });
+			postToHost({ event: 'change', revision: pending.revision, source: pending.source, sourceRevision: pending.sourceRevision });
 		};
 
-		const scheduleChange = (source: string, svg: string, revision: number) => {
-			pendingChangeRef.current = { source, svg, revision };
+		const scheduleChange = (source: string, sourceRevision: number, revision: number) => {
+			pendingChangeRef.current = { source, sourceRevision, revision };
 			if (changeTimerRef.current !== null) return;
 			changeTimerRef.current = window.setTimeout(flushChange, CHANGE_THROTTLE_MS);
-		};
-
-		const flushAutosave = () => {
-			autosaveTimerRef.current = null;
-			const pending = pendingAutosaveRef.current;
-			pendingAutosaveRef.current = null;
-			if (!pending) return;
-			postToHost({ event: 'autosave', revision: pending.revision, source: pending.source, xml: pending.source, svg: pending.svg });
-		};
-
-		const scheduleAutosave = (source: string, svg: string, revision: number) => {
-			pendingAutosaveRef.current = { source, svg, revision };
-			if (autosaveTimerRef.current !== null) {
-				window.clearTimeout(autosaveTimerRef.current);
-			}
-			autosaveTimerRef.current = window.setTimeout(flushAutosave, AUTOSAVE_DEBOUNCE_MS);
-		};
-
-		const flushPendingEditorMessages = () => {
-			if (changeTimerRef.current !== null) {
-				window.clearTimeout(changeTimerRef.current);
-				flushChange();
-			}
-			if (autosaveTimerRef.current !== null) {
-				window.clearTimeout(autosaveTimerRef.current);
-				flushAutosave();
-			}
 		};
 
 		const unsubscribe = useEditorStore.subscribe((state) => {
@@ -383,10 +332,10 @@ function HostBridge() {
 				previousToolRef.current = state.toolMode;
 				postToHost({ event: 'tool', tool: state.toolMode });
 			}
-			const nextSvg = state.snapshot.svg?.svg ?? '';
-			if (nextSvg && nextSvg !== previousSvgRef.current) {
-				previousSvgRef.current = nextSvg;
-				lastKnownSvg = nextSvg;
+			if (state.snapshot.source === state.source && state.pendingRequestId === null &&
+				state.snapshot.svg !== null && state.snapshot.revision !== previousRenderRef.current) {
+				previousRenderRef.current = state.snapshot.revision;
+				postToHost({ event: 'rendered', sourceRevision: state.sourceRevision });
 			}
 
 			if (previousSourceRef.current === null) {
@@ -395,73 +344,155 @@ function HostBridge() {
 			}
 			if (state.source === previousSourceRef.current) return;
 			previousSourceRef.current = state.source;
-			scheduleChange(state.source, lastKnownSvg, currentHostRevision);
-			if (autosaveEnabled) {
-				scheduleAutosave(state.source, lastKnownSvg, currentHostRevision);
-			}
+			scheduleChange(state.source, state.sourceRevision, currentHostRevision);
 		});
 
-		const handleMessage = (event: MessageEvent) => {
-			let message: HostMessage | null = null;
-			if (typeof event.data === 'string') {
-				try { message = JSON.parse(event.data) as HostMessage; } catch { return; }
-			} else if (event.data && typeof event.data === 'object') {
-				message = event.data as HostMessage;
+		const reply = (command: HostCommand, error?: CommandFailure) => {
+			const pending = pendingCommands.get(command.requestId);
+			if (pending) {
+				window.clearTimeout(pending.timer);
+				pendingCommands.delete(command.requestId);
 			}
-			if (!message) return;
-			const action = message.action || message.event;
-			if (action === 'load') {
-				imageBaseUrl = message.imageBaseUrl ?? '';
-				imageBaseErrorReported = false;
-				if (typeof message.revision === 'number' && Number.isInteger(message.revision)) {
-					currentHostRevision = message.revision;
+			postToHost({ event: 'reply', requestId: command.requestId, sessionId: command.sessionId,
+				revision: command.revision, action: command.action,
+				status: error === undefined ? 'ok' : 'failed', error });
+		};
+
+		const handleMessage = (event: MessageEvent) => {
+			if (window.parent === window || event.source !== window.parent) return;
+			if (event.origin !== new URL(document.referrer).origin) return;
+			let data: unknown = event.data;
+			if (typeof data === 'string') {
+				try { data = JSON.parse(data); } catch { return; }
+			}
+			const parsed = hostCommandSchema.safeParse(data);
+			if (!parsed.success) {
+				const identity = commandIdentitySchema.safeParse(data);
+				if (identity.success) postToHost({ ...identity.data, event: 'reply', status: 'failed', error: 'invalid-command' });
+				return;
+			}
+			const command = parsed.data;
+			if (command.action !== 'load' && command.action !== 'snapshot' &&
+				(command.sessionId !== currentHostSession || command.revision !== currentHostRevision)) {
+				reply(command, 'stale-target');
+				return;
+			}
+			switch (command.action) {
+				case 'import-ink':
+				case 'interpret-ink':
+				case 'restore-ink':
+					try { reply(command, executeInkCommand(command)); }
+					catch (error) {
+						postToHost({ event: 'error', message: error instanceof Error ? error.message : String(error) });
+						reply(command, 'invalid-original-ink');
+					}
+					return;
+				case 'load': {
+					if (command.state && !parseTikzForEdit(command.source, { activeFigureId: command.state.activeFigureId })
+						.figures.some(figure => figure.id === command.state!.activeFigureId)) {
+						reply(command, 'invalid-command');
+						return;
+					}
+					if (currentHostSession !== '' &&
+						(command.sessionId !== currentHostSession || command.revision <= currentHostRevision)) {
+						reply(command, 'stale-target');
+						return;
+					}
+					pendingLoad?.();
+					pendingLoad = null;
+					snapshots.replace();
+					for (const pending of pendingCommands.values()) reply(pending.command, 'stale-target');
+					currentHostSession = command.sessionId;
+					currentHostRevision = command.revision;
+					imageBaseUrl = command.imageBaseUrl ?? '';
+					imageBaseErrorReported = false;
+					applyHostSettings(command.settings);
+					persistHostSettings(command.settings);
+					pendingChangeRef.current = null;
+					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: command.state ? { source: command.source, transform: command.state.viewport, fitToContent: command.state.fitToContent } : null });
+					loadIntoEditor(command.source, command.fileName);
+					const finishLoad = () => {
+						const state = useEditorStore.getState();
+						if (state.snapshot.source !== command.source ||
+							(command.state && !state.snapshot.figures.some(figure => figure.id === command.state.activeFigureId))) return;
+						pendingLoad?.();
+						pendingLoad = null;
+						if (command.state) {
+							state.dispatch({ type: 'SET_ACTIVE_FIGURE', figureId: command.state.activeFigureId });
+							state.dispatch({ type: 'SET_TOOL_MODE', mode: command.state.tool });
+							state.dispatch({ type: 'SET_FREEHAND_INTERPRETATION', enabled: command.state.interpretGeometry });
+							state.dispatch({ type: 'SELECT_RANGE', ids: command.state.selection });
+						}
+						postToHost({ event: 'loaded', revision: command.revision });
+						reply(command);
+					};
+					pendingLoad = useEditorStore.subscribe(finishLoad);
+					finishLoad();
+					return;
 				}
-				applyHostSettings(message.settings);
-				persistHostSettings(message.settings);
-				autosaveEnabled = Boolean(message.autosave);
-				pendingChangeRef.current = null;
-				pendingAutosaveRef.current = null;
-				loadIntoEditor(sourceFromMessage(message) ?? DEFAULT_SOURCE, message.fileName ?? message.name ?? currentFileName);
-			} else if (action === 'settings') {
-				applyHostSettings(message.settings);
-				persistHostSettings(message.settings);
-			} else if (action === 'display') {
-				const nextFullscreen = message.fullscreen === true;
-				fullscreenRef.current = nextFullscreen;
-				setFullscreen(nextFullscreen);
-			} else if (action === 'workspace' && message.workspace) {
-				const workspace = message.workspace;
-				void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => applyWorkspace(workspace));
-			} else if (action === 'inspector' && typeof message.inspector === 'boolean') {
-				document.documentElement.dataset.embedInspector = message.inspector ? 'open' : 'closed';
-				window.dispatchEvent(new Event('tikz-embed-inspector'));
-			} else if (action === 'tool' && message.tool) {
-				useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: message.tool });
-			} else if (action === 'tool-option') {
-				const dispatch = useEditorStore.getState().dispatch;
-				if (message.option === 'smoothing' && typeof message.value === 'number') {
-					dispatch({ type: 'SET_FREEHAND_SMOOTHING', value: message.value });
-				} else if (message.option === 'strokeColor' && typeof message.value === 'string') {
-					dispatch({ type: 'SET_CREATION_STROKE_COLOR', value: message.value });
-				} else if (message.option === 'fillColor' && typeof message.value === 'string') {
-					dispatch({ type: 'SET_BUCKET_FILL_COLOR', value: message.value });
-				} else if (message.option === 'shape' && typeof message.value === 'string') {
-					const shape = NODE_SHAPE_OPTIONS.find((candidate) => candidate.value === message.value);
-					if (shape) dispatch({ type: 'SET_ADD_SHAPE_PRESET', value: shape.value });
-				} else if (message.option === 'matrix' && typeof message.rows === 'number' && typeof message.columns === 'number') {
-					dispatch({ type: 'SET_ADD_MATRIX_PRESET', rows: message.rows, columns: message.columns });
+				case 'snapshot':
+					snapshots.request(command, currentHostSession, currentHostRevision);
+					return;
+				case 'cancel':
+					if (pendingCommands.has(command.targetRequestId)) reply(pendingCommands.get(command.targetRequestId)!.command, 'cancelled');
+					snapshots.cancel(command.targetRequestId);
+					reply(command);
+					return;
+				case 'source':
+					postToHost({ event: 'reply', requestId: command.requestId, status: 'ok', action: 'source', source: useEditorStore.getState().source });
+					return;
+				case 'settings':
+					applyHostSettings(command.settings);
+					persistHostSettings(command.settings);
+					reply(command);
+					return;
+				case 'display':
+					fullscreenRef.current = command.fullscreen;
+					setFullscreen(command.fullscreen);
+					reply(command);
+					return;
+				case 'workspace':
+					if (pendingCommands.has(command.requestId)) return;
+					if (pendingCommands.size >= 32) { reply(command, 'busy'); return; }
+					pendingCommands.set(command.requestId, { command,
+						timer: window.setTimeout(() => reply(command, 'timeout'), 10000) });
+					void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => {
+						if (pendingCommands.get(command.requestId)?.command !== command) return;
+						if (command.revision !== currentHostRevision) { reply(command, 'stale-target'); return; }
+						applyWorkspace(command.workspace);
+						document.documentElement.dataset.embedWorkspace = command.workspace;
+						reply(command);
+					}).catch(() => {
+						if (pendingCommands.get(command.requestId)?.command === command) reply(command, 'workspace-unavailable');
+					});
+					return;
+				case 'inspector':
+					document.documentElement.dataset.embedInspector = command.inspector ? 'open' : 'closed';
+					window.dispatchEvent(new Event('tikz-embed-inspector'));
+					reply(command);
+					return;
+				case 'tool':
+					useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: command.tool });
+					reply(command);
+					return;
+				case 'tool-option': {
+					const dispatch = useEditorStore.getState().dispatch;
+					if (command.option === 'smoothing' && typeof command.value === 'number')
+						dispatch({ type: 'SET_FREEHAND_SMOOTHING', value: command.value });
+					else if (command.option === 'strokeColor' && typeof command.value === 'string')
+						dispatch({ type: 'SET_CREATION_STROKE_COLOR', value: command.value });
+					else if (command.option === 'fillColor' && typeof command.value === 'string')
+						dispatch({ type: 'SET_BUCKET_FILL_COLOR', value: command.value });
+					else if (command.option === 'shape' && typeof command.value === 'string') {
+						const shape = NODE_SHAPE_OPTIONS.find(candidate => candidate.value === command.value);
+						if (shape) dispatch({ type: 'SET_ADD_SHAPE_PRESET', value: shape.value });
+						else { reply(command, 'invalid-command'); return; }
+					} else if (command.option === 'matrix' && command.rows && command.columns)
+						dispatch({ type: 'SET_ADD_MATRIX_PRESET', rows: command.rows, columns: command.columns });
+					else { reply(command, 'invalid-command'); return; }
+					reply(command);
+					return;
 				}
-			} else if (action === 'save') {
-				flushPendingEditorMessages();
-				const source = useEditorStore.getState().source;
-				lastSavedSource = source;
-				useEditorStore.getState().dispatch({ type: 'MARK_DOCUMENT_SAVED', fileRef: makeFileRef(currentFileName), lastKnownDiskSource: source });
-				postToHost({ event: 'save', revision: currentHostRevision, source, xml: source, svg: lastKnownSvg, fileName: currentFileName });
-			} else if (action === 'export') {
-				flushPendingEditorMessages();
-				postToHost(makeExportPayload(message.format));
-			} else if (action === 'status' && typeof message.modified === 'boolean' && !message.modified) {
-				useEditorStore.getState().dispatch({ type: 'MARK_DOCUMENT_SAVED', fileRef: makeFileRef(currentFileName), lastKnownDiskSource: useEditorStore.getState().source });
 			}
 		};
 
@@ -472,6 +503,8 @@ function HostBridge() {
 			postToHost({ event: 'close-request' });
 		};
 
+		const inspectorClosed = () => postToHost({ event: 'inspector-closed' });
+		window.addEventListener('tikz-embed-inspector-closed', inspectorClosed);
 		window.addEventListener('message', handleMessage);
 		const imageObserver = new MutationObserver(() => {
 			const images = document.querySelectorAll<SVGImageElement>('image[data-image-file]');
@@ -490,12 +523,16 @@ function HostBridge() {
 		imageObserver.observe(document.body, { childList: true, subtree: true });
 		window.addEventListener('keydown', handleKeydown, true);
 		return () => {
+			pendingLoad?.();
+			snapshots.dispose();
+			for (const pending of pendingCommands.values()) window.clearTimeout(pending.timer);
+			pendingCommands.clear();
 			imageObserver.disconnect();
 			unsubscribe();
+			window.removeEventListener('tikz-embed-inspector-closed', inspectorClosed);
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('keydown', handleKeydown, true);
 			if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
-			if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current);
 		};
 	}, []);
 

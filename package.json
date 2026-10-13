@@ -23,9 +23,12 @@
     "primeicons": "^7",
     "primevue": "^4",
     "viewerjs": "1.14.0",
-    "vue": "^3.5.41"
+    "vue": "^3.5.41",
+    "zod": "^4.6.5",
+    "svg2tikz": "0.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/bun": "^1.4.2",
     "@vitejs/plugin-vue": "^6.0.0",
     "less": "^4.9.0",
