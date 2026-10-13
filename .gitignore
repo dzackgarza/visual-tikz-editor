@@ -4,3 +4,4 @@ standalone/dist/
 src-tauri/binaries/
 src-tauri/target/
 src-tauri/gen/
+test-results/

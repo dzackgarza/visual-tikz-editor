@@ -2,6 +2,7 @@
 /** Reconstruct the vendored tikz-editor embed from its pinned upstream commit. */
 
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -38,6 +39,8 @@ try {
 
   const embedApp = path.join(upstream, 'apps', 'zettlr-embed')
   await cp(path.join(vendor, 'embed'), embedApp, { recursive: true })
+  // The drawing tools and public host boundary use one original-ink codec.
+  await cp(path.join(vendor, 'embed/src/original-ink.ts'), path.join(upstream, 'packages/app/src/original-ink.ts'))
   await writeFile(
     path.join(embedApp, 'index.html'),
     '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>TikZ Editor</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>\n'
@@ -46,6 +49,8 @@ try {
   run('bun', [ 'install', '--no-save' ], upstream)
   run('bunx', [ 'lezer-generator', '--typeScript', 'src/grammar/tikz.grammar', '-o', 'src/grammar/tikz-parser.ts' ], path.join(upstream, 'packages/lezer-tikz'))
   for (const name of [ 'lezer-tikz', 'lang-tikz', 'core' ]) {
+    // The upstream workspace has no root TypeScript binary. Without an explicit
+    // package, bunx can select an unrelated system tsc (4.8 on this host).
     run('bunx', [ '--package', 'typescript@5.9.3', 'tsc', '-p', path.join(upstream, `packages/${name}/tsconfig.json`) ], upstream)
   }
   run('bunx', [ '--package', 'typescript@5.9.3', 'tsc', '--noEmit', '-p', path.join(embedApp, 'tsconfig.json') ], upstream)
@@ -58,8 +63,10 @@ try {
   // The Zettlr fork points that loader at ./mathjax instead, so ship the exact
   // component package selected by the pinned upstream lockfile. The default
   // NewCM SVG font lives under MathJax's expected output/fonts component path.
-  const mathjax = path.join(upstream, 'node_modules', 'mathjax')
-  const newcm = path.join(upstream, 'node_modules', '@mathjax', 'mathjax-newcm-font')
+  const coreRequire = createRequire(path.join(upstream, 'packages/core/package.json'))
+  const appRequire = createRequire(path.join(upstream, 'packages/app/package.json'))
+  const mathjax = path.dirname(coreRequire.resolve('mathjax/package.json'))
+  const newcm = path.dirname(appRequire.resolve('@mathjax/mathjax-newcm-font/package.json'))
   const mathjaxPackage = JSON.parse(await readFile(path.join(mathjax, 'package.json'), 'utf8'))
   const newcmPackage = JSON.parse(await readFile(path.join(newcm, 'package.json'), 'utf8'))
   if (mathjaxPackage.version !== '4.1.1' || newcmPackage.version !== '4.1.1') {

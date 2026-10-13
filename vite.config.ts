@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 // The standalone page; standalone/server.ts builds it with this config.
 export default defineConfig({
   root: path.join(import.meta.dirname, "standalone"),
+  base: "./",
   plugins: [vue()],
   resolve: {
     // The repository's patch to @tikz-editor/lang-tikz
@@ -23,6 +24,14 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        app: path.join(import.meta.dirname, "standalone/index.html"),
+        quiverEmbedding: path.join(import.meta.dirname, "standalone/quiver-embedding.html"),
+        embedding: path.join(import.meta.dirname, "standalone/embedding.html"),
+        hosted: path.join(import.meta.dirname, "standalone/hosted.html"),
+      },
+    },
     // The page loads once from 127.0.0.1; Vue, CodeMirror and Viewer.js in one
     // chunk cost no network round trips, so splitting them gains nothing.
     chunkSizeWarningLimit: 1024,

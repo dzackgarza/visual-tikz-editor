@@ -14,7 +14,7 @@
         aria-label="Diagram view"
       >
         <button
-          v-for="provider in providers"
+          v-for="provider in providers.filter(supportsProvider)"
           :key="provider.id"
           type="button"
           :class="{ active: displayMode === provider.id }"
@@ -86,8 +86,10 @@
       <component
         v-for="provider in providers.filter((candidate) => candidate.id !== 'tikz' && visitedEditors.has(candidate.id))"
         v-if="unavailableMessage === ''"
-        v-show="displayMode === provider.id"
+        :class="{ 'tikz-live-preview-retained': displayMode !== provider.id }"
+        :inert="displayMode !== provider.id"
         :is="provider.component"
+        :ref="(handle: unknown) => setEditorHandle(provider.id, handle)"
         :key="`${provider.id}\0${targetIdentity(props.target)}`"
         class="tikz-live-preview-provider"
         :target="props.target"
@@ -127,7 +129,7 @@ import type { TikzLivePreviewTarget } from "../live-preview";
 import { defaultTikzPreviewMode, type TikzPreviewModeId } from "../preview-modes";
 import { TIKZ_PREVIEW_PROVIDERS, type TikzPreviewProvider } from "./providers";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   target: TikzLivePreviewTarget;
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
@@ -137,7 +139,8 @@ const props = defineProps<{
   showModeSwitcher?: boolean;
   showStatus?: boolean;
   showFullscreen?: boolean;
-}>();
+  showHeader?: boolean;
+}>(), { showHeader: true });
 
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
@@ -163,7 +166,7 @@ const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
 const activeBusy = ref(false);
 const showShellHeader = computed(() =>
-  props.showModeSwitcher !== false || props.showStatus !== false || props.showFullscreen !== false,
+  props.showHeader !== false && (props.showModeSwitcher !== false || props.showStatus !== false || props.showFullscreen !== false),
 );
 const providerStatus = ref<Record<TikzPreviewModeId, string>>({ tikz: "", quiver: "", visual: "" });
 const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({
@@ -172,6 +175,28 @@ const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({
   visual: false,
 });
 const copyError = ref("");
+// Rendered output is a view of the source, not its editor. Retain the last
+// editor as the read target so Save/Copy includes its unpublished changes.
+const sourceEditor = ref<TikzPreviewModeId>(requestedMode.value);
+type EditorHandle = {
+  currentSource?: (signal: AbortSignal) => Promise<string>;
+  zoom?: (direction: "in" | "out" | "reset") => void;
+};
+const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
+function setEditorHandle(id: TikzPreviewModeId, handle: unknown): void {
+  if (handle === null) editorHandles.delete(id);
+  else editorHandles.set(id, handle as EditorHandle);
+}
+async function currentSource(signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted();
+  const editor = editorHandles.get(sourceEditor.value);
+  if (editor?.currentSource) return editor.currentSource(signal);
+  return props.target.source;
+}
+function zoom(direction: "in" | "out" | "reset"): void {
+  editorHandles.get("visual")?.zoom?.(direction);
+}
+defineExpose({ currentSource, zoom });
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const providers: readonly TikzPreviewProvider[] = TIKZ_PREVIEW_PROVIDERS;
 const displayMode = requestedMode;
@@ -228,6 +253,7 @@ watch(
   () => targetIdentity(props.target),
   () => {
     requestedMode.value = props.requestedMode ?? props.initialMode ?? defaultMode();
+    sourceEditor.value = requestedMode.value;
     visitedEditors.value =
       requestedMode.value === "tikz" ? new Set() : new Set([requestedMode.value]);
     providerStatus.value = { tikz: "", quiver: "", visual: "" };
@@ -248,7 +274,10 @@ watch(
   (mode) => {
     activeStatus.value = mode === "tikz" ? "" : providerStatus.value[mode];
     activeBusy.value = mode === "tikz" ? false : providerBusy.value[mode];
-    if (mode !== "tikz") visitedEditors.value = new Set([...visitedEditors.value, mode]);
+    if (mode !== "tikz") {
+      sourceEditor.value = mode;
+      visitedEditors.value = new Set([...visitedEditors.value, mode]);
+    }
     emit("mode", mode);
   },
   { immediate: true },
@@ -424,6 +453,14 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px color-mix(in srgb, black 16%, transparent);
 }
 
+/* Retained iframe layouts must keep nonzero dimensions while another view is active. */
+.tikz-live-preview-retained {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .tikz-live-preview-provider {
   flex: 1 1 auto;
   width: 100%;
@@ -449,5 +486,16 @@ onBeforeUnmount(() => {
   --text: #f3f2ed;
   --accent: #b44243;
   background: #1d242b;
+}
+</style>
+
+<style>
+.tikz-popover-dark {
+  --p-popover-background: #313b45;
+  --p-popover-color: #f3f2ed;
+  --p-popover-border-color: #4f5863;
+  --p-select-background: #252c34;
+  --p-select-color: #f3f2ed;
+  --p-select-border-color: #4f5863;
 }
 </style>

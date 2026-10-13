@@ -40,8 +40,10 @@ import {
   tikzEditorReplacement,
   tikzEditorSessionForBlock,
 } from "../editor-bridge";
-import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../host";
+import { requestEditorSource, requestEditorSnapshot, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../host";
+import { editorNotificationSchema, type EditorNotification } from "../../vendor/tikz-editor/embed/src/events";
 import type { TikzLivePreviewTarget } from "../live-preview";
+import type { EditorShapeOption, EditorToolMode } from "../editor-tools";
 
 interface PreviewSession {
   id: string;
@@ -49,21 +51,6 @@ interface PreviewSession {
   source: TikzEditorSourceSession;
 }
 
-interface TikzEditorHostMessage {
-  event?: string;
-  revision?: number;
-  source?: string;
-  xml?: string;
-  message?: string;
-  title?: string;
-  kind?: string;
-  from?: number;
-  to?: number;
-  requestId?: string;
-  text?: string;
-  key?: string;
-  value?: string;
-}
 
 const props = defineProps<{
   target: TikzLivePreviewTarget;
@@ -78,6 +65,8 @@ const emit = defineEmits<{
   (e: "inspectorClosed"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
+  (e: "tool", tool: EditorToolMode): void;
+  (e: "toolOptions", shapes: EditorShapeOption[]): void;
 }>();
 
 const frame = ref<HTMLIFrameElement | null>(null);
@@ -87,8 +76,29 @@ const session = shallowRef<PreviewSession>({
   source: tikzEditorSessionForBlock(props.target),
 });
 const hostReady = ref(false);
+const pendingTool = ref<EditorToolMode | null>(null);
 const loaded = ref(false);
 const errorMessage = ref("");
+const lifetime = new AbortController();
+
+function snapshot(signal: AbortSignal) {
+  if (frame.value === null || !loaded.value) throw new Error("The editor has not loaded its source");
+  const active = session.value;
+  return requestEditorSnapshot(frame.value, {
+    sessionId: active.id, revision: active.revision, source: active.source.source,
+  }, AbortSignal.any([signal, lifetime.signal]));
+}
+
+async function currentSource(signal: AbortSignal): Promise<string> {
+  const active = session.value;
+  if (frame.value === null || !loaded.value) return active.source.source;
+  const source = await requestEditorSource(frame.value, { sessionId: active.id, revision: active.revision },
+    AbortSignal.any([signal, lifetime.signal]));
+  if (session.value.revision !== active.revision) throw new Error("The source changed while reading the editor");
+  applyEditorSource(source, active.revision);
+  return session.value.source.source;
+}
+
 
 function sameBlockIdentity(a: TikzEditorSourceSession, b: TikzEditorSourceSession): boolean {
   return a.kind === b.kind && a.blockFrom === b.blockFrom;
@@ -99,8 +109,30 @@ function postToEditor(message: Record<string, unknown>): void {
   if (target === undefined || target === null) {
     return;
   }
-  target.postMessage(message, "*");
+  target.postMessage({
+    requestId: crypto.randomUUID(), sessionId: session.value.id,
+    revision: session.value.revision, ...message,
+  }, new URL(props.host.editorUrl, location.href).origin);
 }
+
+function selectTool(tool: EditorToolMode): void {
+  pendingTool.value = tool;
+  if (loaded.value) postToEditor({ action: "tool", tool });
+}
+
+function configureTool(option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number): void {
+  postToEditor({ action: "tool-option", option, value });
+}
+
+function configureMatrix(rows: number, columns: number): void {
+  postToEditor({ action: "tool-option", option: "matrix", rows, columns });
+}
+
+function zoom(direction: "in" | "out" | "reset"): void {
+  if (loaded.value) postToEditor({ action: "zoom", direction });
+}
+
+defineExpose({ snapshot, currentSource, selectTool, configureTool, configureMatrix, zoom });
 
 function sendFullLoad(): void {
   if (!hostReady.value) {
@@ -112,6 +144,7 @@ function sendFullLoad(): void {
   loaded.value = false;
   postToEditor({
     action: "load",
+    sessionId: active.id,
     revision,
     source: active.source.source,
     autosave: 0,
@@ -125,9 +158,6 @@ function sendFullLoad(): void {
       },
     },
   });
-  postToEditor({ action: "display", fullscreen: props.fullscreen });
-  postToEditor({ action: "workspace", workspace: "canvasOnly" });
-  postToEditor({ action: "inspector", inspector: props.showInspector === true });
 }
 
 function sendTheme(): void {
@@ -149,7 +179,7 @@ watch(
     const sameSource = sameIdentity && active.source.source === next.source;
 
     if (!sameIdentity) {
-      session.value = { id: crypto.randomUUID(), revision: 0, source: next };
+      session.value = { ...active, source: next };
       errorMessage.value = "";
       sendFullLoad();
       return;
@@ -186,18 +216,12 @@ watch(
   },
 );
 
-function parseHostMessage(data: unknown): TikzEditorHostMessage | null {
+function parseHostMessage(data: unknown): EditorNotification | null {
   if (typeof data === "string") {
-    try {
-      const parsed = JSON.parse(data) as unknown;
-      return parsed !== null && typeof parsed === "object"
-        ? (parsed as TikzEditorHostMessage)
-        : null;
-    } catch {
-      return null;
-    }
+    try { data = JSON.parse(data); } catch { return null; }
   }
-  return data !== null && typeof data === "object" ? (data as TikzEditorHostMessage) : null;
+  const parsed = editorNotificationSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 }
 
 function applyEditorSource(source: string, revision: number | undefined): void {
@@ -231,25 +255,30 @@ function onMessage(event: MessageEvent): void {
   if (event.source !== frame.value?.contentWindow) {
     return;
   }
-  const message = parseHostMessage(event.data);
-  if (message === null) {
+  if (event.origin !== new URL(props.host.editorUrl, location.href).origin) {
     return;
   }
+  const message = parseHostMessage(event.data);
+  if (message === null || (message.event !== "init" && message.sessionId !== session.value.id)) return;
 
   if (message.event === "clipboard-read" || message.event === "clipboard-write") {
-    const request = message;
     const clipboard = props.host.clipboard;
-    if (clipboard === undefined || typeof request.requestId !== "string") return;
-    const operation = request.event === "clipboard-read"
-      ? clipboard.readText()
-      : typeof request.text === "string" ? clipboard.writeText(request.text) : Promise.reject(new Error("Clipboard text is missing"));
-    void operation.then((text) => postToEditor({ event: "clipboard-result", requestId: request.requestId, text }))
-      .catch((error) => postToEditor({ event: "clipboard-result", requestId: request.requestId, error: error instanceof Error ? error.message : String(error) }));
+    if (clipboard === undefined || message.revision !== session.value.revision) return;
+    const active = session.value;
+    const operation = message.event === "clipboard-read"
+      ? clipboard.readText() : clipboard.writeText(message.text);
+    const respond = (result: { text?: string; error?: string }): void => {
+      if (session.value.id !== active.id || session.value.revision !== active.revision || lifetime.signal.aborted) return;
+      postToEditor({ action: "clipboard-result", targetRequestId: message.requestId, ...result });
+    };
+    void operation.then((text) => respond(typeof text === "string" ? { text } : {}))
+      .catch((error) => respond({ error: error instanceof Error ? error.message : String(error) }));
     return;
   }
 
   switch (message.event) {
     case "persistence-save":
+      if (message.revision !== session.value.revision) break;
       if (typeof message.key === "string" && typeof message.value === "string" && props.host.savePreference !== undefined) {
         void props.host.savePreference(message.key, message.value)
           .catch(error => props.host.reportError("Could not save editor preferences", error));
@@ -258,6 +287,9 @@ function onMessage(event: MessageEvent): void {
     case "init":
       hostReady.value = true;
       sendFullLoad();
+      postToEditor({ action: "display", fullscreen: props.fullscreen });
+      postToEditor({ action: "workspace", workspace: "canvasOnly" });
+      postToEditor({ action: "inspector", inspector: props.showInspector === true });
       break;
     case "loaded":
       if (message.revision !== session.value.revision) {
@@ -265,21 +297,21 @@ function onMessage(event: MessageEvent): void {
       }
       loaded.value = true;
       errorMessage.value = "";
+      if (pendingTool.value !== null) postToEditor({ action: "tool", tool: pendingTool.value });
       break;
-    case "change":
-    case "autosave":
-    case "save": {
-      const source =
-        typeof message.source === "string"
-          ? message.source
-          : typeof message.xml === "string"
-            ? message.xml
-            : null;
-      if (source !== null) {
-        applyEditorSource(source, message.revision);
-      }
+    case "change": {
+      applyEditorSource(message.source, message.revision);
       break;
     }
+    case "save": {
+      if (message.revision !== session.value.revision) break;
+      applyEditorSource(message.source, message.revision);
+      props.host.requestSave?.();
+      break;
+    }
+    case "error":
+      errorMessage.value = message.message;
+      break;
     case "message":
       if (message.kind === "error") {
         errorMessage.value = message.message ?? message.title ?? "tikz-editor reported an error.";
@@ -299,10 +331,16 @@ function onMessage(event: MessageEvent): void {
       const active = session.value.source;
       if (active.source !== message.source ||
           !Number.isInteger(message.from) || !Number.isInteger(message.to) ||
-          message.from! < 0 || message.to! < message.from! || message.to! > active.source.length) break;
-      props.host.selectSource?.(active.sourceFrom + message.from!, active.sourceFrom + message.to!);
+          message.from < 0 || message.to < message.from || message.to > active.source.length) break;
+      props.host.selectSource?.(active.sourceFrom + message.from, active.sourceFrom + message.to);
       break;
     }
+    case "tool":
+      if (message.tool !== undefined) emit("tool", message.tool);
+      break;
+    case "tool-options":
+      if (message.shapes !== undefined) emit("toolOptions", message.shapes);
+      break;
   }
 }
 
@@ -330,6 +368,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  lifetime.abort("disposed");
   window.removeEventListener("message", onMessage);
 });
 </script>

@@ -15,6 +15,7 @@
       <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
         {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
       </button>
+      <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
       <span class="tikz-standalone-status" role="status">{{ status }}<template v-if="editorStatus !== ''"> · {{ editorStatus }}</template></span>
     </header>
@@ -57,7 +58,7 @@
           <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" :selection="sourceSelection" @change="source = $event" />
         </div>
         <div v-for="view in workbenchViews" :key="view" v-show="isVisible(view)" class="view-pane" :style="paneStyle(view)">
-          <TikzWorkbench v-if="visited.has(view)" :key="`${documentKey}-${view}`"
+          <TikzWorkbench v-if="visited.has(view)" :ref="(handle) => setWorkbench(view, handle)" :key="`${documentKey}-${view}`"
             class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
             :show-inspector="inspectorOpen" :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
             :initial-mode="modeForView(view)" @status="onEditorStatus(view, $event)"
@@ -211,6 +212,16 @@ function resizeWithKeyboard(event: KeyboardEvent): void {
   splitPercent.value = Math.max(15, Math.min(85, splitPercent.value + (event.key === "ArrowLeft" ? -5 : 5)));
 }
 const source = ref("");
+const workbenches = new Map<Exclude<ViewId, "code">, InstanceType<typeof TikzWorkbench>>();
+function setWorkbench(view: Exclude<ViewId, "code">, handle: unknown): void {
+  if (handle === null) workbenches.delete(view);
+  else workbenches.set(view, handle as InstanceType<typeof TikzWorkbench>);
+}
+async function currentSource(): Promise<string> {
+  const view = target.value?.language === "tikzcd" ? "quiver" : "canvas";
+  const editor = workbenches.get(view);
+  return editor ? await editor.currentSource(new AbortController().signal) : source.value;
+}
 const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
@@ -286,6 +297,7 @@ const host: TikzWorkbenchHost = {
   },
   imageBaseUrl: () => new URL("/tikz-image/", location.href).href,
   editorUrl: "/tikz-editor/index.html",
+  requestSave: () => { void save(); },
   reportError: (message, error) => {
     hostError.value = `${message}: ${error instanceof Error ? error.message : String(error)}`;
     console.error(message, error);
@@ -386,8 +398,8 @@ async function openDocument(): Promise<void> {
 }
 
 async function saveAs(): Promise<boolean> {
-  const text = source.value;
   try {
+    const text = await currentSource();
     const response = await fetch("/api/save-as", { method: "POST", body: text });
     if (response.status === 204) return false;
     await responseText(response);
@@ -405,8 +417,8 @@ async function save(): Promise<boolean> {
   const current = document.value;
   if (current === null) return false;
   if (!current.saved) return await saveAs();
-  const text = source.value;
   try {
+    const text = await currentSource();
     const response = await fetch("/api/document", {
       method: "PUT",
       headers: { "if-match": current.revision },
@@ -428,10 +440,9 @@ async function save(): Promise<boolean> {
 function onKeydown(event: KeyboardEvent): void {
   if ((event.ctrlKey || event.metaKey) && !event.altKey &&
       (event.key === "-" || event.key === "=" || event.key === "+" || event.key === "0")) {
-    const editor = window.document.querySelector<HTMLIFrameElement>("iframe[src*='tikz-editor']");
-    if (editor?.contentWindow) {
+    if (isVisible("canvas")) {
       event.preventDefault();
-      editor.contentWindow.postMessage({ action: "zoom", direction: event.key === "0" ? "reset" : event.key === "-" ? "out" : "in" }, "*");
+      workbenches.get("canvas")?.zoom(event.key === "0" ? "reset" : event.key === "-" ? "out" : "in");
     }
     return;
   }
@@ -455,6 +466,17 @@ function toggleTheme(): void {
 
 function toggleInspector(): void {
   inspectorOpen.value = !inspectorOpen.value;
+}
+
+async function copySource(): Promise<void> {
+  try {
+    const text = await currentSource();
+    if (host.clipboard) await host.clipboard.writeText(text);
+    else await navigator.clipboard.writeText(text);
+    hostError.value = "";
+  } catch (error) {
+    host.reportError("Could not copy source", error);
+  }
 }
 
 onMounted(() => {
@@ -526,7 +548,7 @@ body,
   position: relative;
   z-index: 20;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 8px;
@@ -542,6 +564,28 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.document-views {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.document-views :deep(.p-button) {
+  min-height: 40px;
+  padding-inline: 10px;
+  font-size: 14px;
+}
+
+.document-views :deep(.p-button:disabled) { display: none; }
+
+.document-views :deep(.p-button.p-button-primary) {
+  background: var(--ribbon);
+  color: #fff;
 }
 
 .document-bar button,

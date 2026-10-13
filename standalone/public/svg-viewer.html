@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Independent SVG viewer</title>
+<style>
+body { font: 16px system-ui; margin: 24px; }
+textarea { display: block; width: 90%; height: 100px; }
+button { margin: 12px 0; min-height: 44px; }
+#diagrams { display: flex; flex-wrap: wrap; gap: 24px; }
+figure { margin: 0; width: 300px; height: 300px; }
+figure > svg { width: 100%; height: 100%; }
+</style>
+<label>Exported SVG<textarea id="svg"></textarea></label>
+<button id="append">Append diagram</button>
+<div id="diagrams"></div>
+<script type="module">
+document.querySelector('#append').addEventListener('click', () => {
+  const parsed = new DOMParser().parseFromString(document.querySelector('#svg').value, 'image/svg+xml');
+  if (parsed.querySelector('parsererror')) throw new Error('Invalid exported SVG');
+  const figure = document.createElement('figure');
+  figure.append(document.importNode(parsed.documentElement, true));
+  document.querySelector('#diagrams').append(figure);
+});
+</script>
+</html>
