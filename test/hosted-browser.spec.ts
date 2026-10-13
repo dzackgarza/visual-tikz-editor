@@ -62,9 +62,11 @@ describe('hosted workbench', function () {
     }), location.origin), sessionId);
     await expect.poll(() => page.evaluate(() => (window as typeof window & { editorMessages: Array<{ requestId?: string }> })
       .editorMessages.find(message => message.requestId === 'completed-drawing'))).toBeDefined();
-    const reply = await page.evaluate(() => (window as typeof window & { editorMessages: Array<{ requestId?: string; source?: string }> })
+    const reply = await page.evaluate(() => (window as typeof window & { editorMessages: Array<{ requestId?: string; source?: string; paperSource?: string }> })
       .editorMessages.find(message => message.requestId === 'completed-drawing'));
     assert.match(reply!.source!, /workbench-ink:/);
+    assert.doesNotMatch(reply!.paperSource!, /workbench-ink:/);
+    assert.match(reply!.paperSource!, /\\draw/);
     await mkdir('test-results/workbench', { recursive: true });
     await page.screenshot({ path: 'test-results/workbench/hosted-drawing.png' });
     await page.close();
