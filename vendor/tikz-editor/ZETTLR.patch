@@ -4252,7 +4252,7 @@ index cf4cf2cf..50d8677f 100644
  
  .hitRegions {
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..366255eb 100644
+index 4e22ccfa..e8caec12 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,6 +25,10 @@ preflightPositionNodeRelativeToAction,
@@ -5103,7 +5103,7 @@ index 4e22ccfa..366255eb 100644
      snapshot,
      source,
      setWarning,
-@@ -3267,6 +3591,122 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,6 +3591,129 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -5158,8 +5158,13 @@ index 4e22ccfa..366255eb 100644
 +    }
 +    event.preventDefault(); event.stopPropagation();
 +    if (snapshot.source !== source) return;
-+    const eligible = new Set(snapshot.scene?.elements.filter((element) => (element.kind === "Path" || element.kind === "Circle" || element.kind === "Ellipse") && !lockedElementIds.has(element.sourceRef.sourceId)).map((element) => element.sourceRef.sourceId));
 +    const inkEntries = originalStrokes(source);
++    const eligible = new Set(snapshot.scene?.elements.filter((element) => {
++      if ((element.kind !== "Path" && element.kind !== "Circle" && element.kind !== "Ellipse") || lockedElementIds.has(element.sourceRef.sourceId)) return false;
++      const span = element.sourceRef.sourceSpan;
++      const envelope = inkEntries.find((entry) => span.from >= entry.drawingFrom && span.to <= entry.drawingTo);
++      return !envelope || !snapshot.scene?.elements.some((component) => lockedElementIds.has(component.sourceRef.sourceId) && component.sourceRef.sourceSpan.from >= envelope.drawingFrom && component.sourceRef.sourceSpan.to <= envelope.drawingTo);
++    }).map((element) => element.sourceRef.sourceId));
 +    eraserGestureRef.current = { pointerId: event.pointerId, last: { x: event.clientX, y: event.clientY },
 +      strokes: collectEraserStrokes(svgLayerHostRef.current, eligible), deleted: new Set(), mergeKey: `erase-${event.pointerId}-${performance.now()}`,
 +      baseSource: source, spans: new Map(snapshot.scene?.elements.filter((element) => element.kind === "Path" || element.kind === "Circle" || element.kind === "Ellipse").map((element) => {
@@ -5197,10 +5202,10 @@ index 4e22ccfa..366255eb 100644
 +    if (selectedPathForFit) return { delete: selectedNodeIndices.size > 0, smooth: true };
 +    const elementId = selectedCurve.path.sourceRef.sourceId;
 +    return {
-+      delete: selectedNodeIndices.size > 0 && editSemanticCurveNodes(source, elementId, selectedNodeIndices, "delete", autoSmoothNodes, activeFigureId).kind === "success",
-+      smooth: editSemanticCurveNodes(source, elementId, selectedNodeIndices, "smooth", autoSmoothNodes, activeFigureId).kind === "success"
++      delete: selectedNodeIndices.size > 0 && editSemanticCurveNodes(source, elementId, selectedNodeIndices, "delete", autoSmoothNodes, activeFigureId, lockedElementIds).kind === "success",
++      smooth: editSemanticCurveNodes(source, elementId, selectedNodeIndices, "smooth", autoSmoothNodes, activeFigureId, lockedElementIds).kind === "success"
 +    };
-+  }, [activeFigureId, autoSmoothNodes, selectedCurve, selectedNodeIndices, selectedPathForFit, source]);
++  }, [activeFigureId, autoSmoothNodes, lockedElementIds, selectedCurve, selectedNodeIndices, selectedPathForFit, source]);
 +
 +  const editSelectedNodes = useCallback((operation: "delete" | "smooth") => {
 +    if (!selectedCurve || (operation === "delete" && selectedNodeIndices.size === 0)) return;
@@ -5209,24 +5214,26 @@ index 4e22ccfa..366255eb 100644
 +      const { path, sourcePath, original, from } = selectedPathForFit;
 +      const survivingCount = sourcePath.commands.length - (operation === "delete" ? selected.size : 0);
 +      if (survivingCount < 2) {
-+        applyActionWithFeedback({ kind: "deleteElements", elementIds: [path.sourceRef.sourceId] });
++        const deletion = editSemanticCurveNodes(source, path.sourceRef.sourceId, selected, "delete", autoSmoothNodes, activeFigureId, lockedElementIds);
++        if (deletion.kind !== "success") { setWarning(deletion.reason); return; }
++        dispatch({ type: "REPLACE_FREEHAND_RESULT", from: 0, before: source, after: deletion.source, expectedSourceRevision: sourceRevision });
 +      } else {
 +        const after = editAuthoredCurveNodes(sourcePath, original, selected, operation, autoSmoothNodes);
 +        if (!after) { setWarning("Could not edit the selected curve nodes."); return; }
 +        dispatch({ type: "REPLACE_FREEHAND_RESULT", from, before: original, after, expectedSourceRevision: sourceRevision });
 +      }
 +    } else {
-+      const result = editSemanticCurveNodes(source, selectedCurve.path.sourceRef.sourceId, selectedNodeIndices, operation, autoSmoothNodes, activeFigureId);
++      const result = editSemanticCurveNodes(source, selectedCurve.path.sourceRef.sourceId, selectedNodeIndices, operation, autoSmoothNodes, activeFigureId, lockedElementIds);
 +      if (result.kind !== "success") { setWarning(result.reason); return; }
 +      dispatch({ type: "REPLACE_FREEHAND_RESULT", from: 0, before: source, after: result.source, expectedSourceRevision: sourceRevision });
 +    }
 +    setSelectedNodeIndices(new Set());
-+  }, [activeFigureId, applyActionWithFeedback, autoSmoothNodes, dispatch, selectedCurve, selectedNodeIndices, selectedPathForFit, source, sourceRevision]);
++  }, [activeFigureId, applyActionWithFeedback, autoSmoothNodes, dispatch, lockedElementIds, selectedCurve, selectedNodeIndices, selectedPathForFit, source, sourceRevision]);
 +
    const handleBackgroundClick = useCallback(
      (event: ReactMouseEvent<HTMLDivElement | SVGSVGElement>) => {
        if (pendingNodePositionTargetPick && event.target === event.currentTarget) {
-@@ -3274,9 +3714,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3274,9 +3721,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          clearPendingNodePositionTargetPick();
          return;
        }
@@ -5243,7 +5250,7 @@ index 4e22ccfa..366255eb 100644
    );
  
    const {
-@@ -3306,6 +3752,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +3759,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -5251,7 +5258,7 @@ index 4e22ccfa..366255eb 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3334,8 +3781,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3334,8 +3788,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      selectedElementIdsRef,
      svgResult,
      svgResultRef,
@@ -5260,7 +5267,7 @@ index 4e22ccfa..366255eb 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -3345,7 +3790,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3345,7 +3797,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomSpeed,
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
@@ -5268,7 +5275,7 @@ index 4e22ccfa..366255eb 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,25 +3893,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,25 +3900,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -5294,7 +5301,7 @@ index 4e22ccfa..366255eb 100644
    useEffect(() => {
      if (toolMode === "select") {
        setPathDraft(null);
-@@ -3706,15 +4131,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4138,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -5318,7 +5325,7 @@ index 4e22ccfa..366255eb 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4244,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4251,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -5326,7 +5333,7 @@ index 4e22ccfa..366255eb 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4257,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4264,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -5334,7 +5341,7 @@ index 4e22ccfa..366255eb 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3863,7 +4290,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4297,10 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -5346,7 +5353,7 @@ index 4e22ccfa..366255eb 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4310,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4317,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -5361,7 +5368,7 @@ index 4e22ccfa..366255eb 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3907,12 +4339,20 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3907,12 +4346,20 @@ export const CanvasPanel = memo(function CanvasPanel({
          editableTextRegionKeys={editableTextRegionKeys}
          draggableSourceIds={draggableSourceIds}
          hitRegionCursorByTargetId={pendingNodePositionHitRegionCursorByTargetId}
@@ -5383,7 +5390,7 @@ index 4e22ccfa..366255eb 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4360,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4367,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -5393,7 +5400,7 @@ index 4e22ccfa..366255eb 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4373,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4380,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -5419,7 +5426,7 @@ index 4e22ccfa..366255eb 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3974,6 +4426,97 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4433,97 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -6809,10 +6816,11 @@ index 0766ca92..1c23b820 100644
      const ancestors = scopeOverlay.ancestorScopeIdsBySourceId.get(sourceId) ?? [];
 diff --git a/packages/app/src/ui/canvas-panel/semantic-curve-edit.ts b/packages/app/src/ui/canvas-panel/semantic-curve-edit.ts
 new file mode 100644
-index 00000000..858ff8fb
+index 00000000..3cb78251
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/semantic-curve-edit.ts
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,184 @@
++import { originalStrokes } from "../../original-ink";
 +import { applyEditAction, type EditAction } from "tikz-editor/edit/actions";
 +import { resolveEligibleExplicitPath, resolveActivePathPointHandle, resolvePathControlHandle } from "tikz-editor/edit/path-editing";
 +import { applyMatrix, inverseMatrix } from "tikz-editor/semantic/transform";
@@ -6935,12 +6943,15 @@ index 00000000..858ff8fb
 +  selectedIndices: ReadonlySet<number>,
 +  operation: "delete" | "smooth",
 +  autoSmooth: boolean,
-+  activeFigureId: string | null
++  activeFigureId: string | null,
++  lockedElementIds: ReadonlySet<string>
 +): SemanticCurveEditResult {
++  if (lockedElementIds.has(elementId)) return { kind: "unsupported", reason: "This curve is locked." };
 +  let nextSource = source;
 +  const handlesFor = (input: string) => {
 +    const rendered = renderTikzToSvg(input, { parse: { activeFigureId } });
 +    return {
++      scene: rendered.semantic.scene,
 +      all: rendered.semantic.editHandles,
 +      nodes: rendered.semantic.editHandles.filter((handle) => handle.kind === "path-point" && handle.sourceRef.sourceId === elementId)
 +        .sort((left, right) => left.sourceRef.sourceSpan.from - right.sourceRef.sourceSpan.from)
@@ -6950,6 +6961,22 @@ index 00000000..858ff8fb
 +  const indices = selectedIndices.size > 0 ? [...selectedIndices] : operation === "smooth"
 +    ? original.nodes.map((_, index) => index) : [];
 +  if (indices.length === 0) return { kind: "unsupported", reason: "Select editable interior curve nodes." };
++  if (indices.some((index) => index < 0 || index >= original.nodes.length)) return { kind: "unsupported", reason: "The selected curve nodes are stale." };
++  if (operation === "delete" && original.nodes.length - indices.length < 2) {
++    const selected = original.scene.elements.find((element) => element.sourceRef.sourceId === elementId);
++    if (!selected) return { kind: "unsupported", reason: "The selected curve could not be resolved." };
++    const span = selected.sourceRef.sourceSpan;
++    const envelope = originalStrokes(source).find((entry) => span.from >= entry.drawingFrom && span.to <= entry.drawingTo);
++    if (envelope) {
++      if (original.scene.elements.some((element) => lockedElementIds.has(element.sourceRef.sourceId) && element.sourceRef.sourceSpan.from >= envelope.drawingFrom && element.sourceRef.sourceSpan.to <= envelope.drawingTo)) {
++        return { kind: "unsupported", reason: "The original stroke contains a locked element." };
++      }
++      return { kind: "success", source: source.slice(0, envelope.from) + source.slice(envelope.to) };
++    }
++    const deletion = applyEditAction(source, original.all, { kind: "deleteElements", elementIds: [elementId] }, { activeFigureId });
++    return deletion.kind === "success" ? { kind: "success", source: deletion.newSource }
++      : { kind: "unsupported", reason: deletion.kind === "error" ? deletion.message : deletion.reason };
++  }
 +  const perform = (index: number, kind: "delete" | "smooth"): SemanticCurveEditResult => {
 +    const handles = handlesFor(nextSource);
 +    const handle = handles.nodes[index];
