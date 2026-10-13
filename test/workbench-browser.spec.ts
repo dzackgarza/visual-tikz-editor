@@ -4,6 +4,7 @@ import { mkdir } from "node:fs/promises";
 import { chromium, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { geometryTraces } from "./geometry-traces";
+import type { EditorSnapshot } from '../src/host';
 
 describe("standalone workbench host boundary", function () {
   let server: ChildProcess;
@@ -11,6 +12,19 @@ describe("standalone workbench host boundary", function () {
   let context: BrowserContext;
   let page: Page;
   let url: string;
+
+  async function hostSnapshot(): Promise<EditorSnapshot> {
+    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
+    return JSON.parse(await page.locator('#result').innerText());
+  }
+
+  async function paintedGeometry(svg: string): Promise<string[][]> {
+    return page.evaluate(markup => [...new DOMParser().parseFromString(markup, 'image/svg+xml')
+      .querySelectorAll('path[data-source-id],circle[data-source-id],ellipse[data-source-id],rect[data-source-id]')]
+      .map(element => ['d', 'cx', 'cy', 'r', 'x', 'y', 'width', 'height', 'stroke', 'fill']
+        .map(attribute => element.getAttribute(attribute) ?? '')), svg);
+  }
 
   before(async function () {
     server = spawn("just", ["run"], { stdio: ["ignore", "pipe", "inherit"], detached: true });
@@ -561,6 +575,130 @@ describe("standalone workbench host boundary", function () {
       return document.getElementById(reference)!.closest("figure") === figure;
     }));
     assert.deepEqual(owners, [true, true]);
+  });
+
+  it('imports and restores ink in the selected earlier inline figure and reopens the selected snapshot', async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    const first = String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (1cm);\end{tikzpicture}`;
+    const second = String.raw`\begin{tikzpicture}\fill[red] (0,0) rectangle (3,2);\end{tikzpicture}`;
+    const authored = `${first} ${second}`;
+    await page.getByLabel('Authored source').fill(authored);
+    await page.getByRole('button', { name: 'Load source', exact: true }).click();
+    const frame = page.frameLocator('#editor');
+    await frame.getByRole('button', { name: 'Figure 2', exact: true }).click();
+    const untouched = await hostSnapshot();
+    await frame.getByRole('button', { name: 'Figure 1', exact: true }).click();
+    const before = await hostSnapshot();
+    const stroke = { key: 'earlier-figure-stroke', intent: 'geometry', color: '#00aa00',
+      samples: Array.from({length: 16}, (_, i) => ({x: i * 4, y: 8 + Math.sin(i) * .1, time: i * 10, pressure: .4})) };
+    await page.getByLabel('Original strokes').fill(JSON.stringify([stroke]));
+    await page.getByRole('button', { name: 'Import strokes', exact: true }).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(/earlier-figure-stroke/);
+    const imported = await hostSnapshot();
+    assert.equal(imported.source.slice(imported.source.indexOf('\\end{tikzpicture}') + '\\end{tikzpicture}'.length), ` ${second}`);
+    assert.deepEqual(imported.originalInk.map(entry => entry.stroke), [stroke]);
+    assert.equal(imported.state.activeFigureId, before.state.activeFigureId);
+    const associated = imported.originalInk[0].sourceIds[0];
+    await expect(frame.locator(`path[data-source-id="${associated}"]`).first()).toHaveAttribute('stroke', '#00aa00');
+    await page.getByLabel('Stroke key').fill(stroke.key);
+    await page.getByRole('button', { name: 'Interpret stroke', exact: true }).click();
+    await expect(page.getByLabel('Authored source')).not.toHaveValue(imported.source);
+    const fitted = await hostSnapshot();
+    assert.equal(fitted.source.slice(fitted.source.indexOf('\\end{tikzpicture}') + '\\end{tikzpicture}'.length), ` ${second}`);
+    await frame.locator('[data-canvas-viewport="true"]').press('Control+z');
+    await expect(page.getByLabel('Authored source')).toHaveValue(imported.source);
+    await frame.locator('[data-canvas-viewport="true"]').press('Control+Shift+z');
+    await expect(page.getByLabel('Authored source')).toHaveValue(fitted.source);
+    await page.getByRole('button', { name: 'Restore stroke', exact: true }).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(imported.source);
+    assert.deepEqual((await hostSnapshot()).originalInk, imported.originalInk);
+    await frame.getByRole('button', { name: 'Figure 2', exact: true }).click();
+    const later = await hostSnapshot();
+    assert.deepEqual(await paintedGeometry(later.svg), await paintedGeometry(untouched.svg));
+    assert.deepEqual(later.originalInk, []);
+    await page.getByRole('button', { name: 'Restore stroke', exact: true }).click();
+    await expect(page.locator('#command-result')).toHaveText('restore-ink:failed:missing-stroke');
+    assert.equal(await page.getByLabel('Authored source').inputValue(), imported.source);
+    await page.reload();
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    await page.getByLabel('Saved snapshot').fill(JSON.stringify(later));
+    await page.getByRole('button', { name: 'Load snapshot', exact: true }).click();
+    const reopened = await hostSnapshot();
+    assert.equal(reopened.state.activeFigureId, later.state.activeFigureId);
+    assert.equal(reopened.source, later.source);
+    assert.deepEqual(await paintedGeometry(reopened.svg), await paintedGeometry(later.svg));
+    await page.evaluate(snapshot => {
+      document.querySelector<HTMLIFrameElement>('#editor')!.contentWindow!.postMessage({
+        action: 'load', sessionId: snapshot.sessionId, revision: snapshot.revision + 1,
+        requestId: 'invalid-figure-state', source: snapshot.source,
+        state: {...snapshot.state, activeFigureId: 'figure:999'}, fileName: 'fixture.tikz',
+      }, location.origin);
+    }, reopened);
+    await expect(page.locator('#command-result')).toHaveText('load:failed:invalid-command');
+    const afterRejectedLoad = await hostSnapshot();
+    assert.equal(afterRejectedLoad.source, reopened.source);
+    assert.equal(afterRejectedLoad.state.activeFigureId, reopened.state.activeFigureId);
+    assert.deepEqual(await paintedGeometry(afterRejectedLoad.svg), await paintedGeometry(reopened.svg));
+  });
+
+  it('interprets the newly drawn stroke instead of identical drawing text in a later figure', async function () {
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator('#status')).toHaveText('Loaded');
+    const first = String.raw`\begin{tikzpicture}
+\draw[blue] (0,0) circle (1cm);
+\end{tikzpicture}`;
+    const second = String.raw`\begin{tikzpicture}
+\draw[red] (0,0) rectangle (3,2);
+\end{tikzpicture}`;
+    await page.getByLabel('Authored source').fill(`${first}\n${second}`);
+    await page.getByRole('button', { name: 'Load source', exact: true }).click();
+    const frame = page.frameLocator('#editor');
+    await frame.getByRole('button', { name: 'Figure 1', exact: true }).click();
+    await frame.getByRole('button', { name: 'Freehand', exact: true }).click();
+    const before = await hostSnapshot();
+    const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    const draw = async () => {
+      await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .6);
+      await page.mouse.down();
+      await page.mouse.move(bounds.x + bounds.width * .35 + 110, bounds.y + bounds.height * .6 + 25, {steps: 15});
+      await page.mouse.up();
+      await expect(frame.getByRole('button', {name: 'Restore stroke', exact: true})).toBeVisible();
+    };
+    await draw();
+    await frame.getByRole('button', {name: 'Restore stroke', exact: true}).click();
+    const raw = await hostSnapshot();
+    const originalDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(raw.source)![1];
+    const duplicateFigure = second.replace('\\end{tikzpicture}', `${originalDrawing}\n\\end{tikzpicture}`);
+    const duplicateSource = `${first}\n${duplicateFigure}`;
+    await page.getByLabel('Saved snapshot').fill(JSON.stringify({...before, source: duplicateSource}));
+    await page.getByRole('button', {name: 'Load snapshot', exact: true}).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(duplicateSource);
+    await frame.getByRole('button', {name: 'Figure 2', exact: true}).click();
+    const laterBeforeDraw = await hostSnapshot();
+    await page.getByRole('button', {name: 'Load snapshot', exact: true}).click();
+    await hostSnapshot();
+    await draw();
+    const fitted = await hostSnapshot();
+    assert.equal(fitted.source.slice(fitted.source.indexOf('\\end{tikzpicture}') + '\\end{tikzpicture}'.length), `\n${duplicateFigure}`);
+    assert.equal(fitted.originalInk.length, 1);
+    assert.notEqual(fitted.originalInk[0].stroke.key, raw.originalInk[0].stroke.key);
+    assert.deepEqual(fitted.originalInk[0].stroke.samples.map(({x,y}) => [x,y]), raw.originalInk[0].stroke.samples.map(({x,y}) => [x,y]));
+    const fittedDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(fitted.source)![1];
+    assert.notEqual(fittedDrawing, originalDrawing);
+    await frame.locator('[data-canvas-viewport="true"]').press('Control+z');
+    const restored = await hostSnapshot();
+    assert.equal(/\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(restored.source)![1], originalDrawing);
+    assert.deepEqual(restored.originalInk, fitted.originalInk);
+    await frame.locator('[data-canvas-viewport="true"]').press('Control+Shift+z');
+    await expect(page.getByLabel('Authored source')).toHaveValue(fitted.source);
+    await page.getByLabel('Stroke key').fill(fitted.originalInk[0].stroke.key);
+    await page.getByRole('button', {name: 'Restore stroke', exact: true}).click();
+    await expect(page.getByLabel('Authored source')).toHaveValue(restored.source);
+    await frame.getByRole('button', {name: 'Figure 2', exact: true}).click();
+    const other = await hostSnapshot();
+    assert.deepEqual(other.originalInk, []);
+    assert.deepEqual(await paintedGeometry(other.svg), await paintedGeometry(laterBeforeDraw.svg));
   });
 
   it("preserves imported stroke channels and outlines after saving and reopening its source", async function () {
