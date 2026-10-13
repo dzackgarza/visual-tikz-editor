@@ -26,6 +26,7 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('workspace'), workspace: z.enum(['default', 'canvasOnly']) }),
   z.object({ ...identity, action: z.literal('inspector'), inspector: z.boolean() }),
   z.object({ ...identity, action: z.literal('tool'), tool: toolModeSchema }),
+  z.object({ ...identity, action: z.literal('zoom'), direction: z.enum(['in', 'out', 'reset']) }),
   z.object({ ...identity, action: z.literal('tool-option'), option: z.enum(['smoothing', 'strokeColor', 'fillColor', 'shape', 'matrix']),
     value: z.union([z.string(), z.number()]).optional(), rows: z.number().int().positive().optional(), columns: z.number().int().positive().optional() }),
   z.object({ ...identity, action: z.literal('source') }),

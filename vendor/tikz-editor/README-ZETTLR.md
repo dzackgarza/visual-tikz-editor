@@ -4,7 +4,7 @@ This directory embeds a pinned fork/build of `DominikPeters/tikz-editor` at the 
 Zettlr does not maintain a parallel TikZ semantic subset.
 
 `embed/` provides the iframe-oriented platform adapter and postMessage bridge.
-`ZETTLR.patch` is the deliberately small upstream-source delta: it redirects MathJax's browser component loader to checked-in local assets, limits the font picker to the locally shipped New Computer Modern runtime, and hides the auxiliary CDN-backed TikZJax compiled-picture command in the web/embed target.
+`ZETTLR.patch` is the maintained upstream-source delta. It redirects MathJax's browser component loader to checked-in local assets, limits the font picker to the locally shipped New Computer Modern runtime, hides the auxiliary CDN-backed TikZJax compiled-picture command, and adapts the embedded toolbar for the workbench. The embedded toolbar groups line and shape modes, starts with freehand drawing, and uses wheel or touch scrolling.
 It does not replace or fork the upstream parser, semantic model, scene graph, or editing machinery.
 `src/` is checked-in generated static output, so ordinary Zettlr builds never need network access or an npm install inside the vendored project.
 

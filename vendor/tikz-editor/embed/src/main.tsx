@@ -2,6 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setActiveEditorPlatform } from '@tikz-editor/app/platform/current';
 import { useEditorStore } from '@tikz-editor/app/store';
+import { CANVAS_ZOOM_BASE_SCALE } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import type { ToolMode } from '@tikz-editor/app/store/types';
@@ -90,6 +91,7 @@ function persistHostSettings(settings?: HostSettingsPatch) {
 
 	if (nextRaw === currentRaw) return;
 	persistenceValues.set(SETTINGS_KEY, nextRaw);
+	try { window.localStorage.setItem(SETTINGS_KEY, nextRaw); } catch {}
 	postToHost({ event: 'persistence-save', key: SETTINGS_KEY, value: nextRaw });
 }
 
@@ -232,12 +234,19 @@ function createMemoryPersistence(initialSource: string): EditorPlatform['persist
 			});
 		} catch {}
 	}
+	try {
+		const savedSettings = window.localStorage.getItem(SETTINGS_KEY);
+		if (savedSettings && !persistenceValues.has(SETTINGS_KEY)) persistenceValues.set(SETTINGS_KEY, savedSettings);
+	} catch {}
 	persistenceValues.set(WORKSPACE_KEY, makeWorkspaceSeed(initialSource));
 	return {
 		load: (key) => persistenceValues.get(key) ?? null,
 		save: (key, value) => {
 			persistenceValues.set(key, value);
-			if (key !== WORKSPACE_KEY) postToHost({ event: 'persistence-save', key, value });
+			if (key !== WORKSPACE_KEY) {
+				try { window.localStorage.setItem(key, value); } catch {}
+				postToHost({ event: 'persistence-save', key, value });
+			}
 		},
 	};
 }
@@ -310,6 +319,7 @@ function HostBridge() {
 		let pendingLoad: (() => void) | null = null;
 		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }), () => imageBaseUrl);
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
+		useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: 'addFreehand' });
 		postToHost({ event: 'tool', tool: useEditorStore.getState().toolMode });
 		postToHost({ event: 'tool-options', shapes: NODE_SHAPE_OPTIONS });
 
@@ -475,6 +485,12 @@ function HostBridge() {
 					useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: command.tool });
 					reply(command);
 					return;
+				case 'zoom':
+					useEditorStore.getState().dispatch(command.direction === 'reset'
+						? { type: 'REQUEST_ZOOM_SCALE', scale: CANVAS_ZOOM_BASE_SCALE }
+						: { type: 'REQUEST_ZOOM', direction: command.direction });
+					reply(command);
+					return;
 				case 'tool-option': {
 					const dispatch = useEditorStore.getState().dispatch;
 					if (command.option === 'smoothing' && typeof command.value === 'number')
@@ -497,6 +513,12 @@ function HostBridge() {
 		};
 
 		const handleKeydown = (event: KeyboardEvent) => {
+			if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '0') {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				useEditorStore.getState().dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: CANVAS_ZOOM_BASE_SCALE });
+				return;
+			}
 			if (event.key !== 'Escape' || !fullscreenRef.current) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();

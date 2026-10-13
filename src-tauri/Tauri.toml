@@ -1,0 +1,26 @@
+productName = "Visual TikZ Editor"
+version = "../package.json"
+identifier = "com.dzackgarza.visual-tikz-editor"
+
+[build]
+frontendDist = "../standalone/dist"
+beforeBuildCommand = "just build-desktop-assets"
+
+[app]
+withGlobalTauri = false
+
+[bundle]
+active = true
+targets = ["deb"]
+category = "GraphicsAndDesign"
+icon = ["icons/icon.png"]
+externalBin = ["binaries/workbench-host"]
+shortDescription = "Edit mathematical diagrams as TikZ source"
+
+[bundle.resources]
+"../standalone/dist/" = "standalone/dist/"
+"../vendor/tikz-editor/src/" = "vendor/tikz-editor/src/"
+"../vendor/quiver/src/" = "vendor/quiver/src/"
+
+[bundle.linux.deb]
+desktopTemplate = "desktop-entry.desktop"

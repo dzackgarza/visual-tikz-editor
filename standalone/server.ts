@@ -11,7 +11,6 @@ import { existsSync } from "node:fs";
 import { readFile, realpath, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { build } from "vite";
 import {
   renderTikz,
   resolveTikzDataDir,
@@ -21,20 +20,26 @@ import {
 
 const input = Bun.argv[2];
 const DIAGRAM_EXTENSIONS = new Set([".tikz", ".tikzcd"]);
-const NEW_DIAGRAM = "\\begin{tikzpicture}\n\n\\end{tikzpicture}\n";
+const NEW_TIKZ = "\\begin{tikzpicture}\n\n\\end{tikzpicture}\n";
+const NEW_TIKZCD = "\\begin{tikzcd}\n\n\\end{tikzcd}\n";
 if (input !== undefined && input !== "" && !DIAGRAM_EXTENSIONS.has(path.extname(input))) {
   throw new Error("Usage: bun run standalone/server.ts [file.tikz|file.tikzcd]");
 }
 
 let documentPath = input === undefined || input === "" ? null : await realpath(input);
-let untitledSource = NEW_DIAGRAM;
-const packageRoot = path.resolve(import.meta.dir, "..");
-const pageRoot = path.join(import.meta.dir, "dist");
+let untitledSource = "";
+let untitledExtension = ".tikz";
+const packageRoot = process.env.TIKZ_WORKBENCH_ASSETS ?? path.resolve(import.meta.dir, "..");
+const pageRoot = path.join(packageRoot, "standalone", "dist");
 const home = os.homedir();
-const untitledPath = path.join(home, "Untitled.tikz");
+const cacheHome = process.env.XDG_CACHE_HOME || path.join(home, ".cache");
+if (!path.isAbsolute(cacheHome)) throw new Error("XDG_CACHE_HOME must be an absolute path");
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".svg"]);
+const untitledPath = (): string => path.join(home, `Untitled${untitledExtension}`);
 
-await build({ configFile: path.join(packageRoot, "vite.config.ts"), logLevel: "warn" });
+if (!existsSync(path.join(pageRoot, "index.html"))) {
+  throw new Error(`Build the standalone page before launch: ${pageRoot}`);
+}
 
 function revisionOf(source: string): string {
   return `"${createHash("sha256").update(source).digest("hex")}"`;
@@ -64,7 +69,7 @@ function documentResponse(source: string): Response {
     headers: {
       "content-type": "text/plain; charset=utf-8",
       etag: revisionOf(source),
-      "x-document-path": documentPath ?? untitledPath,
+      "x-document-path": documentPath ?? untitledPath(),
       "x-document-saved": String(documentPath !== null),
     },
   });
@@ -86,7 +91,7 @@ async function handleDocument(request: Request): Promise<Response> {
 
 async function selectFile(mode: "open" | "save"): Promise<string | null> {
   const args = ["zenity", "--file-selection"];
-  if (mode === "save") args.push("--save", `--filename=${documentPath ?? untitledPath}`);
+  if (mode === "save") args.push("--save", `--filename=${documentPath ?? untitledPath()}`);
   const dialog = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
   const [status, output, error] = await Promise.all([
     dialog.exited,
@@ -135,12 +140,12 @@ async function handleRender(request: Request): Promise<Response> {
   const config = {
     tikzAssetDir: resolveTikzDataDir("", home),
     templatePath: resolveTikzTemplatePath(home),
-    cacheDir: path.join(home, ".cache", "tikz-workbench"),
+    cacheDir: path.join(cacheHome, "visual-tikz-editor"),
     env: process.env,
   };
   // The page edits exactly one diagram: relative inputs resolve from its location.
   return Response.json(
-    await renderTikz({ ...body, docPath: documentPath ?? untitledPath }, config),
+    await renderTikz({ ...body, docPath: documentPath ?? untitledPath() }, config),
   );
 }
 
@@ -153,7 +158,7 @@ async function handleImage(relative: string): Promise<Response> {
   if (!IMAGE_EXTENSIONS.has(path.extname(relative).toLowerCase())) {
     return new Response("Unsupported image format", { status: 415 });
   }
-  return await serveUnder(path.dirname(documentPath ?? untitledPath), relative);
+  return await serveUnder(path.dirname(documentPath ?? untitledPath()), relative);
 }
 
 const server = Bun.serve({
@@ -166,8 +171,11 @@ const server = Bun.serve({
     const { pathname } = new URL(request.url);
     if (pathname === "/api/document") return await handleDocument(request);
     if (pathname === "/api/new" && request.method === "POST") {
+      const kind = await request.text();
+      if (kind !== "tikzpicture" && kind !== "tikzcd") return new Response("Choose tikzpicture or tikzcd", { status: 400 });
       documentPath = null;
-      untitledSource = NEW_DIAGRAM;
+      untitledExtension = kind === "tikzcd" ? ".tikzcd" : ".tikz";
+      untitledSource = kind === "tikzcd" ? NEW_TIKZCD : NEW_TIKZ;
       return documentResponse(untitledSource);
     }
     if (pathname === "/api/open" && request.method === "POST") return await handleOpen();

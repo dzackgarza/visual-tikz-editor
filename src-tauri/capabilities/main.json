@@ -1,0 +1,17 @@
+{
+  "identifier": "main",
+  "description": "Allow the local workbench page to handle its window close request",
+  "windows": [
+    "main"
+  ],
+  "remote": {
+    "urls": [
+      "http://127.0.0.1:*"
+    ]
+  },
+  "permissions": [
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:event:default"
+  ]
+}

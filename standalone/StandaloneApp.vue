@@ -4,35 +4,72 @@
       <strong>{{ fileName }}</strong>
       <Button label="File" icon="pi pi-folder" text aria-haspopup="true" aria-controls="file-menu" @click="toggleFileMenu" />
       <Menu id="file-menu" ref="fileMenu" :model="fileItems" popup />
-      <button type="button" :aria-pressed="sourceOpen" @click="sourceOpen = !sourceOpen">
-        {{ sourceOpen ? 'Hide source' : 'Source' }}
-      </button>
       <button type="button" :aria-pressed="inspectorOpen" @click="toggleInspector">
         {{ inspectorOpen ? 'Hide properties' : 'Properties' }}
       </button>
       <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
-      <span class="tikz-standalone-status" role="status">{{ status }}</span>
+      <span class="tikz-standalone-status" role="status">{{ status }}<template v-if="editorStatus !== ''"> · {{ editorStatus }}</template></span>
     </header>
-    <main v-if="document !== null && target !== null" :class="{ 'source-closed': !sourceOpen }">
-      <SourceEditor
-        v-show="sourceOpen"
-        class="tikz-standalone-source"
-        :source="source"
-        :theme="theme"
-        @change="source = $event"
-      />
-      <TikzWorkbench
-        ref="workbench"
-        :key="documentKey"
-        class="tikz-standalone-workbench"
-        :target="target"
-        :host="host"
-        :theme="theme"
-        :show-inspector="inspectorOpen"
-        :initial-mode="target.language === 'tikzcd' ? 'quiver' : 'visual'"
-        @inspector-closed="inspectorOpen = false"
-      />
+    <div v-if="unsavedPrompt" class="new-kind-backdrop">
+      <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" @keydown.esc.stop.prevent="resolveUnsaved('cancel')">
+        <h2 id="unsaved-title">Save changes?</h2>
+        <p>Save changes to {{ fileName }} before {{ unsavedPrompt }}?</p>
+        <div class="unsaved-actions">
+          <button type="button" @click="resolveUnsaved('cancel')">Cancel</button>
+          <button type="button" @click="resolveUnsaved('discard')">Discard</button>
+          <button type="button" autofocus @click="resolveUnsaved('save')">Save</button>
+        </div>
+      </div>
+    </div>
+    <div v-if="newKindOpen" class="new-kind-backdrop">
+      <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="new-kind-title">
+        <h2 id="new-kind-title">New diagram</h2>
+        <p>Choose a diagram type.</p>
+        <div class="new-kind-options">
+          <button type="button" @click="createDocument('tikzpicture')">TikZ picture</button>
+          <button type="button" @click="createDocument('tikzcd')">TikZ commutative diagram</button>
+        </div>
+        <button type="button" class="new-kind-cancel" @click="openDocument">Open existing…</button>
+        <button v-if="document?.saved || source !== ''" type="button" class="new-kind-cancel" @click="newKindOpen = false">Cancel</button>
+      </div>
+    </div>
+    <main v-if="document !== null && target !== null && !newKindOpen" class="workspace">
+      <nav class="view-rail" aria-label="Left views" :class="{ 'drop-target': dropSide === 'left' }"
+        @dragover.prevent="dropSide = 'left'" @dragleave="dropSide = null" @drop.prevent="dropView($event, 'left')">
+        <button v-for="view in placements.left" :key="view" type="button" draggable="true"
+          :aria-label="`${viewLabels[view]}: left sidebar`" :title="viewLabels[view]"
+          :aria-pressed="active.left === view" :class="{ selected: active.left === view }"
+          @click="toggleView('left', view)" @dragstart="startDrag($event, view)" @dragend="dropSide = null">
+          <span aria-hidden="true">{{ viewIcons[view] }}</span>
+        </button>
+      </nav>
+      <div ref="paneHost" class="pane-host" :class="{ split: bothOpen }"
+        :style="bothOpen ? { gridTemplateColumns: `${splitPercent}% 6px minmax(0, 1fr)` } : undefined">
+        <div v-if="visited.has('code')" v-show="isVisible('code')" class="view-pane" :style="paneStyle('code')">
+          <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" @change="source = $event" />
+        </div>
+        <div v-for="view in workbenchViews" :key="view" v-show="isVisible(view)" class="view-pane" :style="paneStyle(view)">
+          <TikzWorkbench v-if="visited.has(view)" :key="`${documentKey}-${view}`"
+            :ref="(instance) => setWorkbench(view, instance as InstanceType<typeof TikzWorkbench> | null)"
+            class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
+            :show-inspector="inspectorOpen" :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
+            :initial-mode="modeForView(view)" @status="onEditorStatus(view, $event)"
+            @inspector-closed="inspectorOpen = false" />
+        </div>
+        <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
+          aria-orientation="vertical" :aria-valuenow="Math.round(splitPercent)" aria-valuemin="15" aria-valuemax="85"
+          tabindex="0" @pointerdown="startResize" @keydown="resizeWithKeyboard" />
+      </div>
+      <nav class="view-rail right-rail" aria-label="Right views" :class="{ 'drop-target': dropSide === 'right' }"
+        @dragover.prevent="dropSide = 'right'" @dragleave="dropSide = null" @drop.prevent="dropView($event, 'right')">
+        <button v-for="view in placements.right" :key="view" type="button" draggable="true"
+          :aria-label="`${viewLabels[view]}: right sidebar`" :title="viewLabels[view]"
+          :aria-pressed="active.right === view" :class="{ selected: active.right === view }"
+          @click="toggleView('right', view)" @dragstart="startDrag($event, view)" @dragend="dropSide = null">
+          <span aria-hidden="true">{{ viewIcons[view] }}</span>
+        </button>
+      </nav>
     </main>
     <pre v-else-if="loadError !== ''" class="tikz-standalone-error" role="alert">{{ loadError }}</pre>
   </div>
@@ -45,12 +82,15 @@
  * serves the pinned editor pages.
  */
 
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
+import type { TikzPreviewModeId } from "../src/preview-modes";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
 import SourceEditor from "./SourceEditor.vue";
 import Button from "primevue/button";
@@ -64,13 +104,110 @@ interface StandaloneDocument {
 
 const document = shallowRef<StandaloneDocument | null>(null);
 const documentKey = ref(0);
+type ViewId = "code" | "preview" | "canvas" | "quiver";
+type Side = "left" | "right";
+const viewLabels: Record<ViewId, string> = { code: "Code", preview: "Preview", canvas: "Canvas", quiver: "Quiver" };
+const viewIcons: Record<ViewId, string> = { code: "</>", preview: "◉", canvas: "◇", quiver: "⤧" };
+const workbenchViews: readonly Exclude<ViewId, "code">[] = ["preview", "canvas", "quiver"];
+const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["preview", "canvas", "quiver"] });
+const active = reactive<Record<Side, ViewId | null>>({ left: null, right: "canvas" });
+const visited = reactive(new Set<ViewId>());
+const newKindOpen = ref(false);
+const nativeWindow = isTauri();
+const unsavedPrompt = ref<"closing" | "continuing" | null>(null);
+let resolvePrompt: ((choice: "save" | "discard" | "cancel") => void) | null = null;
+let allowUnload = false;
+let unlistenClose: (() => void) | null = null;
+const editorStatuses = reactive<Record<Exclude<ViewId, "code">, string>>({ preview: "", canvas: "", quiver: "" });
+const editorStatus = computed(() => {
+  const visible = active.right ?? active.left;
+  return visible === "preview" || visible === "canvas" || visible === "quiver" ? editorStatuses[visible] : "";
+});
+
+function onEditorStatus(view: Exclude<ViewId, "code">, value: string): void {
+  editorStatuses[view] = value;
+}
+const dropSide = ref<Side | null>(null);
+const paneHost = ref<HTMLElement | null>(null);
+const splitPercent = ref(50);
+const bothOpen = computed(() => active.left !== null && active.right !== null);
+
+function modeForView(view: Exclude<ViewId, "code">): TikzPreviewModeId {
+  return view === "preview" ? "tikz" : view === "canvas" ? "visual" : "quiver";
+}
+
+function isVisible(view: ViewId): boolean {
+  return active.left === view || active.right === view;
+}
+
+function paneStyle(view: ViewId): { gridColumn: string } {
+  if (!bothOpen.value) return { gridColumn: "1" };
+  return { gridColumn: active.left === view ? "1" : "3" };
+}
+
+function toggleView(side: Side, view: ViewId): void {
+  active[side] = active[side] === view ? null : view;
+  visited.add(view);
+}
+
+function startDrag(event: DragEvent, view: ViewId): void {
+  event.dataTransfer?.setData("application/x-visual-tikz-view", view);
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+}
+
+function dropView(event: DragEvent, destination: Side): void {
+  dropSide.value = null;
+  const view = event.dataTransfer?.getData("application/x-visual-tikz-view");
+  if (view !== "code" && view !== "preview" && view !== "canvas" && view !== "quiver") return;
+  const source: Side = placements.left.includes(view) ? "left" : "right";
+  if (source === destination) return;
+  placements[source].splice(placements[source].indexOf(view), 1);
+  placements[destination].push(view);
+  if (active[source] === view) active[source] = null;
+  active[destination] = view;
+  visited.add(view);
+}
+
+function setSplit(clientX: number): void {
+  const rect = paneHost.value?.getBoundingClientRect();
+  if (rect === undefined) return;
+  splitPercent.value = Math.max(15, Math.min(85, ((clientX - rect.left) / rect.width) * 100));
+}
+
+function startResize(event: PointerEvent): void {
+  const separator = event.currentTarget as HTMLElement;
+  separator.setPointerCapture(event.pointerId);
+  setSplit(event.clientX);
+  const move = (moveEvent: PointerEvent): void => setSplit(moveEvent.clientX);
+  const stop = (): void => {
+    separator.removeEventListener("pointermove", move);
+    separator.removeEventListener("pointerup", stop);
+    separator.removeEventListener("pointercancel", stop);
+  };
+  separator.addEventListener("pointermove", move);
+  separator.addEventListener("pointerup", stop);
+  separator.addEventListener("pointercancel", stop);
+}
+
+function resizeWithKeyboard(event: KeyboardEvent): void {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  splitPercent.value = Math.max(15, Math.min(85, splitPercent.value + (event.key === "ArrowLeft" ? -5 : 5)));
+}
 const source = ref("");
-const workbench = ref<InstanceType<typeof TikzWorkbench> | null>(null);
+const workbenches = new Map<Exclude<ViewId, "code">, InstanceType<typeof TikzWorkbench>>();
+function setWorkbench(view: Exclude<ViewId, "code">, instance: InstanceType<typeof TikzWorkbench> | null): void {
+  if (instance === null) workbenches.delete(view);
+  else workbenches.set(view, instance);
+}
+async function currentEditorSource(): Promise<string> {
+  const view = target.value?.language === "tikzcd" ? "quiver" : "canvas";
+  return await workbenches.get(view)?.currentSource(new AbortController().signal) ?? source.value;
+}
 const savedSource = ref("");
 const loadError = ref("");
 const hostError = ref("");
 const inspectorOpen = ref(false);
-const sourceOpen = ref(window.matchMedia("(min-width: 901px)").matches);
 const fileMenu = ref<InstanceType<typeof Menu> | null>(null);
 const fileItems = computed(() => [
   { label: "New diagram", disabled: document.value === null, command: newDocument },
@@ -78,6 +215,7 @@ const fileItems = computed(() => [
   { separator: true },
   { label: "Save", disabled: document.value === null || !dirty.value, command: save },
   { label: "Save As…", disabled: document.value === null, command: saveAs },
+  ...(nativeWindow ? [{ separator: true }, { label: "Exit", command: requestExit }] : []),
 ]);
 function toggleFileMenu(event: Event): void {
   fileMenu.value?.toggle(event);
@@ -87,7 +225,7 @@ const theme = ref<TikzWorkbenchTheme>(
 );
 
 const dirty = computed(
-  () => document.value !== null && (!document.value.saved || source.value !== savedSource.value),
+  () => document.value !== null && (source.value !== savedSource.value || (!document.value.saved && source.value !== "")),
 );
 const fileName = computed(() => document.value?.path.split("/").pop() ?? "TikZ workbench");
 const status = computed(() => {
@@ -114,9 +252,6 @@ const target = computed<TikzLivePreviewTarget | null>(() => {
     docPath: document.value.path,
     authoredSource: text,
   };
-});
-
-watch(() => target.value?.language, (language) => {
 });
 
 async function responseText(response: Response): Promise<string> {
@@ -173,6 +308,15 @@ async function applyDocument(response: Response): Promise<void> {
   source.value = text;
   savedSource.value = text;
   documentKey.value++;
+  newKindOpen.value = !document.value.saved && text === "";
+  const preferred: ViewId = rawTikzEnvironment(text) === "tikzcd" || document.value.path.endsWith(".tikzcd") ? "quiver" : "canvas";
+  visited.clear();
+  visited.add(preferred);
+  active.left = null;
+  active.right = preferred;
+  editorStatuses.preview = "";
+  editorStatuses.canvas = "";
+  editorStatuses.quiver = "";
   hostError.value = "";
 }
 
@@ -184,48 +328,76 @@ async function load(): Promise<void> {
   }
 }
 
-function mayReplaceDocument(): boolean {
-  return source.value === savedSource.value || window.confirm("Discard unsaved changes?");
+function resolveUnsaved(choice: "save" | "discard" | "cancel"): void {
+  unsavedPrompt.value = null;
+  resolvePrompt?.(choice);
+  resolvePrompt = null;
+}
+
+async function mayLeaveDocument(action: "closing" | "continuing"): Promise<boolean> {
+  if (!dirty.value) return true;
+  if (unsavedPrompt.value !== null) return false;
+  const choice = await new Promise<"save" | "discard" | "cancel">((resolve) => {
+    resolvePrompt = resolve;
+    unsavedPrompt.value = action;
+    void nextTick(() => window.document.querySelector<HTMLButtonElement>(".unsaved-actions button:last-child")?.focus());
+  });
+  if (choice === "cancel") return false;
+  if (choice === "discard") return true;
+  return await save() && !dirty.value;
+}
+
+async function requestExit(): Promise<void> {
+  if (nativeWindow) await getCurrentWindow().close();
 }
 
 async function newDocument(): Promise<void> {
-  if (!mayReplaceDocument()) return;
+  if (!await mayLeaveDocument("continuing")) return;
+  newKindOpen.value = true;
+}
+
+async function createDocument(kind: "tikzpicture" | "tikzcd"): Promise<void> {
   try {
-    await applyDocument(await fetch("/api/new", { method: "POST" }));
+    await applyDocument(await fetch("/api/new", { method: "POST", body: kind }));
+    newKindOpen.value = false;
   } catch (error) {
     host.reportError("Could not create a diagram", error);
   }
 }
 
 async function openDocument(): Promise<void> {
-  if (!mayReplaceDocument()) return;
+  if (!await mayLeaveDocument("continuing")) return;
   try {
-    await applyDocument(await fetch("/api/open", { method: "POST" }));
+    const response = await fetch("/api/open", { method: "POST" });
+    await applyDocument(response);
+    if (response.status !== 204) newKindOpen.value = false;
   } catch (error) {
     host.reportError("Could not open a diagram", error);
   }
 }
 
-async function saveAs(): Promise<void> {
+async function saveAs(): Promise<boolean> {
   try {
-    const text = await workbench.value!.currentSource(new AbortController().signal);
+    const text = await currentEditorSource();
     const response = await fetch("/api/save-as", { method: "POST", body: text });
-    if (response.status === 204) return;
+    if (response.status === 204) return false;
     await responseText(response);
     document.value = metadata(response);
     savedSource.value = text;
     hostError.value = "";
+    return true;
   } catch (error) {
     host.reportError("Could not save the diagram", error);
+    return false;
   }
 }
 
-async function save(): Promise<void> {
+async function save(): Promise<boolean> {
   const current = document.value;
-  if (current === null) return;
+  if (current === null) return false;
   if (!current.saved) return await saveAs();
   try {
-    const text = await workbench.value!.currentSource(new AbortController().signal);
+    const text = await currentEditorSource();
     const response = await fetch("/api/document", {
       method: "PUT",
       headers: { "if-match": current.revision },
@@ -237,12 +409,22 @@ async function save(): Promise<void> {
     document.value = { ...current, revision };
     savedSource.value = text;
     hostError.value = "";
+    return true;
   } catch (error) {
     host.reportError("Could not save the file", error);
+    return false;
   }
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey &&
+      (event.key === "-" || event.key === "=" || event.key === "+" || event.key === "0")) {
+    if (active.left === "canvas" || active.right === "canvas") {
+      event.preventDefault();
+      workbenches.get("canvas")?.zoom(event.key === "0" ? "reset" : event.key === "-" ? "out" : "in");
+    }
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key === "s") {
     event.preventDefault();
     void save();
@@ -250,8 +432,9 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onBeforeUnload(event: BeforeUnloadEvent): void {
-  if (source.value === savedSource.value) return;
+  if (allowUnload || !dirty.value) return;
   event.preventDefault();
+  event.returnValue = "";
 }
 
 function toggleTheme(): void {
@@ -265,7 +448,7 @@ function toggleInspector(): void {
 
 async function copySource(): Promise<void> {
   try {
-    const text = await workbench.value?.currentSource(new AbortController().signal) ?? source.value;
+    const text = await currentEditorSource();
     await navigator.clipboard.writeText(text);
     hostError.value = "";
   } catch (error) {
@@ -276,12 +459,32 @@ async function copySource(): Promise<void> {
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("beforeunload", onBeforeUnload);
+  if (nativeWindow) {
+    void getCurrentWindow().onCloseRequested((event) => {
+      if (!dirty.value) return;
+      event.preventDefault();
+      void mayLeaveDocument("closing").then(async (leave) => {
+        if (!leave) return;
+        allowUnload = true;
+        try {
+          await getCurrentWindow().destroy();
+        } catch (error) {
+          allowUnload = false;
+          host.reportError("Could not close the window", error);
+        }
+      });
+    }).then((unlisten) => { unlistenClose = unlisten; }).catch((error) => {
+      host.reportError("Could not guard unsaved changes", error);
+    });
+  }
   void load();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("beforeunload", onBeforeUnload);
+  unlistenClose?.();
+  resolveUnsaved("cancel");
 });
 </script>
 
@@ -420,20 +623,111 @@ body,
   overflow-wrap: anywhere;
 }
 
-main {
+.new-kind-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+}
+
+.new-kind-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 16px 48px color-mix(in srgb, var(--ink) 30%, transparent);
+}
+
+.new-kind-dialog h2 { margin: 0 0 8px; font-size: 20px; }
+.new-kind-dialog p { margin: 0 0 20px; color: var(--graphite); }
+.new-kind-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.new-kind-dialog button { min-height: 56px; border: 1px solid var(--ribbon); border-radius: 10px; color: var(--ink); background: var(--leaf); font: inherit; cursor: pointer; }
+.new-kind-dialog button:hover, .new-kind-dialog button:focus-visible { background: color-mix(in srgb, var(--ribbon) 15%, var(--leaf)); }
+.new-kind-dialog .new-kind-cancel { display: block; width: 100%; min-height: 40px; margin-top: 12px; border-color: color-mix(in srgb, var(--ink) 18%, transparent); }
+.unsaved-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.unsaved-actions button { min-height: 44px; padding: 0 14px; }
+
+.workspace {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(240px, 40%) minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
 }
 
-main.source-closed {
-  grid-template-columns: minmax(0, 1fr);
+.view-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding: 8px 5px;
+  border-right: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  background: var(--leaf);
 }
+
+.right-rail {
+  border-right: 0;
+  border-left: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.view-rail.drop-target { background: color-mix(in srgb, var(--ribbon) 20%, var(--leaf)); }
+
+.view-rail button {
+  display: grid;
+  place-items: center;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--graphite);
+  font: 700 19px system-ui, sans-serif;
+  cursor: grab;
+}
+
+.view-rail button:hover, .view-rail button:focus-visible {
+  background: color-mix(in srgb, var(--ribbon) 12%, var(--leaf));
+}
+
+.view-rail button.selected {
+  color: var(--ribbon);
+  background: var(--paper);
+  box-shadow: inset 3px 0 var(--ribbon);
+}
+
+.right-rail button.selected { box-shadow: inset -3px 0 var(--ribbon); }
+
+.pane-host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.view-pane {
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.view-pane > * { width: 100%; height: 100%; }
+
+.pane-divider {
+  grid-column: 2;
+  grid-row: 1;
+  z-index: 2;
+  background: color-mix(in srgb, var(--ink) 18%, var(--leaf));
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pane-divider:hover, .pane-divider:focus-visible { background: var(--ribbon); }
 
 .tikz-standalone-source {
-  height: 100%;
-  border-right: 1px solid color-mix(in srgb, currentColor 20%, transparent);
   background: var(--paper);
 }
 

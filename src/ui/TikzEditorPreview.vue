@@ -120,6 +120,10 @@ function selectTool(tool: EditorToolMode): void {
   if (loaded.value) postToEditor({ action: "tool", tool });
 }
 
+function zoom(direction: "in" | "out" | "reset"): void {
+  if (loaded.value) postToEditor({ action: "zoom", direction });
+}
+
 function configureTool(option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number): void {
   postToEditor({ action: "tool-option", option, value });
 }
@@ -128,7 +132,7 @@ function configureMatrix(rows: number, columns: number): void {
   postToEditor({ action: "tool-option", option: "matrix", rows, columns });
 }
 
-defineExpose({ snapshot, currentSource, selectTool, configureTool, configureMatrix });
+defineExpose({ snapshot, currentSource, selectTool, configureTool, configureMatrix, zoom });
 
 function sendFullLoad(): void {
   if (!hostReady.value) {

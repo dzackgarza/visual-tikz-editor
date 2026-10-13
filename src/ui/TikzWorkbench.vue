@@ -5,9 +5,10 @@
     aria-label="TikZ workbench"
     :data-tikz-language="props.target.language"
   >
-    <header v-if="props.showHeader !== false" class="tikz-live-preview-header">
-      <span class="tikz-live-preview-label">View:</span>
+    <header v-if="showShellHeader" class="tikz-live-preview-header">
+      <span v-if="props.showModeSwitcher !== false" class="tikz-live-preview-label">View:</span>
       <div
+        v-if="props.showModeSwitcher !== false"
         class="tikz-live-preview-modes"
         role="group"
         aria-label="Diagram view"
@@ -26,7 +27,7 @@
         </button>
       </div>
 
-      <span class="tikz-live-preview-status">{{ unavailableMessage !== '' ? 'Unavailable' : activeStatus }}</span>
+      <span v-if="props.showStatus !== false" class="tikz-live-preview-status">{{ unavailableMessage !== '' ? 'Unavailable' : activeStatus }}</span>
       <span
         v-if="activeBusy"
         class="tikz-live-preview-spinner"
@@ -43,6 +44,7 @@
         <span aria-hidden="true">↻</span>
       </button>
       <button
+        v-if="props.showFullscreen !== false"
         type="button"
         class="tikz-live-preview-action tikz-live-preview-expand"
         :title="fullscreen ? 'Exit fullscreen preview (Esc)' : 'Open fullscreen preview'"
@@ -54,7 +56,7 @@
     </header>
 
     <div class="tikz-live-preview-content">
-      <nav v-if="displayMode === 'visual'" class="tikz-tool-rail" aria-label="Drawing tools">
+      <nav v-if="displayMode === 'visual' && props.showModeSwitcher !== false" class="tikz-tool-rail" aria-label="Drawing tools">
         <button
           v-for="tool in primaryTools"
           :key="tool.mode"
@@ -119,6 +121,12 @@
           </template>
         </div>
       </Popover>
+      <div v-if="!showShellHeader && (activeBusy || activeProvider.refreshable)" class="tikz-live-preview-overlay-controls">
+        <span v-if="activeBusy" class="tikz-live-preview-spinner" aria-hidden="true" />
+        <button v-if="activeProvider.refreshable" type="button"
+          class="tikz-live-preview-action" title="Rebuild TikZ preview" aria-label="Rebuild TikZ preview"
+          @click="forceRefresh"><span aria-hidden="true">↻</span></button>
+      </div>
       <div v-if="unavailableMessage !== ''" class="tikz-live-preview-unavailable" role="alert">
         <strong>{{ activeProvider.label }} cannot edit this diagram</strong>
         <button type="button" @click="copyUnavailableMessage">Copy error</button>
@@ -192,7 +200,7 @@ import { defaultTikzPreviewMode, type TikzPreviewModeId } from "../preview-modes
 import { TIKZ_PREVIEW_PROVIDERS, type TikzPreviewProvider } from "./providers";
 import { EDITOR_TOOLS, type EditorShapeOption, type EditorToolMode } from "../editor-tools";
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   target: TikzLivePreviewTarget;
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
@@ -200,11 +208,15 @@ const props = withDefaults(defineProps<{
   requestedMode?: TikzPreviewModeId;
   showInspector?: boolean;
   showHeader?: boolean;
-}>(), { showHeader: true });
+  showModeSwitcher?: boolean;
+  showStatus?: boolean;
+  showFullscreen?: boolean;
+}>();
 
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
   (e: "inspectorClosed"): void;
+  (e: "status", status: string): void;
 }>();
 
 const fullscreen = ref(false);
@@ -224,6 +236,10 @@ const requestedMode = ref<TikzPreviewModeId>(
 const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
 const activeBusy = ref(false);
+const showShellHeader = computed(() =>
+  props.showHeader !== false &&
+  (props.showModeSwitcher !== false || props.showStatus !== false || props.showFullscreen !== false),
+);
 const providerStatus = ref<Record<TikzPreviewModeId, string>>({ tikz: "", quiver: "", visual: "" });
 const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({
   tikz: false,
@@ -239,6 +255,7 @@ type EditorHandle = {
   selectTool?: (tool: EditorToolMode) => void;
   configureTool?: (option: "smoothing" | "strokeColor" | "fillColor" | "shape", value: string | number) => void;
   configureMatrix?: (rows: number, columns: number) => void;
+  zoom?: (direction: "in" | "out" | "reset") => void;
 };
 const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
 function setEditorHandle(id: TikzPreviewModeId, handle: unknown): void {
@@ -252,7 +269,10 @@ async function currentSource(signal: AbortSignal): Promise<string> {
   if (editor?.currentSource) return editor.currentSource(signal);
   return props.target.source;
 }
-defineExpose({ currentSource });
+function zoom(direction: "in" | "out" | "reset"): void {
+  editorHandles.get("visual")?.zoom?.(direction);
+}
+defineExpose({ currentSource, zoom });
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const editorHandle = ref<EditorHandle | null>(null);
 const activeTool = ref<EditorToolMode>("select");
@@ -390,7 +410,10 @@ function forceRefresh(): void {
 
 function onProviderStatus(provider: TikzPreviewModeId, status: string): void {
   providerStatus.value[provider] = status;
-  if (displayMode.value === provider) activeStatus.value = status;
+  if (displayMode.value === provider) {
+    activeStatus.value = status;
+    emit("status", status);
+  }
 }
 
 function onProviderBusy(provider: TikzPreviewModeId, busy: boolean): void {
@@ -622,6 +645,19 @@ onBeforeUnmount(() => {
 .tikz-tool-label { display: none; }
 .tikz-tool-rail button:hover .tikz-tool-label,
 .tikz-tool-rail button:focus-visible .tikz-tool-label { display: inline; }
+
+.tikz-live-preview-overlay-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px color-mix(in srgb, black 16%, transparent);
+}
 
 .tikz-live-preview-provider {
   flex: 1 1 auto;
