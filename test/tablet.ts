@@ -4,7 +4,7 @@ import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { CDPSession, FrameLocator, Page } from "@playwright/test";
+import type { CDPSession, FrameLocator, Locator, Page } from "@playwright/test";
 
 export const TABLET_VIEWPORTS = [
   { name: "portrait", width: 768, height: 1024 },
@@ -53,6 +53,35 @@ export async function startWorkbench(env: NodeJS.ProcessEnv): Promise<Workbench>
 
 export const editorFrame = (page: Page): FrameLocator => page.frameLocator('iframe[title="TikZ visual editor"]');
 
+/**
+ * The centre of `locator` once its box has stopped moving, as Playwright's own
+ * clicks require; a touch aimed at a box measured mid-layout lands elsewhere.
+ */
+export async function stableCenter(locator: Locator): Promise<Point> {
+  let previous = await locator.boundingBox();
+  for (let attempt = 0; attempt < 50; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const box = await locator.boundingBox();
+    if (box !== null && previous !== null && box.x === previous.x && box.y === previous.y &&
+        box.width === previous.width && box.height === previous.height) {
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    }
+    previous = box;
+  }
+  throw new Error(`${locator} did not settle within 5 s`);
+}
+
+/** A page point on the drawn stroke of `element`, `fraction` of the way along it. */
+export async function strokePoint(page: Page, element: Locator, fraction: number): Promise<Point> {
+  const local = await element.evaluate((geometry: SVGGeometryElement, at) => {
+    const point = geometry.getPointAtLength(geometry.getTotalLength() * at);
+    const matrix = geometry.getScreenCTM()!;
+    return { x: point.x * matrix.a + point.y * matrix.c + matrix.e, y: point.x * matrix.b + point.y * matrix.d + matrix.f };
+  }, fraction);
+  const frame = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+  return { x: frame.x + local.x, y: frame.y + local.y };
+}
+
 /** The part of `visualTikzEditorDebug()` the stories read; the iframe exposes more. */
 export type EditorDebug = {
   historyIndex: number;
@@ -93,6 +122,7 @@ export class TabletInput {
     const [first, ...rest] = points;
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 1, ...first }] });
     for (const point of rest) await this.cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ id: 1, ...point }] });
+    if (rest.length > 0) await this.rest([{ id: 1, ...rest.at(-1)! }]);
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   }
 
@@ -107,7 +137,18 @@ export class TabletInput {
     const pair = (gap: number) => [{ id: 1, x: center.x - gap / 2, y: center.y }, { id: 2, x: center.x + gap / 2, y: center.y }];
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pair(startGap) });
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pair(endGap) });
+    await this.rest(pair(endGap));
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
+
+  /**
+   * Fingers come to rest before lifting. Lifting straight out of a move reads to
+   * Chromium as a fling, and it spends the next tap stopping that fling instead of
+   * clicking (reproduced on a bare page with no editor code).
+   */
+  private async rest(touchPoints: Array<{ id: number } & Point>): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, 120));
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints });
   }
 
   async palm(point: Point, phase: "touchStart" | "touchMove" | "touchEnd"): Promise<void> {
