@@ -231,9 +231,7 @@ const theme = ref<TikzWorkbenchTheme>(
   window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
 );
 
-const dirty = computed(
-  () => document.value !== null && (source.value !== savedSource.value || (!document.value.saved && source.value !== "")),
-);
+const dirty = computed(() => document.value !== null && source.value !== savedSource.value);
 const fileName = computed(() => document.value?.path.split("/").pop() ?? "TikZ workbench");
 const status = computed(() => {
   if (hostError.value !== "") return hostError.value;
