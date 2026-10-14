@@ -458,6 +458,88 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`shows a tapped element's source in the code pane, even one opened afterward, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const code = page.getByRole('button', { name: 'Code: left sidebar', exact: true });
+      await code.click();
+      const authored = String.raw`\begin{tikzpicture}
+\draw (-6,0) -- (-2,3);
+\draw (4,0) circle (2cm);
+\end{tikzpicture}`;
+      await page.locator('.cm-content').fill(authored);
+      const frame = editorFrame(page);
+      await expect(frame.locator('[data-source-id]')).toHaveCount(2);
+      const input = await TabletInput.attach(page);
+      const center = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      // The source lines the code pane's selection highlight spans, as the author sees them.
+      const codeSelection = () => page.locator('.cm-editor').evaluate(editor => {
+        const highlights = [...editor.querySelectorAll('.cm-selectionBackground')].map(node => node.getBoundingClientRect());
+        return [...editor.querySelectorAll('.cm-line')].filter(line => {
+          const text = document.createRange();
+          text.selectNodeContents(line);
+          const box = text.getBoundingClientRect();
+          return box.width > 0 && highlights.some(mark => mark.top < box.bottom && mark.bottom > box.top &&
+            mark.left <= box.left + 1 && mark.right >= box.right - 1);
+        }).map(line => line.textContent).join('\n');
+      });
+      await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      const circle = (await frame.locator('circle[data-source-id]').boundingBox())!;
+      await input.touch([{ x: circle.x + 1, y: circle.y + circle.height / 2 }]);
+      await expect.poll(codeSelection).toBe(String.raw`\draw (4,0) circle (2cm);`);
+      const line = (await frame.locator('[data-source-id]:not(circle)').first().boundingBox())!;
+      await input.penStroke([{ x: line.x + line.width / 2, y: line.y + line.height / 2 }]);
+      await expect.poll(codeSelection).toBe(String.raw`\draw (-6,0) -- (-2,3);`);
+      await code.click();
+      await expect(page.locator('.cm-content')).toHaveCount(0);
+      const reopened = (await frame.locator('circle[data-source-id]').boundingBox())!;
+      await input.touch([{ x: reopened.x + 1, y: reopened.y + reopened.height / 2 }]);
+      await code.click();
+      await expect.poll(codeSelection).toBe(String.raw`\draw (4,0) circle (2cm);`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`places a selected curve's control outside the curve and clear of the rail in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (-6,-3) .. controls (-2,4) and (2,-4) .. (6,3);\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const curve = frame.locator('[data-source-id]').first();
+      await expect(curve).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const select = (await frame.getByRole('button', { name: 'Select', exact: true }).boundingBox())!;
+      await input.touch([{ x: select.x + select.width / 2, y: select.y + select.height / 2 }]);
+      const intersects = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+        Math.min(a.x + a.width, b.x + b.width) > Math.max(a.x, b.x) && Math.min(a.y + a.height, b.y + b.height) > Math.max(a.y, b.y);
+      for (const contact of ['touch', 'pen'] as const) {
+        const box = (await curve.boundingBox())!;
+        const point = await curve.evaluate((path: SVGGeometryElement) => {
+          const at = path.getPointAtLength(path.getTotalLength() * .2);
+          const matrix = path.getScreenCTM()!;
+          return { x: at.x * matrix.a + at.y * matrix.c + matrix.e, y: at.x * matrix.b + at.y * matrix.d + matrix.f };
+        });
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const tapAt = { x: frameBox.x + point.x, y: frameBox.y + point.y };
+        if (contact === 'touch') await input.touch([tapAt]); else await input.penStroke([tapAt]);
+        const control = frame.getByRole('button', { name: 'Curve actions', exact: true }).locator('..');
+        await expect(control).toBeVisible();
+        const controlBox = (await control.boundingBox())!;
+        assert.ok(!intersects(controlBox, box), `${contact}: the curve control covers the curve`);
+        assert.ok(!intersects(controlBox, (await frame.locator('[data-diagram-tools]').boundingBox())!), `${contact}: the curve control covers the rail`);
+        await input.touch([{ x: frameBox.x + 8, y: frameBox.y + frameBox.height - 8 }]);
+      }
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
