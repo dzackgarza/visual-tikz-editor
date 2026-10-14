@@ -152,10 +152,18 @@ index 59fab7a8..24322aa9 100644
        {
          kind: "submenu",
 diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
-index af9d6c30..d04b4379 100644
+index af9d6c30..1bbfcd2c 100644
 --- a/packages/app/src/app-menu/types.ts
 +++ b/packages/app/src/app-menu/types.ts
-@@ -45,6 +45,7 @@ export const APP_MENU_COMMAND_IDS = {
+@@ -18,6 +18,7 @@ export const APP_MENU_COMMAND_IDS = {
+   EXPORT_SVG_COPY: "file.export-svg-copy",
+   UNDO: "edit.undo",
+   REDO: "edit.redo",
++  SELECT_ALL: "edit.select-all",
+   FORMAT_TIKZ: "edit.format-tikz",
+   CUT: "edit.cut",
+   COPY: "edit.copy",
+@@ -45,6 +46,7 @@ export const APP_MENU_COMMAND_IDS = {
    DISTRIBUTE_HORIZONTAL: "edit.distribute-horizontal",
    DISTRIBUTE_VERTICAL: "edit.distribute-vertical",
    PATH_SPLIT: "path.split",
@@ -163,7 +171,7 @@ index af9d6c30..d04b4379 100644
    PATH_JOIN: "path.join",
    PATH_REVERSE: "path.reverse",
    PATH_CLOSE: "path.close",
-@@ -87,7 +88,7 @@ export const APP_MENU_COMMAND_IDS = {
+@@ -87,7 +89,7 @@ export const APP_MENU_COMMAND_IDS = {
    ZOOM_OUT: "view.zoom-out",
    TOGGLE_GRID: "view.toggle-grid",
    TOGGLE_TRANSPARENCY_GRID: "view.toggle-transparency-grid",
@@ -173,7 +181,7 @@ index af9d6c30..d04b4379 100644
    TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
    TOGGLE_SNAP_OBJECT_POINTS: "view.toggle-snap-object-points",
 diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
-index bc368718..b5d8f0d2 100644
+index bc368718..d43e2186 100644
 --- a/packages/app/src/context-menu/canvas-context-menu.ts
 +++ b/packages/app/src/context-menu/canvas-context-menu.ts
 @@ -393,27 +393,17 @@ function buildSingleSelectionSubmenuItems(includePathSubmenu: boolean): readonly
@@ -235,6 +243,19 @@ index bc368718..b5d8f0d2 100644
    const selectionMultiItems = withMatrixMultiItems(buildMultiSelectionItems(includeFlattenForeach), options);
    const singleMatrixItems = buildSingleSelectionItems(includeFlattenForeach, false);
  
+@@ -534,6 +525,12 @@ export function buildCanvasContextMenuDefinition(
+         label: "Paste",
+         accelerator: "CmdOrCtrl+V"
+       },
++      {
++        kind: "command",
++        commandId: APP_MENU_COMMAND_IDS.SELECT_ALL,
++        label: "Select All",
++        accelerator: "CmdOrCtrl+A"
++      },
+       { kind: "separator" },
+       {
+         kind: "command",
 diff --git a/packages/app/src/index.ts b/packages/app/src/index.ts
 index 1672d1d6..48a1138b 100644
 --- a/packages/app/src/index.ts
@@ -1078,7 +1099,7 @@ index 828d4bfb..1ac9eac5 100644
        })),
      tabOrder: [...state.tabOrder],
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..1676ef24 100644
+index 5818d92b..15ef54a9 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
 @@ -262,6 +262,13 @@ export function App() {
@@ -1129,7 +1150,34 @@ index 5818d92b..1676ef24 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1770,7 +1764,7 @@ export function App() {
+@@ -1709,13 +1703,6 @@ export function App() {
+         return;
+       }
+ 
+-      // Ctrl+Shift+D: toggle dev panel
+-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === "d") {
+-        runtime.runCommand(APP_MENU_COMMAND_IDS.TOGGLE_DEV_PANEL, "shortcut");
+-        e.preventDefault();
+-        return;
+-      }
+-
+       // Ctrl/Cmd+Shift+E: edit equation when possible, otherwise insert equation.
+       if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && key === "e") {
+         const edited = runtime.runCommand(APP_MENU_COMMAND_IDS.EDIT_EQUATION, "shortcut");
+@@ -1758,19 +1745,14 @@ export function App() {
+           if (!canvasShortcutContext) {
+             return;
+           }
+-          const ids = Array.from(
+-            new Set(
+-              (snapshotRef.current.scene?.elements ?? []).map((element) => element.sourceRef.sourceId)
+-            )
+-          );
+-          dispatch({ type: "SELECT_RANGE", ids });
++          runtime.runCommand(APP_MENU_COMMAND_IDS.SELECT_ALL, "shortcut");
+           e.preventDefault();
+           return;
+         }
  
          if (!e.shiftKey && key === "c") {
            // If canvas is focused, let the native copy event fire there.
@@ -1138,7 +1186,7 @@ index 5818d92b..1676ef24 100644
              return;
            }
            // If there's a text selection anywhere, let native copy work for it.
-@@ -1786,7 +1780,7 @@ export function App() {
+@@ -1786,7 +1768,7 @@ export function App() {
  
          if (!e.shiftKey && key === "x") {
            // If canvas is focused, let the native cut event fire there.
@@ -1147,7 +1195,7 @@ index 5818d92b..1676ef24 100644
              return;
            }
            // If there's a text selection anywhere, let native cut work for it.
-@@ -1802,7 +1796,7 @@ export function App() {
+@@ -1802,7 +1784,7 @@ export function App() {
  
          if (!e.shiftKey && key === "v") {
            // If canvas is focused, let the native paste event fire there (supports DataTransfer).
@@ -1156,7 +1204,7 @@ index 5818d92b..1676ef24 100644
              return;
            }
            // Otherwise, paste directly via async clipboard API.
-@@ -1872,7 +1866,6 @@ export function App() {
+@@ -1872,7 +1854,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -1164,7 +1212,7 @@ index 5818d92b..1676ef24 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1884,6 @@ export function App() {
+@@ -1891,7 +1872,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -1172,7 +1220,7 @@ index 5818d92b..1676ef24 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +2022,17 @@ export function App() {
+@@ -2030,13 +2010,17 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -1191,7 +1239,7 @@ index 5818d92b..1676ef24 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,11 +2045,11 @@ export function App() {
+@@ -2049,11 +2033,11 @@ export function App() {
              : null
          }
        />
@@ -1205,7 +1253,7 @@ index 5818d92b..1676ef24 100644
        <div className={css.body}>
          <DockLayout
            repeatPreviewModel={repeatPreviewModel}
-@@ -2062,9 +2058,9 @@ export function App() {
+@@ -2062,9 +2046,9 @@ export function App() {
            onNewChat={handleAssistantNewChat}
          />
        </div>
@@ -9457,7 +9505,7 @@ index 44b105be..f1cfbce3 100644
      logClipboardDebug("Clipboard write unavailable: navigator.clipboard missing.");
      return false;
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
-index 3ab44838..aa2c8fce 100644
+index 3ab44838..1f0c5155 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts
 +++ b/packages/app/src/ui/editor-command-runtime.ts
 @@ -98,7 +98,6 @@ type RuntimeInput = {
@@ -9503,8 +9551,16 @@ index 3ab44838..aa2c8fce 100644
      [APP_MENU_COMMAND_IDS.PATH_JOIN]: {
        enabled: availability["path-join"].enabled,
        run: () => {
-@@ -884,12 +888,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -882,14 +886,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+       enabled: nodePositioningAction === "convert-absolute" && onConvertNodePositionToAbsolute != null,
+       run: () => onConvertNodePositionToAbsolute?.()
      },
++    [APP_MENU_COMMAND_IDS.SELECT_ALL]: {
++      enabled: (snapshot.scene?.elements.length ?? 0) > 0,
++      run: () => {
++        dispatch({ type: "SELECT_RANGE", ids: [...new Set((snapshot.scene?.elements ?? []).map((element) => element.sourceRef.sourceId))] });
++      }
++    },
      [APP_MENU_COMMAND_IDS.FIT_TO_CONTENT]: {
        enabled: snapshot.svg != null,
 -      checked: fitToContentModeActive,
@@ -9516,7 +9572,7 @@ index 3ab44838..aa2c8fce 100644
          dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
        }
      },
-@@ -911,9 +910,9 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -911,9 +916,9 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        checked: showTransparencyGrid,
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" }); }
      },
@@ -9528,30 +9584,7 @@ index 3ab44838..aa2c8fce 100644
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "documentBounds" }); }
      },
      [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID]: {
-@@ -1072,6 +1071,22 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
-     }
-   };
- 
-+  if (getActiveEditorPlatform().id === "zettlr-embed") {
-+    for (const commandId of [
-+      APP_MENU_COMMAND_IDS.TOGGLE_SOURCE_PANEL,
-+      APP_MENU_COMMAND_IDS.TOGGLE_DEV_PANEL,
-+      APP_MENU_COMMAND_IDS.TOGGLE_ASSISTANT_PANEL,
-+      APP_MENU_COMMAND_IDS.TOGGLE_GUIDES,
-+      APP_MENU_COMMAND_IDS.TOGGLE_TRANSPARENCY_GRID,
-+      APP_MENU_COMMAND_IDS.SAVE_WORKSPACE_AS,
-+      APP_MENU_COMMAND_IDS.MANAGE_WORKSPACES,
-+      APP_MENU_COMMAND_IDS.OPEN_PGF_TIKZ_MANUAL,
-+      APP_MENU_COMMAND_IDS.SHOW_ABOUT,
-+      APP_MENU_COMMAND_IDS.OPEN_GITHUB_REPOSITORY,
-+      APP_MENU_COMMAND_IDS.OPEN_GITHUB_ISSUES
-+    ]) bindings[commandId] = { enabled: false, run: () => {} };
-+  }
-+
-   return {
-     bindings,
-     runCommand: (commandId, origin) => {
-@@ -1098,6 +1113,7 @@ export function useEditorCommandRuntime(
+@@ -1098,6 +1103,7 @@ export function useEditorCommandRuntime(
      onAddNodeAdornment?: (kind: "label" | "pin") => void;
      onPositionNodeRelativeTo?: () => void;
      onConvertNodePositionToAbsolute?: () => void;
@@ -9559,7 +9592,7 @@ index 3ab44838..aa2c8fce 100644
      onShowCompiledPicture?: () => void;
      onOpenSettings?: () => void;
      onFocusAssistant?: () => void;
-@@ -1126,7 +1142,6 @@ export function useEditorCommandRuntime(
+@@ -1126,7 +1132,6 @@ export function useEditorCommandRuntime(
    const tabCount = useEditorStore((s) => s.tabOrder.length);
    const dirty = useEditorStore((s) => s.documents[s.activeDocumentId]?.dirty ?? false);
    const fileRef = useEditorStore((s) => s.documents[s.activeDocumentId]?.fileRef ?? null);
@@ -9567,7 +9600,7 @@ index 3ab44838..aa2c8fce 100644
    const showGrid = useEditorStore((s) => s.showGrid);
    const showTransparencyGrid = useEditorStore((s) => s.showTransparencyGrid);
    const snapModes = useEditorStore((s) => s.snapModes);
-@@ -1203,7 +1218,6 @@ export function useEditorCommandRuntime(
+@@ -1203,7 +1208,6 @@ export function useEditorCommandRuntime(
          tabCount,
          dirty,
          fileRef,
@@ -9575,7 +9608,7 @@ index 3ab44838..aa2c8fce 100644
          showGrid,
          showTransparencyGrid,
          snapModes,
-@@ -1234,6 +1248,7 @@ export function useEditorCommandRuntime(
+@@ -1234,6 +1238,7 @@ export function useEditorCommandRuntime(
          onAddNodeAdornment: options.onAddNodeAdornment,
          onPositionNodeRelativeTo: options.onPositionNodeRelativeTo,
          onConvertNodePositionToAbsolute: options.onConvertNodePositionToAbsolute,
@@ -9583,7 +9616,7 @@ index 3ab44838..aa2c8fce 100644
          onShowCompiledPicture: options.onShowCompiledPicture,
          onOpenSettings: options.onOpenSettings,
          onCheckForUpdates: options.onCheckForUpdates,
-@@ -1256,7 +1271,6 @@ export function useEditorCommandRuntime(
+@@ -1256,7 +1261,6 @@ export function useEditorCommandRuntime(
        tabCount,
        dirty,
        fileRef,
@@ -9591,7 +9624,7 @@ index 3ab44838..aa2c8fce 100644
        showGrid,
        showTransparencyGrid,
        snapModes,
-@@ -1287,6 +1301,7 @@ export function useEditorCommandRuntime(
+@@ -1287,6 +1291,7 @@ export function useEditorCommandRuntime(
        options.onAddNodeAdornment,
        options.onPositionNodeRelativeTo,
        options.onConvertNodePositionToAbsolute,
