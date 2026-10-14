@@ -2,7 +2,7 @@
   <div class="tikz-standalone" :class="theme">
     <header class="document-bar">
       <strong>{{ fileName }}</strong>
-      <details class="file-menu" @click="closeFileMenu">
+      <details class="file-menu" aria-label="File" @click="closeFileMenu">
         <summary>File</summary>
         <div class="file-menu-items">
           <button type="button" :disabled="document === null" @click="newDocument">New tikzpicture or tikzcd…</button>

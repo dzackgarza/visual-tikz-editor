@@ -28,7 +28,7 @@ describe('standalone native file workflow', function () {
   const fileMenu = () => page.getByRole('group', { name: 'File' }).locator('summary');
 
   async function chooseFile(name: string): Promise<void> {
-    const { stdout } = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'xdg-desktop-portal-gtk'], { env: desktopEnv, timeout: 10000 });
+    const { stdout } = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'zenity'], { env: desktopEnv, timeout: 10000 });
     const id = stdout.trim().split('\n').at(-1)!;
     await execute('xdotool', ['windowfocus', '--sync', id], { env: desktopEnv });
     await execute('import', ['-window', 'root', `test-results/workbench/native-${name}-dialog.png`], { env: desktopEnv });
@@ -49,7 +49,7 @@ describe('standalone native file workflow', function () {
       displayServer.once('exit', code => reject(new Error(`Display exited: ${code}`)));
       displayServer.stdout!.once('data', data => resolve(`:${String(data).trim()}`));
     });
-    desktopEnv = Object.fromEntries(Object.entries({ ...process.env, DISPLAY: display, GDK_BACKEND: "x11", GSK_RENDERER: "cairo", GTK_USE_PORTAL: "0" }).filter((entry): entry is [string, string] => entry[1] !== undefined));
+    desktopEnv = Object.fromEntries(Object.entries({ ...process.env, DISPLAY: display, GDK_BACKEND: "x11", GSK_RENDERER: "cairo", GDK_DEBUG: "no-portals" }).filter((entry): entry is [string, string] => entry[1] !== undefined));
     sessionBus = spawn('dbus-daemon', ['--session', '--nofork', '--print-address=1'], { env: desktopEnv, stdio: ['ignore', 'pipe', 'inherit'] });
     desktopEnv.DBUS_SESSION_BUS_ADDRESS = await new Promise<string>((resolve, reject) => {
       sessionBus.once('error', reject);
@@ -117,7 +117,7 @@ describe('standalone native file workflow', function () {
     await expect(page.locator('.tikz-standalone-status')).toContainText('Saved');
     await fileMenu().click();
     await page.getByRole('button', { name: 'Open…', exact: true }).click();
-    const dialog = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'xdg-desktop-portal-gtk'], { env: desktopEnv, timeout: 10000 });
+    const dialog = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'zenity'], { env: desktopEnv, timeout: 10000 });
     await execute('xdotool', ['windowfocus', '--sync', dialog.stdout.trim().split('\n').at(-1)!], { env: desktopEnv });
     const cancelled = page.waitForResponse(response => response.url().endsWith('/api/open'));
     await execute('xdotool', ['key', '--clearmodifiers', 'Escape'], { env: desktopEnv });
