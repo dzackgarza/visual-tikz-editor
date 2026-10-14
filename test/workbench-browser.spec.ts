@@ -127,7 +127,7 @@ describe("standalone workbench host boundary", function () {
       const overflow = await strip.evaluate(element => ({
         vertical: element.scrollHeight - element.clientHeight, horizontal: element.scrollWidth - element.clientWidth }));
       assert.deepEqual(overflow, { vertical: 0, horizontal: 0 });
-      for (const name of ['Layers', 'Properties', 'Settings', 'Zoom and display', 'Select', 'Erase', 'Freehand', 'Insert', 'Undo', 'Redo'])
+      for (const name of ['Layers', 'Properties', 'Settings', 'Zoom and display', 'Select', 'Lasso', 'Eraser', 'Freehand', 'Insert', 'Bucket', 'Undo', 'Redo'])
         await expect(rail.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
       await expect(rail.getByRole('button', { name: /^Drawing color: / })).toBeInViewport({ ratio: 1 });
       const swatches = rail.getByRole('button', { name: /^Use / });
@@ -137,14 +137,43 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`names no key in the context menu a long press opens in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (2cm);\end{tikzpicture}`);
+      const frame = editorFrame(page);
+      const circle = frame.locator('circle[data-source-id]');
+      await expect(circle).toBeInViewport();
+      const input = await TabletInput.attach(page);
+      const tapCenter = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      await input.touch([await tapCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      const box = (await circle.boundingBox())!;
+      await input.longPress({ x: box.x + 1, y: box.y + box.height / 2 });
+      const menu = frame.getByRole('menu').first();
+      await expect(menu).toBeVisible();
+      const items = (await menu.locator('button').allInnerTexts()).map(text => text.trim().replace(/\s+/g, ' '));
+      assert.ok(items.includes('Delete'), items.join(' | '));
+      for (const item of items) {
+        assert.doesNotMatch(item, /Ctrl|Cmd|⌘|⇧|Shift|Alt|⌥|Esc\b|Escape|⌫/, item);
+        assert.doesNotMatch(item, /^(.+) \1$/, `${item} repeats its key name`);
+      }
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
     const canvas = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-    await page.mouse.move(canvas.x + 90, canvas.y + canvas.height / 2);
+    await page.mouse.move(canvas.x + canvas.width * .4, canvas.y + canvas.height / 2);
     await page.mouse.down();
-    await page.mouse.move(canvas.x + 180, canvas.y + canvas.height / 2 + 25, { steps: 12 });
+    await page.mouse.move(canvas.x + canvas.width * .4 + 90, canvas.y + canvas.height / 2 + 25, { steps: 12 });
     const render = (await page.getByRole('button', { name: 'Preview: right sidebar', exact: true }).boundingBox())!;
     const copy = (await page.getByRole('button', { name: 'Copy source', exact: true }).boundingBox())!;
     await page.mouse.up();

@@ -3388,25 +3388,13 @@ index 681cb41c..308ca76a 100644
      case "addBezier":
        return snapHint;
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..934efb9d 100644
+index 0ddde08e..dcd5a6c1 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
-@@ -144,6 +144,55 @@
+@@ -144,6 +144,43 @@
    flex: 1;
  }
  
-+.embeddedTools {
-+  display: flex;
-+  align-items: center;
-+  gap: 2px;
-+  overflow: auto;
-+  scrollbar-width: none;
-+  touch-action: pan-x pan-y;
-+}
-+
-+.embeddedTools::-webkit-scrollbar { display: none; }
-+.embeddedItem { flex: 0 0 auto; }
-+.embeddedSpacer { flex: 1 0 12px; }
 +.toolbarGrip { border: 0; background: transparent; color: var(--text-muted); cursor: grab; touch-action: none; user-select: none; }
 +.toolbarGrip:active { cursor: grabbing; }
 +.dockGuide { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
@@ -3447,7 +3435,7 @@ index 0ddde08e..934efb9d 100644
  .updateChip {
    display: inline-flex;
    align-items: center;
-@@ -224,3 +273,24 @@
+@@ -224,3 +261,24 @@
      padding: 8px;
    }
  }
@@ -3455,30 +3443,30 @@ index 0ddde08e..934efb9d 100644
 +.embeddedTools .btn { min-width: 44px; height: 44px; padding: 8px; }
 +.embeddedTools .zoomTrigger { width: 44px; padding: 0; font-size: 12px; }
 +.toolbarGrip { min-width: 44px; min-height: 44px; flex-shrink: 0; }
-+.palette { flex-wrap: nowrap; max-width: 240px; max-height: 160px; overflow: auto; }
-+.paletteSwatch { flex: 0 0 44px; width: 44px; height: 44px; }
++.paletteSwatch { width: 44px; height: 44px; }
 +
-+.panelButtons { display: flex; flex-direction: inherit; gap: 4px; }
-+.embeddedTools .palette { max-width: 44px; flex-direction: column; max-height: 176px; }
-+
-+.embeddedTools { min-width: 0; min-height: 0; overscroll-behavior: contain; }
-+.embeddedTools > * { flex-shrink: 0; }
-+.embeddedTools .palette { flex-shrink: 0; }
++/* The rail lays every control on a 44 px grid; a short canvas adds columns
++   (docked left or right) or rows (docked top or bottom) instead of scrolling. */
++.embeddedTools { display: grid; gap: 2px; justify-items: center; align-items: center; }
++.embeddedTools .panelButtons, .embeddedTools .palette { display: contents; }
++[data-dock="left"] .embeddedTools, [data-dock="right"] .embeddedTools {
++  grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
++}
++[data-dock="top"] .embeddedTools, [data-dock="bottom"] .embeddedTools, [data-dock="floating"] .embeddedTools {
++  grid-auto-flow: row; grid-template-columns: repeat(auto-fill, 44px); grid-auto-rows: 44px;
++}
++.embeddedTools .insertTrigger { width: 44px; padding: 0; font-size: 12px; }
 +
 +.insertChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: min(300px, calc(100vw - 48px)); }
 +.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
 +.insertChoice:disabled { opacity: .5; }
-+
-+[data-dock="top"] .embeddedTools .palette,
-+[data-dock="bottom"] .embeddedTools .palette,
-+[data-dock="floating"] .embeddedTools .palette { flex-direction: row; max-width: 176px; max-height: 44px; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..b8fc91bf 100644
+index a3293df2..be69ad26 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
 -import { useEffect, useMemo, useState } from "react";
-+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 +import { ZoomDisplayControl } from "./ZoomDisplayControl";
 +import { createPortal } from "react-dom";
  import { RiDownloadCloudLine } from "@remixicon/react";
@@ -3732,7 +3720,7 @@ index a3293df2..b8fc91bf 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +335,173 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +335,174 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -3852,7 +3840,7 @@ index a3293df2..b8fc91bf 100644
 +        {renderPopup(insertSection === "shape" ? "shape-picker" : "matrix-picker")}
 +      </>}
 +    </ToolbarPopupSection>}>
-+      <button type="button" className={css.btn} aria-label="Insert" aria-haspopup="dialog" aria-expanded={openPopupMode === "insert"}
++      <button type="button" className={`${css.btn} ${css.insertTrigger}`} aria-label="Insert" aria-haspopup="dialog" aria-expanded={openPopupMode === "insert"}
 +        onClick={() => { setInsertSection("all"); setOpenPopupMode((mode) => mode === "insert" ? null : "insert"); }}>Insert</button>
 +    </ToolbarToolPopup>;
 +
@@ -3898,15 +3886,16 @@ index a3293df2..b8fc91bf 100644
 +    visibility: safeRect ? "visible" as const : "hidden" as const
 +  };
 +  const verticalDock = dock === "left" || dock === "right";
-+  const toolStripSize = safeRect ? {
-+    maxHeight: verticalDock ? Math.max(44, safeRect.bottom - safeRect.top - 56) : 44,
-+    maxWidth: verticalDock ? 44 : Math.max(44, safeRect.right - safeRect.left - 56)
-+  } : undefined;
++  // The strip's grid adds columns (vertical dock) or rows (horizontal dock) once
++  // its controls exceed the canvas cell, so this one bound is all it needs.
++  const toolStripSize = safeRect ? (verticalDock
++    ? { maxHeight: Math.max(44, safeRect.bottom - safeRect.top - 56) }
++    : { maxWidth: Math.max(44, safeRect.right - safeRect.left - 56) }) : undefined;
 +
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +530,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +531,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -3918,7 +3907,7 @@ index a3293df2..b8fc91bf 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +590,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +591,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -3926,7 +3915,7 @@ index a3293df2..b8fc91bf 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +633,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +634,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -3934,7 +3923,7 @@ index a3293df2..b8fc91bf 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +649,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +650,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -3956,7 +3945,7 @@ index a3293df2..b8fc91bf 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +671,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +672,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -3964,7 +3953,7 @@ index a3293df2..b8fc91bf 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +679,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +680,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -3976,7 +3965,7 @@ index a3293df2..b8fc91bf 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +692,77 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +693,69 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4017,13 +4006,7 @@ index a3293df2..b8fc91bf 100644
 +    <button type="button" data-toolbar-grip className={css.toolbarGrip} aria-label="Move toolbar" title="Drag toolbar">
 +      ⋮⋮
 +    </button>
-+    <div ref={toolbarRef} className={css.embeddedTools} style={toolStripSize} onWheel={(event) => {
-+      const strip = toolbarRef.current;
-+      if (!strip) return;
-+      if (settings.toolbar.dock === "top" || settings.toolbar.dock === "bottom") strip.scrollLeft += event.deltaX || event.deltaY;
-+      else strip.scrollTop += event.deltaY || event.deltaX;
-+      event.preventDefault();
-+    }}>
++    <div ref={toolbarRef} className={css.embeddedTools} style={toolStripSize}>
 +      <div className={css.panelButtons}>
 +        <button type="button" className={css.btn} aria-label="Layers" onClick={onToggleLayers}>▤</button>
 +        <button type="button" className={css.btn} aria-label="Properties" onClick={onToggleProperties}>⚙</button>
@@ -4032,10 +4015,8 @@ index a3293df2..b8fc91bf 100644
 +      </div>
 +      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("erase")}
 +      {renderEmbeddedTool("addFreehand")}{renderInsertButton()}
-+      {settings.toolbar.items.filter((item) => item.kind !== "tool" || ["undo", "redo", "color", "palette", "addBucket"].includes(item.id)).map((item, index) => item.kind === "separator"
-+        ? <div key={index} className={css.separator} />
-+        : item.kind === "spacer" ? <div key={index} className={css.embeddedSpacer} />
-+          : <div key={index} className={css.embeddedItem}>{renderEmbeddedTool(item.id)}</div>)}
++      {settings.toolbar.items.flatMap((item) => item.kind === "tool" && ["undo", "redo", "color", "palette", "addBucket"].includes(item.id)
++        ? [<Fragment key={item.id}>{renderEmbeddedTool(item.id)}</Fragment>] : [])}
 +    </div>
 +  </div>{dockPreview ? createPortal(<div className={css.dockGuide} aria-hidden="true">
 +    {(["left", "top", "right", "bottom"] as const).map((dock) => <div key={dock}
@@ -4056,7 +4037,7 @@ index a3293df2..b8fc91bf 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +773,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +766,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -4070,7 +4051,7 @@ index a3293df2..b8fc91bf 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +789,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +782,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -4079,7 +4060,7 @@ index a3293df2..b8fc91bf 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +814,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +807,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );

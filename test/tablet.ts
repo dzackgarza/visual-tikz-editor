@@ -91,6 +91,13 @@ export class TabletInput {
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   }
 
+  /** One finger held still past the editor's 550 ms long-press threshold. */
+  async longPress(point: Point): Promise<void> {
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 1, ...point }] });
+    await new Promise(resolve => setTimeout(resolve, 800));
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
+
   async pinch(center: Point, startGap: number, endGap: number): Promise<void> {
     const pair = (gap: number) => [{ id: 1, x: center.x - gap / 2, y: center.y }, { id: 2, x: center.x + gap / 2, y: center.y }];
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pair(startGap) });
