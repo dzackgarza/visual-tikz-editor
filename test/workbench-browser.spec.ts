@@ -124,16 +124,22 @@ describe("standalone workbench host boundary", function () {
       const rail = frame.locator('[data-diagram-tools]');
       await expect(rail).toBeVisible();
       const strip = rail.locator('[class*="embeddedTools"]');
-      const overflow = await strip.evaluate(element => ({
-        vertical: element.scrollHeight - element.clientHeight, horizontal: element.scrollWidth - element.clientWidth }));
-      assert.deepEqual(overflow, { vertical: 0, horizontal: 0 });
-      for (const name of ['Layers', 'Properties', 'Settings', 'Zoom and display', 'Select', 'Lasso', 'Eraser', 'Freehand', 'Insert', 'Bucket', 'Undo', 'Redo'])
-        await expect(rail.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
-      await expect(rail.getByRole('button', { name: /^Drawing color: / })).toBeInViewport({ ratio: 1 });
-      const swatches = rail.getByRole('button', { name: /^Use / });
-      assert.ok(await swatches.count() > 0);
-      for (const swatch of await swatches.all()) await expect(swatch).toBeInViewport({ ratio: 1 });
-      await storyScreenshot(page, `rail-${tablet.name}`);
+      for (const theme of ['light', 'dark'] as const) {
+        if (theme === 'dark') {
+          await page.getByRole('button', { name: 'Dark theme', exact: true }).click();
+          await expect(frame.locator('html')).toHaveAttribute('data-color-scheme', 'dark');
+        }
+        const overflow = await strip.evaluate(element => ({
+          vertical: element.scrollHeight - element.clientHeight, horizontal: element.scrollWidth - element.clientWidth }));
+        assert.deepEqual(overflow, { vertical: 0, horizontal: 0 });
+        for (const name of ['Layers', 'Properties', 'Settings', 'Zoom and display', 'Select', 'Lasso', 'Eraser', 'Freehand', 'Insert', 'Bucket', 'Undo', 'Redo'])
+          await expect(rail.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
+        await expect(rail.getByRole('button', { name: /^Drawing color: / })).toBeInViewport({ ratio: 1 });
+        const swatches = rail.getByRole('button', { name: /^Use / });
+        assert.ok(await swatches.count() > 0);
+        for (const swatch of await swatches.all()) await expect(swatch).toBeInViewport({ ratio: 1 });
+        await storyScreenshot(page, `rail-${tablet.name}-${theme}`);
+      }
     });
   }
 
@@ -359,13 +365,13 @@ describe("standalone workbench host boundary", function () {
       };
       for (const kind of ['tikzcd', 'tikzpicture'] as const) {
         await tap(page.getByRole('group', { name: 'File' }).locator('summary'));
-        await expect(page.locator('.tikz-standalone-status')).toContainText(/^New tikz/);
         await tap(page.getByRole('button', { name: 'New tikzpicture or tikzcd…', exact: true }));
         await expect(page.getByRole('dialog', { name: 'Save changes?' }), 'An untouched new diagram has no changes to save').toHaveCount(0);
         const dialog = page.getByRole('dialog');
         await expect(dialog.getByRole('button', { name: 'tikzpicture', exact: true })).toBeVisible();
         await tap(dialog.getByRole('button', { name: kind, exact: true }));
         await expect(page.locator(kind === 'tikzcd' ? 'iframe[title="Quiver diagram editor"]' : 'iframe[title="TikZ visual editor"]')).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('.tikz-standalone-status')).toHaveText(`New ${kind} · Synced`);
       }
     });
   }
