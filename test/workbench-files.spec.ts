@@ -6,13 +6,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { chromium, expect, type Browser, type Page } from '@playwright/test';
+import { buildWorkbench, startWorkbench, type Workbench } from './tablet';
 
 const execute = promisify(execFile);
 
 describe('standalone native file workflow', function () {
   let displayServer: ChildProcess;
   let sessionBus: ChildProcess;
-  let server: ChildProcess;
+  let workbench: Workbench;
   let browser: Browser;
   let page: Page;
   let desktopEnv: Record<string, string>;
@@ -20,16 +21,11 @@ describe('standalone native file workflow', function () {
   let url: string;
 
   async function startServer(): Promise<void> {
-    server = spawn('just', ['run'], { env: desktopEnv, stdio: ['ignore', 'pipe', 'inherit'], detached: true });
-    url = await new Promise<string>((resolve, reject) => {
-      server.once('error', reject);
-      server.once('exit', code => reject(new Error(`Standalone server exited: ${code}`)));
-      server.stdout!.on('data', chunk => {
-        const match = /TikZ workbench: (http:\/\/127\.0\.0\.1:\d+\/)/.exec(String(chunk));
-        if (match) resolve(match[1]);
-      });
-    });
+    workbench = await startWorkbench(desktopEnv);
+    url = workbench.url;
   }
+
+  const fileMenu = () => page.getByRole('group', { name: 'File' }).locator('summary');
 
   async function chooseFile(name: string): Promise<void> {
     const { stdout } = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'xdg-desktop-portal-gtk'], { env: desktopEnv, timeout: 10000 });
@@ -61,6 +57,7 @@ describe('standalone native file workflow', function () {
     });
     diagramPath = join(await mkdtemp(join(tmpdir(), 'workbench-native-')), 'authored.tikz');
     await mkdir('test-results/workbench', { recursive: true });
+    await buildWorkbench();
     await startServer();
     browser = await chromium.launch({ headless: false, env: desktopEnv });
     page = await browser.newPage();
@@ -73,7 +70,7 @@ describe('standalone native file workflow', function () {
       await page.context().tracing.stop({ path: 'test-results/workbench/native-files.zip' });
     }
     await browser?.close();
-    if (server?.pid) process.kill(-server.pid, 'SIGTERM');
+    await workbench?.stop();
     sessionBus?.kill('SIGTERM');
     displayServer?.kill('SIGTERM');
   });
@@ -84,19 +81,18 @@ describe('standalone native file workflow', function () {
 \draw[blue] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
     await page.goto(url);
-    await page.getByRole('button', { name: 'TikZ picture', exact: true }).click();
+    await page.getByRole('button', { name: 'tikzpicture', exact: true }).click();
     await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
     await expect(page.locator('.cm-content')).toBeVisible({ timeout: 30_000 });
     await page.locator('.cm-content').fill(authored);
-    await page.getByRole('button', { name: 'File', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Save As…', exact: true }).click();
+    await fileMenu().click();
+    await page.getByRole('button', { name: 'Save As…', exact: true }).click();
     await chooseFile('save');
     await expect.poll(() => existsSync(diagramPath)).toBe(true);
     assert.equal(await readFile(diagramPath, 'utf8'), authored);
     await expect(page.locator('.tikz-standalone-status')).toContainText('Saved');
     await page.goto('about:blank');
-    process.kill(-server.pid!, 'SIGTERM');
-    await new Promise(resolve => server.once('exit', resolve));
+    await workbench.stop();
     await startServer();
     await page.goto(url);
     await expect(page.getByRole('button', { name: 'Open existing…', exact: true })).toBeVisible({ timeout: 30_000 });
@@ -119,8 +115,8 @@ describe('standalone native file workflow', function () {
     const edited = await page.evaluate(() => navigator.clipboard.readText());
     assert.equal(await readFile(diagramPath, 'utf8'), edited);
     await expect(page.locator('.tikz-standalone-status')).toContainText('Saved');
-    await page.getByRole('button', { name: 'File', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Open…', exact: true }).click();
+    await fileMenu().click();
+    await page.getByRole('button', { name: 'Open…', exact: true }).click();
     const dialog = await execute('xdotool', ['search', '--sync', '--onlyvisible', '--class', 'xdg-desktop-portal-gtk'], { env: desktopEnv, timeout: 10000 });
     await execute('xdotool', ['windowfocus', '--sync', dialog.stdout.trim().split('\n').at(-1)!], { env: desktopEnv });
     const cancelled = page.waitForResponse(response => response.url().endsWith('/api/open'));
@@ -160,7 +156,7 @@ describe('standalone native file workflow', function () {
         await page.evaluate(() => {
           const buttons = [...document.querySelectorAll('button')];
           buttons.find(button => button.getAttribute('aria-label') === 'Preview: right sidebar')!.click();
-          buttons.find(button => button.textContent?.trim() === 'File')!.click();
+          document.querySelector<HTMLElement>('.file-menu summary')!.click();
         });
       } else {
         await frame.locator('.vertex').nth(1).click();
@@ -169,10 +165,10 @@ describe('standalone native file workflow', function () {
           input.dispatchEvent(new Event('input', { bubbles: true }));
           const buttons = [...window.parent.document.querySelectorAll('button')];
           buttons.find(button => button.getAttribute('aria-label') === 'Preview: right sidebar')!.click();
-          buttons.find(button => button.textContent?.trim() === 'File')!.click();
+          window.parent.document.querySelector<HTMLElement>('.file-menu summary')!.click();
         });
       }
-      await page.getByRole('menuitem', { name: 'Save As…', exact: true }).click();
+      await page.getByRole('button', { name: 'Save As…', exact: true }).click();
       await chooseFile('save');
       await expect.poll(() => existsSync(diagramPath)).toBe(true);
       const browserWindow = await execute('xdotool', ['search', '--onlyvisible', '--class', 'chromium'], { env: desktopEnv });

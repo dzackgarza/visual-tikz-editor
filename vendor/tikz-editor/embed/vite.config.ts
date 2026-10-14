@@ -20,7 +20,6 @@ export default defineConfig({
 			{ find: /^@tikz-editor\/app\/platform\/current$/, replacement: path.resolve(__dirname, '../../packages/app/src/platform/current.ts') },
 			{ find: /^@tikz-editor\/app\/platform\/types$/, replacement: path.resolve(__dirname, '../../packages/app/src/platform/types.ts') },
 			{ find: /^@tikz-editor\/app\/store\/types$/, replacement: path.resolve(__dirname, '../../packages/app/src/store/types.ts') },
-			{ find: /^@tikz-editor\/app\/workspace$/, replacement: path.resolve(__dirname, '../../packages/app/src/ui/workspace-apply.ts') },
 			{ find: /^@tikz-editor\/lang-tikz$/, replacement: path.resolve(__dirname, '../../packages/lang-tikz/src/index.ts') },
 			{ find: /^@tikz-editor\/lezer-tikz$/, replacement: path.resolve(__dirname, '../../packages/lezer-tikz/src/index.ts') },
 			{ find: /^tikz-editor$/, replacement: path.resolve(__dirname, '../../packages/core/src/index.ts') },

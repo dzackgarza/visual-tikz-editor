@@ -5,11 +5,11 @@ import { snapshotResultSchema } from './snapshot-protocol';
 export const commandFailureSchema = z.enum([
   'invalid-command', 'stale-target', 'source-changed', 'duplicate-stroke-key',
   'unsupported-source', 'missing-stroke', 'ink-is-not-geometry', 'no-fit',
-  'edit-rejected', 'invalid-original-ink', 'workspace-unavailable', 'cancelled', 'timeout', 'busy',
+  'edit-rejected', 'invalid-original-ink', 'cancelled', 'timeout', 'busy',
 ]);
 export type CommandFailure = z.infer<typeof commandFailureSchema>;
 
-const action = z.enum(['load', 'settings', 'display', 'workspace', 'inspector', 'source',
+const action = z.enum(['load', 'settings', 'display', 'inspector', 'source',
   'tool', 'tool-option', 'zoom', 'clipboard-result', 'import-ink', 'interpret-ink', 'restore-ink', 'cancel']);
 const identity = commandIdentitySchema.shape;
 export const commandReplySchema = z.discriminatedUnion('status', [

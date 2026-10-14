@@ -19,7 +19,6 @@ function load() {
   acceptedSource = source.value;
   revision++;
   post({ action: 'load', source: source.value, autosave: 0, fileName: 'fixture.tikz', imageBaseUrl: `${location.origin}/`, sessionId, revision, requestId: crypto.randomUUID() });
-  post({ action: 'workspace', workspace: 'canvasOnly', sessionId, revision, requestId: crypto.randomUUID() });
 }
 
 function receive(event: MessageEvent) {
@@ -34,7 +33,7 @@ function receive(event: MessageEvent) {
     acceptedSource = message.source;
     source.value = acceptedSource;
   }
-  if (message.event === 'reply' && message.action !== 'workspace')
+  if (message.event === 'reply')
     document.querySelector('#command-result')!.textContent = `${message.action}:${message.status}:${message.error ?? ''}`;
   if (message.event === 'reply' && message.status === 'failed') status.textContent = message.error;
 }

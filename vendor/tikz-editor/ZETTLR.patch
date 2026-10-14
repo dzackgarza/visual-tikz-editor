@@ -4396,7 +4396,7 @@ index cf4cf2cf..106a922d 100644
  
  .hitRegions {
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..2ee0f284 100644
+index 4e22ccfa..dbc29a80 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,16 @@ preflightPositionNodeRelativeToAction,
@@ -5829,7 +5829,7 @@ index 4e22ccfa..2ee0f284 100644
 +          <label><input type="checkbox" checked={preserveOriginal} onChange={(event) => setPreserveOriginal(event.currentTarget.checked)} />Keep recoverable original in source</label>
 +          <div className={freehandPopupCss.actions}>
 +            {freehandResultOffer.intent === "geometry" ? <button type="button" onClick={() => applyFreehandSuggestion()}>Apply simplification</button> : null}
-+            <button type="button" onClick={cancelFreehandOffer}>Keep original / Escape</button>
++            <button type="button" onClick={cancelFreehandOffer}>Keep original</button>
 +          </div>
 +        </div>
 +      ) : null}

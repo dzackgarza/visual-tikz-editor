@@ -288,7 +288,6 @@ function onMessage(event: MessageEvent): void {
       hostReady.value = true;
       sendFullLoad();
       postToEditor({ action: "display", fullscreen: props.fullscreen });
-      postToEditor({ action: "workspace", workspace: "canvasOnly" });
       postToEditor({ action: "inspector", inspector: props.showInspector === true });
       break;
     case "loaded":

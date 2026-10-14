@@ -1,15 +1,14 @@
 import { strict as assert } from "node:assert";
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir } from "node:fs/promises";
-import { chromium, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, expect, type Browser, type BrowserContext, type FrameLocator, type Page } from "@playwright/test";
 
 import { geometryTraces } from "./geometry-traces";
+import { buildWorkbench, editorDebug, editorFrame, startWorkbench, storyScreenshot, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
 import type { EditorSnapshot } from '../src/host';
 
-const freehandButton = (page: Page) => page.getByRole('button', { name: 'Draw', exact: true });
+const freehandTool = (frame: FrameLocator) => frame.getByRole('button', { name: 'Freehand', exact: true });
 
 describe("standalone workbench host boundary", function () {
-  let server: ChildProcess;
+  let workbench: Workbench;
   let browser: Browser;
   let context: BrowserContext;
   let page: Page;
@@ -35,20 +34,13 @@ describe("standalone workbench host boundary", function () {
   }
 
   before(async function () {
-    server = spawn("just", ["run"], { stdio: ["ignore", "pipe", "inherit"], detached: true });
-    url = await new Promise<string>((resolve, reject) => {
-      server.once("error", reject);
-      server.once("exit", code => reject(new Error(`Standalone server exited: ${code}`)));
-      server.stdout!.on("data", chunk => {
-        const match = /TikZ workbench: (http:\/\/127\.0\.0\.1:\d+\/)/.exec(String(chunk));
-        if (match !== null) resolve(match[1]);
-      });
-    });
+    await buildWorkbench();
     browser = await chromium.launch();
-    await mkdir("test-results/workbench", { recursive: true });
   });
 
   beforeEach(async function () {
+    workbench = await startWorkbench(process.env);
+    url = workbench.url;
     context = await browser.newContext();
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
@@ -61,14 +53,14 @@ describe("standalone workbench host boundary", function () {
 
   afterEach(async function () {
     const name = this.currentTest!.title.replace(/[^a-z0-9]+/gi, "-");
-    await page.screenshot({ path: `test-results/workbench/${name}.png` });
+    await storyScreenshot(page, name);
     await context.tracing.stop({ path: `test-results/workbench/${name}.zip` });
     await context.close();
+    await workbench.stop();
   });
 
   after(async function () {
     await browser?.close();
-    if (server?.pid !== undefined) process.kill(-server.pid, "SIGTERM");
   });
 
   it('keeps authored source through a render error and recovers in the dark tablet workspace', async function () {
@@ -354,8 +346,8 @@ describe("standalone workbench host boundary", function () {
     await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
     await expect.poll(() => frame.locator('[data-source-id]').count()).toBeGreaterThan(1);
     await expect(page.locator('.tikz-standalone-status')).toContainText('Synced');
-    await freehandButton(page).click();
-    await expect(freehandButton(page)).toHaveAttribute('aria-pressed', 'true');
+    await freehandTool(frame).click();
+    await expect(freehandTool(frame)).toHaveAttribute('aria-pressed', 'true');
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(box.x + box.width * .55, box.y + box.height * .3);
     await page.mouse.down();
@@ -387,8 +379,11 @@ describe("standalone workbench host boundary", function () {
     // that delivery window, then use the canvas again to catch hidden mutation.
     await page.waitForTimeout(600);
     assert.equal(await sourcePane.innerText(), authored);
-    await page.getByRole("button", { name: "Properties", exact: true }).click();
-    await page.getByRole("button", { name: "Hide properties", exact: true }).click();
+    const frame = editorFrame(page);
+    await frame.getByRole("button", { name: "Properties", exact: true }).click();
+    await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
+    await frame.getByRole("button", { name: "Close properties", exact: true }).click();
+    await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toHaveCount(0);
     assert.equal(await sourcePane.innerText(), authored);
   });
 
@@ -434,13 +429,16 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`;
     await sourcePane.fill(source);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    const frame = editorFrame(page);
+    await frame.getByRole("button", { name: "Properties", exact: true }).click();
+    await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
     await page.screenshot({ path: "test-results/workbench/tablet-properties.png" });
     await expect(sourcePane).toBeHidden();
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     assert.equal(await sourcePane.innerText(), source);
+    await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
     await page.screenshot({ path: "test-results/workbench/tablet-both-panels.png" });
-    await page.getByRole("button", { name: "Hide properties", exact: true }).click();
+    await frame.getByRole("button", { name: "Close properties", exact: true }).click();
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const writes: string[] = [];
     page.on("request", request => { if (request.method() !== "GET") writes.push(request.url()); });
@@ -502,37 +500,6 @@ describe("standalone workbench host boundary", function () {
     assert.deepEqual(JSON.parse(await page.locator('#repeated-result').innerText()), accepted);
     await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
     await expect(page.getByLabel('Authored source')).toHaveValue(accepted.source);
-  });
-
-  it('cancels a pending workspace command before it can change the editor', async function () {
-    await page.addInitScript(() => window.addEventListener('message', event => {
-      const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-      if (message?.event === 'loaded') (window as unknown as { loadedEditor: unknown }).loadedEditor = message;
-    }));
-    await page.goto(`${url}embedding.html`);
-    await expect(page.locator('#status')).toHaveText('Loaded');
-    const accepted = { ...await page.evaluate(() => (window as unknown as { loadedEditor: { sessionId: string; revision: number } }).loadedEditor), source: await page.getByLabel('Authored source').inputValue() };
-    await page.evaluate(({ sessionId, revision }) => {
-      const editor = document.querySelector<HTMLIFrameElement>('#editor')!;
-      const output = document.createElement('pre');
-      output.id = 'workspace-result';
-      document.querySelector('section')!.append(output);
-      window.addEventListener('message', event => {
-        if (event.source !== editor.contentWindow || event.origin !== location.origin) return;
-        const reply = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (reply.event === 'reply' && reply.requestId === 'cancelled-workspace') output.textContent = JSON.stringify(reply);
-      });
-      editor.contentWindow!.postMessage({ action: 'workspace', workspace: 'default', sessionId, revision, requestId: 'cancelled-workspace' }, location.origin);
-      editor.contentWindow!.postMessage({ action: 'cancel', targetRequestId: 'cancelled-workspace', sessionId, revision, requestId: crypto.randomUUID() }, location.origin);
-    }, accepted);
-    await expect(page.locator('#workspace-result')).not.toBeEmpty();
-    const reply = JSON.parse(await page.locator('#workspace-result').innerText());
-    assert.equal(reply.status, 'failed', await page.locator('#command-result').innerText());
-    assert.equal(reply.error, 'cancelled');
-    await expect(page.frameLocator('#editor').getByRole('menuitem', { name: 'File', exact: true })).toBeHidden();
-    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
-    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
-    assert.equal(JSON.parse(await page.locator('#result').innerText()).source, accepted.source);
   });
 
   it("retains the current drawing when an older load arrives from its host", async function () {
@@ -667,7 +634,7 @@ describe("standalone workbench host boundary", function () {
     await page.getByRole('button', { name: 'Load source', exact: true }).click();
     const frame = page.frameLocator('#editor');
     await frame.getByRole('button', { name: 'Figure 1', exact: true }).click();
-    await freehandButton(page).click();
+    await freehandTool(page.frameLocator('#editor')).click();
     const before = await hostSnapshot();
     const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const draw = async () => {
@@ -675,11 +642,12 @@ describe("standalone workbench host boundary", function () {
       await page.mouse.down();
       await page.mouse.move(bounds.x + bounds.width * .35 + 110, bounds.y + bounds.height * .6 + 25, {steps: 15});
       await page.mouse.up();
-      await expect(frame.getByRole('button', {name: 'Restore stroke', exact: true})).toBeVisible();
+      await frame.getByRole('dialog', {name: 'Freehand result'}).getByRole('button', {name: 'Apply simplification', exact: true}).click();
+      await expect(frame.getByRole('button', {name: 'Restore original stroke', exact: true})).toBeVisible();
     };
     await draw();
     const fittedSource = await page.getByLabel('Authored source').inputValue();
-    await frame.getByRole('button', {name: 'Restore stroke', exact: true}).click();
+    await frame.getByRole('button', {name: 'Restore original stroke', exact: true}).click();
     await expect(page.getByLabel('Authored source')).not.toHaveValue(fittedSource);
     const raw = await hostSnapshot();
     const originalDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(raw.source)![1];
@@ -825,7 +793,7 @@ describe("standalone workbench host boundary", function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
     const frame = page.frameLocator('#editor');
-    await freehandButton(page).click();
+    await freehandTool(page.frameLocator('#editor')).click();
     const viewport = frame.locator('[data-canvas-viewport="true"]');
     await viewport.scrollIntoViewIfNeeded();
     const bounds = (await viewport.boundingBox())!;
@@ -850,10 +818,10 @@ describe("standalone workbench host boundary", function () {
 
   it('lets the author keep handwritten ink outside geometric interpretation', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    const frame = page.frameLocator('iframe');
-    await page.getByRole('button', { name: 'Properties', exact: true }).click();
+    const frame = editorFrame(page);
+    await frame.getByRole('button', { name: 'Properties', exact: true }).click();
     await frame.getByRole('checkbox', { name: 'Interpret geometry', exact: true }).uncheck();
-    await page.getByRole('button', { name: 'Hide properties', exact: true }).click();
+    await frame.getByRole('button', { name: 'Close properties', exact: true }).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const x = box.x + box.width * .4, y = box.y + box.height * .55;
     await frame.locator('body').evaluate(() => {
@@ -889,7 +857,7 @@ describe("standalone workbench host boundary", function () {
     'Stored originals retain every delivered pen sample in order');
     assert.equal((source.match(/ circle /g) ?? []).length, 0, 'The handwritten loop must not become a circle');
     await expect(frame.getByRole('dialog', { name: 'Freehand result' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Properties', exact: true }).click();
+    await frame.getByRole('button', { name: 'Properties', exact: true }).click();
     await expect(frame.getByRole('checkbox', { name: 'Interpret geometry', exact: true })).not.toBeChecked();
   });
 
@@ -897,7 +865,7 @@ describe("standalone workbench host boundary", function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const frame = page.frameLocator('#editor');
-    await freehandButton(page).click();
+    await freehandTool(page.frameLocator('#editor')).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const x = box.x + box.width * .3, y = box.y + box.height * .55;
     const cdp = await context.newCDPSession(page);
@@ -912,53 +880,55 @@ describe("standalone workbench host boundary", function () {
     assert.equal(result.originalInk.length, 1);
     assert.ok(result.originalInk[0].stroke.samples.length >= 3);
     assert.ok(result.svg.includes(`data-source-id="${result.originalInk[0].sourceIds[0]}"`));
-    await expect(freehandButton(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(freehandTool(page.frameLocator('#editor'))).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('keeps palm contact out of pen drawing and supports finger pan and pinch afterward', async function () {
-    await page.goto(`${url}embedding.html`);
-    await expect(page.locator('#status')).toHaveText('Loaded');
-    const frame = page.frameLocator('#editor');
-    await freehandButton(page).click();
-    const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-    const x = box.x + box.width * .3, y = box.y + box.height * .55;
-    const cdp = await context.newCDPSession(page);
-    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1, pointerType: 'pen', force: .5 });
-    for (let i = 1; i <= 20; i++) {
-      if (i === 5) await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 3, x: x + 160, y: y + 50, radiusX: 35, radiusY: 30 }] });
-      if (i === 10) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 3, x: x + 180, y: y + 70, radiusX: 35, radiusY: 30 }] });
-      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + i * 5, y, button: 'left', buttons: 1, pointerType: 'pen', force: .5 });
-    }
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + 100, y, button: 'left', buttons: 0, clickCount: 1, pointerType: 'pen' });
-    await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
-    await expect(page.getByLabel('Authored source')).toHaveValue(/workbench-ink:/);
+  async function embeddingSnapshot(): Promise<EditorSnapshot> {
     await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
     await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
-    const drawn = JSON.parse(await page.locator('#result').innerText());
-    assert.equal(drawn.originalInk.length, 1);
-    assert.ok(drawn.originalInk[0].stroke.samples.length >= 22, 'Palm contact must not replace the pen drag');
-    await frame.getByRole('button', { name: 'Keep', exact: true }).click();
-    await expect(freehandButton(page)).toHaveAttribute('aria-pressed', 'true');
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 4, x, y }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 4, x: x + 55, y: y + 35 }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
-    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
-    const panned = JSON.parse(await page.locator('#result').innerText());
-    assert.equal(panned.source, drawn.source);
-    assert.notDeepEqual(panned.state.viewport, drawn.state.viewport);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 5, x, y }, { id: 6, x: x + 80, y }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 5, x: x - 30, y }, { id: 6, x: x + 110, y }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
-    await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
-    const pinched = JSON.parse(await page.locator('#result').innerText());
-    assert.equal(pinched.source, drawn.source);
-    assert.ok(pinched.state.viewport.scale > panned.state.viewport.scale);
-    await expect(freehandButton(page)).toHaveAttribute('aria-pressed', 'true');
-  });
+    return JSON.parse(await page.locator('#result').innerText());
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`keeps palm contact out of pen drawing and supports finger pan and pinch afterward in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.goto(`${url}embedding.html`);
+      await expect(page.locator('#status')).toHaveText('Loaded');
+      const frame = page.frameLocator('#editor');
+      await freehandTool(frame).click();
+      const input = await TabletInput.attach(page);
+      const viewport = frame.locator('[data-canvas-viewport="true"]');
+      await viewport.scrollIntoViewIfNeeded();
+      const box = (await viewport.boundingBox())!;
+      const x = box.x + box.width * .3, y = box.y + box.height * .55;
+      await input.penDown({ x, y });
+      for (let i = 1; i <= 20; i++) {
+        if (i === 5) await input.palm({ x: x + 160, y: y + 50 }, 'touchStart');
+        if (i === 10) await input.palm({ x: x + 180, y: y + 70 }, 'touchMove');
+        await input.penMove({ x: x + i * 5, y });
+      }
+      await input.palm({ x: x + 180, y: y + 70 }, 'touchEnd');
+      await input.penUp({ x: x + 100, y });
+      await frame.getByRole('dialog', { name: 'Freehand result' }).getByRole('button', { name: 'Apply simplification', exact: true }).click();
+      await expect(frame.getByRole('dialog', { name: 'Freehand result' })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
+      await expect(page.getByLabel('Authored source')).toHaveValue(/workbench-ink:/);
+      const drawn = await embeddingSnapshot();
+      assert.equal(drawn.originalInk.length, 1);
+      assert.ok(drawn.originalInk[0].stroke.samples.length >= 22, 'Palm contact must not replace the pen drag');
+      await expect(freehandTool(frame)).toHaveAttribute('aria-pressed', 'true');
+      await input.touch([{ x, y }, { x: x + 55, y: y + 35 }]);
+      const panned = await embeddingSnapshot();
+      assert.equal(panned.source, drawn.source);
+      assert.notDeepEqual(panned.state.viewport, drawn.state.viewport);
+      await input.pinch({ x: x + 40, y }, 80, 140);
+      const pinched = await embeddingSnapshot();
+      assert.equal(pinched.source, drawn.source);
+      assert.ok(pinched.state.viewport.scale > panned.state.viewport.scale);
+      await expect(freehandTool(frame)).toHaveAttribute('aria-pressed', 'true');
+      await storyScreenshot(page, `palm-pan-pinch-${tablet.name}`);
+    });
+  }
 
   it("cancels a resource-pending snapshot and continues with a newer drawing", async function () {
     let release!: () => void;
@@ -993,14 +963,14 @@ describe("standalone workbench host boundary", function () {
 
   it('keeps file ownership in the standalone host', async function () {
     await expect(page.frameLocator('iframe[title="TikZ visual editor"]').getByRole('menuitem', { name: 'File', exact: true })).toBeHidden();
-    await expect(page.getByRole('button', { name: 'File', exact: true })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'File' })).toBeVisible();
   });
 
   it('restores its accepted tool and viewport in a fresh editor session', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const frame = page.frameLocator('#editor');
-    await freehandButton(page).click();
+    await freehandTool(page.frameLocator('#editor')).click();
     const viewport = frame.locator('[data-canvas-viewport="true"]');
     await viewport.scrollIntoViewIfNeeded();
     const box = (await viewport.boundingBox())!;
@@ -1025,7 +995,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator('#status')).toHaveText('Snapshot ready', { timeout: 12000 });
     const restored = JSON.parse(await page.locator('#result').innerText());
     assert.deepEqual(restored.state, saved.state);
-    await expect(freehandButton(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(freehandTool(page.frameLocator('#editor'))).toHaveAttribute('aria-pressed', 'true');
     assert.equal(await frame.locator('[data-canvas-scale]').getAttribute('data-canvas-scale'), String(saved.state.viewport.scale));
     await expect.poll(async () => {
       const after = await displayedCircle.boundingBox();
@@ -1083,36 +1053,56 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
-  for (const width of [1280, 768]) {
-    it(`retains authored source and its drawing tool through rendered-view switches at ${width}px`, async function () {
-      await page.setViewportSize({ width, height: 1024 });
-      await page.reload();
-      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
-      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
-      const authored = String.raw`\begin{tikzpicture}
+  const renderSwitchAuthored = String.raw`\begin{tikzpicture}
 % Retain this comment and the authored macro even if the canvas does not interpret it.
 \pgfmathsetmacro{\unused}{3+4}
 \draw[blue] (0,0) circle (1cm);
 \end{tikzpicture}`;
-      const sourcePane = page.locator('.cm-content');
-      await sourcePane.fill(authored);
-      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', );
-      const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
-      await page.getByRole('button', { name: 'Preview: right sidebar', exact: true }).click();
-      await expect(page.locator('.tikz-standalone-status')).toContainText('Up to date', { timeout: 40000 });
-      assert.equal(await sourcePane.innerText(), authored);
-      await page.screenshot({ path: `test-results/workbench/rendered-${width}.png` });
-      await page.getByRole('button', { name: 'Canvas: right sidebar', exact: true }).click();
-      const viewport = frame.locator('[data-canvas-viewport="true"]');
-      const bounds = (await viewport.boundingBox())!;
-      await page.mouse.move(bounds.x + bounds.width / 3, bounds.y + bounds.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(bounds.x + bounds.width / 3 + 100, bounds.y + bounds.height / 2 + 25, { steps: 16 });
-      await page.mouse.up();
-      await expect(sourcePane).toContainText('workbench-ink:');
-      await viewport.press('Control+z');
-      await viewport.press('Control+z');
-      await expect.poll(() => sourcePane.innerText()).toBe(authored);
+
+  async function authorAndRender(width: number, height: number): Promise<void> {
+    await page.setViewportSize({ width, height });
+    await page.reload();
+    await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+    await page.locator('.cm-content').fill(renderSwitchAuthored);
+    await expect(page.locator('.tikz-standalone-status')).toContainText('Synced');
+    await page.getByRole('button', { name: 'Preview: right sidebar', exact: true }).click();
+    await expect(page.locator('.tikz-standalone-status')).toContainText('Up to date', { timeout: 40000 });
+    assert.equal(await page.locator('.cm-content').innerText(), renderSwitchAuthored);
+    await page.screenshot({ path: `test-results/workbench/rendered-${width}x${height}.png` });
+    await page.getByRole('button', { name: 'Canvas: right sidebar', exact: true }).click();
+  }
+
+  it('retains authored source and its drawing tool through rendered-view switches with a desktop mouse', async function () {
+    await authorAndRender(1280, 1024);
+    const viewport = editorFrame(page).locator('[data-canvas-viewport="true"]');
+    const bounds = (await viewport.boundingBox())!;
+    await page.mouse.move(bounds.x + bounds.width / 3, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + bounds.width / 3 + 100, bounds.y + bounds.height / 2 + 25, { steps: 16 });
+    await page.mouse.up();
+    await expect(page.locator('.cm-content')).toContainText('workbench-ink:');
+    await viewport.press('Control+z');
+    await viewport.press('Control+z');
+    await expect.poll(() => page.locator('.cm-content').innerText()).toBe(renderSwitchAuthored);
+  });
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`retains authored source and its drawing tool through rendered-view switches by pen in ${tablet.name}`, async function () {
+      await authorAndRender(tablet.width, tablet.height);
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await expect(freehandTool(frame)).toHaveAttribute('aria-pressed', 'true');
+      const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const before = (await editorDebug(page)).historyIndex;
+      await input.penStroke(waveAcross(bounds, .45, .5, 100));
+      await frame.getByRole('dialog', { name: 'Freehand result' }).getByRole('button', { name: 'Apply simplification', exact: true }).click();
+      await expect(page.locator('.cm-content')).toContainText('workbench-ink:');
+      await expect(freehandTool(frame)).toHaveAttribute('aria-pressed', 'true');
+      const strokeEdits = (await editorDebug(page)).historyIndex - before;
+      assert.ok(strokeEdits > 0, 'The stroke is an undoable edit');
+      for (let i = 0; i < strokeEdits; i++) await frame.getByRole('button', { name: 'Undo', exact: true }).click();
+      await expect.poll(() => page.locator('.cm-content').innerText()).toBe(renderSwitchAuthored);
     });
   }
 });

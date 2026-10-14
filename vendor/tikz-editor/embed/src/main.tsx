@@ -474,21 +474,6 @@ function HostBridge() {
 					setFullscreen(command.fullscreen);
 					reply(command);
 					return;
-				case 'workspace':
-					if (pendingCommands.has(command.requestId)) return;
-					if (pendingCommands.size >= 32) { reply(command, 'busy'); return; }
-					pendingCommands.set(command.requestId, { command,
-						timer: window.setTimeout(() => reply(command, 'timeout'), 10000) });
-					void import('@tikz-editor/app/workspace').then(({ applyWorkspace }) => {
-						if (pendingCommands.get(command.requestId)?.command !== command) return;
-						if (command.revision !== currentHostRevision) { reply(command, 'stale-target'); return; }
-						applyWorkspace(command.workspace);
-						document.documentElement.dataset.embedWorkspace = command.workspace;
-						reply(command);
-					}).catch(() => {
-						if (pendingCommands.get(command.requestId)?.command === command) reply(command, 'workspace-unavailable');
-					});
-					return;
 				case 'inspector':
 					document.documentElement.dataset.embedInspector = command.inspector ? 'open' : 'closed';
 					window.dispatchEvent(new Event('tikz-embed-inspector'));

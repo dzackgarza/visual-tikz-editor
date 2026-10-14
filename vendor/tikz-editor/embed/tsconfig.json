@@ -38,9 +38,6 @@
       "@tikz-editor/app/store/types": [
         "../../packages/app/src/store/types.ts"
       ],
-      "@tikz-editor/app/workspace": [
-        "../../packages/app/src/ui/workspace-apply.ts"
-      ],
       "@tikz-editor/lang-tikz": [
         "../../packages/lang-tikz/src/index.ts"
       ],

@@ -19,7 +19,6 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
     imageBaseUrl: z.string().optional(), nativeClipboard: z.boolean().optional(), settings: settings.optional(), state: editorStateSchema.optional(), autosave: z.literal(0).optional() }),
   z.object({ ...identity, action: z.literal('settings'), settings }),
   z.object({ ...identity, action: z.literal('display'), fullscreen: z.boolean() }),
-  z.object({ ...identity, action: z.literal('workspace'), workspace: z.enum(['default', 'canvasOnly']) }),
   z.object({ ...identity, action: z.literal('inspector'), inspector: z.boolean() }),
   z.object({ ...identity, action: z.literal('tool'), tool: toolModeSchema }),
   z.object({ ...identity, action: z.literal('tool-option'), option: z.enum(['smoothing', 'strokeColor', 'fillColor', 'shape', 'matrix']),

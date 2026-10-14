@@ -1,29 +1,23 @@
 import { strict as assert } from 'node:assert';
-import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { chromium, expect, type Browser } from '@playwright/test';
+import { buildWorkbench, startWorkbench, type Workbench } from './tablet';
 
 describe('hosted workbench', function () {
-  let server: ChildProcess;
+  let workbench: Workbench;
   let browser: Browser;
   let url: string;
 
   before(async function () {
-    server = spawn('just', ['run'], { stdio: ['ignore', 'pipe', 'inherit'], detached: true });
-    url = await new Promise<string>((resolve, reject) => {
-      server.once('error', reject);
-      server.once('exit', code => reject(new Error(`Workbench exited: ${code}`)));
-      server.stdout!.on('data', chunk => {
-        const match = /TikZ workbench: (http:\/\/127\.0\.0\.1:\d+\/)/.exec(String(chunk));
-        if (match !== null) resolve(match[1]);
-      });
-    });
+    await buildWorkbench();
+    workbench = await startWorkbench(process.env);
+    url = workbench.url;
     browser = await chromium.launch();
   });
 
   after(async function () {
     await browser?.close();
-    if (server?.pid !== undefined) process.kill(-server.pid, 'SIGTERM');
+    await workbench?.stop();
   });
 
   it('returns a completed drawing to its embedding document', async function () {
