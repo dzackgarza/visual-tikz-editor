@@ -538,6 +538,63 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    for (const contact of ['touch', 'pen'] as const) {
+      it(`highlights, locks, and keeps a curve selected by ${contact} in ${tablet.name}`, async function () {
+        await page.setViewportSize({ width: tablet.width, height: tablet.height });
+        await page.reload();
+        await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+        await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+        await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (2,-2) .. controls (5,6) and (9,-6) .. (12,2);
+\draw (4,10) -- (10,12);
+\end{tikzpicture}`);
+        await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
+        const input = await TabletInput.attach(page);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const centerOf = async (locator: ReturnType<typeof frame.locator>) => {
+          const box = (await locator.boundingBox())!;
+          return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        };
+        const tap = async (point: { x: number; y: number }) => contact === 'touch' ? input.touch([point]) : input.penStroke([point]);
+        const onCurve = async (fraction: number) => {
+          const point = await frame.locator('svg [data-source-id="path:0"]').first().evaluate((path: SVGGeometryElement, at) => {
+            const p = path.getPointAtLength(path.getTotalLength() * at);
+            const m = path.getScreenCTM()!;
+            return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+          }, fraction);
+          return { x: frameBox.x + point.x, y: frameBox.y + point.y };
+        };
+        await input.touch([await centerOf(frame.getByRole('button', { name: 'Select', exact: true }))]);
+        await tap(await onCurve(.3));
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
+        await expect(frame.locator('[data-selection-highlight="path:0"]')).toBeVisible();
+        const lock = frame.getByRole('button', { name: 'Lock curve', exact: true });
+        await expect(lock).toHaveAttribute('aria-pressed', 'false');
+        await input.touch([await centerOf(lock)]);
+        await expect(lock).toHaveAttribute('aria-pressed', 'true');
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await tap({ x: viewport.x + viewport.width - 20, y: viewport.y + viewport.height - 20 });
+        await tap(await centerOf(frame.locator('svg [data-source-id="path:1"]').first()));
+        assert.deepEqual((await editorDebug(page)).selection, ['path:0'], 'A locked curve stays selected');
+        const anchor = frame.locator('[data-handle-kind="move-handle"][data-source-id="path:0"]').first();
+        await tap(await centerOf(anchor));
+        await expect.poll(async () => (await editorDebug(page)).handle).not.toBeNull();
+        assert.deepEqual((await editorDebug(page)).selection, ['path:0']);
+        const before = (await editorDebug(page)).viewport;
+        await input.touch([{ x: viewport.x + viewport.width - 40, y: viewport.y + viewport.height - 60 }, { x: viewport.x + viewport.width - 90, y: viewport.y + viewport.height - 100 }]);
+        assert.notDeepEqual((await editorDebug(page)).viewport, before, 'Finger pan still works on a locked curve');
+        assert.deepEqual((await editorDebug(page)).selection, ['path:0']);
+        await input.touch([await centerOf(lock)]);
+        await expect(lock).toHaveAttribute('aria-pressed', 'false');
+        await tap({ x: viewport.x + viewport.width - 20, y: viewport.y + viewport.height - 20 });
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+      });
+    }
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));

@@ -59,6 +59,7 @@ export type EditorDebug = {
   tool: string;
   source: string;
   selection: string[];
+  handle: string | null;
   scene: { elements: { sourceRef: { sourceId: string } }[] } | null;
   viewport: { translateX: number; translateY: number; scale: number };
   canvasAids: { grid: boolean; rulers: boolean; documentBounds: boolean };
