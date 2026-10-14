@@ -286,6 +286,90 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`moves the drawing rail by its grip only and never over the rulers in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator('[data-diagram-tools]');
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const center = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) =>
+        input.touch(Array.from({ length: 13 }, (_, i) => ({ x: from.x + (to.x - from.x) * i / 12, y: from.y + (to.y - from.y) * i / 12 })));
+      const clearOfRulers = async () => {
+        const railBox = (await rail.boundingBox())!;
+        for (const ruler of ['canvas-top-ruler', 'canvas-left-ruler']) {
+          const box = (await frame.getByTestId(ruler).boundingBox())!;
+          const overlapX = Math.min(railBox.x + railBox.width, box.x + box.width) - Math.max(railBox.x, box.x);
+          const overlapY = Math.min(railBox.y + railBox.height, box.y + box.height) - Math.max(railBox.y, box.y);
+          assert.ok(overlapX <= 0 || overlapY <= 0, `The rail covers ${ruler}`);
+        }
+      };
+      await expect(rail).toHaveAttribute('data-dock', 'left');
+      await clearOfRulers();
+      const names = await rail.getByRole('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
+      assert.ok(names.indexOf('Lasso') < 8 && names.indexOf('Eraser') < 8, names.join(', '));
+      await drag(await center(rail.getByRole('button', { name: 'Select', exact: true })), { x: viewport.x + viewport.width - 10, y: viewport.y + viewport.height / 2 });
+      await expect(rail).toHaveAttribute('data-dock', 'left');
+      await drag(await center(rail.getByRole('button', { name: 'Move toolbar', exact: true })), { x: viewport.x + viewport.width - 10, y: viewport.y + viewport.height / 2 });
+      await expect(rail).toHaveAttribute('data-dock', 'right');
+      await clearOfRulers();
+      await drag(await center(rail.getByRole('button', { name: 'Move toolbar', exact: true })), { x: viewport.x + viewport.width / 2, y: viewport.y + 10 });
+      await expect(rail).toHaveAttribute('data-dock', 'top');
+      await clearOfRulers();
+    });
+
+    it(`copies and pastes an element through long presses in ${tablet.name}`, async function () {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
+      const frame = editorFrame(page);
+      await expect(frame.locator('circle[data-source-id]')).toHaveCount(1);
+      const input = await TabletInput.attach(page);
+      const center = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      const circle = (await frame.locator('circle[data-source-id]').boundingBox())!;
+      await input.longPress({ x: circle.x + 1, y: circle.y + circle.height / 2 });
+      await input.touch([await center(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Copy', exact: true }))]);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await input.longPress({ x: viewport.x + viewport.width * .85, y: viewport.y + viewport.height * .2 });
+      await input.touch([await center(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Paste', exact: true }))]);
+      await expect.poll(async () => ((await editorDebug(page)).source.match(/circle/g) ?? []).length).toBe(2);
+    });
+
+    it(`starts a new tikzpicture or tikzcd by touch in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: ReturnType<typeof page.locator>) => {
+        const box = (await locator.boundingBox())!;
+        await input.touch([{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]);
+      };
+      for (const kind of ['tikzcd', 'tikzpicture'] as const) {
+        await tap(page.getByRole('group', { name: 'File' }).locator('summary'));
+        await expect(page.locator('.tikz-standalone-status')).toContainText(/^New tikz/);
+        await tap(page.getByRole('button', { name: 'New tikzpicture or tikzcd…', exact: true }));
+        await expect(page.getByRole('dialog', { name: 'Save changes?' }), 'An untouched new diagram has no changes to save').toHaveCount(0);
+        const dialog = page.getByRole('dialog');
+        await expect(dialog.getByRole('button', { name: 'tikzpicture', exact: true })).toBeVisible();
+        await tap(dialog.getByRole('button', { name: kind, exact: true }));
+        await expect(page.locator(kind === 'tikzcd' ? 'iframe[title="Quiver diagram editor"]' : 'iframe[title="TikZ visual editor"]')).toBeVisible({ timeout: 30_000 });
+      }
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
