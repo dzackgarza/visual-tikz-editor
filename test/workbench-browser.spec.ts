@@ -424,6 +424,40 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`erases every stroke a pen sweep crosses and nothing else in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (-6,-4) -- (-6,4);
+\draw (-2,-4) -- (-2,4);
+\draw (6,-4) -- (6,4);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('[data-source-id]')).toHaveCount(3);
+      const input = await TabletInput.attach(page);
+      const center = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      await input.touch([await center(frame.getByRole('button', { name: 'Eraser', exact: true }))]);
+      const lines = await frame.locator('[data-source-id]').evaluateAll(nodes => nodes.map(node => {
+        const box = node.getBoundingClientRect();
+        return { id: node.getAttribute('data-source-id'), x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      }));
+      const [left, middle] = [...lines].sort((a, b) => a.x - b.x);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const y = frameBox.y + left.y;
+      await input.penStroke(Array.from({ length: 12 }, (_, i) => ({ x: frameBox.x + left.x - 20 + i * (middle.x - left.x + 40) / 11, y })));
+      await expect.poll(async () => (await editorDebug(page)).source).toBe(String.raw`\begin{tikzpicture}
+\draw (6,-4) -- (6,4);
+\end{tikzpicture}`);
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
