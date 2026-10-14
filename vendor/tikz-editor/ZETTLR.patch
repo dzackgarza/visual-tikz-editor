@@ -1074,7 +1074,7 @@ index 828d4bfb..1ac9eac5 100644
        })),
      tabOrder: [...state.tabOrder],
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..2fedee85 100644
+index 5818d92b..1676ef24 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
 @@ -262,6 +262,13 @@ export function App() {
@@ -1201,42 +1201,18 @@ index 5818d92b..2fedee85 100644
        <div className={css.body}>
          <DockLayout
            repeatPreviewModel={repeatPreviewModel}
-@@ -2064,7 +2060,7 @@ export function App() {
+@@ -2062,9 +2058,9 @@ export function App() {
+           onNewChat={handleAssistantNewChat}
+         />
        </div>
-       <StatusBar />
+-      <StatusBar />
++      {platform.id === "zettlr-embed" ? null : <StatusBar />}
        <Suspense fallback={null}>
 -        <DevPanel />
 +        {platform.id === "zettlr-embed" ? null : <DevPanel />}
        </Suspense>
        {showOpenExampleModal ? (
          <Suspense fallback={null}>
-diff --git a/packages/app/src/ui/AppMenuBar.tsx b/packages/app/src/ui/AppMenuBar.tsx
-index 746d7c3b..f50defda 100644
---- a/packages/app/src/ui/AppMenuBar.tsx
-+++ b/packages/app/src/ui/AppMenuBar.tsx
-@@ -1,4 +1,5 @@
- import { useEffect, useRef, useState } from "react";
-+import { getActiveEditorPlatform } from "../platform/current";
- import type { AppMenuDefinition, AppMenuItem } from "../app-menu";
- import type { CommandBindings } from "./editor-command-runtime";
- import { useWorkspaceListStore } from "../store/workspace-list-store";
-@@ -165,6 +166,7 @@ export function AppMenuBar({
-   definition: AppMenuDefinition;
-   bindings: CommandBindings;
- }) {
-+  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
-   const [openSectionId, setOpenSectionId] = useState<string | null>(null);
-   const menuRootRef = useRef<HTMLDivElement | null>(null);
- 
-@@ -198,6 +200,8 @@ export function AppMenuBar({
-     return () => { window.removeEventListener("keydown", onKeyDown); };
-   }, [openSectionId]);
- 
-+  if (embedded) return null;
-+
-   return (
-     <div
-       className={css.menuBar}
 diff --git a/packages/app/src/ui/CanvasContextMenu.module.css b/packages/app/src/ui/CanvasContextMenu.module.css
 index 558a0a1b..c5ed3f6d 100644
 --- a/packages/app/src/ui/CanvasContextMenu.module.css
@@ -3251,28 +3227,24 @@ index e849b257..c9f850fe 100644
                      <label className={css.settingLabel} htmlFor="setting-handle-size">
                        Edit Handle Size
 diff --git a/packages/app/src/ui/StatusBar.module.css b/packages/app/src/ui/StatusBar.module.css
-index 853a0713..772f76ed 100644
+index 853a0713..c03cdfd1 100644
 --- a/packages/app/src/ui/StatusBar.module.css
 +++ b/packages/app/src/ui/StatusBar.module.css
-@@ -214,3 +214,7 @@
+@@ -214,3 +214,6 @@
      display: none;
    }
  }
 +
 +.bar { min-height: 48px; height: auto; overflow: visible; font-size: 14px; }
 +.zoomAction { min-width: 60px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-pane); color: var(--text); border-radius: 6px; font: inherit; }
-+.zoomLevels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 diff --git a/packages/app/src/ui/StatusBar.tsx b/packages/app/src/ui/StatusBar.tsx
-index 681cb41c..d8469495 100644
+index 681cb41c..308ca76a 100644
 --- a/packages/app/src/ui/StatusBar.tsx
 +++ b/packages/app/src/ui/StatusBar.tsx
-@@ -1,26 +1,28 @@
+@@ -1,34 +1,20 @@
 -import { RiArrowDownSLine, RiAspectRatioLine, RiGridLine } from "@remixicon/react";
-+import { useSettingsStore } from "../settings/useSettingsStore";
-+import { useState } from "react";
-+import { ToolbarToolPopup, ToolbarPopupSection } from "./ToolbarToolPopup";
++import { ZoomDisplayControl } from "./ZoomDisplayControl";
  import { useEditorStore } from "../store/store";
-+import { CANVAS_ZOOM_BASE_SCALE } from "../store/workspace-state";
  import type { CanvasDragKind, ToolMode } from "../store/types";
  import { getModifierKeyLabels, type ModifierKeyLabels } from "./key-labels";
  import { useFrameTimingStats } from "./useFrameTimingStats";
@@ -3283,55 +3255,62 @@ index 681cb41c..d8469495 100644
 -const CSS_SCREEN_DPI = 96;
 -// Canvas transforms use CSS pixels, whose reference inch is 96 px.
 -const ACTUAL_SIZE_SCALE = CSS_SCREEN_DPI / TEX_PT_PER_IN;
- const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150, 200, 300, 400] as const;
- const MIN_ZOOM_PERCENT = 25;
- const MAX_ZOOM_PERCENT = 400;
- 
+-const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150, 200, 300, 400] as const;
+-const MIN_ZOOM_PERCENT = 25;
+-const MAX_ZOOM_PERCENT = 400;
+-
  export function StatusBar() {
-+  const snapModes = useEditorStore((state) => state.snapModes);
-+  const updateCanvasSettings = useSettingsStore((state) => state.updateCanvasSettings);
-+  const [zoomOpen, setZoomOpen] = useState(false);
-+  const showRulers = useEditorStore((state) => state.showRulers);
-+  const showDocumentBounds = useEditorStore((state) => state.showDocumentBounds);
    const snapshot = useEditorStore((s) => s.snapshot);
    const activeFigureId = useEditorStore((s) => s.activeFigureId);
    const currentDocument = useEditorStore((s) => s.documents[s.activeDocumentId] ?? null);
-   const canvasTransform = useEditorStore((s) => s.canvasTransform);
-   const canvasFitToContentScale = useEditorStore((s) => s.canvasFitToContentScale);
+-  const canvasTransform = useEditorStore((s) => s.canvasTransform);
+-  const canvasFitToContentScale = useEditorStore((s) => s.canvasFitToContentScale);
 -  const fitToContentModeActive = useEditorStore((s) => s.fitToContentModeActive);
-   const showGrid = useEditorStore((s) => s.showGrid);
+-  const showGrid = useEditorStore((s) => s.showGrid);
    const selectedIds = useEditorStore((s) => s.selectedElementIds);
    const pendingRequestId = useEditorStore((s) => s.pendingRequestId);
-@@ -48,10 +50,10 @@ export function StatusBar() {
+   const toolMode = useEditorStore((s) => s.toolMode);
+   const activeCanvasDragKind = useEditorStore((s) => s.activeCanvasDragKind);
+   const activeSourceScrubSourceId = useEditorStore((s) => s.activeSourceScrubSourceId);
+   const canvasStatusHint = useEditorStore((s) => s.canvasStatusHint);
+-  const dispatch = useEditorStore((s) => s.dispatch);
+ 
+   const showPerf = import.meta.env.DEV;
+   const perfStats = useFrameTimingStats(activeCanvasDragKind, showPerf);
+@@ -48,32 +34,6 @@ export function StatusBar() {
    const figures = snapshot.figures;
    const activeFigureIndex = activeFigureId ? figures.findIndex((figure) => figure.id === activeFigureId) : -1;
    const showFigureContext = figures.length > 1 && activeFigureIndex >= 0;
 -  const zoomPercent = Math.round((canvasTransform.scale / ACTUAL_SIZE_SCALE) * 100);
-+  const zoomPercent = Math.round((canvasTransform.scale / CANVAS_ZOOM_BASE_SCALE) * 100);
-   const fitToContentDoubleZoomPercent = canvasFitToContentScale == null
-     ? MAX_ZOOM_PERCENT
+-  const fitToContentDoubleZoomPercent = canvasFitToContentScale == null
+-    ? MAX_ZOOM_PERCENT
 -    : Math.ceil((canvasFitToContentScale / ACTUAL_SIZE_SCALE) * 200);
-+    : Math.ceil((canvasFitToContentScale / CANVAS_ZOOM_BASE_SCALE) * 200);
-   const maxZoomPercent = Math.max(MAX_ZOOM_PERCENT, fitToContentDoubleZoomPercent, zoomPercent);
-   const sliderZoomPercent = Math.max(MIN_ZOOM_PERCENT, Math.min(maxZoomPercent, zoomPercent));
-   const zoomOptions = [...new Set([
-@@ -64,13 +66,9 @@ export function StatusBar() {
-     if (!Number.isFinite(percent)) {
-       return;
-     }
+-  const maxZoomPercent = Math.max(MAX_ZOOM_PERCENT, fitToContentDoubleZoomPercent, zoomPercent);
+-  const sliderZoomPercent = Math.max(MIN_ZOOM_PERCENT, Math.min(maxZoomPercent, zoomPercent));
+-  const zoomOptions = [...new Set([
+-    ...ZOOM_LEVELS.filter((level) => level <= maxZoomPercent),
+-    maxZoomPercent,
+-    zoomPercent
+-  ])].sort((left, right) => left - right);
+-
+-  const requestZoomPercent = (percent: number) => {
+-    if (!Number.isFinite(percent)) {
+-      return;
+-    }
 -    dispatch({ type: "REQUEST_ZOOM_SCALE", scale: (percent / 100) * ACTUAL_SIZE_SCALE });
-+    dispatch({ type: "REQUEST_ZOOM_SCALE", scale: (percent / 100) * CANVAS_ZOOM_BASE_SCALE });
-   };
+-  };
 -  const toggleFitToContent = () => {
 -    if (fitToContentModeActive) {
 -      dispatch({ type: "SET_FIT_TO_CONTENT_MODE", active: false });
 -      return;
 -    }
-+  const fitToContent = () => {
-     dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
-   };
- 
-@@ -210,54 +208,25 @@ export function StatusBar() {
+-    dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
+-  };
+-
+   const perfClassName =
+     perfStats.maxFrameMs != null && perfStats.maxFrameMs >= 40
+       ? css.error
+@@ -210,54 +170,7 @@ export function StatusBar() {
            </div>
          )}
  
@@ -3383,29 +3362,11 @@ index 681cb41c..d8469495 100644
 -          </select>
 -          <RiArrowDownSLine className={css.zoomSelectCaret} size={14} aria-hidden="true" />
 -        </span>
-+        <ToolbarToolPopup open={zoomOpen} onClose={() => setZoomOpen(false)} popup={
-+          <ToolbarPopupSection title="Zoom and display">
-+            <button type="button" className={css.zoomAction} onClick={fitToContent}>Fit diagram</button>
-+            <label>Zoom <input type="range" min={MIN_ZOOM_PERCENT} max={maxZoomPercent} value={sliderZoomPercent}
-+              aria-label="Zoom" onChange={(event) => requestZoomPercent(Number(event.currentTarget.value))} /></label>
-+            <button type="button" className={css.zoomAction} aria-pressed={snapModes.grid} onClick={() => dispatch({ type: "TOGGLE_SNAP_MODE", mode: "grid" })}>Snap to grid</button>
-+            <button type="button" className={css.zoomAction} aria-pressed={snapModes.latticeLock} onClick={() => {
-+              dispatch({ type: "TOGGLE_SNAP_MODE", mode: "latticeLock" }); updateCanvasSettings({ latticeLock: !snapModes.latticeLock });
-+            }}>Lock geometry to lattice</button>
-+            <div className={css.zoomLevels}>{zoomOptions.map((level) => <button type="button" key={level}
-+              className={css.zoomAction} aria-pressed={zoomPercent === level} onClick={() => requestZoomPercent(level)}>{level}%</button>)}</div>
-+            {([{ aid: "grid", label: "Grid", checked: showGrid }, { aid: "rulers", label: "Rulers", checked: showRulers },
-+              { aid: "documentBounds", label: "Output bounds", checked: showDocumentBounds }] as const).map(({ aid, label, checked }) =>
-+              <button type="button" key={aid} className={css.zoomAction} aria-pressed={checked}
-+                onClick={() => dispatch({ type: "TOGGLE_CANVAS_AID", aid })}>{checked ? "✓ " : ""}{label}</button>)}
-+          </ToolbarPopupSection>}>
-+          <button type="button" className={css.zoomAction} aria-label="Zoom and display" aria-haspopup="dialog" aria-expanded={zoomOpen}
-+            onClick={() => setZoomOpen((open) => !open)}>{zoomPercent}% ▾</button>
-+        </ToolbarToolPopup>
++        <ZoomDisplayControl triggerClassName={css.zoomAction} />
        </div>
      </div>
    );
-@@ -306,15 +275,20 @@ function resolveToolCreateModifierHint(toolMode: ToolMode, keys: ModifierKeyLabe
+@@ -306,15 +219,20 @@ function resolveToolCreateModifierHint(toolMode: ToolMode, keys: ModifierKeyLabe
      case "addGrid":
        return `${keys.shift} draw a square grid · ${snapHint}`;
      case "select":
@@ -3427,7 +3388,7 @@ index 681cb41c..d8469495 100644
      case "addBezier":
        return snapHint;
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..ccab61f1 100644
+index 0ddde08e..934efb9d 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
 @@ -144,6 +144,55 @@
@@ -3486,12 +3447,13 @@ index 0ddde08e..ccab61f1 100644
  .updateChip {
    display: inline-flex;
    align-items: center;
-@@ -224,3 +273,23 @@
+@@ -224,3 +273,24 @@
      padding: 8px;
    }
  }
 +
 +.embeddedTools .btn { min-width: 44px; height: 44px; padding: 8px; }
++.embeddedTools .zoomTrigger { width: 44px; padding: 0; font-size: 12px; }
 +.toolbarGrip { min-width: 44px; min-height: 44px; flex-shrink: 0; }
 +.palette { flex-wrap: nowrap; max-width: 240px; max-height: 160px; overflow: auto; }
 +.paletteSwatch { flex: 0 0 44px; width: 44px; height: 44px; }
@@ -3511,17 +3473,18 @@ index 0ddde08e..ccab61f1 100644
 +[data-dock="bottom"] .embeddedTools .palette,
 +[data-dock="floating"] .embeddedTools .palette { flex-direction: row; max-width: 176px; max-height: 44px; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..97e90eee 100644
+index a3293df2..b8fc91bf 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,6 @@
 -import { useEffect, useMemo, useState } from "react";
 +import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { ZoomDisplayControl } from "./ZoomDisplayControl";
 +import { createPortal } from "react-dom";
  import { RiDownloadCloudLine } from "@remixicon/react";
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
-@@ -8,16 +9,17 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
+@@ -8,16 +10,17 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
  import { getToolCapabilityStatus } from "./capabilities";
  import { RenderedTooltip } from "./RenderedTooltip";
  import {
@@ -3541,7 +3504,7 @@ index a3293df2..97e90eee 100644
  import css from "./Toolbar.module.css";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
-@@ -26,26 +28,58 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,26 +29,58 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -3602,7 +3565,7 @@ index a3293df2..97e90eee 100644
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +90,119 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +91,119 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -3723,7 +3686,7 @@ index a3293df2..97e90eee 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -92,7 +235,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -92,7 +236,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
    const renderPopup = (popupKind: ToolPopupKind) => {
      if (popupKind === "bucket-color") {
        return (
@@ -3732,7 +3695,7 @@ index a3293df2..97e90eee 100644
            <ColorPicker
              ariaLabel="Bucket fill color"
              value={bucketFillColor}
-@@ -111,7 +254,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +255,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -3750,7 +3713,7 @@ index a3293df2..97e90eee 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +278,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +279,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -3769,7 +3732,7 @@ index a3293df2..97e90eee 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +334,173 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +335,173 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -3943,7 +3906,7 @@ index a3293df2..97e90eee 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +529,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +530,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -3955,7 +3918,7 @@ index a3293df2..97e90eee 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +589,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +590,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -3963,7 +3926,7 @@ index a3293df2..97e90eee 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +632,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +633,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -3971,7 +3934,7 @@ index a3293df2..97e90eee 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +648,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +649,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -3993,7 +3956,7 @@ index a3293df2..97e90eee 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +670,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +671,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -4001,7 +3964,7 @@ index a3293df2..97e90eee 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +678,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +679,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -4013,7 +3976,7 @@ index a3293df2..97e90eee 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +691,76 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +692,77 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4065,6 +4028,7 @@ index a3293df2..97e90eee 100644
 +        <button type="button" className={css.btn} aria-label="Layers" onClick={onToggleLayers}>▤</button>
 +        <button type="button" className={css.btn} aria-label="Properties" onClick={onToggleProperties}>⚙</button>
 +        <button type="button" className={css.btn} aria-label="Settings" onClick={onOpenSettings}>☰</button>
++        <ZoomDisplayControl triggerClassName={`${css.btn} ${css.zoomTrigger}`} />
 +      </div>
 +      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("erase")}
 +      {renderEmbeddedTool("addFreehand")}{renderInsertButton()}
@@ -4092,7 +4056,7 @@ index a3293df2..97e90eee 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +771,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +773,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -4106,7 +4070,7 @@ index a3293df2..97e90eee 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +787,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +789,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -4115,7 +4079,7 @@ index a3293df2..97e90eee 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +812,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +814,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -4267,6 +4231,81 @@ index 8aeb4133..50d346db 100644
        ) : null}
      </div>
    );
+diff --git a/packages/app/src/ui/ZoomDisplayControl.module.css b/packages/app/src/ui/ZoomDisplayControl.module.css
+new file mode 100644
+index 00000000..a3cd7fb7
+--- /dev/null
++++ b/packages/app/src/ui/ZoomDisplayControl.module.css
+@@ -0,0 +1,3 @@
++.action { min-width: 60px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-pane); color: var(--text); border-radius: 6px; font: inherit; }
++.levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
++.action[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+diff --git a/packages/app/src/ui/ZoomDisplayControl.tsx b/packages/app/src/ui/ZoomDisplayControl.tsx
+new file mode 100644
+index 00000000..58508731
+--- /dev/null
++++ b/packages/app/src/ui/ZoomDisplayControl.tsx
+@@ -0,0 +1,60 @@
++import { useState } from "react";
++import { useSettingsStore } from "../settings/useSettingsStore";
++import { useEditorStore } from "../store/store";
++import { CANVAS_ZOOM_BASE_SCALE } from "../store/workspace-state";
++import { ToolbarToolPopup, ToolbarPopupSection } from "./ToolbarToolPopup";
++import css from "./ZoomDisplayControl.module.css";
++
++const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150, 200, 300, 400] as const;
++const MIN_ZOOM_PERCENT = 25;
++const MAX_ZOOM_PERCENT = 400;
++
++/** Zoom, snapping, lattice lock, and canvas aids behind one control showing the zoom percentage. */
++export function ZoomDisplayControl({ triggerClassName }: { triggerClassName: string }) {
++  const [open, setOpen] = useState(false);
++  const snapModes = useEditorStore((state) => state.snapModes);
++  const showGrid = useEditorStore((state) => state.showGrid);
++  const showRulers = useEditorStore((state) => state.showRulers);
++  const showDocumentBounds = useEditorStore((state) => state.showDocumentBounds);
++  const canvasTransform = useEditorStore((state) => state.canvasTransform);
++  const canvasFitToContentScale = useEditorStore((state) => state.canvasFitToContentScale);
++  const dispatch = useEditorStore((state) => state.dispatch);
++  const updateCanvasSettings = useSettingsStore((state) => state.updateCanvasSettings);
++
++  const zoomPercent = Math.round((canvasTransform.scale / CANVAS_ZOOM_BASE_SCALE) * 100);
++  const fitToContentDoubleZoomPercent = canvasFitToContentScale == null
++    ? MAX_ZOOM_PERCENT
++    : Math.ceil((canvasFitToContentScale / CANVAS_ZOOM_BASE_SCALE) * 200);
++  const maxZoomPercent = Math.max(MAX_ZOOM_PERCENT, fitToContentDoubleZoomPercent, zoomPercent);
++  const sliderZoomPercent = Math.max(MIN_ZOOM_PERCENT, Math.min(maxZoomPercent, zoomPercent));
++  const zoomOptions = [...new Set([
++    ...ZOOM_LEVELS.filter((level) => level <= maxZoomPercent),
++    maxZoomPercent,
++    zoomPercent
++  ])].sort((left, right) => left - right);
++  const requestZoomPercent = (percent: number) =>
++    dispatch({ type: "REQUEST_ZOOM_SCALE", scale: (percent / 100) * CANVAS_ZOOM_BASE_SCALE });
++
++  return (
++    <ToolbarToolPopup open={open} onClose={() => setOpen(false)} popup={
++      <ToolbarPopupSection title="Zoom and display">
++        <button type="button" className={css.action} onClick={() => dispatch({ type: "REQUEST_FIT_TO_CONTENT" })}>Fit diagram</button>
++        <label>Zoom <input type="range" min={MIN_ZOOM_PERCENT} max={maxZoomPercent} value={sliderZoomPercent}
++          aria-label="Zoom" onChange={(event) => requestZoomPercent(Number(event.currentTarget.value))} /></label>
++        <button type="button" className={css.action} aria-pressed={snapModes.grid}
++          onClick={() => dispatch({ type: "TOGGLE_SNAP_MODE", mode: "grid" })}>Snap to grid</button>
++        <button type="button" className={css.action} aria-pressed={snapModes.latticeLock} onClick={() => {
++          dispatch({ type: "TOGGLE_SNAP_MODE", mode: "latticeLock" }); updateCanvasSettings({ latticeLock: !snapModes.latticeLock });
++        }}>Lock geometry to lattice</button>
++        <div className={css.levels}>{zoomOptions.map((level) => <button type="button" key={level}
++          className={css.action} aria-pressed={zoomPercent === level} onClick={() => requestZoomPercent(level)}>{level}%</button>)}</div>
++        {([{ aid: "grid", label: "Grid", checked: showGrid }, { aid: "rulers", label: "Rulers", checked: showRulers },
++          { aid: "documentBounds", label: "Output bounds", checked: showDocumentBounds }] as const).map(({ aid, label, checked }) =>
++          <button type="button" key={aid} className={css.action} aria-pressed={checked}
++            onClick={() => dispatch({ type: "TOGGLE_CANVAS_AID", aid })}>{label}</button>)}
++      </ToolbarPopupSection>}>
++      <button type="button" className={triggerClassName} aria-label="Zoom and display" aria-haspopup="dialog" aria-expanded={open}
++        onClick={() => setOpen((current) => !current)}>{zoomPercent}%</button>
++    </ToolbarToolPopup>
++  );
++}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 index cf4cf2cf..106a922d 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css

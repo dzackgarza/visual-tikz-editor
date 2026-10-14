@@ -3,8 +3,6 @@ html,body,#root{margin:0;width:100%;height:100%;overflow:hidden}#root{display:fl
 
 /* The embedded editor has one host-owned document and a canvas-first layout. */
 #root > div { position: relative; --app-ui-scale: 1.25 !important; --app-ui-font-size: 14px !important; }
-#root [role="menubar"] { min-height: 48px; padding: 2px 8px; background: #eef0ea; }
-#root [role="menubar"] button { min-height: 44px; padding-inline: 12px; font-size: 14px; }
 #root [data-testid="tab-strip"] { display: none; }
 #root > div > [data-diagram-tools] { position: absolute; z-index: 20; display: flex; align-items: center; padding: 4px; border: 1px solid #c9cdc6; border-radius: 14px; background: #eef0ea; box-shadow: 0 5px 16px #1c243026; transform: translate(-50%,-50%); max-width: calc(100% - 24px); max-height: calc(100% - 80px); }
 #root > div > [data-diagram-tools][data-dock="left"] { transform: translateY(-50%); flex-direction: column; }
@@ -17,8 +15,8 @@ html,body,#root{margin:0;width:100%;height:100%;overflow:hidden}#root{display:fl
 #root [data-diagram-tools] button { min-width: 44px; min-height: 44px; border-radius: 8px; }
 #root [data-diagram-tools] button[class*="paletteSwatch"] { min-width: 44px; min-height: 44px; border-radius: 50%; }
 #root [data-diagram-tools] button[class*="btnActive"] { color: #fff; background: #9e2a2b; }
-#root [data-diagram-tools] button:focus-visible, #root [role="menubar"] button:focus-visible { outline: 2px solid #9e2a2b; outline-offset: 2px; }
-html[data-color-scheme="dark"] #root [role="menubar"], html[data-color-scheme="dark"] #root > div > [data-diagram-tools] { border-color: #4f5863; background: #313b45; }
+#root [data-diagram-tools] button:focus-visible { outline: 2px solid #9e2a2b; outline-offset: 2px; }
+html[data-color-scheme="dark"] #root > div > [data-diagram-tools] { border-color: #4f5863; background: #313b45; }
 #root .flexlayout__tabset:has(.flexlayout__tab_button) .flexlayout__tabset_tabbar_outer { height: 42px !important; min-height: 42px !important; }
 #root .flexlayout__tabset:has(.flexlayout__tab_button) .flexlayout__tab_button { display: inline-flex; align-items: center; min-height: 40px; padding-inline: 10px !important; font-size: 14px !important; }
 #root .flexlayout__tabset:has(.flexlayout__tab_button) .flexlayout__tabset_content { font-size: 14px; }
