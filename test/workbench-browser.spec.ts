@@ -393,6 +393,37 @@ describe("standalone workbench host boundary", function () {
     }
   });
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`reverses a path from its long-press menu in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
+      const frame = editorFrame(page);
+      const line = frame.locator('[data-source-id]').first();
+      await expect(line).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const center = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      // Near the line's (-4,-2) end: the curve selection popup currently opens over
+      // the middle of a selected curve (an M2 placement defect).
+      // Of the two ends, press the one the rail does not cover.
+      const lineBox = (await line.boundingBox())!;
+      const railBox = (await frame.locator('[data-diagram-tools]').boundingBox())!;
+      const lowerLeft = { x: lineBox.x + lineBox.width * .1, y: lineBox.y + lineBox.height * .9 };
+      const upperRight = { x: lineBox.x + lineBox.width * .9, y: lineBox.y + lineBox.height * .1 };
+      await input.longPress(lowerLeft.x > railBox.x + railBox.width ? lowerLeft : upperRight);
+      const menu = frame.getByRole('menu').first();
+      await input.touch([await center(menu.getByRole('menuitem', { name: /^Path/ }))]);
+      await input.touch([await center(frame.getByRole('menuitem', { name: 'Reverse Path', exact: true }))]);
+      await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\(4,2\) -- \(-4,-2\)/);
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
