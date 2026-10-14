@@ -255,6 +255,37 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`keeps panels and the freehand result clear of the drawing rail in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator('[data-diagram-tools]');
+      const center = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      const overlap = async (locator: ReturnType<typeof frame.locator>) => {
+        const [a, b] = [(await rail.boundingBox())!, (await locator.boundingBox())!];
+        return Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
+          Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+      };
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await input.penStroke(waveAcross(viewport, .45, .4, 120));
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      await expect(result).toBeVisible();
+      assert.equal(await overlap(result), 0, 'The freehand result covers the rail');
+      await input.touch([await center(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await input.touch([await center(rail.getByRole('button', { name: 'Properties', exact: true }))]);
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      await expect(panel).toBeVisible();
+      assert.equal(await overlap(panel), 0, 'The properties panel covers the rail');
+      await storyScreenshot(page, `placement-${tablet.name}`);
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
