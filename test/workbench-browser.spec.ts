@@ -115,6 +115,28 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`shows every drawing-rail control without scrolling in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const rail = frame.locator('[data-diagram-tools]');
+      await expect(rail).toBeVisible();
+      const strip = rail.locator('[class*="embeddedTools"]');
+      const overflow = await strip.evaluate(element => ({
+        vertical: element.scrollHeight - element.clientHeight, horizontal: element.scrollWidth - element.clientWidth }));
+      assert.deepEqual(overflow, { vertical: 0, horizontal: 0 });
+      for (const name of ['Layers', 'Properties', 'Settings', 'Zoom and display', 'Select', 'Erase', 'Freehand', 'Insert', 'Undo', 'Redo'])
+        await expect(rail.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
+      await expect(rail.getByRole('button', { name: /^Drawing color: / })).toBeInViewport({ ratio: 1 });
+      const swatches = rail.getByRole('button', { name: /^Use / });
+      assert.ok(await swatches.count() > 0);
+      for (const swatch of await swatches.all()) await expect(swatch).toBeInViewport({ ratio: 1 });
+      await storyScreenshot(page, `rail-${tablet.name}`);
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
