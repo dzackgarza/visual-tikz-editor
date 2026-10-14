@@ -376,6 +376,23 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  it('names no key in the tooltips a hovering pen shows on the drawing rail', async function () {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.reload();
+    await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+    const frame = editorFrame(page);
+    const input = await TabletInput.attach(page);
+    const rail = frame.locator('[data-diagram-tools]');
+    for (const name of ['Select', 'Lasso', 'Eraser', 'Freehand', 'Bucket']) {
+      const box = (await rail.getByRole('button', { name, exact: true }).boundingBox())!;
+      await input.penHover({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+      const tooltip = frame.getByRole('tooltip');
+      await expect(tooltip).toBeVisible();
+      assert.doesNotMatch(await tooltip.innerText(), /\([A-Z]\)|Ctrl|Cmd|Shift|Alt|Esc/, `${name} tooltip`);
+      await input.penHover({ x: 2, y: 2 });
+    }
+  });
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));

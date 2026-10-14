@@ -113,6 +113,11 @@ export class TabletInput {
     await this.cdp.send("Input.dispatchTouchEvent", { type: phase, touchPoints: phase === "touchEnd" ? [] : [{ id: 9, ...point, radiusX: 35, radiusY: 30 }] });
   }
 
+  /** The pen within hover range of the screen, not touching it. */
+  async penHover(point: Point): Promise<void> {
+    await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point, button: "none", buttons: 0, pointerType: "pen" });
+  }
+
   async penMove(point: Point): Promise<void> {
     await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point, button: "left", buttons: 1, pointerType: "pen", force: .5 });
   }
