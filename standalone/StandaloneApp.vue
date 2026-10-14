@@ -271,7 +271,7 @@ const host: TikzWorkbenchHost = {
   savePreference,
   ...(nativeWindow ? { clipboard: { readText, writeText } } : {}),
   selectSource: (from, to) => {
-    if (isVisible("code")) sourceSelection.value = { from, to };
+    sourceSelection.value = { from, to };
   },
   readSource: (from, to) => source.value.slice(from, to),
   writeSource: (from, to, insert) => {

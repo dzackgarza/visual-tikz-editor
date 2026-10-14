@@ -409,9 +409,7 @@ describe("standalone workbench host boundary", function () {
         return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
       };
       await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      // Near the line's (-4,-2) end: the curve selection popup currently opens over
-      // the middle of a selected curve (an M2 placement defect).
-      // Of the two ends, press the one the rail does not cover.
+      // Of the line's two ends, press the one the rail does not cover.
       const lineBox = (await line.boundingBox())!;
       const railBox = (await frame.locator('[data-diagram-tools]').boundingBox())!;
       const lowerLeft = { x: lineBox.x + lineBox.width * .1, y: lineBox.y + lineBox.height * .9 };
@@ -466,8 +464,8 @@ describe("standalone workbench host boundary", function () {
       const code = page.getByRole('button', { name: 'Code: left sidebar', exact: true });
       await code.click();
       const authored = String.raw`\begin{tikzpicture}
-\draw (-6,0) -- (-2,3);
-\draw (4,0) circle (2cm);
+\draw (2,8) -- (12,14);
+\draw (8,-6) circle (3cm);
 \end{tikzpicture}`;
       await page.locator('.cm-content').fill(authored);
       const frame = editorFrame(page);
@@ -491,16 +489,16 @@ describe("standalone workbench host boundary", function () {
       await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
       const circle = (await frame.locator('circle[data-source-id]').boundingBox())!;
       await input.touch([{ x: circle.x + 1, y: circle.y + circle.height / 2 }]);
-      await expect.poll(codeSelection).toBe(String.raw`\draw (4,0) circle (2cm);`);
+      await expect.poll(codeSelection).toBe(String.raw`\draw (8,-6) circle (3cm);`);
       const line = (await frame.locator('[data-source-id]:not(circle)').first().boundingBox())!;
       await input.penStroke([{ x: line.x + line.width / 2, y: line.y + line.height / 2 }]);
-      await expect.poll(codeSelection).toBe(String.raw`\draw (-6,0) -- (-2,3);`);
+      await expect.poll(codeSelection).toBe(String.raw`\draw (2,8) -- (12,14);`);
       await code.click();
-      await expect(page.locator('.cm-content')).toHaveCount(0);
+      await expect(page.locator('.cm-content')).toBeHidden();
       const reopened = (await frame.locator('circle[data-source-id]').boundingBox())!;
       await input.touch([{ x: reopened.x + 1, y: reopened.y + reopened.height / 2 }]);
       await code.click();
-      await expect.poll(codeSelection).toBe(String.raw`\draw (4,0) circle (2cm);`);
+      await expect.poll(codeSelection).toBe(String.raw`\draw (8,-6) circle (3cm);`);
     });
   }
 

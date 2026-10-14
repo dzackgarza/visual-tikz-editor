@@ -4692,7 +4692,7 @@ index cf4cf2cf..106a922d 100644
  
  .hitRegions {
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..489b3ed2 100644
+index 4e22ccfa..33748b48 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,16 @@ preflightPositionNodeRelativeToAction,
@@ -5914,37 +5914,55 @@ index 4e22ccfa..489b3ed2 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4395,29 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4395,47 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
 +  const selectionPopupStyle = (() => {
++    // The control never covers what it acts on or the rail: it goes below,
++    // above, right of, or left of the selection, whichever first fits inside
++    // the canvas area the rail leaves free.
 +    const viewport = viewportRef.current?.getBoundingClientRect();
-+    const leftEdge = Math.max(8, (viewport?.left ?? 0) + 8);
-+    const rightEdge = Math.min(window.innerWidth - 8, (viewport?.right ?? window.innerWidth) - 8);
-+    const topEdge = Math.max(8, (viewport?.top ?? 0) + 8);
-+    const bottomEdge = Math.min(window.innerHeight - 8, (viewport?.bottom ?? window.innerHeight) - 8);
++    const rootStyle = getComputedStyle(document.documentElement);
++    const inset = (edge: string) => Number.parseFloat(rootStyle.getPropertyValue(`--rail-inset-${edge}`));
++    const leftEdge = Math.max((viewport?.left ?? 0), inset("left")) + 8;
++    const rightEdge = Math.min((viewport?.right ?? window.innerWidth), window.innerWidth - inset("right")) - 8;
++    const topEdge = Math.max((viewport?.top ?? 0), inset("top")) + 8;
++    const bottomEdge = Math.min((viewport?.bottom ?? window.innerHeight), window.innerHeight - inset("bottom")) - 8;
 +    const width = Math.max(0, Math.min(300, rightEdge - leftEdge));
++    const height = Math.min(curveActionsOpen && selectedCurve ? 240 : 112, Math.max(0, bottomEdge - topEdge));
 +    const bounds = [...selectedElementIds].flatMap((id) => {
 +      const box = sourceBoundsSvg.get(id) ?? scopeOverlay.boundsByScopeId.get(id);
 +      return box ? [box] : [];
 +    });
-+    const anchorX = viewport && svgResult && bounds.length > 0
-+      ? viewport.left + canvasTransform.translateX + (Math.min(...bounds.map((box) => box.minX)) - svgResult.viewBox.x) * canvasTransform.scale + 8
-+      : leftEdge;
-+    const anchorY = viewport && svgResult && bounds.length > 0
-+      ? viewport.top + canvasTransform.translateY + (Math.min(...bounds.map((box) => box.minY)) - svgResult.viewBox.y) * canvasTransform.scale + 8
-+      : topEdge;
-+    const minimumHeight = Math.min(curveActionsOpen && selectedCurve ? 240 : 112, Math.max(0, bottomEdge - topEdge));
-+    const left = clamp(anchorX, leftEdge, Math.max(leftEdge, rightEdge - width));
-+    const top = clamp(anchorY, topEdge, Math.max(topEdge, bottomEdge - minimumHeight));
-+    return { left, top, width, maxHeight: Math.max(0, bottomEdge - top) };
++    if (!viewport || !svgResult || bounds.length === 0) return { left: leftEdge, top: topEdge, width, maxHeight: Math.max(0, bottomEdge - topEdge) };
++    const toClientX = (x: number) => viewport.left + canvasTransform.translateX + (x - svgResult.viewBox.x) * canvasTransform.scale;
++    const toClientY = (y: number) => viewport.top + canvasTransform.translateY + (y - svgResult.viewBox.y) * canvasTransform.scale;
++    const box = {
++      left: toClientX(Math.min(...bounds.map((item) => item.minX))) - 8, right: toClientX(Math.max(...bounds.map((item) => item.maxX))) + 8,
++      top: toClientY(Math.min(...bounds.map((item) => item.minY))) - 8, bottom: toClientY(Math.max(...bounds.map((item) => item.maxY))) + 8
++    };
++    const alongX = clamp(box.left, leftEdge, Math.max(leftEdge, rightEdge - width));
++    const alongY = clamp(box.top, topEdge, Math.max(topEdge, bottomEdge - height));
++    const candidates = [
++      { left: alongX, top: box.bottom }, { left: alongX, top: box.top - height },
++      { left: box.right, top: alongY }, { left: box.left - width, top: alongY }
++    ];
++    const fitting = candidates.filter((place) => place.left >= leftEdge && place.left + width <= rightEdge &&
++      place.top >= topEdge && place.top + height <= bottomEdge);
++    const others = [...sourceBoundsSvg].filter(([id]) => !selectedElementIds.has(id)).map(([, item]) => ({
++      left: toClientX(item.minX), right: toClientX(item.maxX), top: toClientY(item.minY), bottom: toClientY(item.maxY)
++    }));
++    const clearOfOthers = fitting.find((place) => others.every((item) => item.right <= place.left || item.left >= place.left + width ||
++      item.bottom <= place.top || item.top >= place.top + height));
++    const place = clearOfOthers ?? fitting[0] ?? { left: alongX, top: clamp(box.bottom, topEdge, Math.max(topEdge, bottomEdge - height)) };
++    return { left: place.left, top: place.top, width, maxHeight: Math.max(0, bottomEdge - place.top) };
 +  })();
 +
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4440,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4458,19 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -5965,7 +5983,7 @@ index 4e22ccfa..489b3ed2 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4469,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4487,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -5980,7 +5998,7 @@ index 4e22ccfa..489b3ed2 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3907,12 +4498,27 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3907,12 +4516,27 @@ export const CanvasPanel = memo(function CanvasPanel({
          editableTextRegionKeys={editableTextRegionKeys}
          draggableSourceIds={draggableSourceIds}
          hitRegionCursorByTargetId={pendingNodePositionHitRegionCursorByTargetId}
@@ -6010,7 +6028,7 @@ index 4e22ccfa..489b3ed2 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4526,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4544,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6020,7 +6038,7 @@ index 4e22ccfa..489b3ed2 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4539,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4557,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6050,7 +6068,7 @@ index 4e22ccfa..489b3ed2 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3974,6 +4596,74 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4614,74 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />

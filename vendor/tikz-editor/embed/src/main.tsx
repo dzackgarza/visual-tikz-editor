@@ -11,6 +11,7 @@ import { createSnapshotRequests } from './snapshots';
 import type { CommandFailure } from './events';
 import { executeInkCommand } from './ink-commands';
 import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
+import { walkStatements } from 'tikz-editor/ast/walk';
 
 const App = lazy(async () => {
 	const mod = await import('@tikz-editor/app');
@@ -317,9 +318,13 @@ function HostBridge() {
 		const unsubscribe = useEditorStore.subscribe((state) => {
 			if (state.snapshot.source === state.source) {
 				const handle = state.activeHandleId === null ? undefined : state.snapshot.editHandles.find(item => item.id === state.activeHandleId);
+				// A selected statement shows its whole statement; a selected node or
+				// other item inside one shows that item; a selected point shows the point.
+				const statementSpans = new Map<string, { from: number; to: number }>();
+				walkStatements(state.snapshot.parseResult?.figure.body ?? [], { onStatement: statement => statementSpans.set(statement.id, statement.span) });
 				const spans = handle ? [handle.sourceRef.sourceSpan] : (state.snapshot.scene?.elements ?? [])
 					.filter(item => state.selectedElementIds.has(item.sourceRef.sourceId))
-					.map(item => item.sourceRef.sourceSpan);
+					.map(item => statementSpans.get(item.sourceRef.sourceId) ?? item.sourceRef.sourceSpan);
 				if (spans.length > 0) {
 					const from = Math.min(...spans.map(span => span.from));
 					const to = Math.max(...spans.map(span => span.to));
