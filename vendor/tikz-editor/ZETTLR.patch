@@ -8792,7 +8792,7 @@ index 709cc1b9..bc306f4d 100644
        snapGuideInput,
        snapSettingsPatch,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
-index 43f01253..9fe50887 100644
+index 43f01253..f3d20e86 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportEffects.ts
 @@ -1,3 +1,4 @@
@@ -8800,7 +8800,15 @@ index 43f01253..9fe50887 100644
  import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from "react";
  import { viewportPoint as makeViewportPoint, clientPoint, px } from "tikz-editor/coords/index";
  import { clamp, distanceSquared, viewportToSvgPoint } from "./geometry";
-@@ -22,8 +23,6 @@ export type UseCanvasViewportEffectsArgs = {
+@@ -7,6 +8,7 @@ import type { CanvasTransform } from "../../store/types";
+ import type { CanvasSnapshot, DragState, PendingTouchViewport, SourceBoundsMap, StateSetter, ValueSetter } from "./types";
+ import type { ResizeFrame } from "./resize-frames";
+ import type { SvgViewBox } from "tikz-editor/svg/types";
++import { useEditorStore } from "../../store/store";
+ 
+ export type UseCanvasViewportEffectsArgs = {
+   dragRef: MutableRefObject<DragState | null>;
+@@ -22,8 +24,6 @@ export type UseCanvasViewportEffectsArgs = {
    selectedElementIdsRef: MutableRefObject<ReadonlySet<string>>;
    svgResult: CanvasSnapshot["svg"];
    svgResultRef: MutableRefObject<CanvasSnapshot["svg"]>;
@@ -8809,7 +8817,7 @@ index 43f01253..9fe50887 100644
    sourceBoundsSvg: SourceBoundsMap;
    sourceBoundsSvgRef: MutableRefObject<SourceBoundsMap>;
    resizeFramesBySource: ReadonlyMap<string, ResizeFrame | null>;
-@@ -33,7 +32,6 @@ export type UseCanvasViewportEffectsArgs = {
+@@ -33,7 +33,6 @@ export type UseCanvasViewportEffectsArgs = {
    zoomSpeed: number;
    MIN_SCALE: number;
    MAX_SCALE: number;
@@ -8817,7 +8825,7 @@ index 43f01253..9fe50887 100644
  };
  
  export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
-@@ -51,8 +49,6 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -51,8 +50,6 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
      selectedElementIdsRef,
      svgResult,
      svgResultRef,
@@ -8826,7 +8834,7 @@ index 43f01253..9fe50887 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -61,8 +57,7 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -61,8 +58,7 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
      dispatchCanvasTransform,
      zoomSpeed,
      MIN_SCALE,
@@ -8836,7 +8844,7 @@ index 43f01253..9fe50887 100644
    } = args;
  
    useEffect(() => {
-@@ -76,12 +71,16 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -76,12 +72,16 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
          return;
        }
  
@@ -8855,7 +8863,41 @@ index 43f01253..9fe50887 100644
        if (distanceSquared(nextWorld, drag.currentWorld) <= 1e-12) {
          return;
        }
-@@ -131,10 +130,6 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -103,8 +103,24 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+     const viewport = viewportRef.current;
+     if (!viewport) return;
+ 
++    // The last visible size: a resize keeps the view centre fixed, so whatever
++    // the author had centred (the origin at startup) stays in view.
++    let visibleSize: { width: number; height: number } | null = null;
+     const updateSize = () => {
+       const rect = viewport.getBoundingClientRect();
++      if (rect.width > 0 && rect.height > 0) {
++        if (visibleSize !== null) {
++          const current = canvasTransformRef.current;
++          const next = {
++            translateX: current.translateX + (rect.width - visibleSize.width) / 2,
++            translateY: current.translateY + (rect.height - visibleSize.height) / 2,
++            scale: current.scale
++          };
++          canvasTransformRef.current = next;
++          useEditorStore.getState().dispatch({ type: "SET_CANVAS_TRANSFORM", transform: next });
++        }
++        visibleSize = { width: rect.width, height: rect.height };
++      }
+       setViewportSize({
+         width: rect.width,
+         height: rect.height
+@@ -117,7 +133,7 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+     observer.observe(viewport);
+ 
+     return () => { observer.disconnect(); };
+-  }, [setViewportSize, viewportRef]);
++  }, [canvasTransformRef, setViewportSize, viewportRef]);
+ 
+   useLayoutEffect(() => {
+     canvasTransformRef.current = canvasTransform;
+@@ -131,10 +147,6 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
      svgResultRef.current = svgResult;
    }, [svgResult, svgResultRef]);
  
@@ -8866,7 +8908,7 @@ index 43f01253..9fe50887 100644
    useEffect(() => {
      sourceBoundsSvgRef.current = sourceBoundsSvg;
    }, [sourceBoundsSvg, sourceBoundsSvgRef]);
-@@ -175,6 +170,8 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -175,6 +187,8 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
      if (!viewport) return;
  
      const activeTouchPointers = new Map<number, ClientPoint>();
@@ -8875,7 +8917,7 @@ index 43f01253..9fe50887 100644
      let pinchGesture:
        | {
            baseScale: number;
-@@ -240,10 +237,6 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -240,10 +254,6 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
        const translateX = center.x - (pinchGesture.baseSvgPoint.x - currentSvg.viewBox.x) * nextScale;
        const translateY = center.y - (pinchGesture.baseSvgPoint.y - currentSvg.viewBox.y) * nextScale;
  
@@ -8886,7 +8928,7 @@ index 43f01253..9fe50887 100644
        dispatchCanvasTransform({ translateX, translateY, scale: nextScale });
      };
  
-@@ -261,9 +254,6 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -261,9 +271,6 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
        const viewportPoint = makeViewportPoint(px(event.clientX - rect.left), px(event.clientY - rect.top));
  
        if (event.ctrlKey || event.metaKey) {
@@ -8896,7 +8938,7 @@ index 43f01253..9fe50887 100644
          const deltaModeFactor =
            event.deltaMode === 1
              ? 16
-@@ -288,6 +278,21 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -288,6 +295,21 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
      };
  
      const onPointerDown = (event: PointerEvent) => {
@@ -8918,7 +8960,7 @@ index 43f01253..9fe50887 100644
        if (event.pointerType !== "touch") {
          return;
        }
-@@ -302,9 +307,15 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -302,9 +324,15 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
        beginPinchGesture();
        updatePinchGesture();
        event.preventDefault();
@@ -8934,7 +8976,7 @@ index 43f01253..9fe50887 100644
        if (event.pointerType !== "touch" || !activeTouchPointers.has(event.pointerId)) {
          return;
        }
-@@ -314,9 +325,16 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -314,9 +342,16 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
        }
        updatePinchGesture();
        event.preventDefault();
@@ -8951,7 +8993,7 @@ index 43f01253..9fe50887 100644
        if (event.pointerType !== "touch" || !activeTouchPointers.has(event.pointerId)) {
          return;
        }
-@@ -329,17 +347,17 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -329,17 +364,17 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
      };
  
      viewport.addEventListener("wheel", onWheel, { passive: false });
@@ -8977,7 +9019,7 @@ index 43f01253..9fe50887 100644
        activeTouchPointers.clear();
        pinchGesture = null;
      };
-@@ -349,10 +367,8 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
+@@ -349,10 +384,8 @@ export function useCanvasViewportEffects(args: UseCanvasViewportEffectsArgs) {
      canvasTransformRef,
      dispatchCanvasTransform,
      dragRef,
