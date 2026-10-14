@@ -189,6 +189,32 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`selects every element from the empty-canvas long press in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\draw (3,0) -- (5,1);\end{tikzpicture}`);
+      const frame = editorFrame(page);
+      await expect(frame.locator('[data-source-id]')).toHaveCount(2);
+      const input = await TabletInput.attach(page);
+      const center = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await input.longPress({ x: viewport.x + viewport.width * .85, y: viewport.y + viewport.height * .2 });
+      const menu = frame.getByRole('menu').first();
+      await expect(menu.getByRole('menuitem', { name: 'Paste', exact: true })).toBeVisible();
+      await input.touch([await center(menu.getByRole('menuitem', { name: 'Select All', exact: true }))]);
+      const debug = await editorDebug(page);
+      assert.deepEqual([...debug.selection].sort(), [...new Set(debug.scene!.elements.map(element => element.sourceRef.sourceId))].sort());
+      assert.equal(debug.selection.length, 2);
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
