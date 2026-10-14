@@ -166,6 +166,29 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`offers only settings that act in the embedded editor in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: ReturnType<typeof frame.getByRole>) => {
+        const box = (await locator.boundingBox())!;
+        await input.touch([{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]);
+      };
+      await tap(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Settings', exact: true }));
+      const dialog = frame.getByTestId('settings-modal');
+      await expect(dialog).toBeVisible();
+      assert.deepEqual(await dialog.locator('nav button').allInnerTexts(), ['Canvas', 'Colors']);
+      const labels = (await dialog.locator('label[for^="setting-"]').evaluateAll(nodes =>
+        nodes.map(node => node.childNodes[0].textContent!.trim())));
+      assert.deepEqual(labels, ['Grid Size', 'Grid Opacity', 'Edit Handle Size', 'Zoom Speed', 'Toolbar Position', 'Generated Source Indent']);
+      await dialog.getByLabel('Toolbar Position').selectOption('right');
+      await expect(frame.locator('[data-diagram-tools]')).toHaveAttribute('data-dock', 'right');
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
