@@ -3,7 +3,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -89,5 +89,8 @@ try {
   await cp(path.join(mathjax, 'LICENSE'), path.join(vendor, 'MATHJAX-NEWCM-LICENSE.txt'))
   console.log(`Rebuilt vendor/tikz-editor from ${commit}`)
 } finally {
-  run('trash', [ temporary ], root)
+  // The build directory is this script's own scratch space (a clone plus a full
+  // dependency install). Trashing it only moved it within the same filesystem,
+  // which filled the disk after a few dozen rebuilds.
+  await rm(temporary, { recursive: true })
 }
