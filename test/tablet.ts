@@ -54,7 +54,12 @@ export async function startWorkbench(env: NodeJS.ProcessEnv): Promise<Workbench>
 export const editorFrame = (page: Page): FrameLocator => page.frameLocator('iframe[title="TikZ visual editor"]');
 
 /** The part of `visualTikzEditorDebug()` the stories read; the iframe exposes more. */
-export type EditorDebug = { historyIndex: number };
+export type EditorDebug = {
+  historyIndex: number;
+  viewport: { translateX: number; translateY: number; scale: number };
+  canvasAids: { grid: boolean; rulers: boolean; documentBounds: boolean };
+  snapModes: { grid: boolean; latticeLock: boolean };
+};
 
 export async function editorDebug(page: Page): Promise<EditorDebug> {
   const frame = page.frames().find(candidate => new URL(candidate.url()).pathname === "/tikz-editor/index.html");

@@ -86,6 +86,35 @@ describe("standalone workbench host boundary", function () {
     assert.equal(await page.locator('.cm-content').innerText(), valid);
   });
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`reaches zoom, snapping, lattice lock, and canvas aids by touch in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: ReturnType<typeof frame.getByRole>) => {
+        await expect(locator).toBeInViewport({ ratio: 1 });
+        const box = (await locator.boundingBox())!;
+        await input.touch([{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]);
+      };
+      const before = await editorDebug(page);
+      await tap(frame.getByRole('button', { name: 'Zoom and display', exact: true }));
+      await tap(frame.getByRole('button', { name: 'Lock geometry to lattice', exact: true }));
+      await tap(frame.getByRole('button', { name: 'Snap to grid', exact: true }));
+      await tap(frame.getByRole('button', { name: 'Rulers', exact: true }));
+      await tap(frame.getByRole('button', { name: '200%', exact: true }));
+      const after = await editorDebug(page);
+      assert.equal(after.snapModes.latticeLock, !before.snapModes.latticeLock);
+      assert.equal(after.snapModes.grid, !before.snapModes.grid);
+      assert.equal(after.canvasAids.rulers, !before.canvasAids.rulers);
+      assert.notEqual(after.viewport.scale, before.viewport.scale);
+      await expect(frame.getByRole('button', { name: 'Lock geometry to lattice', exact: true })).toHaveAttribute('aria-pressed', String(after.snapModes.latticeLock));
+      await expect(frame.getByRole('button', { name: '200%', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
