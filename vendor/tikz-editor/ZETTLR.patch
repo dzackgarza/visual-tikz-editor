@@ -423,53 +423,57 @@ index af0a7abe..a4e1db8e 100644
    rendering: {
      mathJaxFont: "mathjax-newcm"
 diff --git a/packages/app/src/settings/useSettingsStore.ts b/packages/app/src/settings/useSettingsStore.ts
-index 6d5ddef2..66e5e991 100644
+index 6d5ddef2..eb1f0637 100644
 --- a/packages/app/src/settings/useSettingsStore.ts
 +++ b/packages/app/src/settings/useSettingsStore.ts
-@@ -9,10 +9,12 @@ type SettingsStore = {
+@@ -9,9 +9,7 @@ type SettingsStore = {
    updateEditorSettings: (patch: Partial<AppSettings["editor"]>) => void;
    updateCanvasSettings: (patch: Partial<AppSettings["canvas"]>) => void;
    updateColorPickerSettings: (patch: Partial<AppSettings["colorPicker"]>) => void;
+-  updateRenderingSettings: (patch: Partial<AppSettings["rendering"]>) => void;
+-  resetGeneralSettings: () => void;
+-  resetEditorSettings: () => void;
 +  updateToolbarSettings: (patch: Partial<AppSettings["toolbar"]>) => void;
-   updateRenderingSettings: (patch: Partial<AppSettings["rendering"]>) => void;
-   resetGeneralSettings: () => void;
-   resetEditorSettings: () => void;
    resetCanvasSettings: () => void;
-+  resetToolbarSettings: () => void;
  };
  
- export const useSettingsStore = create<SettingsStore>((set) => ({
-@@ -57,6 +59,16 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
+@@ -57,32 +55,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
        return { settings: next };
      });
    },
+-  updateRenderingSettings: (patch) => {
 +  updateToolbarSettings: (patch) => {
-+    set((state) => {
-+      const next: AppSettings = {
-+        ...state.settings,
-+        toolbar: { ...state.settings.toolbar, ...patch }
-+      };
-+      saveSettings(next);
-+      return { settings: next };
-+    });
-+  },
-   updateRenderingSettings: (patch) => {
      set((state) => {
        const next: AppSettings = {
-@@ -97,5 +109,30 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
+         ...state.settings,
+-        rendering: { ...state.settings.rendering, ...patch }
+-      };
+-      saveSettings(next);
+-      return { settings: next };
+-    });
+-  },
+-  resetGeneralSettings: () => {
+-    set((state) => {
+-      const next: AppSettings = {
+-        ...state.settings,
+-        general: { ...DEFAULT_SETTINGS.general },
+-        colorPicker: { ...DEFAULT_SETTINGS.colorPicker }
+-      };
+-      saveSettings(next);
+-      return { settings: next };
+-    });
+-  },
+-  resetEditorSettings: () => {
+-    set((state) => {
+-      const next: AppSettings = {
+-        ...state.settings,
+-        editor: { ...DEFAULT_SETTINGS.editor }
++        toolbar: { ...state.settings.toolbar, ...patch }
+       };
        saveSettings(next);
        return { settings: next };
+@@ -99,3 +76,18 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
      });
-+  },
-+  resetToolbarSettings: () => {
-+    set((state) => {
-+      const next: AppSettings = {
-+        ...state.settings,
-+        toolbar: { ...DEFAULT_SETTINGS.toolbar, items: [...DEFAULT_SETTINGS.toolbar.items] }
-+      };
-+      saveSettings(next);
-+      return { settings: next };
-+    });
    }
  }));
 +
@@ -3034,23 +3038,22 @@ index dd056fad..1da24da9 100644
 +  .navItem { width: 100%; }
 +}
 diff --git a/packages/app/src/ui/SettingsModal.tsx b/packages/app/src/ui/SettingsModal.tsx
-index e849b257..c9f850fe 100644
+index e849b257..1fd6a8ee 100644
 --- a/packages/app/src/ui/SettingsModal.tsx
 +++ b/packages/app/src/ui/SettingsModal.tsx
-@@ -1,29 +1,23 @@
+@@ -1,34 +1,19 @@
  import { useState } from "react";
  import { useSettingsStore } from "../settings/useSettingsStore";
 -import { EDITOR_FONT_SIZE_OPTIONS, type ColorPickerAccuracy, type ColorScheme, type GridSize, type MathJaxFont } from "../settings/types";
-+import { EDITOR_FONT_SIZE_OPTIONS, TOOLBAR_TOOL_IDS, type ToolbarItem, type ToolbarToolId, type ColorScheme, type GridSize, type MathJaxFont } from "../settings/types";
++import { DEFAULT_SETTINGS, type GridSize, type ToolbarDock } from "../settings/types";
  import { Modal } from "./Modal";
 +import { ColorPicker, cssColorForToken } from "./ColorPicker";
 +import { TOOL_COLOR_OPTIONS } from "./tool-config";
  import css from "./SettingsModal.module.css";
  
 -type CategoryId = "general" | "editor" | "canvas";
-+type CategoryId = "general" | "editor" | "canvas" | "toolbar" | "colors";
- 
- const MATHJAX_FONTS: { value: MathJaxFont; label: string }[] = [
+-
+-const MATHJAX_FONTS: { value: MathJaxFont; label: string }[] = [
 -  { value: "mathjax-newcm",   label: "New Computer Modern (default)" },
 -  { value: "mathjax-asana",   label: "Asana Math" },
 -  { value: "mathjax-bonum",   label: "Gyre Bonum" },
@@ -3062,132 +3065,139 @@ index e849b257..c9f850fe 100644
 -  { value: "mathjax-stix2",   label: "STIX2" },
 -  { value: "mathjax-termes",  label: "Gyre Termes" },
 -  { value: "mathjax-tex",     label: "TeX (classic MathJax v3)" },
-+  { value: "mathjax-newcm", label: "New Computer Modern" }
- ];
+-];
++type CategoryId = "canvas" | "colors";
  
  const CATEGORIES: { id: CategoryId; label: string }[] = [
-   { id: "general", label: "General" },
-   { id: "editor", label: "Code Editor" },
+-  { id: "general", label: "General" },
+-  { id: "editor", label: "Code Editor" },
 -  { id: "canvas", label: "Canvas" }
 +  { id: "canvas", label: "Canvas" },
-+  { id: "toolbar", label: "Toolbar" },
 +  { id: "colors", label: "Colors" }
  ];
  
- let rememberedCategory: CategoryId = "general";
-@@ -37,6 +31,7 @@ type SettingsModalProps = {
+-let rememberedCategory: CategoryId = "general";
+-const MIN_FORMATTER_MAX_LINE_LENGTH = 40;
+-const MAX_FORMATTER_MAX_LINE_LENGTH = 240;
++let rememberedCategory: CategoryId = "canvas";
+ 
+ type SettingsModalProps = {
+   onClose: () => void;
+@@ -36,44 +21,33 @@ type SettingsModalProps = {
+ 
  export function SettingsModal({ onClose }: SettingsModalProps) {
    const [activeCategory, setActiveCategory] = useState<CategoryId>(rememberedCategory);
-   const [formatterMaxLineLengthInput, setFormatterMaxLineLengthInput] = useState<string | null>(null);
+-  const [formatterMaxLineLengthInput, setFormatterMaxLineLengthInput] = useState<string | null>(null);
 +  const [selectedPaletteIndex, setSelectedPaletteIndex] = useState<number | null>(null);
  
    const selectCategory = (id: CategoryId) => {
      rememberedCategory = id;
-@@ -47,10 +42,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+     setActiveCategory(id);
+   };
+   const settings = useSettingsStore((s) => s.settings);
+-  const updateGeneralSettings = useSettingsStore((s) => s.updateGeneralSettings);
    const updateEditorSettings = useSettingsStore((s) => s.updateEditorSettings);
    const updateCanvasSettings = useSettingsStore((s) => s.updateCanvasSettings);
    const updateColorPickerSettings = useSettingsStore((s) => s.updateColorPickerSettings);
+-  const updateRenderingSettings = useSettingsStore((s) => s.updateRenderingSettings);
+-  const resetGeneralSettings = useSettingsStore((s) => s.resetGeneralSettings);
+-  const resetEditorSettings = useSettingsStore((s) => s.resetEditorSettings);
 +  const updateToolbarSettings = useSettingsStore((s) => s.updateToolbarSettings);
-   const updateRenderingSettings = useSettingsStore((s) => s.updateRenderingSettings);
-   const resetGeneralSettings = useSettingsStore((s) => s.resetGeneralSettings);
-   const resetEditorSettings = useSettingsStore((s) => s.resetEditorSettings);
    const resetCanvasSettings = useSettingsStore((s) => s.resetCanvasSettings);
-+  const resetToolbarSettings = useSettingsStore((s) => s.resetToolbarSettings);
-   const formatterMaxLineLengthValue = formatterMaxLineLengthInput ?? String(settings.editor.formatterMaxLineLength);
+-  const formatterMaxLineLengthValue = formatterMaxLineLengthInput ?? String(settings.editor.formatterMaxLineLength);
+-
+-  const commitFormatterMaxLineLength = () => {
+-    const parsed = Number(formatterMaxLineLengthValue);
+-    const clamped = Number.isFinite(parsed)
+-      ? Math.max(MIN_FORMATTER_MAX_LINE_LENGTH, Math.min(MAX_FORMATTER_MAX_LINE_LENGTH, Math.round(parsed)))
+-      : settings.editor.formatterMaxLineLength;
+-
+-    updateEditorSettings({ formatterMaxLineLength: clamped });
+-    setFormatterMaxLineLengthInput(null);
+-  };
  
-   const commitFormatterMaxLineLength = () => {
-@@ -73,9 +70,36 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
-       setFormatterMaxLineLengthInput(null);
+   const resetActiveCategoryToDefaults = () => {
+-    if (activeCategory === "general") {
+-      resetGeneralSettings();
+-      return;
+-    }
+-    if (activeCategory === "editor") {
+-      resetEditorSettings();
+-      setFormatterMaxLineLengthInput(null);
++    if (activeCategory === "colors") {
++      updateColorPickerSettings({ palette: DEFAULT_SETTINGS.colorPicker.palette });
        return;
      }
-+    if (activeCategory === "toolbar") {
-+      resetToolbarSettings();
-+      return;
-+    }
-+    if (activeCategory === "colors") {
-+      updateColorPickerSettings({ palette: ["black", "white", "red", "orange", "yellow", "green", "blue", "violet"] });
-+      return;
-+    }
      resetCanvasSettings();
-   };
- 
-+  const setToolbarItems = (items: ToolbarItem[]) => updateToolbarSettings({ items });
-+  const updateToolbarItem = (index: number, item: ToolbarItem) => {
-+    const items = [...settings.toolbar.items];
-+    items[index] = item;
-+    setToolbarItems(items);
++    updateToolbarSettings({ dock: DEFAULT_SETTINGS.toolbar.dock });
++    updateEditorSettings({ indentSize: DEFAULT_SETTINGS.editor.indentSize });
 +  };
-+  const moveToolbarItem = (index: number, offset: number) => {
-+    const items = [...settings.toolbar.items];
-+    const target = index + offset;
-+    if (target < 0 || target >= items.length) return;
-+    [items[index], items[target]] = [items[target], items[index]];
-+    setToolbarItems(items);
-+  };
++
 +  const updatePaletteColor = (index: number, color: string) => {
 +    const palette = [...settings.colorPicker.palette];
 +    palette[index] = color;
 +    updateColorPickerSettings({ palette });
-+  };
-+
+   };
+ 
    return (
-     <Modal
-       onClose={onClose}
-@@ -109,6 +133,50 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -109,208 +83,23 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
            </nav>
  
            <div className={css.content}>
-+            {activeCategory === "toolbar" && <div className={css.panel}>
-+              <div className={css.panelTitle}>Toolbar</div>
-+              <div className={css.settingRow}>
-+                <label className={css.settingLabel} htmlFor="toolbar-dock">Position</label>
-+                <select id="toolbar-dock" className={css.select} value={settings.toolbar.dock} onChange={(event) => updateToolbarSettings({ dock: event.target.value as typeof settings.toolbar.dock })}>
-+                  <option value="left">Left</option><option value="right">Right</option><option value="top">Top</option><option value="bottom">Bottom</option><option value="floating">Floating</option>
-+                </select>
-+              </div>
-+              <div className={css.settingsGroup}>
-+                {settings.toolbar.items.map((item, index) => <div className={css.settingRow} key={index}>
-+                  <select className={css.select} aria-label={`Toolbar item ${index + 1}`} value={item.kind === "tool" ? item.id : item.kind} onChange={(event) => {
-+                    const value = event.target.value;
-+                    updateToolbarItem(index, value === "separator" || value === "spacer" ? { kind: value } : { kind: "tool", id: value as ToolbarToolId });
-+                  }}>
-+                    <option value="separator">Separator</option><option value="spacer">Space</option>
-+                    {TOOLBAR_TOOL_IDS.map((id) => <option key={id} value={id}>{id === "addBezier" ? "Curves" : id.replace(/^add/, "")}</option>)}
-+                  </select>
-+                  <div>
-+                    <button type="button" aria-label={`Move item ${index + 1} up`} disabled={index === 0} onClick={() => moveToolbarItem(index, -1)}>↑</button>
-+                    <button type="button" aria-label={`Move item ${index + 1} down`} disabled={index === settings.toolbar.items.length - 1} onClick={() => moveToolbarItem(index, 1)}>↓</button>
-+                    <button type="button" aria-label={`Remove item ${index + 1}`} onClick={() => setToolbarItems(settings.toolbar.items.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
-+                  </div>
-+                </div>)}
-+              </div>
-+              <div><button type="button" onClick={() => setToolbarItems([...settings.toolbar.items, { kind: "tool", id: "select" }])}>Add tool</button> <button type="button" onClick={() => setToolbarItems([...settings.toolbar.items, { kind: "separator" }])}>Add separator</button> <button type="button" onClick={() => setToolbarItems([...settings.toolbar.items, { kind: "spacer" }])}>Add space</button></div>
-+              <div className={css.resetRow}><button type="button" className={css.resetButton} onClick={resetActiveCategoryToDefaults}>Reset to Defaults</button></div>
-+            </div>}
-+            {activeCategory === "colors" && <div className={css.panel}>
-+              <div className={css.panelTitle}>Color Settings</div>
-+              <div className={css.settingsGroup}>
-+                {settings.colorPicker.palette.map((color, index) => <div className={css.settingRow} key={index}>
-+                  <label className={css.settingLabel} htmlFor={`palette-${index}`}>Color {index + 1}</label>
-+                  <button type="button" id={`palette-${index}`} className={css.palettePreview} aria-label={`Choose saved color ${index + 1}`}
-+                    style={{ background: cssColorForToken(color) ?? "transparent" }} onClick={() => setSelectedPaletteIndex(index)} />
-+                  <button type="button" onClick={() => updateColorPickerSettings({ palette: settings.colorPicker.palette.filter((_, colorIndex) => colorIndex !== index) })}>Remove</button>
-+                </div>)}
-+              </div>
-+              {selectedPaletteIndex !== null && settings.colorPicker.palette[selectedPaletteIndex] !== undefined && <ColorPicker
-+                ariaLabel={`Palette color ${selectedPaletteIndex + 1}`} value={settings.colorPicker.palette[selectedPaletteIndex]}
-+                syntaxValue={settings.colorPicker.palette[selectedPaletteIndex]} options={TOOL_COLOR_OPTIONS}
-+                onChange={(color) => updatePaletteColor(selectedPaletteIndex, color)} />}
-+              <button type="button" onClick={() => updateColorPickerSettings({ palette: [...settings.colorPicker.palette, "black"] })}>Add color</button>
-+              <div className={css.resetRow}><button type="button" className={css.resetButton} onClick={resetActiveCategoryToDefaults}>Reset to Defaults</button></div>
-+            </div>}
-             {activeCategory === "general" && (
-               <div className={css.panel}>
-                 <div className={css.panelTitle}>General</div>
-@@ -163,23 +231,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
-                     />
-                   </div>
- 
+-            {activeCategory === "general" && (
+-              <div className={css.panel}>
+-                <div className={css.panelTitle}>General</div>
+-                <div className={css.settingsGroup}>
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-ui-font-size">
+-                      UI Font Size
+-                      <span className={css.settingDesc}>Adjusts app chrome text size.</span>
+-                    </label>
+-                    <select
+-                      id="setting-ui-font-size"
+-                      className={css.select}
+-                      value={settings.general.uiFontSizePx}
+-                      onChange={(e) => { updateGeneralSettings({ uiFontSizePx: Number(e.target.value) }); }}
+-                    >
+-                      {[10, 11, 12, 13, 14].map((size) => (
+-                        <option key={size} value={size}>{size}px</option>
+-                      ))}
+-                    </select>
+-                  </div>
+-
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-color-scheme">
+-                      Color Scheme
+-                      <span className={css.settingDesc}>Controls light/dark mode for the app UI.</span>
+-                    </label>
+-                    <select
+-                      id="setting-color-scheme"
+-                      className={css.select}
+-                      value={settings.general.colorScheme}
+-                      onChange={(e) => { updateGeneralSettings({ colorScheme: e.target.value as ColorScheme }); }}
+-                    >
+-                      <option value="system">System (default)</option>
+-                      <option value="light">Light</option>
+-                      <option value="dark">Dark</option>
+-                    </select>
+-                  </div>
+-
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-canvas-invert">
+-                      Invert Canvas in Dark Mode
+-                      <span className={css.settingDesc}>
+-                        Applies brightness inversion to the diagram in dark mode, keeping hue intact.
+-                      </span>
+-                    </label>
+-                    <input
+-                      id="setting-canvas-invert"
+-                      type="checkbox"
+-                      className={css.checkbox}
+-                      checked={settings.general.canvasInvert}
+-                      onChange={(e) => { updateGeneralSettings({ canvasInvert: e.target.checked }); }}
+-                    />
+-                  </div>
+-
 -                  <div className={css.settingRow}>
 -                    <label className={css.settingLabel} htmlFor="setting-color-picker-accuracy">
 -                      Color Picker Precision
@@ -3205,11 +3215,157 @@ index e849b257..c9f850fe 100644
 -                      <option value="exact">Exact</option>
 -                    </select>
 -                  </div>
-+
-                 </div>
-                 <div className={css.resetRow}>
-                   <button
-@@ -332,6 +384,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+-                </div>
+-                <div className={css.resetRow}>
+-                  <button
+-                    type="button"
+-                    className={css.resetButton}
+-                    data-testid="settings-reset-general"
+-                    onClick={resetActiveCategoryToDefaults}
+-                  >
+-                    Reset to Defaults
+-                  </button>
+-                </div>
+-              </div>
+-            )}
+-
+-            {activeCategory === "editor" && (
+-              <div className={css.panel}>
+-                <div className={css.panelTitle}>Code Editor</div>
+-                <div className={css.settingsGroup}>
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-word-wrap">
+-                      Word Wrap
+-                      <span className={css.settingDesc}>Wrap long lines in the source editor.</span>
+-                    </label>
+-                    <input
+-                      id="setting-word-wrap"
+-                      type="checkbox"
+-                      className={css.checkbox}
+-                      checked={settings.editor.wordWrap}
+-                      onChange={(e) => { updateEditorSettings({ wordWrap: e.target.checked }); }}
+-                    />
+-                  </div>
+-
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-line-numbers">
+-                      Line Numbers
+-                      <span className={css.settingDesc}>Show line numbers in the source editor.</span>
+-                    </label>
+-                    <input
+-                      id="setting-line-numbers"
+-                      type="checkbox"
+-                      className={css.checkbox}
+-                      checked={settings.editor.lineNumbers}
+-                      onChange={(e) => { updateEditorSettings({ lineNumbers: e.target.checked }); }}
+-                    />
+-                  </div>
+-
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-font-size">
+-                      Font Size
+-                      <span className={css.settingDesc}>Source editor font size.</span>
+-                    </label>
+-                    <select
+-                      id="setting-font-size"
+-                      className={css.select}
+-                      value={settings.editor.fontSize}
+-                      onChange={(e) => { updateEditorSettings({ fontSize: Number(e.target.value) }); }}
+-                    >
+-                      {EDITOR_FONT_SIZE_OPTIONS.map((size) => (
+-                        <option key={size} value={size}>{size}px</option>
+-                      ))}
+-                    </select>
+-                  </div>
+-
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-indent-size">
+-                      Indent Size
+-                      <span className={css.settingDesc}>Spaces inserted by Tab and formatting.</span>
+-                    </label>
+-                    <select
+-                      id="setting-indent-size"
+-                      className={css.select}
+-                      value={settings.editor.indentSize}
+-                      onChange={(e) => { updateEditorSettings({ indentSize: Number(e.target.value) as 2 | 4 }); }}
+-                    >
+-                      <option value={2}>2 spaces</option>
+-                      <option value={4}>4 spaces</option>
+-                    </select>
+-                  </div>
+-                </div>
+-
+-                <div className={css.panelTitle}>Formatter</div>
+-                <div className={css.settingsGroup}>
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-formatter-reflow-long-options">
+-                      Reflow Long Option Lists
+-                      <span className={css.settingDesc}>Split long option lists into one entry per line while formatting.</span>
+-                    </label>
+-                    <input
+-                      id="setting-formatter-reflow-long-options"
+-                      type="checkbox"
+-                      className={css.checkbox}
+-                      checked={settings.editor.formatterReflowLongOptions}
+-                      onChange={(e) => { updateEditorSettings({ formatterReflowLongOptions: e.target.checked }); }}
+-                    />
+-                  </div>
+-
+-                  <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-formatter-max-line-length">
+-                      Max Line Length
+-                      <span className={css.settingDesc}>Longer option lists are reflowed when this limit is exceeded.</span>
+-                    </label>
+-                    <input
+-                      id="setting-formatter-max-line-length"
+-                      type="number"
+-                      className={css.numberInput}
+-                      min={MIN_FORMATTER_MAX_LINE_LENGTH}
+-                      max={MAX_FORMATTER_MAX_LINE_LENGTH}
+-                      value={formatterMaxLineLengthValue}
+-                      onChange={(e) => { setFormatterMaxLineLengthInput(e.target.value); }}
+-                      onBlur={commitFormatterMaxLineLength}
+-                      onKeyDown={(e) => {
+-                        if (e.key === "Enter") {
+-                          commitFormatterMaxLineLength();
+-                        }
+-                      }}
+-                    />
+-                  </div>
+-                </div>
+-                <div className={css.resetRow}>
+-                  <button
+-                    type="button"
+-                    className={css.resetButton}
+-                    data-testid="settings-reset-editor"
+-                    onClick={resetActiveCategoryToDefaults}
+-                  >
+-                    Reset to Defaults
+-                  </button>
+-                </div>
++            {activeCategory === "colors" && <div className={css.panel}>
++              <div className={css.panelTitle}>Color Settings</div>
++              <div className={css.settingsGroup}>
++                {settings.colorPicker.palette.map((color, index) => <div className={css.settingRow} key={index}>
++                  <label className={css.settingLabel} htmlFor={`palette-${index}`}>Color {index + 1}</label>
++                  <button type="button" id={`palette-${index}`} className={css.palettePreview} aria-label={`Choose saved color ${index + 1}`}
++                    style={{ background: cssColorForToken(color) ?? "transparent" }} onClick={() => setSelectedPaletteIndex(index)} />
++                  <button type="button" onClick={() => updateColorPickerSettings({ palette: settings.colorPicker.palette.filter((_, colorIndex) => colorIndex !== index) })}>Remove</button>
++                </div>)}
+               </div>
+-            )}
+-
++              {selectedPaletteIndex !== null && settings.colorPicker.palette[selectedPaletteIndex] !== undefined && <ColorPicker
++                ariaLabel={`Palette color ${selectedPaletteIndex + 1}`} value={settings.colorPicker.palette[selectedPaletteIndex]}
++                syntaxValue={settings.colorPicker.palette[selectedPaletteIndex]} options={TOOL_COLOR_OPTIONS}
++                onChange={(color) => updatePaletteColor(selectedPaletteIndex, color)} />}
++              <button type="button" onClick={() => updateColorPickerSettings({ palette: [...settings.colorPicker.palette, "black"] })}>Add color</button>
++              <div className={css.resetRow}><button type="button" className={css.resetButton} onClick={resetActiveCategoryToDefaults}>Reset to Defaults</button></div>
++            </div>}
+             {activeCategory === "canvas" && (
+               <div className={css.panel}>
+                 <div className={css.panelTitle}>Canvas</div>
+@@ -332,6 +121,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                      </select>
                    </div>
  
@@ -3226,6 +3382,56 @@ index e849b257..c9f850fe 100644
                    <div className={css.settingRow}>
                      <label className={css.settingLabel} htmlFor="setting-handle-size">
                        Edit Handle Size
+@@ -373,31 +172,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+                   </div>
+                 </div>
+ 
+-                <div className={css.panelTitle}>Rendering</div>
+                 <div className={css.settingsGroup}>
+                   <div className={css.settingRow}>
+-                    <label className={css.settingLabel} htmlFor="setting-mathjax-font">
+-                      Math Font
+-                      <span className={css.settingDesc}>Font used to render math in text nodes.</span>
++                    <label className={css.settingLabel} htmlFor="setting-toolbar-position">
++                      Toolbar Position
++                      <span className={css.settingDesc}>Edge of the canvas the drawing rail docks to.</span>
+                     </label>
+-                    <select
+-                      id="setting-mathjax-font"
+-                      className={css.select}
+-                      value={settings.rendering.mathJaxFont}
+-                      onChange={(e) => { updateRenderingSettings({ mathJaxFont: e.target.value as MathJaxFont }); }}
+-                    >
+-                      {MATHJAX_FONTS.map(({ value, label }) => (
+-                        <option key={value} value={value}>{label}</option>
+-                      ))}
++                    <select id="setting-toolbar-position" className={css.select} value={settings.toolbar.dock}
++                      onChange={(event) => { updateToolbarSettings({ dock: event.target.value as ToolbarDock }); }}>
++                      <option value="left">Left</option><option value="right">Right</option><option value="top">Top</option>
++                      <option value="bottom">Bottom</option><option value="floating">Floating</option>
+                     </select>
+                   </div>
+-                  <div className={css.fontPreviewRow}>
+-                    <img
+-                      key={settings.rendering.mathJaxFont}
+-                      className={css.fontPreviewImg}
+-                      src={`${import.meta.env.BASE_URL}font-previews/${settings.rendering.mathJaxFont}.svg`}
+-                      alt={`Preview of ${settings.rendering.mathJaxFont}`}
+-                    />
++
++                  <div className={css.settingRow}>
++                    <label className={css.settingLabel} htmlFor="setting-indent-size">
++                      Generated Source Indent
++                      <span className={css.settingDesc}>Spaces before each line the editor writes into the source.</span>
++                    </label>
++                    <select id="setting-indent-size" className={css.select} value={settings.editor.indentSize}
++                      onChange={(event) => { updateEditorSettings({ indentSize: Number(event.target.value) as 2 | 4 }); }}>
++                      <option value={2}>2 spaces</option>
++                      <option value={4}>4 spaces</option>
++                    </select>
+                   </div>
+                 </div>
+ 
 diff --git a/packages/app/src/ui/StatusBar.module.css b/packages/app/src/ui/StatusBar.module.css
 index 853a0713..c03cdfd1 100644
 --- a/packages/app/src/ui/StatusBar.module.css
@@ -3461,7 +3667,7 @@ index 0ddde08e..dcd5a6c1 100644
 +.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
 +.insertChoice:disabled { opacity: .5; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..be69ad26 100644
+index a3293df2..c4507edc 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -3965,7 +4171,7 @@ index a3293df2..be69ad26 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +693,69 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +693,68 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4015,8 +4221,7 @@ index a3293df2..be69ad26 100644
 +      </div>
 +      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("erase")}
 +      {renderEmbeddedTool("addFreehand")}{renderInsertButton()}
-+      {settings.toolbar.items.flatMap((item) => item.kind === "tool" && ["undo", "redo", "color", "palette", "addBucket"].includes(item.id)
-+        ? [<Fragment key={item.id}>{renderEmbeddedTool(item.id)}</Fragment>] : [])}
++      {(["color", "addBucket", "undo", "redo", "palette"] as const).map((id) => <Fragment key={id}>{renderEmbeddedTool(id)}</Fragment>)}
 +    </div>
 +  </div>{dockPreview ? createPortal(<div className={css.dockGuide} aria-hidden="true">
 +    {(["left", "top", "right", "bottom"] as const).map((dock) => <div key={dock}
@@ -4037,7 +4242,7 @@ index a3293df2..be69ad26 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +766,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +765,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -4051,7 +4256,7 @@ index a3293df2..be69ad26 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +782,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +781,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -4060,7 +4265,7 @@ index a3293df2..be69ad26 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +807,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +806,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
