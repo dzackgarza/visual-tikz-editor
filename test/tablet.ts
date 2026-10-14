@@ -56,6 +56,8 @@ export const editorFrame = (page: Page): FrameLocator => page.frameLocator('ifra
 /** The part of `visualTikzEditorDebug()` the stories read; the iframe exposes more. */
 export type EditorDebug = {
   historyIndex: number;
+  tool: string;
+  source: string;
   selection: string[];
   scene: { elements: { sourceRef: { sourceId: string } }[] } | null;
   viewport: { translateX: number; translateY: number; scale: number };

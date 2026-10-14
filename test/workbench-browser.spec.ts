@@ -215,6 +215,46 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`inserts, deletes, and opens layers through touch routes in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
+      const frame = editorFrame(page);
+      await expect(frame.locator('[data-source-id]')).toHaveCount(1);
+      const input = await TabletInput.attach(page);
+      const center = async (locator: ReturnType<typeof frame.locator>) => {
+        const box = (await locator.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      const rail = frame.locator('[data-diagram-tools]');
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+
+      await input.touch([await center(rail.getByRole('button', { name: 'Insert', exact: true }))]);
+      await input.touch([await center(frame.getByRole('button', { name: 'Line', exact: true }))]);
+      assert.equal((await editorDebug(page)).tool, 'addLine');
+      const from = { x: viewport.x + viewport.width * .7, y: viewport.y + viewport.height * .3 };
+      await input.penStroke([from, { x: from.x + 40, y: from.y + 30 }, { x: from.x + 80, y: from.y + 60 }]);
+      await expect(frame.locator('[data-source-id]')).toHaveCount(2);
+      await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw[^;]*--[^;]*;/);
+
+      await input.touch([await center(rail.getByRole('button', { name: 'Select', exact: true }))]);
+      const circle = (await frame.locator('circle[data-source-id]').boundingBox())!;
+      await input.longPress({ x: circle.x + 1, y: circle.y + circle.height / 2 });
+      await input.touch([await center(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Delete', exact: true }))]);
+      await expect(frame.locator('circle[data-source-id]')).toHaveCount(0);
+      assert.doesNotMatch((await editorDebug(page)).source, /circle/);
+
+      await input.touch([await center(rail.getByRole('button', { name: 'Layers', exact: true }))]);
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      await expect(panel).toBeVisible();
+      await expect(panel.getByText('Layers', { exact: true })).toBeVisible();
+      await expect(panel.getByText('Line', { exact: true })).toBeVisible();
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
