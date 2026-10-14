@@ -644,6 +644,52 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    for (const contact of ['touch', 'pen'] as const) {
+      it(`edits a curve point from the curve's own control by ${contact} in ${tablet.name}`, async function () {
+        await page.setViewportSize({ width: tablet.width, height: tablet.height });
+        await page.reload();
+        await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+        await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+        await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0);
+\end{tikzpicture}`);
+        await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+        const frame = editorFrame(page);
+        const curve = frame.locator('svg [data-source-id="path:0"]').first();
+        await expect(curve).toBeVisible();
+        const input = await TabletInput.attach(page);
+        const tap = async (point: { x: number; y: number }) => contact === 'touch' ? input.touch([point]) : input.penStroke([point]);
+        await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+        await tap(await strokePoint(page, curve, .15));
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
+        const pointAt = async (x: number) => {
+          const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+          const anchors = await frame.locator('[data-handle-kind="move-handle"][data-source-id="path:0"]').evaluateAll(nodes => nodes.map(node => {
+            const box = node.getBoundingClientRect();
+            return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+          }).sort((a, b) => a.x - b.x));
+          return { x: frameBox.x + anchors[x].x, y: frameBox.y + anchors[x].y };
+        };
+        await tap(await pointAt(1));
+        await expect(frame.getByRole('button', { name: '1 point selected', exact: true })).toBeVisible();
+        for (const name of ['Make corner', 'Smooth points', 'Delete points', 'Split here'])
+          await expect(frame.getByRole('button', { name, exact: true })).toBeVisible();
+        await expect(frame.getByRole('button', { name: 'Point actions', exact: true })).toHaveCount(0);
+        await input.longPress(await pointAt(1));
+        await expect(frame.getByRole('menu')).toHaveCount(0);
+        await expect(frame.getByRole('button', { name: 'Make corner', exact: true })).toBeVisible();
+        const before = (await editorDebug(page)).source;
+        await input.touch([await stableCenter(frame.getByRole('button', { name: 'Make corner', exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).not.toBe(before);
+        assert.match((await editorDebug(page)).source, /\(6,0\)/);
+        await tap(await pointAt(1));
+        await input.touch([await stableCenter(frame.getByRole('button', { name: 'Delete points', exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).not.toMatch(/\(6,0\)/);
+      });
+    }
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
