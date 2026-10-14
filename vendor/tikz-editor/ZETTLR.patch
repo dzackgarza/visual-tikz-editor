@@ -10166,7 +10166,7 @@ index 4e8f0b66..4f6458b8 100644
        const { from, to: normalizedTo } = normalizeRange(d.from, d.to, docLength);
        let to = normalizedTo;
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870b..570495b8 100644
+index 0101870b..880da98a 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
 @@ -1,7 +1,9 @@
@@ -10221,7 +10221,7 @@ index 0101870b..570495b8 100644
  function BucketIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-@@ -166,15 +189,19 @@ export type ToolButtonDef = {
+@@ -166,26 +189,31 @@ export type ToolButtonDef = {
    separatorBefore?: true;
  };
  
@@ -10232,20 +10232,36 @@ index 0101870b..570495b8 100644
  
  // Tool buttons in display order (bucket moved to end)
  export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
-   { mode: "select",     label: "Select",   title: "Select (V)",   shortcut: "v", icon: SelectIcon },
+-  { mode: "select",     label: "Select",   title: "Select (V)",   shortcut: "v", icon: SelectIcon },
+-  { mode: "magnify",    label: "Magnify",  title: "Magnify (M)",  shortcut: "m", icon: MagnifyIcon },
+-  { mode: "addNode",    label: "Node",     title: "Node (N)",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
+-  { mode: "addShape",   label: "Shape",    title: "Shape (S)",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
++  { mode: "select",     label: "Select",   title: "Select",   shortcut: "v", icon: SelectIcon },
 +  { mode: "lasso",      label: "Lasso",    title: "Lasso selection",       icon: PathIcon },
-+  { mode: "erase",      label: "Eraser",   title: "Erase an element",      icon: EraserIcon },
-   { mode: "magnify",    label: "Magnify",  title: "Magnify (M)",  shortcut: "m", icon: MagnifyIcon },
-   { mode: "addNode",    label: "Node",     title: "Node (N)",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
++  { mode: "erase",      label: "Eraser",   title: "Erase every stroke you sweep across",      icon: EraserIcon },
++  { mode: "magnify",    label: "Magnify",  title: "Magnify",  shortcut: "m", icon: MagnifyIcon },
++  { mode: "addNode",    label: "Node",     title: "Node",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
 +  { mode: "addPoint",   label: "Point",    title: "Point",                    icon: PointIcon },
 +  { mode: "addImage",   label: "Image",    title: "Image",                    icon: ImageIcon },
-   { mode: "addShape",   label: "Shape",    title: "Shape (S)",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
++  { mode: "addShape",   label: "Shape",    title: "Shape",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
    { mode: "addMatrix",  label: "Matrix",   title: "Matrix",                      icon: MatrixIcon,   popupKind: "matrix-picker" },
-   { mode: "addLine",    label: "Line",     title: "Line (L)",     shortcut: "l", icon: LineIcon,     separatorBefore: true },
-@@ -186,6 +213,7 @@ export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
-   { mode: "addRect",    label: "Rect",     title: "Rectangle (R)", shortcut: "r", icon: RectIcon },
-   { mode: "addEllipse", label: "Ellipse",  title: "Ellipse (E)",  shortcut: "e", icon: EllipseIcon },
-   { mode: "addCircle",  label: "Circle",   title: "Circle (C)",   shortcut: "c", icon: CircleIcon },
+-  { mode: "addLine",    label: "Line",     title: "Line (L)",     shortcut: "l", icon: LineIcon,     separatorBefore: true },
+-  { mode: "addArrow",   label: "Arrow",    title: "Arrow (A)",    shortcut: "a", icon: ArrowIcon },
+-  { mode: "addBezier",  label: "Bezier",   title: "Bezier (B)",   shortcut: "b", icon: BezierIcon },
+-  { mode: "addPath",    label: "Path",     title: "Path (P)",     shortcut: "p", icon: PathIcon },
+-  { mode: "addFreehand", label: "Freehand", title: "Freehand (F)", shortcut: "f", icon: FreehandIcon },
++  { mode: "addLine",    label: "Line",     title: "Line",     shortcut: "l", icon: LineIcon,     separatorBefore: true },
++  { mode: "addArrow",   label: "Arrow",    title: "Arrow",    shortcut: "a", icon: ArrowIcon },
++  { mode: "addBezier",  label: "Bezier",   title: "Bezier",   shortcut: "b", icon: BezierIcon },
++  { mode: "addPath",    label: "Path",     title: "Path",     shortcut: "p", icon: PathIcon },
++  { mode: "addFreehand", label: "Freehand", title: "Freehand", shortcut: "f", icon: FreehandIcon },
+   { mode: "addGrid",    label: "Grid",     title: "Grid",                        icon: GridIcon,     separatorBefore: true },
+-  { mode: "addRect",    label: "Rect",     title: "Rectangle (R)", shortcut: "r", icon: RectIcon },
+-  { mode: "addEllipse", label: "Ellipse",  title: "Ellipse (E)",  shortcut: "e", icon: EllipseIcon },
+-  { mode: "addCircle",  label: "Circle",   title: "Circle (C)",   shortcut: "c", icon: CircleIcon },
++  { mode: "addRect",    label: "Rect",     title: "Rectangle", shortcut: "r", icon: RectIcon },
++  { mode: "addEllipse", label: "Ellipse",  title: "Ellipse",  shortcut: "e", icon: EllipseIcon },
++  { mode: "addCircle",  label: "Circle",   title: "Circle",   shortcut: "c", icon: CircleIcon },
 +  { mode: "addArc",     label: "Arc",      title: "Arc",                       icon: ArcIcon },
    { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
  ];
