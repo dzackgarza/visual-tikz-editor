@@ -488,14 +488,3 @@ onBeforeUnmount(() => {
   background: #1d242b;
 }
 </style>
-
-<style>
-.tikz-popover-dark {
-  --p-popover-background: #313b45;
-  --p-popover-color: #f3f2ed;
-  --p-popover-border-color: #4f5863;
-  --p-select-background: #252c34;
-  --p-select-color: #f3f2ed;
-  --p-select-border-color: #4f5863;
-}
-</style>

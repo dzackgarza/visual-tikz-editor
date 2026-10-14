@@ -5,8 +5,6 @@ import { useEditorStore } from '@tikz-editor/app/store';
 import { CANVAS_ZOOM_BASE_SCALE, getEditorSettings, reloadEditorSettings, updateEditorGeneralSettings } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
-import type { ToolMode } from '@tikz-editor/app/store/types';
-import { NODE_SHAPE_OPTIONS } from 'tikz-editor/edit/inspector';
 import './styles.css';
 import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
 import { createSnapshotRequests } from './snapshots';
@@ -291,7 +289,6 @@ function HostBridge() {
 	const fullscreenRef = useRef(false);
 	const previousSourceRef = useRef<string | null>(null);
 	const previousRenderRef = useRef(-1);
-	const previousToolRef = useRef<ToolMode | null>(null);
 	const pendingChangeRef = useRef<PendingEditorMessage | null>(null);
 	const changeTimerRef = useRef<number | null>(null);
 
@@ -301,8 +298,6 @@ function HostBridge() {
 		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }), () => imageBaseUrl);
 		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
 		useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: 'addFreehand' });
-		postToHost({ event: 'tool', tool: useEditorStore.getState().toolMode });
-		postToHost({ event: 'tool-options', shapes: NODE_SHAPE_OPTIONS });
 
 		const flushChange = () => {
 			changeTimerRef.current = null;
@@ -334,10 +329,6 @@ function HostBridge() {
 						postToHost({ event: 'source-selection', source: state.source, from, to });
 					}
 				} else previousSelection = '';
-			}
-			if (state.toolMode !== previousToolRef.current) {
-				previousToolRef.current = state.toolMode;
-				postToHost({ event: 'tool', tool: state.toolMode });
 			}
 			if (state.snapshot.source === state.source && state.pendingRequestId === null &&
 				state.snapshot.svg !== null && state.snapshot.revision !== previousRenderRef.current) {
@@ -479,28 +470,6 @@ function HostBridge() {
 					window.dispatchEvent(new Event('tikz-embed-inspector'));
 					reply(command);
 					return;
-				case 'tool':
-					useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: command.tool });
-					reply(command);
-					return;
-				case 'tool-option': {
-					const dispatch = useEditorStore.getState().dispatch;
-					if (command.option === 'smoothing' && typeof command.value === 'number')
-						dispatch({ type: 'SET_FREEHAND_SMOOTHING', value: command.value });
-					else if (command.option === 'strokeColor' && typeof command.value === 'string')
-						dispatch({ type: 'SET_CREATION_STROKE_COLOR', value: command.value });
-					else if (command.option === 'fillColor' && typeof command.value === 'string')
-						dispatch({ type: 'SET_BUCKET_FILL_COLOR', value: command.value });
-					else if (command.option === 'shape' && typeof command.value === 'string') {
-						const shape = NODE_SHAPE_OPTIONS.find(candidate => candidate.value === command.value);
-						if (shape) dispatch({ type: 'SET_ADD_SHAPE_PRESET', value: shape.value });
-						else { reply(command, 'invalid-command'); return; }
-					} else if (command.option === 'matrix' && command.rows && command.columns)
-						dispatch({ type: 'SET_ADD_MATRIX_PRESET', rows: command.rows, columns: command.columns });
-					else { reply(command, 'invalid-command'); return; }
-					reply(command);
-					return;
-				}
 			}
 		};
 

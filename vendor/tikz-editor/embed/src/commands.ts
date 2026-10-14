@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { snapshotRequestSchema, editorStateSchema, toolModeSchema } from './snapshot-protocol';
+import { snapshotRequestSchema, editorStateSchema } from './snapshot-protocol';
 import { originalStrokeSchema } from './original-ink';
 
 export const commandIdentitySchema = z.object({
@@ -12,7 +12,6 @@ const settings = z.object({ general: z.object({
   colorScheme: z.enum(['system', 'light', 'dark']).optional(),
   canvasInvert: z.boolean().optional(),
 }).optional() });
-export { toolModeSchema } from './snapshot-protocol';
 
 export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('load'), source: z.string(), fileName: z.string(),
@@ -20,9 +19,6 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('settings'), settings }),
   z.object({ ...identity, action: z.literal('display'), fullscreen: z.boolean() }),
   z.object({ ...identity, action: z.literal('inspector'), inspector: z.boolean() }),
-  z.object({ ...identity, action: z.literal('tool'), tool: toolModeSchema }),
-  z.object({ ...identity, action: z.literal('tool-option'), option: z.enum(['smoothing', 'strokeColor', 'fillColor', 'shape', 'matrix']),
-    value: z.union([z.string(), z.number()]).optional(), rows: z.number().int().positive().optional(), columns: z.number().int().positive().optional() }),
   z.object({ ...identity, action: z.literal('source') }),
   z.object({ ...identity, action: z.literal('zoom'), direction: z.enum(['in', 'out', 'reset']) }),
   z.object({ ...identity, action: z.literal('clipboard-result'), targetRequestId: z.string().min(1), text: z.string().optional(), error: z.string().optional() }),

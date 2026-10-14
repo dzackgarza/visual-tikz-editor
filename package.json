@@ -21,13 +21,10 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-clipboard-manager": "2.3.2",
     "@tikz-editor/lang-tikz": "0.5.1",
+    "svg2tikz": "0.1.1",
     "viewerjs": "1.14.0",
     "vue": "^3.5.41",
-    "@primeuix/themes": "^1",
-    "primeicons": "^7",
-    "primevue": "^4",
-    "zod": "^4.6.5",
-    "svg2tikz": "0.1.1"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
