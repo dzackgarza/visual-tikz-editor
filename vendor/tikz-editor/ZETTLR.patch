@@ -4396,7 +4396,7 @@ index cf4cf2cf..106a922d 100644
  
  .hitRegions {
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..dbc29a80 100644
+index 4e22ccfa..36b57182 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,16 @@ preflightPositionNodeRelativeToAction,
@@ -4471,7 +4471,7 @@ index 4e22ccfa..dbc29a80 100644
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
-@@ -757,6 +773,44 @@ function computeAutoScaleForImportedTikz(
+@@ -757,6 +773,43 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -4495,7 +4495,6 @@ index 4e22ccfa..dbc29a80 100644
 +  baselineDrawing: string;
 +  strokeId: string;
 +  documentId: string;
-+  intent: "geometry" | "ink";
 +  baseSource: string;
 +  autoApply: boolean;
 +  smoothing: number;
@@ -4516,7 +4515,7 @@ index 4e22ccfa..dbc29a80 100644
  export const CanvasPanel = memo(function CanvasPanel({
    repeatPreviewModel = null
  }: {
-@@ -774,6 +828,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +827,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -4525,7 +4524,7 @@ index 4e22ccfa..dbc29a80 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -792,7 +848,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -792,7 +847,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid,
      showTransparencyGrid,
      snapModes,
@@ -4533,7 +4532,7 @@ index 4e22ccfa..dbc29a80 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +869,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +868,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -4542,7 +4541,7 @@ index 4e22ccfa..dbc29a80 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -832,7 +889,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -832,7 +888,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
      snapModes: s.snapModes,
@@ -4550,7 +4549,7 @@ index 4e22ccfa..dbc29a80 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +901,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +900,9 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -4561,7 +4560,7 @@ index 4e22ccfa..dbc29a80 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,14 +946,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +945,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -4578,7 +4577,7 @@ index 4e22ccfa..dbc29a80 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -912,11 +969,106 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -912,11 +968,106 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
@@ -4686,7 +4685,7 @@ index 4e22ccfa..dbc29a80 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1085,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1084,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -4695,7 +4694,7 @@ index 4e22ccfa..dbc29a80 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1096,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1095,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -4709,7 +4708,7 @@ index 4e22ccfa..dbc29a80 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1132,6 +1275,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,6 +1274,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -4717,7 +4716,7 @@ index 4e22ccfa..dbc29a80 100644
      onOpenEditEquation: handleOpenEditEquationCommand,
      activeHandleIdOverride: contextMenuHandleIdOverride
    });
-@@ -1157,7 +1301,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1157,7 +1300,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
    const pathDraftRef = useRef<PathToolDraft | null>(null);
@@ -4725,7 +4724,7 @@ index 4e22ccfa..dbc29a80 100644
    const previousCanvasContextKeyRef = useRef(canvasFigureContextKey(activeDocumentId, activeFigureId));
    const pendingAddedSelectionRef = useRef<PendingAddedSelection | null>(null);
    const canvasTransformRef = useRef(canvasTransform);
-@@ -1166,6 +1309,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1166,6 +1308,12 @@ export const CanvasPanel = memo(function CanvasPanel({
    const sourceBoundsSvgRef = useRef<SourceBoundsMap>(new Map<string, SvgBounds>());
    const liveResizeFramesRef = useRef(new Map<string, ReturnType<typeof resolveResizeFrameForSource>>());
    const previousViewBoxRef = useRef<SvgViewBox | null>(null);
@@ -4738,7 +4737,7 @@ index 4e22ccfa..dbc29a80 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1300,7 +1449,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1448,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -4746,7 +4745,7 @@ index 4e22ccfa..dbc29a80 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1469,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1468,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -4757,7 +4756,7 @@ index 4e22ccfa..dbc29a80 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1653,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1652,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -4781,7 +4780,7 @@ index 4e22ccfa..dbc29a80 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1668,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1667,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -4795,7 +4794,7 @@ index 4e22ccfa..dbc29a80 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1810,7 +1935,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,7 +1934,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -4803,7 +4802,7 @@ index 4e22ccfa..dbc29a80 100644
      svgResult,
      canvasTransform,
      marqueeDraft,
-@@ -1819,10 +1943,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1819,10 +1942,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      ROTATE_HANDLE_OFFSET_PX
    });
  
@@ -4827,7 +4826,7 @@ index 4e22ccfa..dbc29a80 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,6 +1974,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,6 +1973,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -4836,7 +4835,7 @@ index 4e22ccfa..dbc29a80 100644
      showGuides,
      guides,
      guidePreview,
-@@ -1857,32 +1995,41 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,32 +1994,41 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -4882,7 +4881,7 @@ index 4e22ccfa..dbc29a80 100644
      viewportRef,
      canvasTransformRef,
      fitToContentRequestToken,
-@@ -1890,11 +2037,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1890,11 +2036,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomRequestDirection,
      zoomScaleRequestToken,
      zoomScaleRequestValue,
@@ -4894,7 +4893,7 @@ index 4e22ccfa..dbc29a80 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -2055,17 +2197,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2196,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -4919,7 +4918,7 @@ index 4e22ccfa..dbc29a80 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2221,221 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2220,222 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -4996,14 +4995,15 @@ index 4e22ccfa..dbc29a80 100644
 +    if (rawState.source !== after) {
        pendingAddedSelectionRef.current = null;
 +      setWarning("The document changed before the stroke could be inserted.");
-+    } else {
++    } else if (intent === "geometry") {
++      // Handwritten ink stays exactly as drawn; only geometry has a fit to offer.
 +      const interpretation: FreehandInterpretation = fitted && fitted.kind !== "raw" ? { ...fitted, rawSource } : { source: rawSource, rawSource, kind: "raw" };
 +      if (interpretation.source !== interpretation.rawSource) {
 +        dispatch({ type: "SET_SOURCE_TRANSIENT", source: after.slice(0, from) + interpretation.source + after.slice(from + interpretation.rawSource.length) });
 +      }
 +      setFreehandResultOffer({ draft: sourceDraft, interpretation, rawSource: interpretation.rawSource, strokeId,
 +        rawWorldPoints: original.samples.map((sample) => makeWorldPoint(pt(sample.x), pt(sample.y))), originalStroke: original, baselineDrawing: rawSource,
-+        documentId: current.activeDocumentId, intent, baseSource: after, autoApply: intent === "geometry" && autoApplyFit, smoothing: smoothingUnits,
++        documentId: current.activeDocumentId, baseSource: after, autoApply: autoApplyFit, smoothing: smoothingUnits,
 +        from, toleranceUnits: simplificationUnits, zoom: canvasTransform.scale, strokeColor: creationStrokeColor,
 +        sourceRevision: useEditorStore.getState().sourceRevision, left: 12, top: 12 });
      }
@@ -5817,18 +5817,18 @@ index 4e22ccfa..dbc29a80 100644
 +          style={{ left: 12, bottom: 12 }} onPointerDown={(event) => event.stopPropagation()}>
 +          <strong>Freehand result</strong>
 +          <span>{freehandResultOffer.rawWorldPoints.length} raw samples · {freehandResultOffer.interpretation.kind === "line" ? 2 : freehandResultOffer.interpretation.kind === "rectangle" ? 4 : freehandResultOffer.interpretation.kind === "circle" || freehandResultOffer.interpretation.kind === "ellipse" ? 4 : (freehandResultOffer.interpretation.source.match(/\.\. controls/g)?.length ?? 0) + 1} fitted anchors</span>
-+          {freehandResultOffer.intent === "geometry" ? <label>Smoothing: {formatNumber(freehandResultOffer.smoothing)} lattice units
++          <label>Smoothing: {formatNumber(freehandResultOffer.smoothing)} lattice units
 +            <input type="range" min={0} max={1} step={0.01} value={freehandResultOffer.smoothing}
 +              onChange={(event) => updateFreehandPreview(freehandResultOffer.toleranceUnits, Number(event.currentTarget.value))} />
-+          </label> : null}
-+          {freehandResultOffer.intent === "geometry" ? <label>Simplification: {formatNumber(freehandResultOffer.toleranceUnits)} lattice units
++          </label>
++          <label>Simplification: {formatNumber(freehandResultOffer.toleranceUnits)} lattice units
 +            <input type="range" min={0.01} max={2} step={0.01} value={freehandResultOffer.toleranceUnits}
 +              onChange={(event) => updateFreehandPreview(Number(event.currentTarget.value), freehandResultOffer.smoothing)} />
-+          </label> : null}
++          </label>
 +          <label><input type="checkbox" checked={autoApplyFit} onChange={(event) => setAutoApplyFit(event.currentTarget.checked)} />Apply automatically to future strokes</label>
 +          <label><input type="checkbox" checked={preserveOriginal} onChange={(event) => setPreserveOriginal(event.currentTarget.checked)} />Keep recoverable original in source</label>
 +          <div className={freehandPopupCss.actions}>
-+            {freehandResultOffer.intent === "geometry" ? <button type="button" onClick={() => applyFreehandSuggestion()}>Apply simplification</button> : null}
++            <button type="button" onClick={() => applyFreehandSuggestion()}>Apply simplification</button>
 +            <button type="button" onClick={cancelFreehandOffer}>Keep original</button>
 +          </div>
 +        </div>
