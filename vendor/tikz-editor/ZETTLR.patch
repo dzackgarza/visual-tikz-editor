@@ -4811,7 +4811,7 @@ index 00000000..cfa5304b
 +  );
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-index cf4cf2cf..0c7d3db4 100644
+index cf4cf2cf..3c71ef92 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 @@ -94,14 +94,14 @@
@@ -4885,26 +4885,26 @@ index cf4cf2cf..0c7d3db4 100644
  
  .gridAxis {
 -  stroke: color-mix(in srgb, var(--accent-dark) 40%, transparent);
-+  stroke: #3c4650;
++  stroke: #1f5fbf;
    vector-effect: non-scaling-stroke;
  }
  
 -:global([data-color-scheme="dark"]) .gridMinor {
 -  stroke: rgba(85, 82, 76, 0.2);
 +.gridAxisLabel {
-+  fill: #3c4650;
++  fill: #1f5fbf;
  }
  
 -:global([data-color-scheme="dark"]) .gridMajor {
 -  stroke: rgba(69, 65, 59, 0.32);
 +:global([data-canvas-invert]) .gridAxis {
-+  stroke: #c3b9af;
++  stroke: #e0a040;
  }
  
 -:global([data-color-scheme="dark"]) .gridAxis {
 -  stroke: rgba(37, 34, 116, 0.5);
 +:global([data-canvas-invert]) .gridAxisLabel {
-+  fill: #c3b9af;
++  fill: #e0a040;
  }
  
  @media (min-resolution: 2dppx) {
@@ -4956,7 +4956,7 @@ index cf4cf2cf..0c7d3db4 100644
    pointer-events: none;
  }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..3d3eb841 100644
+index 4e22ccfa..42887f18 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,17 @@ preflightPositionNodeRelativeToAction,
@@ -6246,7 +6246,7 @@ index 4e22ccfa..3d3eb841 100644
 -  const snapStrokeWidth = 1 / Math.max(canvasTransform.scale, 1e-3);
 +  const gridMinorStrokeWidth = 1;
 +  const gridMajorStrokeWidth = 1.25;
-+  const gridAxisStrokeWidth = 1.5;
++  const gridAxisStrokeWidth = 2;
 +  const guideStrokeWidth = 1;
 +  const guideHitStrokeWidth = 12;
 +  const snapStrokeWidth = 1;
@@ -6544,7 +6544,7 @@ index 4e22ccfa..3d3eb841 100644
          <Suspense fallback={null}>
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
-index f0ff59f8..a165850f 100644
+index f0ff59f8..143fe750 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 @@ -22,6 +22,7 @@ import {
@@ -6724,7 +6724,7 @@ index f0ff59f8..a165850f 100644
                          y1={y}
                          y2={y}
                          className={css.gridMinor}
-@@ -580,14 +615,23 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -580,14 +615,28 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      {gridLines.horizontalMajor.map((y: number) => (
                        <line
                          key={`h-maj-${y}`}
@@ -6738,6 +6738,11 @@ index f0ff59f8..a165850f 100644
                          strokeWidth={gridMajorStrokeWidth}
                        />
                      ))}
++                  </g>
++                )}
++                {gridLines && (
++                  // The axes sit above the grid and outside its opacity, so the origin reads at any grid setting.
++                  <g transform={gridLines.transform}>
 +                    {gridLines.verticalAxisX != null && (
 +                      <text x={8 / canvasTransform.scale} y={gridLines.yMin + 20 / canvasTransform.scale} fontSize={12 / canvasTransform.scale} className={css.gridAxisLabel}>y</text>
 +                    )}
@@ -6750,7 +6755,7 @@ index f0ff59f8..a165850f 100644
                      {gridLines.verticalAxisX != null && (
                        <line
                          key="v-axis-0"
-@@ -602,8 +646,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -602,8 +651,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      {gridLines.horizontalAxisY != null && (
                        <line
                          key="h-axis-0"
@@ -6761,7 +6766,7 @@ index f0ff59f8..a165850f 100644
                          y1={gridLines.horizontalAxisY}
                          y2={gridLines.horizontalAxisY}
                          className={css.gridAxis}
-@@ -681,7 +725,16 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -681,7 +730,16 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    previewArrowPoints={previewArrowPoints}
                  />
  
@@ -6779,7 +6784,7 @@ index f0ff59f8..a165850f 100644
                    hitRegions={hitRegions}
                    hoveredElementId={hoveredElementId}
                    toolMode={toolMode}
-@@ -692,7 +745,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -692,7 +750,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    onElementContextMenu={onElementContextMenu}
                    onElementDoubleClick={onElementDoubleClick}
                    onHoverChange={onHoverChange}
@@ -6788,7 +6793,7 @@ index f0ff59f8..a165850f 100644
  
                  <NodePositionLinkOverlay
                    links={nodePositionLinks}
-@@ -701,6 +754,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -701,6 +759,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
  
                  <SelectionOverlay
                    marqueeBounds={marqueeBounds}
@@ -6797,7 +6802,7 @@ index f0ff59f8..a165850f 100644
                    selectionBoxes={selectionBoxes}
                    adornmentHighlightBoxes={adornmentHighlightBoxes}
                    adornmentConnectors={selectedAdornmentConnectors}
-@@ -756,6 +811,9 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -756,6 +816,9 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  {toolMode === "select" && (
                    <HandleOverlay
                      handleDisplays={handleDisplays}
@@ -6807,7 +6812,7 @@ index f0ff59f8..a165850f 100644
                      handleHalfSize={handleHalfSize}
                      handleStrokeWidth={handleStrokeWidth}
                      onHandlePointerDown={onHandlePointerDown}
-@@ -993,7 +1051,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -993,7 +1056,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
              </RenderedTooltip>
            )}
            {selectionHint && !warning ? (
