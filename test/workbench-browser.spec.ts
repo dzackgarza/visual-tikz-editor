@@ -162,6 +162,57 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`commits the locked curve its preview shows, with lattice control points, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+      const input = await TabletInput.attach(page);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+      });
+      const rail = frame.locator('[data-diagram-tools]');
+      await expect(rail.getByRole('button', { name: 'Lock to lattice', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Insert', exact: true }))]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Curve', exact: true }))]);
+      assert.equal((await editorDebug(page)).tool, 'addBezier');
+      await input.penStroke([at(2, 1), at(5, 1), at(8, 1)]);
+      await input.penDown(at(5, 1));
+      // A bend one unit off the chord puts unrounded controls 4/3 of a unit off it.
+      await input.penMove(at(5.1, 1.6));
+      await input.penMove(at(5.1, 2.1));
+      const preview = frame.getByTestId('canvas-tool-preview-bezier');
+      await expect(preview).toBeAttached();
+      const numbers = (d: string) => [...d.matchAll(/-?\d+(?:\.\d+)?/g)].map(match => Number(match[0]));
+      const previewed = numbers((await preview.getAttribute('d'))!);
+      await input.penUp(at(5.1, 2.1));
+      await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\.\. controls/);
+      const curve = (await editorDebug(page)).source.split('\n').map(line => line.trim()).find(line => line.includes('.. controls'))!;
+      assert.ok(numbers(curve).every(Number.isInteger), `A locked curve has off-lattice points: ${curve}`);
+      const committed = numbers((await frame.locator('svg [data-source-id="path:2"]').first().getAttribute('d'))!);
+      assert.equal(committed.length, previewed.length, `preview ${previewed} vs committed ${committed}`);
+      assert.ok(committed.every((value, index) => Math.abs(value - previewed[index]) < 0.05), `The preview showed ${previewed}; the editor committed ${committed}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`shows every drawing-rail control without scrolling in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
