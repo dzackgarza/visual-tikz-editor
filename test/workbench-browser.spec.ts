@@ -991,6 +991,40 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`smooths only the neighbours of a deleted curve point in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) .. controls (1,2) and (2,2) .. (3,0) .. controls (4,-2) and (5,-2) .. (6,0) .. controls (7,2) and (8,2) .. (9,0) .. controls (10,-2) and (11,-2) .. (12,0);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const curve = frame.locator('svg [data-source-id="path:0"]').first();
+      await expect(curve).toBeVisible();
+      const input = await TabletInput.attach(page);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      await input.penStroke([await strokePoint(page, curve, .1)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const anchors = await frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]').evaluateAll(nodes => nodes.map(node => {
+        const box = node.getBoundingClientRect();
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      }).sort((a, b) => a.x - b.x));
+      assert.equal(anchors.length, 5, `anchors: ${anchors.length}`);
+      await input.penStroke([{ x: frameBox.x + anchors[2].x, y: frameBox.y + anchors[2].y }]);
+      await expect(frame.getByRole('button', { name: '1 point selected', exact: true })).toBeVisible();
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Delete points', exact: true }))]);
+      await expect.poll(async () => (await editorDebug(page)).source).not.toMatch(/\(6,0\)/);
+      const source = (await editorDebug(page)).source;
+      // The segments that did not touch the deleted point keep their outer control points.
+      assert.match(source, /\(0,0\) \.\. controls \(1,2\)/, `The first segment's outer control moved: ${source}`);
+      assert.match(source, /and \(11,-2\) \.\. \(12,0\)/, `The last segment's outer control moved: ${source}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
