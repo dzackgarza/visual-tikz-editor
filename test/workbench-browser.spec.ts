@@ -297,6 +297,35 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`draws the axes distinct from major grid lines, undimmed, in both themes in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const axis = frame.locator('line[class*="gridAxis"]').first();
+      const major = frame.locator('line[class*="gridMajor"]').first();
+      await expect(axis).toBeAttached();
+      const look = (line: typeof axis) => line.evaluate(element => {
+        let opacity = 1;
+        for (let node: Element | null = element; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity);
+        const rgb = getComputedStyle(element).stroke.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+        return { rgb, opacity, width: Number(element.getAttribute('stroke-width')) };
+      });
+      for (const theme of ['light', 'dark'] as const) {
+        if (theme === 'dark') {
+          await page.getByRole('button', { name: 'Dark theme', exact: true }).click();
+          await expect(frame.locator('html')).toHaveAttribute('data-color-scheme', 'dark');
+        }
+        const [a, m] = [await look(axis), await look(major)];
+        const distance = Math.hypot(...a.rgb.map((value, index) => value - m.rgb[index]));
+        assert.ok(distance > 60, `${theme}: axis ${a.rgb} and major line ${m.rgb} share a colour`);
+        assert.ok(a.opacity >= .95, `${theme}: the axis is dimmed to ${a.opacity}`);
+        assert.ok(a.width >= m.width + .5, `${theme}: axis width ${a.width}, major ${m.width}`);
+      }
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
