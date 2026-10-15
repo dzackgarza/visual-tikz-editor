@@ -893,6 +893,34 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`keeps the original stroke after an automatic fit in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      // The first stroke turns automatic fitting on for the strokes after it.
+      await input.penStroke(waveAcross(viewport, .45, .3, 120));
+      await input.touch([await stableCenter(result.getByRole('checkbox', { name: 'Apply automatically to future strokes' }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      const drawsBefore = ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+      await input.penStroke(waveAcross(viewport, .45, .65, 120));
+      await expect(result).toBeVisible();
+      await expect.poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length).toBe(drawsBefore + 1);
+      const lastDraw = async () => { const draws = (await editorDebug(page)).source.split('\n').filter(line => line.trim().startsWith('\\draw')); return draws[draws.length - 1]; };
+      assert.match(await lastDraw(), /\.\. controls/, 'The automatic fit did not apply');
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      // Keep original brings back the recorded stroke: a polyline of its samples, not the fit.
+      await expect.poll(async () => { const draw = await lastDraw(); return !/\.\. controls/.test(draw) && (draw.match(/--/g) ?? []).length > 5; },
+        { message: 'Keep original left the automatic fit in place' }).toBe(true);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
