@@ -7563,7 +7563,7 @@ index 5660d6d8..4ca2001f 100644
      minorStep,
      majorStep: minorStep * OVERLAY_MAJOR_STEP_MULTIPLE
 diff --git a/packages/app/src/ui/canvas-panel/interaction-helpers.ts b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
-index f22aaafd..84a5d899 100644
+index f22aaafd..e4da0b40 100644
 --- a/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 +++ b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 @@ -1,5 +1,8 @@
@@ -7663,7 +7663,7 @@ index f22aaafd..84a5d899 100644
    };
  }
  
-@@ -199,15 +208,15 @@ export function createBezierTemplateFromBend(
+@@ -199,27 +208,59 @@ export function createBezierTemplateFromBend(
    startWorld: WorldPoint,
    endWorld: WorldPoint,
    bendWorld: WorldPoint,
@@ -7682,7 +7682,29 @@ index f22aaafd..84a5d899 100644
    };
  }
  
-@@ -215,11 +224,21 @@ export function resolveToolCreateCurrentWorld(
++// Common angles pull a free arc's end, so a finger can land a half, quarter, or eighth circle:
++// multiples of 45 degrees within 8 degrees, other multiples of 15 degrees within 3.
++const ARC_ANGLE_MAGNETS = [{ step: 45, within: 8 }, { step: 15, within: 3 }] as const;
++
++/** The pointer moved onto the nearest common angle about the centre, in the figure frame, or null when none pulls it. */
++export function magneticArcAngle(center: WorldPoint, pointer: WorldPoint, transform: LatticeTransform | undefined): WorldPoint | null {
++  const frame = transform ? worldTransform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f) : null;
++  const inverse = frame ? inverseMatrix(frame) : null;
++  const toFrame = (point: WorldPoint) => inverse ? applyMatrix(inverse, point) : point;
++  const c = toFrame(center);
++  const p = toFrame(pointer);
++  const radius = Math.hypot(p.x - c.x, p.y - c.y);
++  if (radius <= 1e-9) return null;
++  const degrees = Math.atan2(p.y - c.y, p.x - c.x) * 180 / Math.PI;
++  const nearest = ARC_ANGLE_MAGNETS.map(({ step, within }) => ({ angle: Math.round(degrees / step) * step, within }))
++    .find(({ angle, within }) => Math.abs(degrees - angle) <= within)?.angle;
++  if (nearest === undefined) return null;
++  const radians = nearest * Math.PI / 180;
++  const snapped = worldPoint(pt(c.x + radius * Math.cos(radians)), pt(c.y + radius * Math.sin(radians)));
++  return frame ? applyMatrix(frame, snapped) : snapped;
++}
++
+ export function resolveToolCreateCurrentWorld(
    startWorld: WorldPoint,
    rawCurrentWorld: WorldPoint,
    mode: ToolCreateMode,
@@ -7708,7 +7730,7 @@ index f22aaafd..84a5d899 100644
  }
  
  export function snapPointDeltaToAxisStepMultiples(
-@@ -333,14 +352,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
+@@ -333,14 +374,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
    return worldPoint(pt(sumX / count), pt(sumY / count));
  }
  
@@ -7733,7 +7755,7 @@ index f22aaafd..84a5d899 100644
    return [
      { label: "X", value: formatTooltipLengthCm(point.x) },
      { label: "Y", value: formatTooltipLengthCm(point.y) }
-@@ -481,8 +508,13 @@ export function projectResizeDimensionsFromOppositeCorner(
+@@ -481,8 +530,13 @@ export function projectResizeDimensionsFromOppositeCorner(
  export function resolveToolCreateSize(
    mode: ToolCreateMode,
    startWorld: WorldPoint,
@@ -7748,7 +7770,7 @@ index f22aaafd..84a5d899 100644
    if (mode === "addCircle") {
      const radius = Math.hypot(currentWorld.x - startWorld.x, currentWorld.y - startWorld.y);
      const diameter = clampTooltipScalar(radius * 2);
-@@ -506,11 +538,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
+@@ -506,11 +560,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
  
  function formatTooltipLength(valuePt: number): string {
    const clamped = clampTooltipScalar(valuePt);
@@ -9393,7 +9415,7 @@ index 8078a5d4..89bbc24e 100644
    const hitRegions = useMemo(() => {
      if (!snapshot.scene || !svgResult) return [];
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..550ff98a 100644
+index 709cc1b9..eb69e582 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 @@ -1,6 +1,6 @@
@@ -9409,7 +9431,7 @@ index 709cc1b9..550ff98a 100644
  import { createFreehandToolDraft } from "./freehand-tool";
  import { isToolCreateMode } from "../tool-config";
 -import { formatTooltipCoordinateRows } from "./interaction-helpers";
-+import { formatTooltipCoordinateRows, resolveToolCreateCurrentWorld } from "./interaction-helpers";
++import { formatTooltipCoordinateRows, magneticArcAngle, resolveToolCreateCurrentWorld } from "./interaction-helpers";
  import type { MatrixCellAnchorHint } from "./endpoint-anchor-snap";
  import type {
 +  ArcDraft,
@@ -9561,7 +9583,7 @@ index 709cc1b9..550ff98a 100644
              ? resolveEndpointAnchorSnap({
                  pointerWorld: world,
                  zoom: toolSnapContext?.zoom ?? canvasTransform.scale,
-@@ -351,14 +372,52 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -351,14 +372,53 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          setToolCursorWorld(resolvedStart);
          event.preventDefault();
  
@@ -9581,6 +9603,7 @@ index 709cc1b9..550ff98a 100644
 +            return;
 +          }
 +          if (distanceSquared(draft.center, resolvedStart) <= 1e-8) return;
++          if (!locked && !event.shiftKey) arcPoint = magneticArcAngle(draft.center, world, snapSettingsPatch.latticeTransform) ?? arcPoint;
 +          if (locked) {
 +            const latticeEndpoint = snapArcEndpointToLattice(draft.center, draft.start, arcPoint, snapSettingsPatch.latticeTransform);
 +            if (latticeEndpoint.kind === "unavailable") { setWarning(latticeEndpoint.reason); return; }
@@ -9616,7 +9639,7 @@ index 709cc1b9..550ff98a 100644
            setNodeAnchorOverlay(null);
            setFreehandDraft(nextFreehandDraft);
            setDragTooltip(null);
-@@ -366,7 +425,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -366,7 +426,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              kind: "tool-freehand",
              pointerId: event.pointerId,
              points: nextFreehandDraft.points,
@@ -9625,7 +9648,7 @@ index 709cc1b9..550ff98a 100644
            };
            setDragState(nextFreehandDrag);
            logSnapDebug({
-@@ -375,7 +434,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -375,7 +435,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              dragKind: "tool-freehand",
              rawPoint: world,
              snappedPoint: resolvedStart,
@@ -9634,7 +9657,7 @@ index 709cc1b9..550ff98a 100644
            });
            return;
          }
-@@ -384,7 +443,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -384,7 +444,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            const activeDraft = pathDraftRef.current;
            if (!activeDraft) {
              // Check if click is near an endpoint of an existing open path
@@ -9643,7 +9666,7 @@ index 709cc1b9..550ff98a 100644
                ? resolvePathEndpointSnap({
                    pointerWorld: resolvedStart,
                    zoom: canvasTransform.scale,
-@@ -515,7 +574,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -515,7 +575,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            return;
          }
  
@@ -9652,7 +9675,7 @@ index 709cc1b9..550ff98a 100644
            event.preventDefault();
            event.stopPropagation();
            setDragTooltip(null);
-@@ -535,6 +594,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -535,6 +595,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              toolCursorWorld != null &&
              distanceSquared(world, toolCursorWorld) <= previewToleranceWorld * previewToleranceWorld;
            const nodeAt = previewMatchesClick ? toolCursorWorld : snapResult.snappedPoint ?? world;
@@ -9665,7 +9688,7 @@ index 709cc1b9..550ff98a 100644
            setSnapLines(snapResult.lines);
            logSnapDebug({
              phase: "tool-add-node",
-@@ -558,7 +623,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -558,7 +624,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                    columns: selectedAddMatrixColumns,
                    matrixKind: "nodes"
                  }
@@ -9678,7 +9701,7 @@ index 709cc1b9..550ff98a 100644
              at: nodeAt
            });
            if (!ok.sourceChanged) {
-@@ -566,7 +635,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -566,7 +636,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            }
            if (ok.sourceChanged) {
              suppressNextBackgroundClickRef.current = true;
@@ -9686,7 +9709,7 @@ index 709cc1b9..550ff98a 100644
              setToolDraft(null);
              setToolCursorWorld(null);
              setSnapLines([]);
-@@ -609,7 +677,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -609,7 +678,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -9695,7 +9718,7 @@ index 709cc1b9..550ff98a 100644
          if (event.pointerType === "touch") {
            const pending = pendingTouchViewportRef.current;
            if (!event.isPrimary || (pending && pending.pointerId !== event.pointerId)) {
-@@ -669,6 +737,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -669,6 +738,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        nodeAnchorTargets,
        matrixCellAnchorHints,
        pendingBezier,
@@ -9704,7 +9727,7 @@ index 709cc1b9..550ff98a 100644
        toolMode,
        toolCursorWorld,
        snapGuideInput,
-@@ -704,7 +774,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -704,7 +775,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        if (event.button !== 0 || event.target !== event.currentTarget) {
          return;
        }
@@ -9713,7 +9736,7 @@ index 709cc1b9..550ff98a 100644
          if (toolMode !== "magnify") {
            onInteractionPointerDown(event as unknown as ReactPointerEvent<SVGSVGElement>);
          }
-@@ -812,6 +882,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -812,6 +883,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchors =
@@ -9721,7 +9744,7 @@ index 709cc1b9..550ff98a 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -826,7 +897,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -826,7 +898,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpoint =
@@ -9730,7 +9753,7 @@ index 709cc1b9..550ff98a 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -851,7 +922,18 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -851,7 +923,21 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -9740,6 +9763,9 @@ index 709cc1b9..550ff98a 100644
 +        const bypassLattice = event.ctrlKey || event.metaKey;
 +        if (Boolean(arcDraft.bypassLattice) !== bypassLattice) setArcDraft({ ...arcDraft, bypassLattice });
 +        cursorWorld = resolveToolCreateCurrentWorld(arcDraft.center, cursorWorld, "addCircle", event.shiftKey, snapSettingsPatch.latticeTransform);
++        if (arcDraft.start && !snapSettingsPatch.latticeLock && !event.shiftKey) {
++          cursorWorld = magneticArcAngle(arcDraft.center, world, snapSettingsPatch.latticeTransform) ?? cursorWorld;
++        }
 +        if (snapSettingsPatch.latticeLock && !event.ctrlKey && !event.metaKey) {
 +          if (arcDraft.start) {
 +            const endpoint = snapArcEndpointToLattice(arcDraft.center, arcDraft.start, cursorWorld, snapSettingsPatch.latticeTransform);
@@ -9750,7 +9776,7 @@ index 709cc1b9..550ff98a 100644
        setToolCursorWorld(cursorWorld);
        updateInitialPlacementTooltip(event, cursorWorld);
        if (!toolDraft && !bezierBendDraft && !pathSegmentDraft) {
-@@ -883,6 +965,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -883,6 +969,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
@@ -9758,7 +9784,7 @@ index 709cc1b9..550ff98a 100644
        toolMode,
        snapGuideInput,
        snapSettingsPatch,
-@@ -996,6 +1079,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -996,6 +1083,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchorsEnter =
@@ -9766,7 +9792,7 @@ index 709cc1b9..550ff98a 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -1010,7 +1094,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1010,7 +1098,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpointEnter =
@@ -9775,7 +9801,7 @@ index 709cc1b9..550ff98a 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -1035,7 +1119,18 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1035,7 +1123,21 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -9785,6 +9811,9 @@ index 709cc1b9..550ff98a 100644
 +        const bypassLattice = event.ctrlKey || event.metaKey;
 +        if (Boolean(arcDraft.bypassLattice) !== bypassLattice) setArcDraft({ ...arcDraft, bypassLattice });
 +        cursorWorld = resolveToolCreateCurrentWorld(arcDraft.center, cursorWorld, "addCircle", event.shiftKey, snapSettingsPatch.latticeTransform);
++        if (arcDraft.start && !snapSettingsPatch.latticeLock && !event.shiftKey) {
++          cursorWorld = magneticArcAngle(arcDraft.center, world, snapSettingsPatch.latticeTransform) ?? cursorWorld;
++        }
 +        if (snapSettingsPatch.latticeLock && !event.ctrlKey && !event.metaKey) {
 +          if (arcDraft.start) {
 +            const endpoint = snapArcEndpointToLattice(arcDraft.center, arcDraft.start, cursorWorld, snapSettingsPatch.latticeTransform);
@@ -9795,7 +9824,7 @@ index 709cc1b9..550ff98a 100644
        setToolCursorWorld(cursorWorld);
        updateInitialPlacementTooltip(event, cursorWorld);
        if (!toolDraft && !bezierBendDraft && !pathSegmentDraft) {
-@@ -1067,6 +1162,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1067,6 +1169,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
