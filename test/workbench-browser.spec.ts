@@ -874,6 +874,25 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`states the freehand tool's properties without pixels in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator('[data-diagram-tools]');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Freehand', exact: true }))]);
+      assert.equal((await editorDebug(page)).tool, 'addFreehand');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Properties', exact: true }))]);
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      await expect(panel).toBeVisible();
+      await expect(panel.getByText('Freehand', { exact: false }).first()).toBeVisible();
+      const text = await panel.innerText();
+      assert.doesNotMatch(text, /\d\s*px\b/, `The freehand properties state pixels: ${text.match(/[^\n]*\d\s*px[^\n]*/)?.[0]}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
