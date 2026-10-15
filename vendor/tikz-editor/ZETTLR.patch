@@ -4713,7 +4713,7 @@ index cf4cf2cf..0c7d3db4 100644
    pointer-events: none;
  }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..7cc8e6b9 100644
+index 4e22ccfa..520a290a 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,16 @@ preflightPositionNodeRelativeToAction,
@@ -5544,7 +5544,7 @@ index 4e22ccfa..7cc8e6b9 100644
      ]
    );
  
-@@ -3192,6 +3497,77 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3497,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -5581,7 +5581,8 @@ index 4e22ccfa..7cc8e6b9 100644
 +        setMarqueeDraft(null);
 +        suppressNextBackgroundClickRef.current = true;
 +        liftingFinger = press.pointerId;
-+        if (selectedNodeIndicesRef.current.size > 1) { setCurveActionsOpen(true); return; }
++        // A held point opens the curve's own control, which carries every point edit.
++        if (selectedNodeIndicesRef.current.size > 0) { setCurveActionsOpen(true); return; }
 +        openContextMenuRef.current(makeClientPoint(px(press.x), px(press.y)), press.sourceId,
 +          press.sourceId ? useEditorStore.getState().activeHandleId : null);
 +      }, 550) };
@@ -5622,7 +5623,7 @@ index 4e22ccfa..7cc8e6b9 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3596,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3597,15 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -5638,7 +5639,7 @@ index 4e22ccfa..7cc8e6b9 100644
      snapshot,
      source,
      setWarning,
-@@ -3267,16 +3646,231 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,16 +3647,231 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -5872,7 +5873,7 @@ index 4e22ccfa..7cc8e6b9 100644
    );
  
    const {
-@@ -3306,6 +3900,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +3901,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -5880,7 +5881,7 @@ index 4e22ccfa..7cc8e6b9 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,12 +3925,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,12 +3926,11 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -5894,7 +5895,7 @@ index 4e22ccfa..7cc8e6b9 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -3345,7 +3939,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3345,7 +3940,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomSpeed,
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
@@ -5902,7 +5903,7 @@ index 4e22ccfa..7cc8e6b9 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,25 +4042,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,25 +4043,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -5928,7 +5929,7 @@ index 4e22ccfa..7cc8e6b9 100644
    useEffect(() => {
      if (toolMode === "select") {
        setPathDraft(null);
-@@ -3706,15 +4280,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4281,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -5952,7 +5953,7 @@ index 4e22ccfa..7cc8e6b9 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4393,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4394,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -5960,7 +5961,7 @@ index 4e22ccfa..7cc8e6b9 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4406,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4407,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -5968,7 +5969,7 @@ index 4e22ccfa..7cc8e6b9 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4417,47 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4418,47 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -6016,7 +6017,7 @@ index 4e22ccfa..7cc8e6b9 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4480,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4481,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -6039,7 +6040,7 @@ index 4e22ccfa..7cc8e6b9 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4511,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4512,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -6054,7 +6055,7 @@ index 4e22ccfa..7cc8e6b9 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4537,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4538,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -6088,7 +6089,7 @@ index 4e22ccfa..7cc8e6b9 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4569,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4570,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6098,7 +6099,7 @@ index 4e22ccfa..7cc8e6b9 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4582,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4583,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6128,7 +6129,7 @@ index 4e22ccfa..7cc8e6b9 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3974,6 +4639,77 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4640,79 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -6156,18 +6157,20 @@ index 4e22ccfa..7cc8e6b9 100644
 +            <span aria-hidden="true">{lockedCurveId ? "🔒" : "🔓"}</span>Lock curve
 +          </button>
 +          <button type="button" aria-expanded={curveActionsOpen} onClick={() => setCurveActionsOpen(!curveActionsOpen)}>
-+            {selectedNodeIndices.size ? `${selectedNodeIndices.size} selected nodes` : "Curve actions"}
++            {selectedNodeIndices.size ? `${selectedNodeIndices.size} point${selectedNodeIndices.size === 1 ? "" : "s"} selected` : "Curve actions"}
 +          </button>
-+          {selectionCommandsApplicable ? <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>
-+            {pointCommandContext ? "Point actions" : "More curve actions"}
-+          </button> : null}
++          {selectedNodeIndices.size > 0 ? <>
++            {selectedNodeIndices.size === 1 && commandRuntime.bindings[APP_MENU_COMMAND_IDS.PATH_POINT_CORNER].enabled
++              ? <button type="button" onClick={() => commandRuntime.runCommand(APP_MENU_COMMAND_IDS.PATH_POINT_CORNER, "context-menu")}>Make corner</button> : null}
++            {selectedNodeActionCapabilities.smooth ? <button type="button" onClick={() => editSelectedNodes("smooth")}>Smooth points</button> : null}
++            {selectedNodeActionCapabilities.delete ? <button type="button" onClick={() => editSelectedNodes("delete")}>Delete points</button> : null}
++            {selectedNodeIndices.size === 1 && commandRuntime.bindings[APP_MENU_COMMAND_IDS.PATH_SPLIT].enabled
++              ? <button type="button" onClick={() => commandRuntime.runCommand(APP_MENU_COMMAND_IDS.PATH_SPLIT, "context-menu")}>Split here</button> : null}
++            <button type="button" onClick={() => { setSelectedNodeIndices(new Set()); dispatch({ type: "SET_ACTIVE_HANDLE", handleId: null }); }}>Select entire curve</button>
++          </> : selectionCommandsApplicable ? <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>More curve actions</button> : null}
 +          {curveActionsOpen ? <>
 +            <button type="button" aria-pressed={touchNodeSelection} onClick={() => setTouchNodeSelection(!touchNodeSelection)}>{touchNodeSelection ? "Finish selecting nodes" : "Select multiple nodes"}</button>
-+            {selectedNodeIndices.size > 0 ? <>
-+              {selectedNodeActionCapabilities.delete ? <button type="button" onClick={() => editSelectedNodes("delete")}>Delete selected nodes</button> : null}
-+              {selectedNodeActionCapabilities.smooth ? <button type="button" onClick={() => editSelectedNodes("smooth")}>Smooth selected nodes</button> : null}
-+              <button type="button" onClick={() => { setSelectedNodeIndices(new Set()); dispatch({ type: "SET_ACTIVE_HANDLE", handleId: null }); }}>Select entire curve</button>
-+            </> : <>
++            {selectedNodeIndices.size > 0 ? null : <>
 +              {selectedPathForFit ? <button type="button" onClick={simplifySelectedPath}>Simplify curve</button> : null}
 +              {selectedNodeActionCapabilities.smooth ? <button type="button" onClick={() => editSelectedNodes("smooth")}>Smooth curve</button> : null}
 +              <button type="button" onClick={() => applyActionWithFeedback({ kind: "deleteElements", elementIds: [selectedCurve.path.sourceRef.sourceId] })}>Delete curve</button>
