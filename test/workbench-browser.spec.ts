@@ -690,6 +690,8 @@ describe("standalone workbench host boundary", function () {
       // A second tap on the selected square switches its frame to rotate-and-shear handles, as in Inkscape.
       await input.penStroke([at(2, 4.2)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:2']);
+      // The switch waits out the double-tap window; the author sees the edge handles appear.
+      await expect(frame.locator('[data-handle-kind="shear"]').first()).toBeAttached();
       const edge = at(6, 4);
       const handles = await frame.locator('[data-resize-role="right"]').evaluateAll(nodes => nodes.map(node => {
         const box = node.getBoundingClientRect();
@@ -761,6 +763,51 @@ describe("standalone workbench host boundary", function () {
       // Dragging the guide back onto its ruler deletes it.
       await input.touch(Array.from({ length: 13 }, (_, i) => ({ x: to.x + 40, y: to.y + (from.y - to.y) * i / 12 })));
       await expect.poll(guideAtThree, { message: 'The guide survives being dragged onto its ruler' }).toBe(false);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`reads a drawn line's end in lattice units when the figure scales its lattice in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
+\draw (0,0) -- (5,0);
+\draw (0,0) -- (0,5);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+      const input = await TabletInput.attach(page);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xFive], [, yFive]] = [await ends('path:0'), await ends('path:1')];
+      // Screen position of lattice (x, y) in the x=2cm, y=2cm frame, from the two segments of length 5.
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xFive.x - origin.x) * x / 5 + (yFive.x - origin.x) * y / 5,
+        y: frameBox.y + origin.y + (xFive.y - origin.y) * x / 5 + (yFive.y - origin.y) * y / 5
+      });
+      const rail = frame.locator('[data-diagram-tools]');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Insert', exact: true }))]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Line', exact: true }))]);
+      const [from, to] = [at(1, 1), at(3, 2)];
+      await input.penDown(from);
+      for (let i = 1; i <= 10; i++) await input.penMove({ x: from.x + (to.x - from.x) * i / 10, y: from.y + (to.y - from.y) * i / 10 });
+      const tooltip = frame.getByTestId('canvas-drag-tooltip');
+      await expect(tooltip).toBeVisible();
+      const text = await tooltip.innerText();
+      await input.penUp(to);
+      // From (1,1) to (3,2) the line spans 2 by 1 lattice units; in centimetres it would read 4 by 2.
+      assert.match(text, /Width:\s*2 units/, `The drag readout does not state a width of 2 lattice units: ${text}`);
+      assert.match(text, /Height:\s*1 units/, `The drag readout does not state a height of 1 lattice unit: ${text}`);
+      assert.doesNotMatch(text, /cm|px/, `The drag readout states physical lengths: ${text}`);
     });
   }
 
