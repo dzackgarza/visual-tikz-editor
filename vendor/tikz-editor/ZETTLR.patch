@@ -5080,7 +5080,7 @@ index cf4cf2cf..4a0d0a4e 100644
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..2d264b12 100644
+index 4e22ccfa..0daca6a4 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,19 @@ preflightPositionNodeRelativeToAction,
@@ -5162,10 +5162,12 @@ index 4e22ccfa..2d264b12 100644
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
-@@ -210,6 +230,27 @@ type SnapDebugOverlayDragState =
+@@ -210,6 +230,29 @@ type SnapDebugOverlayDragState =
  
  const RULER_SIZE = 24;
  const MIN_SCALE = 0.05;
++// Repeated Simplify doubles its tolerance from the setting up to this many times the setting.
++const SIMPLIFY_MAX_ESCALATION = 32;
 +// Chromium's double-click interval: two taps closer than this are one double tap.
 +const DOUBLE_TAP_WINDOW_MS = 500;
 +
@@ -5190,7 +5192,7 @@ index 4e22ccfa..2d264b12 100644
  const MAX_SCALE = 20;
  const NUDGE_STEP_PT = 0.05 * PT_PER_CM;
  const NUDGE_STEP_SHIFT_PT = 0.25 * PT_PER_CM;
-@@ -668,6 +709,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
+@@ -668,6 +711,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
    return "single-line";
  }
  
@@ -5206,7 +5208,7 @@ index 4e22ccfa..2d264b12 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,10 +807,50 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +809,50 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -5259,7 +5261,7 @@ index 4e22ccfa..2d264b12 100644
  }) {
    const platform = getActiveEditorPlatform();
    const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
-@@ -774,6 +864,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +866,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -5268,7 +5270,7 @@ index 4e22ccfa..2d264b12 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -792,7 +884,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -792,7 +886,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid,
      showTransparencyGrid,
      snapModes,
@@ -5276,7 +5278,7 @@ index 4e22ccfa..2d264b12 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +905,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +907,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -5285,7 +5287,7 @@ index 4e22ccfa..2d264b12 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -832,7 +925,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -832,7 +927,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
      snapModes: s.snapModes,
@@ -5293,7 +5295,7 @@ index 4e22ccfa..2d264b12 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +937,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +939,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -5305,7 +5307,7 @@ index 4e22ccfa..2d264b12 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,14 +983,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +985,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -5322,7 +5324,7 @@ index 4e22ccfa..2d264b12 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -912,11 +1006,135 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -912,11 +1008,135 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
@@ -5459,7 +5461,7 @@ index 4e22ccfa..2d264b12 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1151,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1153,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -5468,7 +5470,7 @@ index 4e22ccfa..2d264b12 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1162,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1164,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -5482,7 +5484,7 @@ index 4e22ccfa..2d264b12 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1255,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1257,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -5505,7 +5507,7 @@ index 4e22ccfa..2d264b12 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,7 +1325,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,7 +1327,9 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -5515,7 +5517,7 @@ index 4e22ccfa..2d264b12 100644
      activeHandleIdOverride: contextMenuHandleIdOverride
    });
  
-@@ -1157,15 +1352,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1157,15 +1354,22 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
    const pathDraftRef = useRef<PathToolDraft | null>(null);
@@ -5539,7 +5541,7 @@ index 4e22ccfa..2d264b12 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1300,7 +1502,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1504,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -5547,7 +5549,7 @@ index 4e22ccfa..2d264b12 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1522,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1524,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -5558,7 +5560,7 @@ index 4e22ccfa..2d264b12 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1706,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1708,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -5582,7 +5584,7 @@ index 4e22ccfa..2d264b12 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1721,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1723,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -5596,7 +5598,7 @@ index 4e22ccfa..2d264b12 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1810,19 +1988,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +1990,31 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -5630,7 +5632,7 @@ index 4e22ccfa..2d264b12 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,9 +2028,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,9 +2030,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -5643,7 +5645,7 @@ index 4e22ccfa..2d264b12 100644
      snapModes,
      gridMinorTargetPx,
      canvasTransform,
-@@ -1857,44 +2050,50 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2052,50 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -5703,7 +5705,7 @@ index 4e22ccfa..2d264b12 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1975,6 +2174,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2176,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -5947,7 +5949,7 @@ index 4e22ccfa..2d264b12 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,17 +2491,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2493,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -5972,7 +5974,7 @@ index 4e22ccfa..2d264b12 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2515,222 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2517,228 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -6131,36 +6133,42 @@ index 4e22ccfa..2d264b12 100644
 +    if (freehandResultOffer?.autoApply) applyFreehandSuggestion(true);
 +  }, [autoApplyFit, freehandResultOffer, applyFreehandSuggestion]);
 +
++  // Repeating Simplify on the same curve coarsens the tolerance each time, so repeated steps converge,
++  // as Inkscape's repeated simplify does; a stroke that kept its recorded ink is refitted from the ink.
++  const lastSimplifyRef = useRef<{ sourceId: string; source: string; toleranceUnits: number } | null>(null);
 +  const simplifySelectedPath = useCallback(() => {
 +    if (!selectedPathForFit) return;
-+    const draft = sampleSelectedCurvePath(selectedPathForFit.sourcePath, 1);
-+    if (!draft) return;
-+    const interpretation = interpretFreehandToolSource(draft, 1, { preserveCurve: true, toleranceWorld: simplificationUnits * PT_PER_CM });
++    const sourceId = selectedPathForFit.path.sourceRef.sourceId;
++    const last = lastSimplifyRef.current;
++    const repeat = last !== null && last.sourceId === sourceId && last.source === selectedPathForFit.original;
++    const inverse = selectedOriginal.entry ? inverseMatrix(resolveFigureCoordinateFrame(source, editParseOptions)) : null;
++    const draft = selectedOriginal.entry && inverse
++      ? { points: selectedOriginal.entry.stroke.samples.map((sample) => applyMatrix(inverse, makeWorldPoint(pt(sample.x), pt(sample.y)))), minSampleDistanceWorld: 0 }
++      : sampleSelectedCurvePath(selectedPathForFit.sourcePath, 1);
 +    const sourcePrefix = /^\s*\\draw(?:\[[^\]]*\])?/.exec(selectedPathForFit.original)?.[0];
-+    if (!interpretation || !sourcePrefix) return;
-+    const fitted = interpretation.source.replace(/^\\draw(?:\[[^\]]*\])?/, sourcePrefix);
-+    const fittedSource = autoSmoothNodes ? smoothAuthoredCurveJoints(fitted) : fitted;
++    if (!draft) { setWarning("Simplify could not read this curve's points."); return; }
++    if (!sourcePrefix) { setWarning("Simplify could not read this curve's draw command."); return; }
 +    const oldSegments = selectedPathForFit.sourcePath.commands.filter((command) => command.kind === "C").length;
-+    const newSegments = (fittedSource.match(/\.\.\s+controls\b/gu) ?? []).length;
-+    if (newSegments >= oldSegments) {
-+      setWarning("This path has no simpler fit at the selected strength.");
++    for (let toleranceUnits = repeat ? last.toleranceUnits * 2 : simplificationUnits;
++      toleranceUnits <= simplificationUnits * SIMPLIFY_MAX_ESCALATION; toleranceUnits *= 2) {
++      const interpretation = interpretFreehandToolSource(draft, 1, { preserveCurve: true, toleranceWorld: toleranceUnits * PT_PER_CM });
++      if (!interpretation) continue;
++      const fitted = interpretation.source.replace(/^\\draw(?:\[[^\]]*\])?/, sourcePrefix);
++      const fittedSource = autoSmoothNodes ? smoothAuthoredCurveJoints(fitted) : fitted;
++      const newSegments = (fittedSource.match(/\.\.\s+controls\b/gu) ?? []).length;
++      if (newSegments >= oldSegments || newSegments < 1) continue;
++      const revision = useEditorStore.getState().sourceRevision;
++      dispatch({ type: "REPLACE_FREEHAND_RESULT", from: selectedPathForFit.from, before: selectedPathForFit.original, after: fittedSource, expectedSourceRevision: revision });
++      if (useEditorStore.getState().sourceRevision === revision) {
++        setWarning("Could not simplify the selected path.");
++        return;
++      }
++      lastSimplifyRef.current = { sourceId, source: fittedSource, toleranceUnits };
++      setWarning(null);
 +      return;
 +    }
-+    const revision = useEditorStore.getState().sourceRevision;
-+    dispatch({
-+      type: "REPLACE_FREEHAND_RESULT",
-+      from: selectedPathForFit.from,
-+      before: selectedPathForFit.original,
-+      after: fittedSource,
-+      expectedSourceRevision: revision
-+    });
-+    const nextState = useEditorStore.getState();
-+    if (nextState.sourceRevision === revision) {
-+      setWarning("Could not simplify the selected path.");
-+      return;
-+    }
-+    setWarning(null);
-+  }, [autoSmoothNodes, canvasTransform.scale, dispatch, simplificationUnits, selectedPathForFit]);
++    setWarning("This curve is already as simple as Simplify can make it.");
++  }, [autoSmoothNodes, dispatch, editParseOptions, selectedOriginal.entry, simplificationUnits, selectedPathForFit, source]);
 +
 +  const simplifySelectedRange = useCallback(() => {
 +    if (!selectedPathForFit || rangeStartIndex === null || selectedAnchorIndex === null) return;
@@ -6176,7 +6184,7 @@ index 4e22ccfa..2d264b12 100644
 +      simplificationUnits * PT_PER_CM
 +    );
 +    if (!replacement) {
-+      setWarning("This range has no simpler fit at the selected strength.");
++      setWarning("This range has no simpler fit at the selected simplification.");
 +      return;
 +    }
 +    const beforeCount = selectedPathForFit.sourcePath.commands.length - 1;
@@ -6219,7 +6227,7 @@ index 4e22ccfa..2d264b12 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2745,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2753,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -6227,7 +6235,7 @@ index 4e22ccfa..2d264b12 100644
          return;
        }
  
-@@ -2141,7 +2753,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2761,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -6235,7 +6243,7 @@ index 4e22ccfa..2d264b12 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2769,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2777,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -6243,7 +6251,7 @@ index 4e22ccfa..2d264b12 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,7 +2783,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,7 +2791,6 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -6251,7 +6259,7 @@ index 4e22ccfa..2d264b12 100644
      },
      [applyActionWithFeedback, creationStrokeColor, dispatch, setDragState]
    );
-@@ -3011,6 +3620,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3628,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -6259,7 +6267,7 @@ index 4e22ccfa..2d264b12 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3064,9 +3674,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3682,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -6269,7 +6277,7 @@ index 4e22ccfa..2d264b12 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3147,7 +3754,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3762,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -6280,7 +6288,7 @@ index 4e22ccfa..2d264b12 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3780,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3788,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -6290,7 +6298,7 @@ index 4e22ccfa..2d264b12 100644
      ]
    );
  
-@@ -3192,6 +3802,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3810,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -6369,7 +6377,7 @@ index 4e22ccfa..2d264b12 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3902,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3910,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -6388,7 +6396,7 @@ index 4e22ccfa..2d264b12 100644
      snapshot,
      source,
      setWarning,
-@@ -3267,16 +3955,231 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,16 +3963,231 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -6622,7 +6630,7 @@ index 4e22ccfa..2d264b12 100644
    );
  
    const {
-@@ -3306,6 +4209,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4217,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -6630,7 +6638,7 @@ index 4e22ccfa..2d264b12 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,12 +4234,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,12 +4242,11 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -6644,7 +6652,7 @@ index 4e22ccfa..2d264b12 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -3345,7 +4248,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3345,7 +4256,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomSpeed,
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
@@ -6652,7 +6660,7 @@ index 4e22ccfa..2d264b12 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,25 +4351,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,25 +4359,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -6678,7 +6686,7 @@ index 4e22ccfa..2d264b12 100644
    useEffect(() => {
      if (toolMode === "select") {
        setPathDraft(null);
-@@ -3706,15 +4589,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4597,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -6702,7 +6710,7 @@ index 4e22ccfa..2d264b12 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4702,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4710,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -6710,7 +6718,7 @@ index 4e22ccfa..2d264b12 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4715,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4723,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -6718,12 +6726,17 @@ index 4e22ccfa..2d264b12 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4726,105 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4734,110 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
 +  // The canvas hint sits in the canvas corner; placement keeps the selection control off it.
 +  const [selectionHintElement, setSelectionHintElement] = useState<HTMLDivElement | null>(null);
++  // A stroke that kept its recorded original offers it from the selection's own control, not a second panel.
++  const originalStrokeActions = selectedOriginal.entry ? <>
++    <button type="button" onClick={() => applyOriginalStroke(false)}>Restore original stroke</button>
++    {selectedOriginal.entry.stroke.intent === "geometry" ? <button type="button" onClick={() => applyOriginalStroke(true)}>Reapply original fit</button> : null}
++  </> : null;
 +  // Selection controls belong to the selection tools; under a drawing tool they would sit where the next stroke goes.
 +  const selectionControlsShown = toolMode === "select" || toolMode === "lasso";
 +  // The freehand result sits in a fixed canvas corner: the first, from the bottom leading one, whose box clears the stroke.
@@ -6824,7 +6837,7 @@ index 4e22ccfa..2d264b12 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4847,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4860,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -6847,7 +6860,7 @@ index 4e22ccfa..2d264b12 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4878,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4891,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -6862,7 +6875,7 @@ index 4e22ccfa..2d264b12 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4904,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4917,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -6896,7 +6909,7 @@ index 4e22ccfa..2d264b12 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4936,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4949,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6906,7 +6919,7 @@ index 4e22ccfa..2d264b12 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4949,29 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4962,29 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6940,7 +6953,7 @@ index 4e22ccfa..2d264b12 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5002,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5015,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -6948,25 +6961,17 @@ index 4e22ccfa..2d264b12 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5011,81 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5024,74 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
 +      {selectedOriginal.error ? <div role="alert">{selectedOriginal.error}</div> : null}
-+      {selectionControlsShown && selectedOriginal.entry && !freehandResultOffer ? (
-+        <div className={`${freehandPopupCss.popup} ${freehandPopupCss.bottom} ${freehandPopupCss.trailing}`} aria-label="Original stroke">
-+          <strong>Original stroke</strong>
-+          <div className={freehandPopupCss.actions}>
-+            <button type="button" onClick={() => applyOriginalStroke(false)}>Restore original stroke</button>
-+            {selectedOriginal.entry.stroke.intent === "geometry" ? <button type="button" onClick={() => applyOriginalStroke(true)}>Reapply original fit</button> : null}
-+          </div>
-+        </div>
-+      ) : null}
 +      {selectionControlsShown && selectedElementIds.size > 0 && !selectedCurve && !freehandResultOffer ? (
 +        <div ref={measureSelectionControl} className={freehandPopupCss.rangeControls} onPointerDown={(event) => event.stopPropagation()} style={selectionPopupStyle}>
 +          {selectionCommandsApplicable ? <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>
 +            {pointCommandContext ? "Point actions" : selectedElementIds.size === 1 ? "Selection actions" : `${selectedElementIds.size} selected · Actions`}
 +          </button> : null}
++          {originalStrokeActions}
 +        </div>
 +      ) : null}
 +      {selectionControlsShown && selectedCurve && !freehandResultOffer ? (
@@ -6976,6 +6981,7 @@ index 4e22ccfa..2d264b12 100644
 +            <span aria-hidden="true">{lockedCurveId ? "🔒" : "🔓"}</span>Lock curve
 +          </button>
 +          <span className={freehandPopupCss.pointCount}>{selectedCurve.handles.length} point{selectedCurve.handles.length === 1 ? "" : "s"}</span>
++          {originalStrokeActions}
 +          <button type="button" aria-expanded={curveActionsOpen} onClick={() => setCurveActionsOpen(!curveActionsOpen)}>
 +            {selectedNodeIndices.size ? `${selectedNodeIndices.size} point${selectedNodeIndices.size === 1 ? "" : "s"} selected` : "Curve actions"}
 +          </button>

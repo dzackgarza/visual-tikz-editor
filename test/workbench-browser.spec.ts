@@ -1078,19 +1078,23 @@ describe("standalone workbench host boundary", function () {
       for (let step = 0; step < 8; step++) {
         await expect(frame.getByRole('button', { name: 'Curve actions', exact: true }),
           `No Curve actions before simplify step ${step + 1} (anchors ${counts.join(' → ')}, selection ${JSON.stringify((await editorDebug(page)).selection)})`).toBeVisible();
-        await input.touch([await stableCenter(frame.getByRole('button', { name: 'Curve actions', exact: true }))]);
         const simplify = frame.getByRole('button', { name: 'Simplify curve', exact: true });
+        // The curve's actions stay open between steps; open them only when they are closed.
+        if (!(await simplify.isVisible())) await input.touch([await stableCenter(frame.getByRole('button', { name: 'Curve actions', exact: true }))]);
+        await expect(simplify, `No Simplify curve at step ${step + 1} (anchors ${counts.join(' → ')})`).toBeVisible();
         await input.touch([await stableCenter(simplify)]);
-        await page.waitForTimeout(300);
-        const now = await anchors();
-        if (now === counts[counts.length - 1]) break;
-        counts.push(now);
+        // A step either sheds anchors or says the curve is final.
+        const final = frame.getByText(/already as simple/i);
+        await expect.poll(async () => (await anchors()) !== counts[counts.length - 1] || await final.isVisible(),
+          { message: `Simplify step ${step + 1} neither changed the curve nor said it was final (alerts: ${JSON.stringify(await frame.getByRole('alert').allInnerTexts())}, selection ${JSON.stringify((await editorDebug(page)).selection)}, simplify visible ${await simplify.isVisible()})` }).toBe(true);
+        if (await final.isVisible()) break;
+        counts.push(await anchors());
       }
       // Each step sheds anchors until the fit is final, and the author is told so.
       assert.ok(counts.length >= 3, `Simplify could not be repeated: anchors ${counts.join(' → ')}`);
       assert.ok(counts.every((count, index) => index === 0 || count < counts[index - 1]), `anchors ${counts.join(' → ')}`);
       assert.ok(counts[counts.length - 1] >= 2, `Simplification collapsed the curve: ${counts.join(' → ')}`);
-      await expect(frame.getByRole('alert').or(frame.getByText(/simpler fit|already as simple/i)).first()).toBeVisible();
+      await expect(frame.getByRole('alert').or(frame.getByText(/simpler fit|already as simple/i)).first(), `No final message after anchors ${counts.join(' → ')}`).toBeVisible();
     });
   }
 
