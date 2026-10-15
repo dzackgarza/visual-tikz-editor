@@ -44,7 +44,7 @@ document.querySelector('#import-ink')!.addEventListener('click', () => {
 for (const action of ['interpret-ink', 'restore-ink'] as const) {
   document.querySelector(`#${action}`)!.addEventListener('click', () => {
     post({ action, source: source.value, key: document.querySelector<HTMLInputElement>('#stroke-key')!.value,
-      tolerance: 8, sessionId, revision, requestId: crypto.randomUUID() });
+      sessionId, revision, requestId: crypto.randomUUID() });
   });
 }
 document.querySelector('#load')!.addEventListener('click', load);

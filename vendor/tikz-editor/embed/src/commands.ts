@@ -23,7 +23,7 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('zoom'), direction: z.enum(['in', 'out', 'reset']) }),
   z.object({ ...identity, action: z.literal('clipboard-result'), targetRequestId: z.string().min(1), text: z.string().optional(), error: z.string().optional() }),
   z.object({ ...identity, action: z.literal('import-ink'), source: z.string(), strokes: z.array(originalStrokeSchema).min(1) }),
-  z.object({ ...identity, action: z.enum(['interpret-ink', 'restore-ink']), source: z.string(), key: z.string(), tolerance: z.number().min(4).max(32) }),
+  z.object({ ...identity, action: z.enum(['interpret-ink', 'restore-ink']), source: z.string(), key: z.string() }),
   z.object({ ...identity, action: z.literal('cancel'), targetRequestId: z.string().min(1) }),
   snapshotRequestSchema,
 ]);

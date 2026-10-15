@@ -1,12 +1,13 @@
 import { resolveFigureCoordinateFrame } from 'tikz-editor/edit/coordinate-frame';
-import { applyMatrix, inverseMatrix } from 'tikz-editor/semantic/transform';
+import { inverseMatrix } from 'tikz-editor/semantic/transform';
 import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
 import { useEditorStore } from '@tikz-editor/app/store';
-import { interpretFreehandToolSource } from '@tikz-editor/app/freehand';
-import { pt, worldPoint } from 'tikz-editor/coords/index';
+import { originalInkDrawing, refittedInkDrawing } from '@tikz-editor/app/freehand';
+import { getEditorSettings } from '@tikz-editor/app';
+import { PT_PER_CM } from 'tikz-editor/edit/format';
 import type { CommandFailure } from './events';
 import type { HostCommand } from './commands';
-import { originalStrokes, strokeEnvelope, originalDrawingSource, tikzStrokeColor, tikzStrokeOpacity } from './original-ink';
+import { originalStrokes, strokeEnvelope } from './original-ink';
 
 export function executeInkCommand(command: Extract<HostCommand, { action: 'import-ink' | 'interpret-ink' | 'restore-ink' }>): CommandFailure | undefined {
   const state = useEditorStore.getState();
@@ -16,13 +17,7 @@ export function executeInkCommand(command: Extract<HostCommand, { action: 'impor
   const figure = parsed.figures.find(item => item.id === parsed.activeFigureId);
   const inverse = inverseMatrix(resolveFigureCoordinateFrame(state.source, { activeFigureId: state.activeFigureId }));
   if (figure === undefined || inverse === null) return 'unsupported-source';
-  const localSamples = (stroke: Parameters<typeof originalDrawingSource>[0]) => stroke.samples.map(sample => {
-    const point = applyMatrix(inverse, worldPoint(pt(sample.x), pt(sample.y)));
-    return { ...sample, x: point.x, y: point.y };
-  });
-  const authoredOriginal = (stroke: Parameters<typeof originalDrawingSource>[0]) => stroke.outline === undefined
-    ? originalDrawingSource({ ...stroke, samples: localSamples(stroke) })
-    : `\\begin{scope}[cm={${inverse.a},${inverse.b},${inverse.c},${inverse.d},(${inverse.e}pt,${inverse.f}pt)}]\n${originalDrawingSource(stroke)}\n\\end{scope}`;
+  const authoredOriginal = (stroke: Parameters<typeof originalInkDrawing>[0]) => originalInkDrawing(stroke, inverse);
   const originals = originalStrokes(state.source);
   let next: string;
   if (command.action === 'import-ink') {
@@ -39,13 +34,10 @@ export function executeInkCommand(command: Extract<HostCommand, { action: 'impor
     let drawing = authoredOriginal(entry.stroke);
     if (command.action === 'interpret-ink') {
       if (entry.stroke.intent !== 'geometry') return 'ink-is-not-geometry';
-      const fit = interpretFreehandToolSource({
-        points: localSamples(entry.stroke).map(sample => worldPoint(pt(sample.x), pt(sample.y))),
-        minSampleDistanceWorld: 0,
-      }, 1, { strokeColor: tikzStrokeColor(entry.stroke), toleranceWorld: command.tolerance });
-      if (fit === null || fit.kind === 'raw') return 'no-fit';
-      const opacity = tikzStrokeOpacity(entry.stroke);
-      drawing = opacity === 1 ? fit.source : `\\begin{scope}[opacity=${opacity}]\n${fit.source}\n\\end{scope}`;
+      // The editor's own simplification setting is the one tolerance for every refit, host or canvas.
+      const fit = refittedInkDrawing(entry.stroke, inverse, getEditorSettings().canvas.freehandSimplificationUnits * PT_PER_CM);
+      if (fit === null) return 'no-fit';
+      drawing = fit;
     }
     next = state.source.slice(0, entry.drawingFrom) + drawing + state.source.slice(entry.drawingTo);
   }
