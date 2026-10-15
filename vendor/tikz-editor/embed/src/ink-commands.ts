@@ -42,7 +42,7 @@ export function executeInkCommand(command: Extract<HostCommand, { action: 'impor
       const fit = interpretFreehandToolSource({
         points: localSamples(entry.stroke).map(sample => worldPoint(pt(sample.x), pt(sample.y))),
         minSampleDistanceWorld: 0,
-      }, 1, command.tolerance, { strokeColor: tikzStrokeColor(entry.stroke), toleranceWorld: command.tolerance });
+      }, 1, { strokeColor: tikzStrokeColor(entry.stroke), toleranceWorld: command.tolerance });
       if (fit === null || fit.kind === 'raw') return 'no-fit';
       const opacity = tikzStrokeOpacity(entry.stroke);
       drawing = opacity === 1 ? fit.source : `\\begin{scope}[opacity=${opacity}]\n${fit.source}\n\\end{scope}`;
