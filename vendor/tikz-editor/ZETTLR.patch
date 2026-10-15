@@ -3727,7 +3727,7 @@ index 0ddde08e..dcd5a6c1 100644
 +.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
 +.insertChoice:disabled { opacity: .5; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..dbc5c4ca 100644
+index a3293df2..698f494c 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -4258,7 +4258,7 @@ index a3293df2..dbc5c4ca 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +720,73 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +720,74 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4305,15 +4305,16 @@ index a3293df2..dbc5c4ca 100644
 +        <button type="button" className={css.btn} aria-label="Properties" onClick={onToggleProperties}>⚙</button>
 +        <button type="button" className={css.btn} aria-label="Settings" onClick={onOpenSettings}>☰</button>
 +        <ZoomDisplayControl triggerClassName={`${css.btn} ${css.zoomTrigger}`} />
-+        <RenderedTooltip content={settings.canvas.latticeLock ? "Points land on the lattice" : "Points move freely"}>
-+          <button type="button" className={[css.btn, settings.canvas.latticeLock ? css.btnActive : ""].filter(Boolean).join(" ")}
-+            aria-label="Lock to lattice" aria-pressed={settings.canvas.latticeLock}
-+            onClick={() => updateCanvasSettings({ latticeLock: !settings.canvas.latticeLock })}>⌗</button>
-+        </RenderedTooltip>
 +      </div>
 +      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("erase")}
 +      {renderEmbeddedTool("addFreehand")}{renderInsertButton()}
-+      {(["color", "addBucket", "undo", "redo", "palette"] as const).map((id) => <Fragment key={id}>{renderEmbeddedTool(id)}</Fragment>)}
++      {(["color", "addBucket", "undo", "redo"] as const).map((id) => <Fragment key={id}>{renderEmbeddedTool(id)}</Fragment>)}
++      <RenderedTooltip content={settings.canvas.latticeLock ? "Points land on the lattice" : "Points move freely"}>
++        <button type="button" className={[css.btn, settings.canvas.latticeLock ? css.btnActive : ""].filter(Boolean).join(" ")}
++          aria-label="Lock to lattice" aria-pressed={settings.canvas.latticeLock}
++          onClick={() => updateCanvasSettings({ latticeLock: !settings.canvas.latticeLock })}>⌗</button>
++      </RenderedTooltip>
++      {renderEmbeddedTool("palette")}
 +    </div>
 +  </div>{dockPreview ? createPortal(<div className={css.dockGuide} aria-hidden="true">
 +    {(["left", "top", "right", "bottom"] as const).map((dock) => <div key={dock}
@@ -4334,7 +4335,7 @@ index a3293df2..dbc5c4ca 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +797,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +798,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -4348,7 +4349,7 @@ index a3293df2..dbc5c4ca 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +813,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +814,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -4357,7 +4358,7 @@ index a3293df2..dbc5c4ca 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +838,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +839,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -7250,7 +7251,7 @@ index 5660d6d8..4ca2001f 100644
      minorStep,
      majorStep: minorStep * OVERLAY_MAJOR_STEP_MULTIPLE
 diff --git a/packages/app/src/ui/canvas-panel/interaction-helpers.ts b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
-index f22aaafd..40f4c23a 100644
+index f22aaafd..84a5d899 100644
 --- a/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 +++ b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 @@ -1,5 +1,8 @@
@@ -7263,25 +7264,113 @@ index f22aaafd..40f4c23a 100644
  import type { EditHandle, SceneElement, ScenePathCommand } from "tikz-editor/semantic/types";
  import { CM_PER_PT, PT_PER_CM, formatNumber } from "tikz-editor/edit/format";
  import { worldPoint, worldVector, svgBounds, pt } from "tikz-editor/coords/index";
-@@ -199,14 +202,14 @@ export function createBezierTemplateFromBend(
+@@ -59,10 +62,11 @@ export function createTemplateForToolDrag(
+   mode: ToolCreateMode,
+   startWorld: WorldPoint,
+   endWorld: WorldPoint,
+-  options?: {
++  options: {
+     selectedAddShape?: string;
+     strokeColor?: string;
+     fillColor?: string;
++    lattice: BezierLattice;
+   }
+ ): ElementTemplate {
+   const dx = endWorld.x - startWorld.x;
+@@ -72,8 +76,8 @@ export function createTemplateForToolDrag(
+   const hasShapeDrag =
+     Math.max(Math.abs(dx), Math.abs(dy)) >= MIN_SHAPE_DRAG_DIMENSION_PT;
+ 
+-  const strokeColor = options?.strokeColor;
+-  const fillColor = options?.fillColor;
++  const strokeColor = options.strokeColor;
++  const fillColor = options.fillColor;
+ 
+   if (mode === "addPath") {
+     return hasDrag
+@@ -99,7 +103,7 @@ export function createTemplateForToolDrag(
+       pt((startWorld.y + endWorld.y) / 2)
+     );
+     if (hasDrag) {
+-      return createBezierTemplateFromBend(startWorld, endWorld, bend, { strokeColor });
++      return createBezierTemplateFromBend(startWorld, endWorld, bend, { strokeColor, lattice: options.lattice });
+     }
+     return { kind: "bezier", strokeColor };
+   }
+@@ -124,14 +128,14 @@ export function createTemplateForToolDrag(
+ 
+   if (mode === "addShape") {
+     const draft = resolveAddShapeDraft(
+-      options?.selectedAddShape ?? "rectangle",
++      options.selectedAddShape ?? "rectangle",
+       Math.max(Math.abs(dx), MIN_SHAPE_DRAG_DIMENSION_PT),
+       Math.max(Math.abs(dy), MIN_SHAPE_DRAG_DIMENSION_PT)
+     );
+     return hasShapeDrag
+       ? {
+           kind: "node",
+-          shape: options?.selectedAddShape ?? "rectangle",
++          shape: options.selectedAddShape ?? "rectangle",
+           text: "",
+           minimumWidthPt: draft.minimumWidthPt,
+           minimumHeightPt: draft.minimumHeightPt,
+@@ -140,7 +144,7 @@ export function createTemplateForToolDrag(
+         }
+       : {
+           kind: "node",
+-          shape: options?.selectedAddShape ?? "rectangle",
++          shape: options.selectedAddShape ?? "rectangle",
+           text: "",
+           strokeColor,
+           fillColor
+@@ -152,10 +156,15 @@ export function createTemplateForToolDrag(
+     : { kind: "circle", strokeColor, fillColor };
+ }
+ 
++/** The lattice a locked curve's control points land on, or null when the lock is off or bypassed. */
++export type BezierLattice = { transform: LatticeTransform | undefined } | null;
++
++/** Control points through the bend; previews and commits share this so a locked curve looks as it will be written. */
+ export function resolveBezierControlsFromBend(
+   startWorld: WorldPoint,
+   endWorld: WorldPoint,
+-  bendWorld: WorldPoint
++  bendWorld: WorldPoint,
++  lattice: BezierLattice
+ ): { endWorld: WorldPoint; control1: WorldPoint; control2: WorldPoint } {
+   let resolvedEnd = endWorld;
+   let dx = resolvedEnd.x - startWorld.x;
+@@ -190,8 +199,8 @@ export function resolveBezierControlsFromBend(
+ 
+   return {
+     endWorld: resolvedEnd,
+-    control1,
+-    control2
++    control1: lattice ? snapToUnitLattice(control1, lattice.transform) : control1,
++    control2: lattice ? snapToUnitLattice(control2, lattice.transform) : control2
+   };
+ }
+ 
+@@ -199,15 +208,15 @@ export function createBezierTemplateFromBend(
    startWorld: WorldPoint,
    endWorld: WorldPoint,
    bendWorld: WorldPoint,
 -  options?: { strokeColor?: string }
-+  options?: { strokeColor?: string; latticeLock?: boolean; latticeTransform?: LatticeTransform }
++  options: { strokeColor?: string; lattice: BezierLattice }
  ): Extract<ElementTemplate, { kind: "bezier" }> {
-   const controls = resolveBezierControlsFromBend(startWorld, endWorld, bendWorld);
+-  const controls = resolveBezierControlsFromBend(startWorld, endWorld, bendWorld);
++  const controls = resolveBezierControlsFromBend(startWorld, endWorld, bendWorld, options.lattice);
    return {
      kind: "bezier",
      to: controls.endWorld,
--    control1: controls.control1,
--    control2: controls.control2,
-+    control1: options?.latticeLock ? snapToUnitLattice(controls.control1, options.latticeTransform) : controls.control1,
-+    control2: options?.latticeLock ? snapToUnitLattice(controls.control2, options.latticeTransform) : controls.control2,
-     strokeColor: options?.strokeColor
+     control1: controls.control1,
+     control2: controls.control2,
+-    strokeColor: options?.strokeColor
++    strokeColor: options.strokeColor
    };
  }
-@@ -215,11 +218,21 @@ export function resolveToolCreateCurrentWorld(
+ 
+@@ -215,11 +224,21 @@ export function resolveToolCreateCurrentWorld(
    startWorld: WorldPoint,
    rawCurrentWorld: WorldPoint,
    mode: ToolCreateMode,
@@ -7307,7 +7396,7 @@ index f22aaafd..40f4c23a 100644
  }
  
  export function snapPointDeltaToAxisStepMultiples(
-@@ -333,14 +346,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
+@@ -333,14 +352,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
    return worldPoint(pt(sumX / count), pt(sumY / count));
  }
  
@@ -7332,7 +7421,7 @@ index f22aaafd..40f4c23a 100644
    return [
      { label: "X", value: formatTooltipLengthCm(point.x) },
      { label: "Y", value: formatTooltipLengthCm(point.y) }
-@@ -481,8 +502,13 @@ export function projectResizeDimensionsFromOppositeCorner(
+@@ -481,8 +508,13 @@ export function projectResizeDimensionsFromOppositeCorner(
  export function resolveToolCreateSize(
    mode: ToolCreateMode,
    startWorld: WorldPoint,
@@ -7347,7 +7436,7 @@ index f22aaafd..40f4c23a 100644
    if (mode === "addCircle") {
      const radius = Math.hypot(currentWorld.x - startWorld.x, currentWorld.y - startWorld.y);
      const diameter = clampTooltipScalar(radius * 2);
-@@ -506,11 +532,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
+@@ -506,11 +538,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
  
  function formatTooltipLength(valuePt: number): string {
    const clamped = clampTooltipScalar(valuePt);
@@ -7597,14 +7686,23 @@ index 0961ce75..5418b80f 100644
  
  function hasInsertablePathSegment(
 diff --git a/packages/app/src/ui/canvas-panel/path-tool.ts b/packages/app/src/ui/canvas-panel/path-tool.ts
-index 48b963b4..3ec5caaf 100644
+index 48b963b4..260a5c99 100644
 --- a/packages/app/src/ui/canvas-panel/path-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/path-tool.ts
 @@ -1,3 +1,4 @@
-+import { snapToUnitLattice, type LatticeTransform } from "tikz-editor/edit/snapping";
++import type { LatticeTransform } from "tikz-editor/edit/snapping";
  import {
    generateComplexPathSource,
    generateComplexPathSegmentSource,
+@@ -8,7 +9,7 @@ import {
+ } from "tikz-editor/edit/element-templates";
+ import type { WorldPoint } from "../coords/types";
+ 
+-import { resolveBezierControlsFromBend } from "./interaction-helpers";
++import { resolveBezierControlsFromBend, type BezierLattice } from "./interaction-helpers";
+ 
+ const MIN_SEGMENT_LENGTH_PT = 1e-3;
+ export const PATH_TOOL_CLOSE_RADIUS_PX = 10;
 @@ -31,6 +32,8 @@ export type PathToolGestureSegment = {
    endAnchor?: AnchorReference;
    bendWorld: WorldPoint;
@@ -7614,20 +7712,33 @@ index 48b963b4..3ec5caaf 100644
  };
  
  export function createPathToolDraft(
-@@ -117,9 +120,12 @@ export function appendPathToolSegmentFromGesture(
+@@ -90,14 +93,15 @@ export function appendPathToolLineSegment(draft: PathToolDraft, endWorld: WorldP
+ export function appendPathToolBezierSegment(
    draft: PathToolDraft,
+   endWorld: WorldPoint,
+-  bendWorld: WorldPoint
++  bendWorld: WorldPoint,
++  lattice: BezierLattice
+ ): PathToolDraft {
+   if (pathToolWouldCreateDegenerateSegment(draft, endWorld)) {
+     return draft;
+   }
+ 
+   const from = pathToolCurrentPoint(draft);
+-  const controls = resolveBezierControlsFromBend(from, endWorld, bendWorld);
++  const controls = resolveBezierControlsFromBend(from, endWorld, bendWorld, lattice);
+ 
+   return {
+     ...draft,
+@@ -118,7 +122,7 @@ export function appendPathToolSegmentFromGesture(
    segment: PathToolGestureSegment
  ): PathToolDraft {
--  const nextDraft = segment.asBezier
-+  let nextDraft = segment.asBezier
-     ? appendPathToolBezierSegment(draft, segment.endWorld, segment.bendWorld)
+   const nextDraft = segment.asBezier
+-    ? appendPathToolBezierSegment(draft, segment.endWorld, segment.bendWorld)
++    ? appendPathToolBezierSegment(draft, segment.endWorld, segment.bendWorld, segment.latticeLock ? { transform: segment.latticeTransform } : null)
      : appendPathToolLineSegment(draft, segment.endWorld);
-+  if (segment.latticeLock && nextDraft !== draft) {
-+    nextDraft = { ...nextDraft, segments: nextDraft.segments.map((item, index) => index === nextDraft.segments.length - 1 && item.kind === "bezier" ? { ...item, control1: snapToUnitLattice(item.control1, segment.latticeTransform), control2: snapToUnitLattice(item.control2, segment.latticeTransform) } : item) };
-+  }
    if (nextDraft === draft || !segment.endAnchor) {
      return nextDraft;
-   }
 diff --git a/packages/app/src/ui/canvas-panel/scope-overlay.ts b/packages/app/src/ui/canvas-panel/scope-overlay.ts
 index 0766ca92..1c23b820 100644
 --- a/packages/app/src/ui/canvas-panel/scope-overlay.ts
@@ -7938,7 +8049,7 @@ index dac6b0b3..be694437 100644
  export type TextSelectionOverlay = {
    sourceId: string;
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
-index de0ccae2..b12d5e9d 100644
+index de0ccae2..e6173e2f 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 @@ -1,5 +1,8 @@
@@ -7951,6 +8062,15 @@ index de0ccae2..b12d5e9d 100644
  import { PT_PER_CM } from "tikz-editor/edit/format";
  import type { ScenePathCommand } from "tikz-editor/semantic/types";
  import type { WorldPoint } from "../coords/types";
+@@ -7,7 +10,7 @@ import type { SvgViewBox } from "tikz-editor/svg/types";
+ import type { NodeShapePresetId } from "tikz-editor/edit/inspector";
+ import type { CanvasTransform, ToolMode } from "../../store/types";
+ import { distanceSquared, fmt, worldToSvgPoint, worldToSvgY } from "./geometry";
+-import { resolveBezierControlsFromBend } from "./interaction-helpers";
++import { resolveBezierControlsFromBend, type BezierLattice } from "./interaction-helpers";
+ import { resolveAddShapeDraft, resolveAddShapeOriginFromDrag } from "./add-shape-draft";
+ import {
+   pathToolCanClose,
 @@ -16,7 +19,7 @@ import {
  } from "./path-tool";
  import { resolveFreehandPreviewSegments } from "./freehand-tool";
@@ -7969,12 +8089,12 @@ index de0ccae2..b12d5e9d 100644
    pathSegmentDraft: Extract<DragState, { kind: "tool-path-segment" }> | null;
    pendingBezier: PendingBezier | null;
 +  arcDraft: ArcDraft | null;
-+  latticeLock?: boolean;
++  latticeLock: boolean;
 +  latticeTransform?: LatticeTransform;
    bezierBendDraft: Extract<DragState, { kind: "tool-bezier-bend" }> | null;
    canvasTransform: CanvasTransform;
  };
-@@ -50,10 +55,12 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -50,20 +55,62 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
      toolCursorWorld,
      selectedAddShape,
      freehandDraft,
@@ -7983,12 +8103,15 @@ index de0ccae2..b12d5e9d 100644
      pathSegmentDraft,
      pendingBezier,
 +    arcDraft,
-+    latticeLock = false,
++    latticeLock,
 +    latticeTransform,
      bezierBendDraft,
      canvasTransform
    } = args;
-@@ -63,7 +70,46 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
++  const bezierLattice: BezierLattice = latticeLock ? { transform: latticeTransform } : null;
+ 
+   const toolPreview = useMemo((): ToolPreview | null => {
+     if (!svgResult || toolMode === "select") {
        return null;
      }
  
@@ -8036,7 +8159,7 @@ index de0ccae2..b12d5e9d 100644
        const liveWorld = toolDraft?.currentWorld ?? toolCursorWorld;
        if (!liveWorld) {
          return null;
-@@ -82,7 +128,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -82,7 +129,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        }
  
        const segments: Extract<ToolPreview, { kind: "freehand" }>["segments"] = [];
@@ -8045,7 +8168,26 @@ index de0ccae2..b12d5e9d 100644
          if (segment.kind === "line") {
            const from = worldToSvgPoint(segment.from, svgResult.viewBox);
            const to = worldToSvgPoint(segment.to, svgResult.viewBox);
-@@ -394,6 +440,21 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -117,7 +164,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+     }
+ 
+     const makeBezierPreview = (startWorld: WorldPoint, endWorld: WorldPoint, bendWorld: WorldPoint): ToolPreview => {
+-      const controls = resolveBezierControlsFromBend(startWorld, endWorld, bendWorld);
++      const controls = resolveBezierControlsFromBend(startWorld, endWorld, bendWorld, bezierLattice);
+       const start = worldToSvgPoint(startWorld, svgResult.viewBox);
+       const end = worldToSvgPoint(controls.endWorld, svgResult.viewBox);
+       const c1 = worldToSvgPoint(controls.control1, svgResult.viewBox);
+@@ -182,7 +229,8 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+           const controls = resolveBezierControlsFromBend(
+             pathSegmentDraft.startWorld,
+             pathSegmentDraft.endWorld,
+-            pathSegmentDraft.bendWorld
++            pathSegmentDraft.bendWorld,
++            bezierLattice
+           );
+           const from = worldToSvgPoint(pathSegmentDraft.startWorld, svgResult.viewBox);
+           const c1 = worldToSvgPoint(controls.control1, svgResult.viewBox);
+@@ -394,6 +442,21 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        };
      }
  
@@ -8067,7 +8209,7 @@ index de0ccae2..b12d5e9d 100644
      const dx = toolDraft.currentWorld.x - toolDraft.startWorld.x;
      const dy = toolDraft.currentWorld.y - toolDraft.startWorld.y;
      const radius = Math.hypot(dx, dy);
-@@ -404,7 +465,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -404,7 +467,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        cy: start.y,
        r: radius > 1e-4 ? radius : TOOL_PREVIEW_CIRCLE_RADIUS_PT
      };
@@ -8076,7 +8218,7 @@ index de0ccae2..b12d5e9d 100644
  
    return {
      toolPreview
-@@ -442,3 +503,12 @@ function encodeTranslatedPathPreview(
+@@ -442,3 +505,12 @@ function encodeTranslatedPathPreview(
    }
    return parts.join(" ");
  }
@@ -8090,7 +8232,7 @@ index de0ccae2..b12d5e9d 100644
 +  }).join(" ");
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
-index 0c9bdf4f..f2420be8 100644
+index 0c9bdf4f..01d585cd 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 @@ -8,6 +8,7 @@ import {
@@ -8335,7 +8477,17 @@ index 0c9bdf4f..f2420be8 100644
            finalWorld = finalEndpointAnchor.world;
          }
          setSnapLines(snapped.lines);
-@@ -1064,7 +1103,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1020,7 +1059,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+         const rawTemplate = createTemplateForToolDrag(drag.toolMode, drag.startWorld, finalWorld, {
+           selectedAddShape,
+           strokeColor: creationStrokeColor,
+-          fillColor: creationFillColor
++          fillColor: creationFillColor,
++          lattice: drag.snapContext?.settings.latticeLock && !ctrlOrMeta ? { transform: drag.snapContext.settings.latticeTransform } : null
+         });
+         const template =
+           rawTemplate.kind === "line"
+@@ -1064,7 +1104,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          }
  
          if (ok.sourceChanged) {
@@ -8343,14 +8495,13 @@ index 0c9bdf4f..f2420be8 100644
            setToolCursorWorld(null);
          }
          setToolDraft(null);
-@@ -1093,7 +1131,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1093,7 +1132,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
  
          queueSelectionForAddedElement(makeWorldPoint((drag.startWorld.x + drag.endWorld.x) / 2, (drag.startWorld.y + drag.endWorld.y) / 2));
          const template = createBezierTemplateFromBend(drag.startWorld, drag.endWorld, finalBend, {
 -          strokeColor: creationStrokeColor
 +          strokeColor: creationStrokeColor,
-+          latticeLock: drag.snapContext?.settings.latticeLock && !ctrlOrMeta,
-+          latticeTransform: drag.snapContext?.settings.latticeTransform
++          lattice: drag.snapContext?.settings.latticeLock && !ctrlOrMeta ? { transform: drag.snapContext.settings.latticeTransform } : null
          });
          const ok = applyActionWithFeedback({
            kind: "addElement",
