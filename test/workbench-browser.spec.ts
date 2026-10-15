@@ -87,7 +87,7 @@ describe("standalone workbench host boundary", function () {
   });
 
   for (const tablet of TABLET_VIEWPORTS) {
-    it(`reaches zoom, snapping, lattice lock, and canvas aids by touch in ${tablet.name}`, async function () {
+    it(`reaches zoom and canvas aids by touch in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
@@ -101,16 +101,11 @@ describe("standalone workbench host boundary", function () {
       };
       const before = await editorDebug(page);
       await tap(frame.getByRole('button', { name: 'Zoom and display', exact: true }));
-      await tap(frame.getByRole('button', { name: 'Lock geometry to lattice', exact: true }));
-      await tap(frame.getByRole('button', { name: 'Snap to grid', exact: true }));
       await tap(frame.getByRole('button', { name: 'Rulers', exact: true }));
       await tap(frame.getByRole('button', { name: '200%', exact: true }));
       const after = await editorDebug(page);
-      assert.equal(after.snapModes.latticeLock, !before.snapModes.latticeLock);
-      assert.equal(after.snapModes.grid, !before.snapModes.grid);
       assert.equal(after.canvasAids.rulers, !before.canvasAids.rulers);
       assert.notEqual(after.viewport.scale, before.viewport.scale);
-      await expect(frame.getByRole('button', { name: 'Lock geometry to lattice', exact: true })).toHaveAttribute('aria-pressed', String(after.snapModes.latticeLock));
       await expect(frame.getByRole('button', { name: '200%', exact: true })).toHaveAttribute('aria-pressed', 'true');
     });
   }
@@ -183,7 +178,7 @@ describe("standalone workbench host boundary", function () {
         const overflow = await strip.evaluate(element => ({
           vertical: element.scrollHeight - element.clientHeight, horizontal: element.scrollWidth - element.clientWidth }));
         assert.deepEqual(overflow, { vertical: 0, horizontal: 0 });
-        for (const name of ['Layers', 'Properties', 'Settings', 'Zoom and display', 'Select', 'Lasso', 'Eraser', 'Freehand', 'Insert', 'Bucket', 'Undo', 'Redo'])
+        for (const name of ['Layers', 'Properties', 'Settings', 'Zoom and display', 'Lock to lattice', 'Select', 'Lasso', 'Eraser', 'Freehand', 'Insert', 'Bucket', 'Undo', 'Redo'])
           await expect(rail.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
         await expect(rail.getByRole('button', { name: /^Drawing color: / })).toBeInViewport({ ratio: 1 });
         const swatches = rail.getByRole('button', { name: /^Use / });

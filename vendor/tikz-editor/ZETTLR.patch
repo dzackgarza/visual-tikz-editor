@@ -117,7 +117,7 @@ index f20fa9c3..53e68095 100644
    "devDependencies": {
      "@types/react": "^19.0.0",
 diff --git a/packages/app/src/app-menu/default-menu.ts b/packages/app/src/app-menu/default-menu.ts
-index 59fab7a8..24322aa9 100644
+index 59fab7a8..5a4692ad 100644
 --- a/packages/app/src/app-menu/default-menu.ts
 +++ b/packages/app/src/app-menu/default-menu.ts
 @@ -112,7 +112,8 @@ export const APP_MENU_DEFINITION = [
@@ -151,8 +151,19 @@ index 59fab7a8..24322aa9 100644
        },
        {
          kind: "submenu",
+@@ -513,8 +513,8 @@ export const APP_MENU_DEFINITION = [
+         items: [
+           {
+             kind: "command",
+-            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID,
+-            label: "Snap to Grid"
++            commandId: APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK,
++            label: "Lock to Lattice"
+           },
+           {
+             kind: "command",
 diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
-index af9d6c30..1bbfcd2c 100644
+index af9d6c30..2d08a3d0 100644
 --- a/packages/app/src/app-menu/types.ts
 +++ b/packages/app/src/app-menu/types.ts
 @@ -18,6 +18,7 @@ export const APP_MENU_COMMAND_IDS = {
@@ -171,19 +182,32 @@ index af9d6c30..1bbfcd2c 100644
    PATH_JOIN: "path.join",
    PATH_REVERSE: "path.reverse",
    PATH_CLOSE: "path.close",
-@@ -87,7 +89,7 @@ export const APP_MENU_COMMAND_IDS = {
+@@ -87,8 +89,8 @@ export const APP_MENU_COMMAND_IDS = {
    ZOOM_OUT: "view.zoom-out",
    TOGGLE_GRID: "view.toggle-grid",
    TOGGLE_TRANSPARENCY_GRID: "view.toggle-transparency-grid",
 -  TOGGLE_INFINITE_CANVAS: "view.toggle-infinite-canvas",
+-  TOGGLE_SNAP_GRID: "view.toggle-snap-grid",
 +  TOGGLE_OUTPUT_BOUNDS: "view.toggle-output-bounds",
-   TOGGLE_SNAP_GRID: "view.toggle-snap-grid",
++  TOGGLE_LATTICE_LOCK: "view.toggle-lattice-lock",
    TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
    TOGGLE_SNAP_OBJECT_POINTS: "view.toggle-snap-object-points",
+   TOGGLE_SNAP_OBJECT_GAPS: "view.toggle-snap-object-gaps",
 diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
-index bc368718..d43e2186 100644
+index bc368718..efd7f3e1 100644
 --- a/packages/app/src/context-menu/canvas-context-menu.ts
 +++ b/packages/app/src/context-menu/canvas-context-menu.ts
+@@ -152,8 +152,8 @@ const PATH_ITEMS: readonly AppMenuItem[] = [
+ const SNAP_ITEMS: readonly AppMenuItem[] = [
+   {
+     kind: "command",
+-    commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID,
+-    label: "Snap to Grid"
++    commandId: APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK,
++    label: "Lock to Lattice"
+   },
+   {
+     kind: "command",
 @@ -393,27 +393,17 @@ function buildSingleSelectionSubmenuItems(includePathSubmenu: boolean): readonly
    return items;
  }
@@ -286,7 +310,7 @@ index 20b8b673..faf832b4 100644
    writeText?: (text: string) => Promise<void>;
    readCustomText?: (
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
-index 4850a87e..48491dc5 100644
+index 4850a87e..87e1e052 100644
 --- a/packages/app/src/settings/storage.ts
 +++ b/packages/app/src/settings/storage.ts
 @@ -1,5 +1,5 @@
@@ -304,7 +328,7 @@ index 4850a87e..48491dc5 100644
 +        ...parsed.canvas,
 +        freehandSimplificationUnits: typeof parsed.canvas?.freehandSimplificationUnits === "number" && Number.isFinite(parsed.canvas.freehandSimplificationUnits) ? Math.max(0.01, Math.min(2, parsed.canvas.freehandSimplificationUnits)) : 0.25,
 +        freehandSmoothingUnits: typeof parsed.canvas?.freehandSmoothingUnits === "number" && Number.isFinite(parsed.canvas.freehandSmoothingUnits) ? Math.max(0, Math.min(1, parsed.canvas.freehandSmoothingUnits)) : 0,
-+        latticeLock: typeof parsed.canvas?.latticeLock === "boolean" ? parsed.canvas.latticeLock : false,
++        latticeLock: typeof parsed.canvas?.latticeLock === "boolean" ? parsed.canvas.latticeLock : DEFAULT_SETTINGS.canvas.latticeLock,
 +        freehandAutoApply: typeof parsed.canvas?.freehandAutoApply === "boolean" ? parsed.canvas.freehandAutoApply : false,
 +        freehandPreserveOriginal: typeof parsed.canvas?.freehandPreserveOriginal === "boolean" ? parsed.canvas.freehandPreserveOriginal : true,
 +        freehandAutoSmoothNodes: typeof parsed.canvas?.freehandAutoSmoothNodes === "boolean" ? parsed.canvas.freehandAutoSmoothNodes : true,
@@ -353,7 +377,7 @@ index 4850a87e..48491dc5 100644
    if (!Number.isFinite(value)) {
      return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
 diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
-index af0a7abe..a4e1db8e 100644
+index af0a7abe..3508c0e0 100644
 --- a/packages/app/src/settings/types.ts
 +++ b/packages/app/src/settings/types.ts
 @@ -9,6 +9,15 @@ export type EditorSettings = {
@@ -399,14 +423,15 @@ index af0a7abe..a4e1db8e 100644
    rendering: RenderingSettings;
  };
  
-@@ -81,13 +101,42 @@ export const DEFAULT_SETTINGS: AppSettings = {
+@@ -81,13 +101,43 @@ export const DEFAULT_SETTINGS: AppSettings = {
      formatterMaxLineLength: 100
    },
    canvas: {
 +    freehandSimplificationUnits: 0.25,
 +    freehandSmoothingUnits: 0,    freehandAutoApply: false,
 +    freehandPreserveOriginal: true,
-+    freehandAutoSmoothNodes: true,    latticeLock: false,
++    freehandAutoSmoothNodes: true,
++    latticeLock: true,
      gridSize: "standard",
 +    gridOpacity: 70,
      handleSizePx: 9,
@@ -607,7 +632,7 @@ index 00000000..85ec8212
 +    lastEditWarningToken: next.lastEditWarningToken + (released ? 1 : 0) };
 +}
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6e..da547b69 100644
+index e0845d6e..ac7a9f3d 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
 @@ -1,3 +1,5 @@
@@ -636,15 +661,15 @@ index e0845d6e..da547b69 100644
      hoveredElementId: null,
      activeCanvasDragKind: null,
      activeSourceScrubSourceId: null,
-@@ -51,6 +48,7 @@ function initialUiState(): WorkspaceEphemeralState {
+@@ -51,7 +48,6 @@ function initialUiState(): WorkspaceEphemeralState {
      showGrid: true,
      showTransparencyGrid: false,
      snapModes: {
-+      latticeLock: loadSettings().canvas.latticeLock,
-       grid: true,
+-      grid: true,
        guides: true,
        points: true,
-@@ -60,6 +58,7 @@ function initialUiState(): WorkspaceEphemeralState {
+       gaps: true
+@@ -60,6 +56,7 @@ function initialUiState(): WorkspaceEphemeralState {
      showGuides: true,
      showDocumentBounds: true,
      freehandSmoothingPx: DEFAULT_FREEHAND_SMOOTHING_PX,
@@ -652,7 +677,7 @@ index e0845d6e..da547b69 100644
      bucketFillColor: DEFAULT_BUCKET_FILL_COLOR,
      selectedAddShape: DEFAULT_ADD_SHAPE_PRESET,
      selectedAddMatrixRows: DEFAULT_ADD_MATRIX_ROWS,
-@@ -67,7 +66,7 @@ function initialUiState(): WorkspaceEphemeralState {
+@@ -67,7 +64,7 @@ function initialUiState(): WorkspaceEphemeralState {
      creationStrokeColor: DEFAULT_CREATION_STROKE_COLOR,
      creationFillColor: DEFAULT_CREATION_FILL_COLOR,
      fitToContentRequestToken: 0,
@@ -661,7 +686,7 @@ index e0845d6e..da547b69 100644
      canvasFitToContentScale: null,
      zoomRequestToken: 0,
      zoomRequestDirection: null,
-@@ -100,6 +99,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
+@@ -100,6 +97,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
      case "align": return "Aligned elements";
      case "distribute": return "Distributed elements";
      case "flatten-foreach": return "Flattened foreach";
@@ -669,7 +694,7 @@ index e0845d6e..da547b69 100644
    }
  }
  
-@@ -107,63 +107,7 @@ function prependDeveloperLog(
+@@ -107,63 +105,7 @@ function prependDeveloperLog(
    logs: WorkspaceEphemeralState["developerLogs"],
    entry: WorkspaceEphemeralState["developerLogs"][number]
  ): WorkspaceEphemeralState["developerLogs"] {
@@ -734,7 +759,7 @@ index e0845d6e..da547b69 100644
  }
  
  function applyEditWarningToDocument(doc: DocumentSession, message: string | null): DocumentSession {
-@@ -199,7 +143,8 @@ function updateDocument(
+@@ -199,7 +141,8 @@ function updateDocument(
    if (!current) {
      return workspace;
    }
@@ -744,7 +769,7 @@ index e0845d6e..da547b69 100644
    if (next === current) {
      return workspace;
    }
-@@ -749,6 +694,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -749,6 +692,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        if (activeDoc.assistantLockReason) {
          return state;
        }
@@ -755,7 +780,7 @@ index e0845d6e..da547b69 100644
        let result: EditActionResult;
        if (
          action.precomputedResult != null &&
-@@ -934,6 +883,48 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -934,6 +881,48 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
  
@@ -804,7 +829,7 @@ index e0845d6e..da547b69 100644
      case "SET_SOURCE_TRANSIENT": {
        const documentId = activeDocumentIdFromAction(state, action.documentId);
        workspace = updateDocument(workspace, documentId, (doc) => {
-@@ -1027,6 +1018,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1027,6 +1016,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
  
@@ -823,7 +848,7 @@ index e0845d6e..da547b69 100644
      case "SELECT": {
        workspace = updateDocument(workspace, activeId, (doc) => {
          if (action.additive) {
-@@ -1094,6 +1097,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1094,6 +1095,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, toolMode: action.mode };
        break;
  
@@ -834,7 +859,7 @@ index e0845d6e..da547b69 100644
      case "SET_CANVAS_TRANSFORM":
        ui = { ...ui, canvasTransform: action.transform };
        break;
-@@ -1108,6 +1115,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1108,6 +1113,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, activeCanvasDragKind: action.kind };
        break;
  
@@ -846,7 +871,7 @@ index e0845d6e..da547b69 100644
        const nextValue = Math.max(
          FREEHAND_SMOOTHING_MIN_PX,
 diff --git a/packages/app/src/store/types.ts b/packages/app/src/store/types.ts
-index 450957d0..9b7e5a5d 100644
+index 450957d0..e1cbc4df 100644
 --- a/packages/app/src/store/types.ts
 +++ b/packages/app/src/store/types.ts
 @@ -11,9 +11,13 @@ import type {
@@ -863,7 +888,7 @@ index 450957d0..9b7e5a5d 100644
    | "addMatrix"
    | "addShape"
    | "addPath"
-@@ -23,13 +27,15 @@ export type ToolMode =
+@@ -23,14 +27,14 @@ export type ToolMode =
    | "addRect"
    | "addEllipse"
    | "addCircle"
@@ -873,14 +898,14 @@ index 450957d0..9b7e5a5d 100644
  export type CanvasDragKind = "element" | "resize" | "rotate" | "handle" | "pan" | "marquee" | "tool-create";
  export type CanvasAid = "grid" | "rulers" | "guides" | "transparencyGrid" | "documentBounds";
 -export type SnapMode = "grid" | "guides" | "points" | "gaps";
-+export type SnapMode = "grid" | "guides" | "points" | "gaps" | "latticeLock";
++export type SnapMode = "guides" | "points" | "gaps";
  
  export type SnapModes = {
-+  latticeLock: boolean;
-   grid: boolean;
+-  grid: boolean;
    guides: boolean;
    points: boolean;
-@@ -81,7 +87,8 @@ export type HistoryEntry = {
+   gaps: boolean;
+@@ -81,7 +85,8 @@ export type HistoryEntry = {
      | "reorder"
      | "align"
      | "distribute"
@@ -890,7 +915,7 @@ index 450957d0..9b7e5a5d 100644
    label: string;
    /** Optional key used to coalesce drag updates into one undo step. */
    mergeKey?: string;
-@@ -137,6 +144,7 @@ export type DocumentSession = {
+@@ -137,6 +142,7 @@ export type DocumentSession = {
    history: HistoryEntry[];
    historyIndex: number;
    selectedElementIds: ReadonlySet<string>;
@@ -898,7 +923,7 @@ index 450957d0..9b7e5a5d 100644
    focusedScopeId: string | null;
    activeHandleId: string | null;
    fileRef: DocumentFileRef | null;
-@@ -170,6 +178,7 @@ export type WorkspaceEphemeralState = {
+@@ -170,6 +176,7 @@ export type WorkspaceEphemeralState = {
    // ── canvas slice ─────────────────────────────────────────────────────────────
    toolMode: ToolMode;
    canvasTransform: CanvasTransform;
@@ -906,7 +931,7 @@ index 450957d0..9b7e5a5d 100644
    hoveredElementId: string | null;
    activeCanvasDragKind: CanvasDragKind | null;
    /** Source id currently being edited via source-number scrubbing. */
-@@ -183,6 +192,7 @@ export type WorkspaceEphemeralState = {
+@@ -183,6 +190,7 @@ export type WorkspaceEphemeralState = {
    showGuides: boolean;
    showDocumentBounds: boolean;
    freehandSmoothingPx: number;
@@ -914,7 +939,7 @@ index 450957d0..9b7e5a5d 100644
    bucketFillColor: string;
    selectedAddShape: Exclude<NodeShapePresetId, "custom">;
    selectedAddMatrixRows: number;
-@@ -247,6 +257,7 @@ export type EditorState = {
+@@ -247,6 +255,7 @@ export type EditorState = {
  
    // ── selection slice ──────────────────────────────────────────────────────────
    selectedElementIds: ReadonlySet<string>;
@@ -922,7 +947,7 @@ index 450957d0..9b7e5a5d 100644
    focusedScopeId: string | null;
    activeHandleId: string | null;
    activeDocumentId: string;
-@@ -258,6 +269,7 @@ export type EditorState = {
+@@ -258,6 +267,7 @@ export type EditorState = {
    // ── canvas slice ─────────────────────────────────────────────────────────────
    toolMode: ToolMode;
    canvasTransform: CanvasTransform;
@@ -930,7 +955,7 @@ index 450957d0..9b7e5a5d 100644
    hoveredElementId: string | null;
    activeCanvasDragKind: CanvasDragKind | null;
    /** Source id currently being edited via source-number scrubbing. */
-@@ -271,6 +283,7 @@ export type EditorState = {
+@@ -271,6 +281,7 @@ export type EditorState = {
    showGuides: boolean;
    showDocumentBounds: boolean;
    freehandSmoothingPx: number;
@@ -938,7 +963,7 @@ index 450957d0..9b7e5a5d 100644
    bucketFillColor: string;
    selectedAddShape: Exclude<NodeShapePresetId, "custom">;
    selectedAddMatrixRows: number;
-@@ -354,6 +367,15 @@ export type EditorAction =
+@@ -354,6 +365,15 @@ export type EditorAction =
        source: string;
        changedSourceIds?: string[] | null;
      }
@@ -954,7 +979,7 @@ index 450957d0..9b7e5a5d 100644
    | { type: "COMPUTE_REQUESTED"; requestId: string; documentId?: string }
    | { type: "SNAPSHOT_READY"; requestId: string; snapshot: SessionSnapshot; documentId?: string }
    | { type: "REORDER_TABS"; fromId: string; toId: string }
-@@ -387,6 +409,7 @@ export type EditorAction =
+@@ -387,6 +407,7 @@ export type EditorAction =
    | { type: "UNDO" }
    | { type: "REDO" }
    // Selection
@@ -962,7 +987,7 @@ index 450957d0..9b7e5a5d 100644
    | { type: "SELECT"; id: string; additive: boolean }
    | { type: "SELECT_RANGE"; ids: string[] }
    | { type: "CLEAR_SELECTION"; preserveFocusedScope?: boolean }
-@@ -394,10 +417,12 @@ export type EditorAction =
+@@ -394,10 +415,12 @@ export type EditorAction =
    | { type: "SET_ACTIVE_HANDLE"; handleId: string | null }
    // Canvas
    | { type: "SET_TOOL_MODE"; mode: ToolMode }
@@ -1099,24 +1124,10 @@ index 828d4bfb..1ac9eac5 100644
        })),
      tabOrder: [...state.tabOrder],
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..15ef54a9 100644
+index 5818d92b..62111ee9 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
-@@ -262,6 +262,13 @@ export function App() {
-     canvasInvert: s.settings.general.canvasInvert,
-     mathJaxFont: s.settings.rendering.mathJaxFont
-   })));
-+  const latticeLockPreference = useSettingsStore((state) => state.settings.canvas.latticeLock);
-+  useEffect(() => {
-+    const current = useEditorStore.getState();
-+    if (current.snapModes.latticeLock !== latticeLockPreference) {
-+      current.dispatch({ type: "TOGGLE_SNAP_MODE", mode: "latticeLock" });
-+    }
-+  }, [latticeLockPreference]);
-   const platform = getActiveEditorPlatform();
-   const menuTarget = menuTargetFromPlatformId(platform.id);
-   const menuDefinition = useMemo(() => filterAppMenuDefinitionForTarget(APP_MENU_DEFINITION, menuTarget), [menuTarget]);
-@@ -298,7 +305,6 @@ export function App() {
+@@ -298,7 +298,6 @@ export function App() {
    } | null>(null);
    const [svgExportSvgResult, setSvgExportSvgResult] = useState<EmitSvgResult | null>(null);
    const [pngExportSvgResult, setPngExportSvgResult] = useState<EmitSvgResult | null>(null);
@@ -1124,7 +1135,7 @@ index 5818d92b..15ef54a9 100644
    const [pendingClose, setPendingClose] = useState<{ intent: CloseIntent; dirtyDocumentIds: string[] } | null>(null);
    const [pendingFileConflict, setPendingFileConflict] = useState<PendingFileConflict | null>(null);
    const requestCloseIntentRef = useRef<(intent: CloseIntent) => void>(() => {});
-@@ -1534,7 +1540,6 @@ export function App() {
+@@ -1534,7 +1533,6 @@ export function App() {
          };
        },
        setCanvasTransform: (transform) => {
@@ -1132,7 +1143,7 @@ index 5818d92b..15ef54a9 100644
          requestAnimationFrame(() => {
            dispatch({ type: "SET_CANVAS_TRANSFORM", transform });
          });
-@@ -1596,17 +1601,6 @@ export function App() {
+@@ -1596,17 +1594,6 @@ export function App() {
      });
    }, [platform.id, snapshot.source, source]);
  
@@ -1150,7 +1161,7 @@ index 5818d92b..15ef54a9 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1709,13 +1703,6 @@ export function App() {
+@@ -1709,13 +1696,6 @@ export function App() {
          return;
        }
  
@@ -1164,7 +1175,7 @@ index 5818d92b..15ef54a9 100644
        // Ctrl/Cmd+Shift+E: edit equation when possible, otherwise insert equation.
        if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && key === "e") {
          const edited = runtime.runCommand(APP_MENU_COMMAND_IDS.EDIT_EQUATION, "shortcut");
-@@ -1758,19 +1745,14 @@ export function App() {
+@@ -1758,19 +1738,14 @@ export function App() {
            if (!canvasShortcutContext) {
              return;
            }
@@ -1186,7 +1197,7 @@ index 5818d92b..15ef54a9 100644
              return;
            }
            // If there's a text selection anywhere, let native copy work for it.
-@@ -1786,7 +1768,7 @@ export function App() {
+@@ -1786,7 +1761,7 @@ export function App() {
  
          if (!e.shiftKey && key === "x") {
            // If canvas is focused, let the native cut event fire there.
@@ -1195,7 +1206,7 @@ index 5818d92b..15ef54a9 100644
              return;
            }
            // If there's a text selection anywhere, let native cut work for it.
-@@ -1802,7 +1784,7 @@ export function App() {
+@@ -1802,7 +1777,7 @@ export function App() {
  
          if (!e.shiftKey && key === "v") {
            // If canvas is focused, let the native paste event fire there (supports DataTransfer).
@@ -1204,7 +1215,7 @@ index 5818d92b..15ef54a9 100644
              return;
            }
            // Otherwise, paste directly via async clipboard API.
-@@ -1872,7 +1854,6 @@ export function App() {
+@@ -1872,7 +1847,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -1212,7 +1223,7 @@ index 5818d92b..15ef54a9 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1872,6 @@ export function App() {
+@@ -1891,7 +1865,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -1220,7 +1231,7 @@ index 5818d92b..15ef54a9 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +2010,17 @@ export function App() {
+@@ -2030,13 +2003,17 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -1239,7 +1250,7 @@ index 5818d92b..15ef54a9 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,11 +2033,11 @@ export function App() {
+@@ -2049,11 +2026,11 @@ export function App() {
              : null
          }
        />
@@ -1253,7 +1264,7 @@ index 5818d92b..15ef54a9 100644
        <div className={css.body}>
          <DockLayout
            repeatPreviewModel={repeatPreviewModel}
-@@ -2062,9 +2046,9 @@ export function App() {
+@@ -2062,9 +2039,9 @@ export function App() {
            onNewChat={handleAssistantNewChat}
          />
        </div>
@@ -3716,7 +3727,7 @@ index 0ddde08e..dcd5a6c1 100644
 +.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
 +.insertChoice:disabled { opacity: .5; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..0397005e 100644
+index a3293df2..dbc5c4ca 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -3747,7 +3758,7 @@ index a3293df2..0397005e 100644
  import css from "./Toolbar.module.css";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
-@@ -26,26 +29,58 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,26 +29,59 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -3793,6 +3804,7 @@ index a3293df2..0397005e 100644
 -  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | null>(null);
 +  const settings = useSettingsStore((s) => s.settings);
 +  const updateToolbarSettings = useSettingsStore((s) => s.updateToolbarSettings);
++  const updateCanvasSettings = useSettingsStore((s) => s.updateCanvasSettings);
 +  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | "color" | "insert" | null>(null);
 +  const [insertSection, setInsertSection] = useState<"all" | "shape" | "matrix">("all");
 +  const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
@@ -3808,7 +3820,7 @@ index a3293df2..0397005e 100644
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +91,145 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +92,145 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -3955,7 +3967,7 @@ index a3293df2..0397005e 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -92,7 +262,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -92,7 +263,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
    const renderPopup = (popupKind: ToolPopupKind) => {
      if (popupKind === "bucket-color") {
        return (
@@ -3964,7 +3976,7 @@ index a3293df2..0397005e 100644
            <ColorPicker
              ariaLabel="Bucket fill color"
              value={bucketFillColor}
-@@ -111,7 +281,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +282,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -3982,7 +3994,7 @@ index a3293df2..0397005e 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +305,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +306,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -4001,7 +4013,7 @@ index a3293df2..0397005e 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +361,174 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +362,174 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -4176,7 +4188,7 @@ index a3293df2..0397005e 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +557,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +558,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -4188,7 +4200,7 @@ index a3293df2..0397005e 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +617,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +618,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -4196,7 +4208,7 @@ index a3293df2..0397005e 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +660,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +661,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -4204,7 +4216,7 @@ index a3293df2..0397005e 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +676,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +677,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4226,7 +4238,7 @@ index a3293df2..0397005e 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +698,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +699,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -4234,7 +4246,7 @@ index a3293df2..0397005e 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +706,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +707,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -4246,7 +4258,7 @@ index a3293df2..0397005e 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +719,68 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +720,73 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4293,6 +4305,11 @@ index a3293df2..0397005e 100644
 +        <button type="button" className={css.btn} aria-label="Properties" onClick={onToggleProperties}>⚙</button>
 +        <button type="button" className={css.btn} aria-label="Settings" onClick={onOpenSettings}>☰</button>
 +        <ZoomDisplayControl triggerClassName={`${css.btn} ${css.zoomTrigger}`} />
++        <RenderedTooltip content={settings.canvas.latticeLock ? "Points land on the lattice" : "Points move freely"}>
++          <button type="button" className={[css.btn, settings.canvas.latticeLock ? css.btnActive : ""].filter(Boolean).join(" ")}
++            aria-label="Lock to lattice" aria-pressed={settings.canvas.latticeLock}
++            onClick={() => updateCanvasSettings({ latticeLock: !settings.canvas.latticeLock })}>⌗</button>
++        </RenderedTooltip>
 +      </div>
 +      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("erase")}
 +      {renderEmbeddedTool("addFreehand")}{renderInsertButton()}
@@ -4317,7 +4334,7 @@ index a3293df2..0397005e 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +791,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +797,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -4331,7 +4348,7 @@ index a3293df2..0397005e 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +807,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +813,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -4340,7 +4357,7 @@ index a3293df2..0397005e 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +832,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +838,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -4503,12 +4520,11 @@ index 00000000..a3cd7fb7
 +.action[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/ZoomDisplayControl.tsx b/packages/app/src/ui/ZoomDisplayControl.tsx
 new file mode 100644
-index 00000000..58508731
+index 00000000..cfa5304b
 --- /dev/null
 +++ b/packages/app/src/ui/ZoomDisplayControl.tsx
-@@ -0,0 +1,60 @@
+@@ -0,0 +1,52 @@
 +import { useState } from "react";
-+import { useSettingsStore } from "../settings/useSettingsStore";
 +import { useEditorStore } from "../store/store";
 +import { CANVAS_ZOOM_BASE_SCALE } from "../store/workspace-state";
 +import { ToolbarToolPopup, ToolbarPopupSection } from "./ToolbarToolPopup";
@@ -4518,17 +4534,15 @@ index 00000000..58508731
 +const MIN_ZOOM_PERCENT = 25;
 +const MAX_ZOOM_PERCENT = 400;
 +
-+/** Zoom, snapping, lattice lock, and canvas aids behind one control showing the zoom percentage. */
++/** Zoom and canvas aids behind one control showing the zoom percentage. */
 +export function ZoomDisplayControl({ triggerClassName }: { triggerClassName: string }) {
 +  const [open, setOpen] = useState(false);
-+  const snapModes = useEditorStore((state) => state.snapModes);
 +  const showGrid = useEditorStore((state) => state.showGrid);
 +  const showRulers = useEditorStore((state) => state.showRulers);
 +  const showDocumentBounds = useEditorStore((state) => state.showDocumentBounds);
 +  const canvasTransform = useEditorStore((state) => state.canvasTransform);
 +  const canvasFitToContentScale = useEditorStore((state) => state.canvasFitToContentScale);
 +  const dispatch = useEditorStore((state) => state.dispatch);
-+  const updateCanvasSettings = useSettingsStore((state) => state.updateCanvasSettings);
 +
 +  const zoomPercent = Math.round((canvasTransform.scale / CANVAS_ZOOM_BASE_SCALE) * 100);
 +  const fitToContentDoubleZoomPercent = canvasFitToContentScale == null
@@ -4550,11 +4564,6 @@ index 00000000..58508731
 +        <button type="button" className={css.action} onClick={() => dispatch({ type: "REQUEST_FIT_TO_CONTENT" })}>Fit diagram</button>
 +        <label>Zoom <input type="range" min={MIN_ZOOM_PERCENT} max={maxZoomPercent} value={sliderZoomPercent}
 +          aria-label="Zoom" onChange={(event) => requestZoomPercent(Number(event.currentTarget.value))} /></label>
-+        <button type="button" className={css.action} aria-pressed={snapModes.grid}
-+          onClick={() => dispatch({ type: "TOGGLE_SNAP_MODE", mode: "grid" })}>Snap to grid</button>
-+        <button type="button" className={css.action} aria-pressed={snapModes.latticeLock} onClick={() => {
-+          dispatch({ type: "TOGGLE_SNAP_MODE", mode: "latticeLock" }); updateCanvasSettings({ latticeLock: !snapModes.latticeLock });
-+        }}>Lock geometry to lattice</button>
 +        <div className={css.levels}>{zoomOptions.map((level) => <button type="button" key={level}
 +          className={css.action} aria-pressed={zoomPercent === level} onClick={() => requestZoomPercent(level)}>{level}%</button>)}</div>
 +        {([{ aid: "grid", label: "Grid", checked: showGrid }, { aid: "rulers", label: "Rulers", checked: showRulers },
@@ -4713,7 +4722,7 @@ index cf4cf2cf..0c7d3db4 100644
    pointer-events: none;
  }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..8eaa5c60 100644
+index 4e22ccfa..caa3e3e3 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,16 @@ preflightPositionNodeRelativeToAction,
@@ -4882,18 +4891,19 @@ index 4e22ccfa..8eaa5c60 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +909,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +909,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
 -  const { gridSize, handleSizePx, zoomSpeed, snapHapticsEnabled, mathJaxFont } = useSettingsStore(useShallow((s) => ({
-+  const { gridSize, gridOpacity, handleSizePx, zoomSpeed, snapHapticsEnabled, mathJaxFont } = useSettingsStore(useShallow((s) => ({
++  const { latticeLock, gridSize, gridOpacity, handleSizePx, zoomSpeed, snapHapticsEnabled, mathJaxFont } = useSettingsStore(useShallow((s) => ({
++    latticeLock: s.settings.canvas.latticeLock,
      gridSize: s.settings.canvas.gridSize,
 +    gridOpacity: s.settings.canvas.gridOpacity,
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,14 +954,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +955,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -4910,7 +4920,7 @@ index 4e22ccfa..8eaa5c60 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -912,11 +977,87 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -912,11 +978,87 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
@@ -4999,7 +5009,7 @@ index 4e22ccfa..8eaa5c60 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1074,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1075,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -5008,7 +5018,7 @@ index 4e22ccfa..8eaa5c60 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1085,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1086,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -5022,7 +5032,7 @@ index 4e22ccfa..8eaa5c60 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1132,6 +1264,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,6 +1265,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -5030,7 +5040,7 @@ index 4e22ccfa..8eaa5c60 100644
      onOpenEditEquation: handleOpenEditEquationCommand,
      activeHandleIdOverride: contextMenuHandleIdOverride
    });
-@@ -1157,15 +1290,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1157,15 +1291,22 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
    const pathDraftRef = useRef<PathToolDraft | null>(null);
@@ -5054,7 +5064,7 @@ index 4e22ccfa..8eaa5c60 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1300,7 +1440,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1441,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -5062,7 +5072,7 @@ index 4e22ccfa..8eaa5c60 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1460,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1461,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -5073,7 +5083,7 @@ index 4e22ccfa..8eaa5c60 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1644,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1645,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -5097,7 +5107,7 @@ index 4e22ccfa..8eaa5c60 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1659,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1660,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -5111,7 +5121,7 @@ index 4e22ccfa..8eaa5c60 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1810,7 +1926,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,7 +1927,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -5119,7 +5129,7 @@ index 4e22ccfa..8eaa5c60 100644
      svgResult,
      canvasTransform,
      marqueeDraft,
-@@ -1819,10 +1934,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1819,10 +1935,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      ROTATE_HANDLE_OFFSET_PX
    });
  
@@ -5143,7 +5153,7 @@ index 4e22ccfa..8eaa5c60 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,6 +1965,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,9 +1966,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -5152,11 +5162,15 @@ index 4e22ccfa..8eaa5c60 100644
      showGuides,
      guides,
      guidePreview,
-@@ -1857,44 +1986,49 @@ export const CanvasPanel = memo(function CanvasPanel({
++    latticeLock,
+     snapModes,
+     gridMinorTargetPx,
+     canvasTransform,
+@@ -1857,44 +1988,49 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
-+    latticeLock: snapModes.latticeLock,
++    latticeLock,
 +    latticeTransform: snapSettingsPatch.latticeTransform,
      toolMode,
      toolDraft,
@@ -5211,7 +5225,7 @@ index 4e22ccfa..8eaa5c60 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -2055,17 +2189,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2191,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -5236,7 +5250,7 @@ index 4e22ccfa..8eaa5c60 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2213,220 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2215,220 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -5481,7 +5495,7 @@ index 4e22ccfa..8eaa5c60 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2441,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2443,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -5489,7 +5503,7 @@ index 4e22ccfa..8eaa5c60 100644
          return;
        }
  
-@@ -2141,7 +2449,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2451,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -5497,7 +5511,7 @@ index 4e22ccfa..8eaa5c60 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2465,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2467,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -5505,7 +5519,7 @@ index 4e22ccfa..8eaa5c60 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,7 +2479,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,7 +2481,6 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -5513,7 +5527,7 @@ index 4e22ccfa..8eaa5c60 100644
      },
      [applyActionWithFeedback, creationStrokeColor, dispatch, setDragState]
    );
-@@ -3064,9 +3369,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3371,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -5523,7 +5537,7 @@ index 4e22ccfa..8eaa5c60 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3147,7 +3449,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3451,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -5534,7 +5548,7 @@ index 4e22ccfa..8eaa5c60 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3475,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3477,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -5544,7 +5558,7 @@ index 4e22ccfa..8eaa5c60 100644
      ]
    );
  
-@@ -3192,6 +3497,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3499,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -5623,7 +5637,7 @@ index 4e22ccfa..8eaa5c60 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3597,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3599,15 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -5639,7 +5653,7 @@ index 4e22ccfa..8eaa5c60 100644
      snapshot,
      source,
      setWarning,
-@@ -3267,16 +3647,231 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,16 +3649,231 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -5873,7 +5887,7 @@ index 4e22ccfa..8eaa5c60 100644
    );
  
    const {
-@@ -3306,6 +3901,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +3903,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -5881,7 +5895,7 @@ index 4e22ccfa..8eaa5c60 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,12 +3926,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,12 +3928,11 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -5895,7 +5909,7 @@ index 4e22ccfa..8eaa5c60 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -3345,7 +3940,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3345,7 +3942,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomSpeed,
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
@@ -5903,7 +5917,7 @@ index 4e22ccfa..8eaa5c60 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,25 +4043,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,25 +4045,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -5929,7 +5943,7 @@ index 4e22ccfa..8eaa5c60 100644
    useEffect(() => {
      if (toolMode === "select") {
        setPathDraft(null);
-@@ -3706,15 +4281,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4283,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -5953,7 +5967,7 @@ index 4e22ccfa..8eaa5c60 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4394,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4396,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -5961,7 +5975,7 @@ index 4e22ccfa..8eaa5c60 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4407,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4409,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -5969,7 +5983,7 @@ index 4e22ccfa..8eaa5c60 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4418,72 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4420,72 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -6042,7 +6056,7 @@ index 4e22ccfa..8eaa5c60 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4506,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4508,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -6065,7 +6079,7 @@ index 4e22ccfa..8eaa5c60 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4537,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4539,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -6080,7 +6094,7 @@ index 4e22ccfa..8eaa5c60 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4563,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4565,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -6114,7 +6128,7 @@ index 4e22ccfa..8eaa5c60 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4595,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4597,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6124,7 +6138,7 @@ index 4e22ccfa..8eaa5c60 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4608,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4610,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6154,7 +6168,7 @@ index 4e22ccfa..8eaa5c60 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +4657,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +4659,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -6162,7 +6176,7 @@ index 4e22ccfa..8eaa5c60 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +4666,80 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4668,80 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -8522,7 +8536,7 @@ index c69a45af..785f3678 100644
        tryInsertPathWorldPoint
      ]
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
-index 7113da3e..594d9611 100644
+index 7113da3e..6f086a32 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
 @@ -1,9 +1,11 @@
@@ -8549,7 +8563,7 @@ index 7113da3e..594d9611 100644
    verticalMinor: number[];
    verticalMajor: number[];
    verticalAxisX: number | null;
-@@ -34,10 +39,13 @@ export type GridLines = {
+@@ -34,12 +39,14 @@ export type GridLines = {
  };
  
  export type UseCanvasGuidesAndRulersArgs = {
@@ -8558,12 +8572,14 @@ index 7113da3e..594d9611 100644
    showGuides: boolean;
    guides: GuidesState;
    guidePreview: GuidePreview | null;
++  latticeLock: boolean;
    snapModes: {
-+    latticeLock?: boolean;
      guides: boolean;
-     grid: boolean;
+-    grid: boolean;
      points: boolean;
-@@ -58,6 +66,8 @@ export type UseCanvasGuidesAndRulersArgs = {
+     gaps: boolean;
+   };
+@@ -58,9 +65,12 @@ export type UseCanvasGuidesAndRulersArgs = {
  
  export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
    const {
@@ -8572,6 +8588,10 @@ index 7113da3e..594d9611 100644
      showGuides,
      guides,
      guidePreview,
++    latticeLock,
+     snapModes,
+     gridMinorTargetPx,
+     canvasTransform,
 @@ -75,6 +85,15 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
      LEFT_RULER_DRAG_SOURCE_WIDTH_PX
    } = args;
@@ -8588,25 +8608,29 @@ index 7113da3e..594d9611 100644
    const snapGuideInput = useMemo(
      () => ({
        x: showGuides && snapModes.guides ? guides.vertical : [],
-@@ -85,6 +104,8 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -85,10 +104,8 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
  
    const snapSettingsPatch = useMemo(
      () => ({
-+      latticeLock: snapModes.latticeLock ?? false,
+-      grid: {
+-        enabled: snapModes.grid,
+-        minorTargetPx: px(gridMinorTargetPx)
+-      },
++      latticeLock,
 +      latticeTransform,
-       grid: {
-         enabled: snapModes.grid,
-         minorTargetPx: px(gridMinorTargetPx)
-@@ -96,7 +117,7 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+       points: {
+         enabled: snapModes.points
+       },
+@@ -96,7 +113,7 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
          enabled: snapModes.gaps
        }
      }),
 -    [snapModes.gaps, snapModes.grid, snapModes.points, gridMinorTargetPx]
-+    [latticeTransform, snapModes.latticeLock, snapModes.gaps, snapModes.grid, snapModes.points, gridMinorTargetPx]
++    [latticeTransform, latticeLock, snapModes.gaps, snapModes.points]
    );
  
    const renderedGuides = useMemo(() => {
-@@ -133,7 +154,7 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -133,7 +150,7 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
    );
  
    const rulers = useMemo(() => {
@@ -8615,7 +8639,7 @@ index 7113da3e..594d9611 100644
        return {
          topTicks: [] as RulerTick[],
          leftTicks: [] as RulerTick[]
-@@ -142,74 +163,74 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -142,74 +159,74 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
  
      const { majorStep, minorStep } = overlayGridSteps;
      const topTicks = buildTicks(
@@ -8718,7 +8742,7 @@ index 7113da3e..594d9611 100644
  
    const resolveGuideFromClient = useCallback(
      (orientation: GuideOrientation, clientPoint: ClientPoint): { value: number; overViewport: boolean } | null => {
-@@ -371,7 +392,3 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -371,7 +388,3 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
  function isZeroGridValue(value: number): boolean {
    return Math.abs(value) < 1e-8;
  }
@@ -9899,10 +9923,10 @@ index 44b105be..f1cfbce3 100644
      logClipboardDebug("Clipboard write unavailable: navigator.clipboard missing.");
      return false;
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
-index 3ab44838..1f0c5155 100644
+index 3ab44838..76a2966c 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts
 +++ b/packages/app/src/ui/editor-command-runtime.ts
-@@ -98,7 +98,6 @@ type RuntimeInput = {
+@@ -98,11 +98,11 @@ type RuntimeInput = {
    tabCount: number;
    dirty: boolean;
    fileRef: DocumentFileRef | null;
@@ -9910,7 +9934,12 @@ index 3ab44838..1f0c5155 100644
    showGrid: boolean;
    showTransparencyGrid: boolean;
    snapModes: SnapModes;
-@@ -129,6 +128,7 @@ type RuntimeInput = {
+   snapHapticsEnabled: boolean;
++  latticeLock: boolean;
+   showRulers: boolean;
+   showGuides: boolean;
+   showDocumentBounds: boolean;
+@@ -129,6 +129,7 @@ type RuntimeInput = {
    onAddNodeAdornment?: (kind: "label" | "pin") => void;
    onPositionNodeRelativeTo?: () => void;
    onConvertNodePositionToAbsolute?: () => void;
@@ -9918,7 +9947,7 @@ index 3ab44838..1f0c5155 100644
    onShowCompiledPicture?: () => void;
    onOpenSettings?: () => void;
    onFocusAssistant?: () => void;
-@@ -167,7 +167,6 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -167,11 +168,11 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      tabCount,
      dirty,
      fileRef,
@@ -9926,7 +9955,12 @@ index 3ab44838..1f0c5155 100644
      showGrid,
      showTransparencyGrid,
      snapModes,
-@@ -198,6 +197,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+     snapHapticsEnabled,
++    latticeLock,
+     showRulers,
+     showGuides,
+     showDocumentBounds,
+@@ -198,6 +199,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      onAddNodeAdornment,
      onPositionNodeRelativeTo,
      onConvertNodePositionToAbsolute,
@@ -9934,7 +9968,7 @@ index 3ab44838..1f0c5155 100644
      onShowCompiledPicture,
      onOpenSettings,
      onFocusAssistant,
-@@ -799,6 +799,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -799,6 +801,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
          splitSelectedPath(commandContext);
        }
      },
@@ -9945,7 +9979,7 @@ index 3ab44838..1f0c5155 100644
      [APP_MENU_COMMAND_IDS.PATH_JOIN]: {
        enabled: availability["path-join"].enabled,
        run: () => {
-@@ -882,14 +886,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -882,14 +888,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        enabled: nodePositioningAction === "convert-absolute" && onConvertNodePositionToAbsolute != null,
        run: () => onConvertNodePositionToAbsolute?.()
      },
@@ -9966,7 +10000,7 @@ index 3ab44838..1f0c5155 100644
          dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
        }
      },
-@@ -911,9 +916,9 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -911,15 +918,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        checked: showTransparencyGrid,
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" }); }
      },
@@ -9977,8 +10011,17 @@ index 3ab44838..1f0c5155 100644
 +      checked: showDocumentBounds,
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "documentBounds" }); }
      },
-     [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID]: {
-@@ -1098,6 +1103,7 @@ export function useEditorCommandRuntime(
+-    [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID]: {
++    [APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK]: {
+       enabled: true,
+-      checked: snapModes.grid,
+-      run: () => { dispatch({ type: "TOGGLE_SNAP_MODE", mode: "grid" }); }
++      checked: latticeLock,
++      run: () => { updateCanvasSettings({ latticeLock: !latticeLock }); }
+     },
+     [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES]: {
+       enabled: true,
+@@ -1098,6 +1105,7 @@ export function useEditorCommandRuntime(
      onAddNodeAdornment?: (kind: "label" | "pin") => void;
      onPositionNodeRelativeTo?: () => void;
      onConvertNodePositionToAbsolute?: () => void;
@@ -9986,7 +10029,7 @@ index 3ab44838..1f0c5155 100644
      onShowCompiledPicture?: () => void;
      onOpenSettings?: () => void;
      onFocusAssistant?: () => void;
-@@ -1126,7 +1132,6 @@ export function useEditorCommandRuntime(
+@@ -1126,11 +1134,11 @@ export function useEditorCommandRuntime(
    const tabCount = useEditorStore((s) => s.tabOrder.length);
    const dirty = useEditorStore((s) => s.documents[s.activeDocumentId]?.dirty ?? false);
    const fileRef = useEditorStore((s) => s.documents[s.activeDocumentId]?.fileRef ?? null);
@@ -9994,7 +10037,12 @@ index 3ab44838..1f0c5155 100644
    const showGrid = useEditorStore((s) => s.showGrid);
    const showTransparencyGrid = useEditorStore((s) => s.showTransparencyGrid);
    const snapModes = useEditorStore((s) => s.snapModes);
-@@ -1203,7 +1208,6 @@ export function useEditorCommandRuntime(
+   const snapHapticsEnabled = useSettingsStore((s) => s.settings.canvas.snapHapticsEnabled);
++  const latticeLock = useSettingsStore((s) => s.settings.canvas.latticeLock);
+   const showRulers = useEditorStore((s) => s.showRulers);
+   const showGuides = useEditorStore((s) => s.showGuides);
+   const showDocumentBounds = useEditorStore((s) => s.showDocumentBounds);
+@@ -1203,11 +1211,11 @@ export function useEditorCommandRuntime(
          tabCount,
          dirty,
          fileRef,
@@ -10002,7 +10050,12 @@ index 3ab44838..1f0c5155 100644
          showGrid,
          showTransparencyGrid,
          snapModes,
-@@ -1234,6 +1238,7 @@ export function useEditorCommandRuntime(
+         snapHapticsEnabled,
++        latticeLock,
+         showRulers,
+         showGuides,
+         showDocumentBounds,
+@@ -1234,6 +1242,7 @@ export function useEditorCommandRuntime(
          onAddNodeAdornment: options.onAddNodeAdornment,
          onPositionNodeRelativeTo: options.onPositionNodeRelativeTo,
          onConvertNodePositionToAbsolute: options.onConvertNodePositionToAbsolute,
@@ -10010,7 +10063,7 @@ index 3ab44838..1f0c5155 100644
          onShowCompiledPicture: options.onShowCompiledPicture,
          onOpenSettings: options.onOpenSettings,
          onCheckForUpdates: options.onCheckForUpdates,
-@@ -1256,7 +1261,6 @@ export function useEditorCommandRuntime(
+@@ -1256,11 +1265,11 @@ export function useEditorCommandRuntime(
        tabCount,
        dirty,
        fileRef,
@@ -10018,7 +10071,12 @@ index 3ab44838..1f0c5155 100644
        showGrid,
        showTransparencyGrid,
        snapModes,
-@@ -1287,6 +1291,7 @@ export function useEditorCommandRuntime(
+       snapHapticsEnabled,
++      latticeLock,
+       showRulers,
+       showGuides,
+       showDocumentBounds,
+@@ -1287,6 +1296,7 @@ export function useEditorCommandRuntime(
        options.onAddNodeAdornment,
        options.onPositionNodeRelativeTo,
        options.onConvertNodePositionToAbsolute,
@@ -10055,16 +10113,17 @@ index e3ffc872..3a088d9c 100644
        if (!browserWrite) {
 diff --git a/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx b/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx
 new file mode 100644
-index 00000000..3c97d2b1
+index 00000000..aa902528
 --- /dev/null
 +++ b/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,105 @@
 +import { useState } from "react";
 +import { worldPoint, pt } from "tikz-editor/coords/index";
 +import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
 +import { applyMatrix } from "tikz-editor/semantic/transform";
 +import { snapArcEndpointToLattice, snapToUnitLattice } from "tikz-editor/edit/snapping";
 +import { PT_PER_CM } from "tikz-editor/edit/format";
++import { useSettingsStore } from "../../settings/useSettingsStore";
 +import { useEditorStore } from "../../store/store";
 +import { SidePanel } from "../SidePanel";
 +import css from "./InspectorPanel.module.css";
@@ -10079,7 +10138,7 @@ index 00000000..3c97d2b1
 +  const activeFigureId = useEditorStore((state) => state.activeFigureId);
 +  const dispatch = useEditorStore((state) => state.dispatch);
 +  const strokeColor = useEditorStore((state) => state.creationStrokeColor);
-+  const latticeLock = useEditorStore((state) => state.snapModes.latticeLock);
++  const latticeLock = useSettingsStore((state) => state.settings.canvas.latticeLock);
 +  const fillColor = useEditorStore((state) => state.creationFillColor);
 +  const [construction, setConstruction] = useState<CircleConstruction>("radius");
 +  const [drafts, setDrafts] = useState<{ [Key in keyof GeometryValues]: string }>({
@@ -11300,18 +11359,30 @@ index 2746595a..da8ac5b8 100644
 +  return `rgba(${(code >> 16) & 255},${(code >> 8) & 255},${code & 255},${opacity})`;
 +}
 diff --git a/packages/core/src/edit/snapping/context.ts b/packages/core/src/edit/snapping/context.ts
-index 2f522fd2..0b09b3ff 100644
+index 2f522fd2..c8d3a13e 100644
 --- a/packages/core/src/edit/snapping/context.ts
 +++ b/packages/core/src/edit/snapping/context.ts
-@@ -25,6 +25,8 @@ export function resolveSnapSettings(patch?: SnapSettingsPatch, base: SnapSetting
+@@ -18,18 +18,15 @@ export function resolveSnapSettings(patch?: SnapSettingsPatch, base: SnapSetting
+   if (!patch) {
+     return {
+       ...base,
+-      grid: { ...base.grid },
+       points: { ...base.points },
+       gaps: { ...base.gaps }
+     };
    }
  
    return {
 +    latticeLock: patch.latticeLock ?? base.latticeLock,
 +    latticeTransform: patch.latticeTransform ?? base.latticeTransform,
      thresholdPx: patch.thresholdPx ?? base.thresholdPx,
-     grid: {
-       enabled: patch.grid?.enabled ?? base.grid.enabled,
+-    grid: {
+-      enabled: patch.grid?.enabled ?? base.grid.enabled,
+-      minorTargetPx: patch.grid?.minorTargetPx ?? base.grid.minorTargetPx
+-    },
+     points: {
+       enabled: patch.points?.enabled ?? base.points.enabled
+     },
 diff --git a/packages/core/src/edit/snapping/geometry.ts b/packages/core/src/edit/snapping/geometry.ts
 index 291bcb24..e59f47b3 100644
 --- a/packages/core/src/edit/snapping/geometry.ts
@@ -11437,7 +11508,7 @@ index 7eccc2f5..1d17eb4e 100644
 +  return { kind: "point", point: worldPoint(pt((Math.round(cx) + best[0]) * LATTICE_UNIT_PT), pt((Math.round(cy) + best[1]) * LATTICE_UNIT_PT)) };
 +}
 diff --git a/packages/core/src/edit/snapping/index.ts b/packages/core/src/edit/snapping/index.ts
-index 9ff1d00f..4e32eba2 100644
+index 9ff1d00f..3e15af2c 100644
 --- a/packages/core/src/edit/snapping/index.ts
 +++ b/packages/core/src/edit/snapping/index.ts
 @@ -7,7 +7,7 @@ import {
@@ -11473,7 +11544,7 @@ index 9ff1d00f..4e32eba2 100644
 +    return { snappedDelta, offset: worldPoint(pt(snappedDelta.x - input.rawDelta.x), pt(snappedDelta.y - input.rawDelta.y)), lines: [] };
 +  }
 +
-+  if (settings.grid.enabled && settings.latticeTransform) {
++  if (settings.latticeTransform) {
 +    const anchor = input.latticeAnchor ?? worldPoint(pt(input.selection.bounds.minX), pt(input.selection.bounds.minY));
 +    const moved = worldPoint(pt(anchor.x + input.rawDelta.x), pt(anchor.y + input.rawDelta.y));
 +    const target = snapToUnitLattice(moved, input.latticeTransform ?? settings.latticeTransform);
@@ -11510,7 +11581,7 @@ index 9ff1d00f..4e32eba2 100644
  
 +export function snapGridPointer(input: SnapToolPointerInput): SnapResult {
 +  const settings = effectiveSettings(input.context, input.settings);
-+  if (settings.latticeLock || !settings.grid.enabled || shouldBypassSnapping(settings, input.modifiers)) {
++  if (settings.latticeLock || shouldBypassSnapping(settings, input.modifiers)) {
 +    return snapToolPointer(input);
 +  }
 +
@@ -11529,7 +11600,7 @@ index 9ff1d00f..4e32eba2 100644
    pointer: WorldPoint;
    referencePoints: WorldPoint[];
  }): SnapResult {
-+  if (settings.grid.enabled && settings.latticeTransform) {
++  if (settings.latticeTransform) {
 +    const lattice = latticePointResult(pointer, settings.latticeTransform);
 +    if (Math.hypot(lattice.offset.x, lattice.offset.y) <= settings.thresholdPx / context.zoom) return lattice;
 +  }
@@ -11541,7 +11612,7 @@ index 9ff1d00f..4e32eba2 100644
    });
  
 -  if (settings.grid.enabled) {
-+  if (settings.grid.enabled && !settings.latticeTransform) {
++  if (!settings.latticeTransform) {
      collectGridSnaps({
        selectionPoints: selection.snapPoints,
        minOffset,
@@ -11556,7 +11627,7 @@ index 9ff1d00f..4e32eba2 100644
    });
  
 -  if (settings.grid.enabled) {
-+  if (settings.grid.enabled && !settings.latticeTransform) {
++  if (!settings.latticeTransform) {
      collectGridSnaps({
        selectionPoints,
        minOffset,
@@ -11576,36 +11647,48 @@ index 9ff1d00f..4e32eba2 100644
 +  return { snappedPoint, offset: worldPoint(pt(snappedPoint.x - point.x), pt(snappedPoint.y - point.y)), lines: [] };
 +}
 diff --git a/packages/core/src/edit/snapping/types.ts b/packages/core/src/edit/snapping/types.ts
-index 3688b6d8..f1b01401 100644
+index 3688b6d8..c8645237 100644
 --- a/packages/core/src/edit/snapping/types.ts
 +++ b/packages/core/src/edit/snapping/types.ts
-@@ -6,6 +6,8 @@ import type { SceneElement } from "../../semantic/types.js";
+@@ -6,11 +6,9 @@ import type { SceneElement } from "../../semantic/types.js";
  export type Axis = "x" | "y";
  
  export type SnapSettings = {
 +  latticeLock: boolean;
 +  latticeTransform?: LatticeTransform;
    thresholdPx: Px;
-   grid: {
+-  grid: {
+-    enabled: boolean;
+-    minorTargetPx: Px;
+-  };
+   points: {
      enabled: boolean;
-@@ -25,6 +27,7 @@ export type SnapSettings = {
+   };
+@@ -25,11 +23,8 @@ export type SnapSettings = {
  export const GRID_MINOR_TARGET_PX = 22;
  
  export const DEFAULT_SNAP_SETTINGS: SnapSettings = {
 +  latticeLock: false,
    thresholdPx: px(8),
-   grid: {
-     enabled: true,
-@@ -42,6 +45,8 @@ export const DEFAULT_SNAP_SETTINGS: SnapSettings = {
+-  grid: {
+-    enabled: true,
+-    minorTargetPx: px(GRID_MINOR_TARGET_PX)
+-  },
+   points: {
+     enabled: true
+   },
+@@ -42,8 +37,9 @@ export const DEFAULT_SNAP_SETTINGS: SnapSettings = {
  };
  
  export type SnapSettingsPatch = {
 +  latticeLock?: boolean;
 +  latticeTransform?: LatticeTransform;
    thresholdPx?: Px;
-   grid?: Partial<SnapSettings["grid"]>;
+-  grid?: Partial<SnapSettings["grid"]>;
    points?: Partial<SnapSettings["points"]>;
-@@ -155,6 +160,8 @@ export type SnapSelectionTranslationInput = {
+   gaps?: Partial<SnapSettings["gaps"]>;
+   bypassWithCtrlOrMeta?: boolean;
+@@ -155,6 +151,8 @@ export type SnapSelectionTranslationInput = {
    context: SnapContext;
    selection: SelectionGeometry;
    rawDelta: WorldPoint;
@@ -11614,7 +11697,7 @@ index 3688b6d8..f1b01401 100644
    modifiers?: SnapModifiers;
    settings?: SnapSettingsPatch;
    enabledAxis?: Axis | null;
-@@ -163,6 +170,7 @@ export type SnapSelectionTranslationInput = {
+@@ -163,6 +161,7 @@ export type SnapSelectionTranslationInput = {
  export type SnapHandlePositionInput = {
    context: SnapContext;
    point: WorldPoint;
@@ -11622,7 +11705,7 @@ index 3688b6d8..f1b01401 100644
    sourceId?: string;
    allowSelfSnap?: boolean;
    modifiers?: SnapModifiers;
-@@ -225,3 +233,6 @@ export type AxisMinOffset = {
+@@ -225,3 +224,6 @@ export type AxisMinOffset = {
    x: number;
    y: number;
  };

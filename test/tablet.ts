@@ -104,7 +104,7 @@ export type EditorDebug = {
   scene: { elements: { sourceRef: { sourceId: string } }[] } | null;
   viewport: { translateX: number; translateY: number; scale: number };
   canvasAids: { grid: boolean; rulers: boolean; documentBounds: boolean };
-  snapModes: { grid: boolean; latticeLock: boolean };
+  settings: { canvas: { latticeLock: boolean } };
 };
 
 export async function editorDebug(page: Page): Promise<EditorDebug> {
