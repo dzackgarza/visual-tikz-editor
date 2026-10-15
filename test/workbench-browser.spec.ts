@@ -561,7 +561,7 @@ describe("standalone workbench host boundary", function () {
         const hint = (await frame.getByTestId('canvas-selection-hint').boundingBox())!;
         const control = (await lock.locator('..').boundingBox())!;
         assert.ok(Math.min(hint.x + hint.width, control.x + control.width) <= Math.max(hint.x, control.x) ||
-          Math.min(hint.y + hint.height, control.y + control.height) <= Math.max(hint.y, control.y), 'The curve control covers the canvas hint');
+          Math.min(hint.y + hint.height, control.y + control.height) <= Math.max(hint.y, control.y), `The curve control covers the canvas hint ${JSON.stringify({ hint, control })}`);
         await storyScreenshot(page, `curve-selected-${contact}-${tablet.name}`);
         await input.touch([await centerOf(lock)]);
         await expect(lock).toHaveAttribute('aria-pressed', 'true');
@@ -690,7 +690,7 @@ describe("standalone workbench host boundary", function () {
         const hint = (await frame.getByTestId('canvas-selection-hint').boundingBox())!;
         const control = (await frame.getByRole('button', { name: 'Make corner', exact: true }).locator('..').boundingBox())!;
         assert.ok(Math.min(hint.x + hint.width, control.x + control.width) <= Math.max(hint.x, control.x) ||
-          Math.min(hint.y + hint.height, control.y + control.height) <= Math.max(hint.y, control.y), 'The point control covers the canvas hint');
+          Math.min(hint.y + hint.height, control.y + control.height) <= Math.max(hint.y, control.y), `The point control covers the canvas hint ${JSON.stringify({ hint, control })}`);
         await storyScreenshot(page, `point-selected-${contact}-${tablet.name}`);
         await expect(frame.getByRole('button', { name: 'Point actions', exact: true })).toHaveCount(0);
         await input.longPress(await pointAt(1));

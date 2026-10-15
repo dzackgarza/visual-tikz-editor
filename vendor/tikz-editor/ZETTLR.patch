@@ -4713,7 +4713,7 @@ index cf4cf2cf..0c7d3db4 100644
    pointer-events: none;
  }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..587ab434 100644
+index 4e22ccfa..8eaa5c60 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,16 @@ preflightPositionNodeRelativeToAction,
@@ -5969,10 +5969,12 @@ index 4e22ccfa..587ab434 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4418,67 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4418,72 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
++  // The canvas hint sits in the canvas corner; placement keeps the selection control off it.
++  const [selectionHintElement, setSelectionHintElement] = useState<HTMLDivElement | null>(null);
 +  // The selection control's own content height, measured, so placement can keep all of it on screen.
 +  const [selectionControlHeight, setSelectionControlHeight] = useState(112);
 +  const selectionControlObserver = useRef<MutationObserver | null>(null);
@@ -6016,19 +6018,22 @@ index 4e22ccfa..587ab434 100644
 +      { left: alongX, top: box.bottom }, { left: alongX, top: box.top - height },
 +      { left: box.right, top: alongY }, { left: box.left - width, top: alongY }
 +    ];
++    // The hint is pinned to the canvas bottom, so a control in its columns ends above it.
++    const hint = selectionHintElement?.getBoundingClientRect();
++    const floorAt = (left: number) => hint && hint.left < left + width && hint.right > left ? Math.min(bottomEdge, hint.top - 8) : bottomEdge;
 +    const fitting = candidates.filter((place) => place.left >= leftEdge && place.left + width <= rightEdge &&
-+      place.top >= topEdge && place.top + height <= bottomEdge);
++      place.top >= topEdge && place.top + height <= floorAt(place.left));
 +    const others = [...sourceBoundsSvg].filter(([id]) => !selectedElementIds.has(id)).map(([, item]) => ({
 +      left: toClientX(item.minX), right: toClientX(item.maxX), top: toClientY(item.minY), bottom: toClientY(item.maxY)
 +    }));
 +    const clearOfOthers = fitting.find((place) => others.every((item) => item.right <= place.left || item.left >= place.left + width ||
 +      item.bottom <= place.top || item.top >= place.top + height));
 +    const place = clearOfOthers ?? fitting[0];
-+    if (place) return { left: place.left, top: place.top, width, maxHeight: Math.max(0, bottomEdge - place.top) };
++    if (place) return { left: place.left, top: place.top, width, maxHeight: Math.max(0, floorAt(place.left) - place.top) };
 +    // Nothing holds the whole control: take the roomier side above or below the
 +    // selection, still clear of it, and let the control scroll within that side.
-+    const roomBelow = bottomEdge - Math.max(box.bottom, topEdge);
-+    const roomAbove = Math.min(box.top, bottomEdge) - topEdge;
++    const roomBelow = floorAt(alongX) - Math.max(box.bottom, topEdge);
++    const roomAbove = Math.min(box.top, floorAt(alongX)) - topEdge;
 +    return roomBelow >= roomAbove
 +      ? { left: alongX, top: Math.max(box.bottom, topEdge), width, maxHeight: Math.max(0, roomBelow) }
 +      : { left: alongX, top: topEdge + Math.max(0, roomAbove - height), width, maxHeight: Math.max(0, roomAbove) };
@@ -6037,7 +6042,7 @@ index 4e22ccfa..587ab434 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4501,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4506,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -6060,7 +6065,7 @@ index 4e22ccfa..587ab434 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4532,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4537,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -6075,7 +6080,7 @@ index 4e22ccfa..587ab434 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4558,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4563,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -6109,7 +6114,7 @@ index 4e22ccfa..587ab434 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4590,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4595,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6119,7 +6124,7 @@ index 4e22ccfa..587ab434 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4603,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4608,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6149,7 +6154,15 @@ index 4e22ccfa..587ab434 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3974,6 +4660,80 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +4657,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+         onTextEditTextareaDrop={handleTextEditTextareaDrop}
+         onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
+         selectionHint={canvasSelectionHint}
++        selectionHintRef={setSelectionHintElement}
+         showDevPanel={false}
+         snapDebugRect={snapDebugRect}
+         onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
+@@ -3974,6 +4666,80 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -6231,7 +6244,7 @@ index 4e22ccfa..587ab434 100644
          <Suspense fallback={null}>
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
-index f0ff59f8..bbb89875 100644
+index f0ff59f8..a165850f 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 @@ -22,6 +22,7 @@ import {
@@ -6296,7 +6309,15 @@ index f0ff59f8..bbb89875 100644
    handleDisplays: readonly HandleDisplay[];
    onHandlePointerDown: (event: ReactPointerEvent<SVGElement>, handle: EditHandle) => void;
    onResizeHandlePointerDown: (event: ReactPointerEvent<SVGElement>, sourceId: string, role: ResizeRole, cursor: string) => void;
-@@ -230,12 +241,14 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -184,6 +195,7 @@ type CanvasPanelViewProps = {
+   onTextEditTextareaDrop: (event: ReactDragEvent<HTMLTextAreaElement>) => void;
+   onTextEditTextareaKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
+   selectionHint: string | null;
++  selectionHintRef: (element: HTMLDivElement | null) => void;
+   showDevPanel: boolean;
+   snapDebugRect: { left: number; top: number; width: number; height: number };
+   onSnapDebugMovePointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+@@ -230,12 +242,14 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      repeatPreviewModel,
      interactionSvgRef,
      onInteractionPointerDown,
@@ -6311,7 +6332,7 @@ index f0ff59f8..bbb89875 100644
      gridMinorStrokeWidth,
      gridMajorStrokeWidth,
      gridAxisStrokeWidth,
-@@ -254,6 +267,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -254,6 +268,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      previewArrowPoints,
      hitRegions,
      hoveredElementId,
@@ -6319,7 +6340,7 @@ index f0ff59f8..bbb89875 100644
      editableTextRegionKeys,
      draggableSourceIds,
      hitRegionCursorByTargetId,
-@@ -263,6 +277,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -263,6 +278,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      onHoverChange,
      nodePositionLinks,
      marqueeBounds,
@@ -6328,7 +6349,7 @@ index f0ff59f8..bbb89875 100644
      selectionBoxes,
      adornmentHighlightBoxes,
      selectedAdornmentConnectors,
-@@ -279,6 +295,11 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -279,6 +296,11 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      nodePositionTargetTooltip,
      handleHalfSize,
      handleDisplays,
@@ -6340,7 +6361,15 @@ index f0ff59f8..bbb89875 100644
      onHandlePointerDown,
      onResizeHandlePointerDown,
      onRotateHandlePointerDown,
-@@ -383,7 +404,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -308,6 +330,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+     onTextEditTextareaDrop,
+     onTextEditTextareaKeyDown,
+     selectionHint,
++    selectionHintRef,
+     showDevPanel,
+     snapDebugRect,
+     onSnapDebugMovePointerDown,
+@@ -383,7 +406,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
    return (
      <div className={css.panel}>
        <div className={[css.canvasGrid, showRulers ? "" : css.canvasGridNoRulers].filter(Boolean).join(" ")}>
@@ -6349,7 +6378,7 @@ index f0ff59f8..bbb89875 100644
  
          {showRulers ? (
            <div className={css.topRulerSlot} data-select="chrome">
-@@ -511,6 +532,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -511,6 +534,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  onFallback={onSvgPatchFallback}
                  hostRef={svgLayerHostRef}
                />
@@ -6367,7 +6396,7 @@ index f0ff59f8..bbb89875 100644
  
                {repeatPreviewModel ? (
                  <svg
-@@ -534,6 +566,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -534,6 +568,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  viewBox={`${svgResult.viewBox.x} ${svgResult.viewBox.y} ${svgResult.viewBox.width} ${svgResult.viewBox.height}`}
                  onClick={onBackgroundClick}
                  onPointerDown={onInteractionPointerDown}
@@ -6375,7 +6404,7 @@ index f0ff59f8..bbb89875 100644
                  onPointerUp={onInteractionPointerUp}
                  onPointerCancel={onInteractionPointerUp}
                  onLostPointerCapture={onInteractionLostPointerCapture}
-@@ -543,7 +576,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -543,7 +578,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  onContextMenu={onCanvasContextMenu}
                >
                  {gridLines && (
@@ -6384,7 +6413,7 @@ index f0ff59f8..bbb89875 100644
                      {gridLines.verticalMinor.map((x: number) => (
                        <line
                          key={`v-min-${x}`}
-@@ -569,8 +602,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -569,8 +604,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      {gridLines.horizontalMinor.map((y: number) => (
                        <line
                          key={`h-min-${y}`}
@@ -6395,7 +6424,7 @@ index f0ff59f8..bbb89875 100644
                          y1={y}
                          y2={y}
                          className={css.gridMinor}
-@@ -580,14 +613,23 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -580,14 +615,23 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      {gridLines.horizontalMajor.map((y: number) => (
                        <line
                          key={`h-maj-${y}`}
@@ -6421,7 +6450,7 @@ index f0ff59f8..bbb89875 100644
                      {gridLines.verticalAxisX != null && (
                        <line
                          key="v-axis-0"
-@@ -602,8 +644,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -602,8 +646,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      {gridLines.horizontalAxisY != null && (
                        <line
                          key="h-axis-0"
@@ -6432,7 +6461,7 @@ index f0ff59f8..bbb89875 100644
                          y1={gridLines.horizontalAxisY}
                          y2={gridLines.horizontalAxisY}
                          className={css.gridAxis}
-@@ -681,7 +723,16 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -681,7 +725,16 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    previewArrowPoints={previewArrowPoints}
                  />
  
@@ -6450,7 +6479,7 @@ index f0ff59f8..bbb89875 100644
                    hitRegions={hitRegions}
                    hoveredElementId={hoveredElementId}
                    toolMode={toolMode}
-@@ -692,7 +743,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -692,7 +745,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    onElementContextMenu={onElementContextMenu}
                    onElementDoubleClick={onElementDoubleClick}
                    onHoverChange={onHoverChange}
@@ -6459,7 +6488,7 @@ index f0ff59f8..bbb89875 100644
  
                  <NodePositionLinkOverlay
                    links={nodePositionLinks}
-@@ -701,6 +752,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -701,6 +754,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
  
                  <SelectionOverlay
                    marqueeBounds={marqueeBounds}
@@ -6468,7 +6497,7 @@ index f0ff59f8..bbb89875 100644
                    selectionBoxes={selectionBoxes}
                    adornmentHighlightBoxes={adornmentHighlightBoxes}
                    adornmentConnectors={selectedAdornmentConnectors}
-@@ -756,6 +809,9 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -756,6 +811,9 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  {toolMode === "select" && (
                    <HandleOverlay
                      handleDisplays={handleDisplays}
@@ -6478,6 +6507,15 @@ index f0ff59f8..bbb89875 100644
                      handleHalfSize={handleHalfSize}
                      handleStrokeWidth={handleStrokeWidth}
                      onHandlePointerDown={onHandlePointerDown}
+@@ -993,7 +1051,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+             </RenderedTooltip>
+           )}
+           {selectionHint && !warning ? (
+-            <div className={css.selectionHint} data-testid="canvas-selection-hint" data-select="text">
++            <div ref={selectionHintRef} className={css.selectionHint} data-testid="canvas-selection-hint" data-select="text">
+               {selectionHint}
+             </div>
+           ) : null}
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
 index 00000000..99ade90d
