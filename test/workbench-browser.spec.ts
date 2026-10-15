@@ -326,6 +326,42 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`starts on at least (-20,20) on both axes at a preset zoom in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const zoom = frame.getByRole('button', { name: 'Zoom and display', exact: true });
+      await expect(zoom).toBeVisible();
+      const readout = (await zoom.innerText()).trim();
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const range = async (testId: string, along: 'x' | 'y') => {
+        const ticks = await frame.getByTestId(testId).locator('text').evaluateAll((texts, axis) => texts.map(text => {
+          const box = text.getBoundingClientRect();
+          return { value: Number(text.textContent), at: axis === 'x' ? box.x + box.width / 2 : box.y + box.height / 2 };
+        }).filter(tick => Number.isFinite(tick.value)), along);
+        const lo = along === 'x' ? viewport.x : viewport.y;
+        const hi = along === 'x' ? viewport.x + viewport.width : viewport.y + viewport.height;
+        const visible = ticks.filter(tick => tick.at >= lo && tick.at <= hi).map(tick => tick.value);
+        return { min: Math.min(...visible), max: Math.max(...visible) };
+      };
+      const [x, y] = [await range('canvas-top-ruler', 'x'), await range('canvas-left-ruler', 'y')];
+      assert.ok(x.min <= -20 && x.max >= 20, `x range ${x.min}..${x.max}`);
+      assert.ok(y.min <= -20 && y.max >= 20, `y range ${y.min}..${y.max}`);
+      const input = await TabletInput.attach(page);
+      // The popup lists the current zoom beside its presets, so move away first: the startup zoom must still be offered.
+      await input.touch([await stableCenter(zoom)]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: '50%', exact: true }))]);
+      await expect(zoom).toHaveText('50%');
+      const presets = await frame.getByRole('button', { name: /^\d+%$/ }).allInnerTexts();
+      assert.ok(presets.includes(readout), `startup zoom ${readout} is not among the presets ${presets}`);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: readout, exact: true }))]);
+      await expect(zoom).toHaveText(readout);
+      await input.touch([await stableCenter(zoom)]);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
