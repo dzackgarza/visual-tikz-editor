@@ -7470,7 +7470,7 @@ index 13b3ad2b..d605df2d 100644
              onContextMenu={onContextMenu}
              data-handle-kind={display.kind}
 diff --git a/packages/app/src/ui/canvas-panel/path-selection-hint.ts b/packages/app/src/ui/canvas-panel/path-selection-hint.ts
-index 0961ce75..0ec27904 100644
+index 0961ce75..5418b80f 100644
 --- a/packages/app/src/ui/canvas-panel/path-selection-hint.ts
 +++ b/packages/app/src/ui/canvas-panel/path-selection-hint.ts
 @@ -2,36 +2,14 @@ import { resolveEligibleExplicitPath, type ExplicitPathAnalysis } from "tikz-edi
@@ -7518,7 +7518,7 @@ index 0961ce75..0ec27904 100644
 -  if (collapsedDensePathSourceIds.has(sourceId)) return "Double-click path to edit points.";
    if (!hasInsertablePathSegment(editHandles, sourceId, resolved.analysis)) return null;
 -  return "Double-click path to add a point.";
-+  return "Drag square nodes or round curve handles. Double-click path to add a point.";
++  return "Drag square points or round curve handles. Double-tap the curve to add a point.";
  }
  
  function hasInsertablePathSegment(
@@ -8345,7 +8345,7 @@ index fbf3023a..c4b1c4fb 100644
    setPendingBezier: (pending: PendingBezier | null) => void;
    setToolCursorWorld: (point: WorldPoint | null) => void;
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
-index c69a45af..d065abf8 100644
+index c69a45af..785f3678 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
 @@ -52,9 +52,6 @@ export type UseCanvasElementInteractionsArgs = {
@@ -8368,21 +8368,7 @@ index c69a45af..d065abf8 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -389,6 +383,13 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
-   const onElementPointerDown = useCallback(
-     (event: ReactPointerEvent<SVGElement>, targetId: string, region?: HitRegion) => {
-       if (!svgResult) return;
-+      if (toolMode === "erase" && event.button === 0) {
-+        event.preventDefault();
-+        event.stopPropagation();
-+        const elementId = typeof region?.sourceId === "string" ? region.sourceId : targetId;
-+        dispatch({ type: "APPLY_EDIT_ACTION", action: { kind: "deleteElement", elementId } });
-+        return;
-+      }
-       if (toolMode === "addBucket") {
-         if (event.button !== 0) {
-           return;
-@@ -435,7 +436,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -435,7 +429,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
  
        if (!additiveSelection && matrixEdgeSelection && event.button === 0) {
          closeTextEditingSession();
@@ -8390,7 +8376,7 @@ index c69a45af..d065abf8 100644
          dispatch({ type: "SELECT_RANGE", ids: matrixEdgeSelection.selectionIds });
          dispatch({
            type: "SET_FOCUSED_SCOPE",
-@@ -445,7 +445,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -445,7 +438,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
          return;
        }
  
@@ -8402,7 +8388,7 @@ index c69a45af..d065abf8 100644
        if (!additiveSelection && textTarget) {
          const draggedIds = alreadySelected && selectedElementIds.size > 0 ? [...selectedElementIds] : [resolvedTargetId];
          const supportsDeferredTextDrag = snapshot.editHandles.some(
-@@ -483,14 +486,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -483,14 +479,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        const isAdornmentTarget = resolvedTargetId.startsWith("node-adornment:");
        closeTextEditingSession();
  
@@ -8417,7 +8403,7 @@ index c69a45af..d065abf8 100644
        const singleSelectedId = selectedElementIds.size === 1
          ? (selectedElementIds.values().next().value ?? null)
          : null;
-@@ -559,16 +554,15 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -559,16 +547,15 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        interactionSvgRef,
        onBucketFillRegion,
        onNodePositionTargetPick,
@@ -8435,7 +8421,7 @@ index c69a45af..d065abf8 100644
        svgResult,
        toolMode,
        viewportRef
-@@ -625,25 +619,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -625,25 +612,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        }
        viewportRef.current?.focus({ preventScroll: true });
  
@@ -8461,7 +8447,7 @@ index c69a45af..d065abf8 100644
        // Try to insert a point on a path segment
        if (tryInsertPathWorldPoint(event, sourceId)) {
          return;
-@@ -651,13 +626,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -651,13 +619,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
      },
      [
        dispatch,
