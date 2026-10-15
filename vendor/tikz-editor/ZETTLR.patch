@@ -5080,7 +5080,7 @@ index cf4cf2cf..4a0d0a4e 100644
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..89a1ded0 100644
+index 4e22ccfa..af691dd9 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,19 @@ preflightPositionNodeRelativeToAction,
@@ -6718,12 +6718,44 @@ index 4e22ccfa..89a1ded0 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4726,73 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4726,105 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
 +  // The canvas hint sits in the canvas corner; placement keeps the selection control off it.
 +  const [selectionHintElement, setSelectionHintElement] = useState<HTMLDivElement | null>(null);
++  // Selection controls belong to the selection tools; under a drawing tool they would sit where the next stroke goes.
++  const selectionControlsShown = toolMode === "select" || toolMode === "lasso";
++  // The freehand result sits in a fixed canvas corner: the first, from the bottom leading one, whose box clears the stroke.
++  const [freehandPopupSize, setFreehandPopupSize] = useState({ width: 268, height: 240 });
++  const measureFreehandPopup = useCallback((element: HTMLDivElement | null) => {
++    if (element) setFreehandPopupSize({ width: element.offsetWidth, height: element.offsetHeight });
++  }, []);
++  const freehandPopupCorner = (() => {
++    const fallback = { horizontal: "leading" as const, top: null };
++    const viewport = viewportRef.current?.getBoundingClientRect();
++    if (!freehandResultOffer || !svgResult || !viewport) return fallback;
++    const screen = freehandResultOffer.rawWorldPoints.map((point) => worldToSvgPoint(point, svgResult.viewBox)).map((point) => ({
++      x: viewport.left + canvasTransform.translateX + (point.x - svgResult.viewBox.x) * canvasTransform.scale,
++      y: viewport.top + canvasTransform.translateY + (point.y - svgResult.viewBox.y) * canvasTransform.scale
++    }));
++    const stroke = { left: Math.min(...screen.map((p) => p.x)), right: Math.max(...screen.map((p) => p.x)), top: Math.min(...screen.map((p) => p.y)), bottom: Math.max(...screen.map((p) => p.y)) };
++    const rootStyle = getComputedStyle(document.documentElement);
++    const inset = (edge: string) => Number.parseFloat(rootStyle.getPropertyValue(`--rail-inset-${edge}`));
++    const { width, height } = freehandPopupSize;
++    const corners = [
++      { vertical: "bottom", horizontal: "leading" }, { vertical: "bottom", horizontal: "trailing" },
++      { vertical: "top", horizontal: "trailing" }, { vertical: "top", horizontal: "leading" }
++    ] as const;
++    // A top corner sits below the canvas's own top edge, so it never covers the header or the rulers.
++    const topOf = (vertical: "top" | "bottom") => vertical === "top" ? Math.max(inset("top"), viewport.top) + 12 : window.innerHeight - inset("bottom") - 12 - height;
++    const corner = corners.find(({ vertical, horizontal }) => {
++      const left = horizontal === "leading" ? inset("left") + 12 : window.innerWidth - inset("right") - 12 - width;
++      const top = topOf(vertical);
++      return left + width <= stroke.left || left >= stroke.right || top + height <= stroke.top || top >= stroke.bottom;
++    });
++    return corner ? { horizontal: corner.horizontal, top: corner.vertical === "top" ? topOf("top") : null } : fallback;
++  })();
 +  // The selection control's own content height, measured, so placement can keep all of it on screen.
 +  const [selectionControlHeight, setSelectionControlHeight] = useState(112);
 +  const selectionControlObserver = useRef<MutationObserver | null>(null);
@@ -6792,7 +6824,7 @@ index 4e22ccfa..89a1ded0 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4815,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4847,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -6815,7 +6847,7 @@ index 4e22ccfa..89a1ded0 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4846,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4878,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -6830,7 +6862,7 @@ index 4e22ccfa..89a1ded0 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4872,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4904,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -6864,7 +6896,7 @@ index 4e22ccfa..89a1ded0 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4904,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4936,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6874,7 +6906,7 @@ index 4e22ccfa..89a1ded0 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4917,29 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4949,29 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6908,7 +6940,7 @@ index 4e22ccfa..89a1ded0 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +4970,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5002,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -6916,13 +6948,13 @@ index 4e22ccfa..89a1ded0 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +4979,80 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5011,81 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
 +      {selectedOriginal.error ? <div role="alert">{selectedOriginal.error}</div> : null}
-+      {selectedOriginal.entry && !freehandResultOffer ? (
-+        <div className={`${freehandPopupCss.popup} ${freehandPopupCss.trailing}`} aria-label="Original stroke">
++      {selectionControlsShown && selectedOriginal.entry && !freehandResultOffer ? (
++        <div className={`${freehandPopupCss.popup} ${freehandPopupCss.bottom} ${freehandPopupCss.trailing}`} aria-label="Original stroke">
 +          <strong>Original stroke</strong>
 +          <div className={freehandPopupCss.actions}>
 +            <button type="button" onClick={() => applyOriginalStroke(false)}>Restore original stroke</button>
@@ -6930,14 +6962,14 @@ index 4e22ccfa..89a1ded0 100644
 +          </div>
 +        </div>
 +      ) : null}
-+      {selectedElementIds.size > 0 && !selectedCurve && !freehandResultOffer ? (
++      {selectionControlsShown && selectedElementIds.size > 0 && !selectedCurve && !freehandResultOffer ? (
 +        <div ref={measureSelectionControl} className={freehandPopupCss.rangeControls} onPointerDown={(event) => event.stopPropagation()} style={selectionPopupStyle}>
 +          {selectionCommandsApplicable ? <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>
 +            {pointCommandContext ? "Point actions" : selectedElementIds.size === 1 ? "Selection actions" : `${selectedElementIds.size} selected · Actions`}
 +          </button> : null}
 +        </div>
 +      ) : null}
-+      {selectedCurve && !freehandResultOffer ? (
++      {selectionControlsShown && selectedCurve && !freehandResultOffer ? (
 +        <div ref={measureSelectionControl} className={freehandPopupCss.rangeControls} style={selectionPopupStyle} onPointerDown={(event) => event.stopPropagation()}>
 +          <button type="button" className={freehandPopupCss.lockToggle} aria-pressed={lockedCurveId !== null}
 +            onClick={() => setLockedCurveId(lockedCurveId ? null : selectedCurve.path.sourceRef.sourceId)}>
@@ -6974,8 +7006,9 @@ index 4e22ccfa..89a1ded0 100644
 +        </div>
 +      ) : null}
 +      {freehandResultOffer ? (
-+        <div className={`${freehandPopupCss.popup} ${freehandPopupCss.leading}`} role="dialog" aria-label="Freehand result"
-+          onPointerDown={(event) => event.stopPropagation()}>
++        <div ref={measureFreehandPopup} style={freehandPopupCorner.top === null ? undefined : { top: freehandPopupCorner.top }}
++          className={`${freehandPopupCss.popup} ${freehandPopupCorner.top === null ? freehandPopupCss.bottom : ""} ${freehandPopupCss[freehandPopupCorner.horizontal]}`}
++          role="dialog" aria-label="Freehand result" onPointerDown={(event) => event.stopPropagation()}>
 +          <strong>Freehand result</strong>
 +          <span>{freehandResultOffer.rawWorldPoints.length} raw samples · {freehandResultOffer.interpretation.kind === "line" ? 2 : freehandResultOffer.interpretation.kind === "rectangle" ? 4 : freehandResultOffer.interpretation.kind === "circle" || freehandResultOffer.interpretation.kind === "ellipse" ? 4 : (freehandResultOffer.interpretation.source.match(/\.\. controls/g)?.length ?? 0) + 1} fitted anchors</span>
 +          <label>Smoothing: {formatNumber(freehandResultOffer.smoothing)} lattice units
@@ -7314,7 +7347,7 @@ index f0ff59f8..8c75e6be 100644
            ) : null}
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
-index 00000000..99ade90d
+index 00000000..60766dad
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 @@ -0,0 +1,114 @@
@@ -7325,7 +7358,6 @@ index 00000000..99ade90d
 +  gap: 10px;
 +  width: 268px;
 +  max-width: min(300px, calc(100vw - 24px - var(--rail-inset-left) - var(--rail-inset-right)));
-+  bottom: calc(var(--rail-inset-bottom) + 12px);
 +  padding: 12px;
 +  border: 1px solid var(--border);
 +  border-radius: 12px;
@@ -7335,6 +7367,7 @@ index 00000000..99ade90d
 +  font-size: 14px;
 +}
 +
++.bottom { bottom: calc(var(--rail-inset-bottom) + 12px); }
 +.leading { left: calc(var(--rail-inset-left) + 12px); }
 +.trailing { right: calc(var(--rail-inset-right) + 12px); }
 +

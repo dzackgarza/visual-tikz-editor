@@ -2297,11 +2297,14 @@ describe("standalone workbench host boundary", function () {
     const before = await hostSnapshot();
     const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const draw = async () => {
+      await freehandTool(frame).click();
       await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .6);
       await page.mouse.down();
       await page.mouse.move(bounds.x + bounds.width * .35 + 110, bounds.y + bounds.height * .6 + 25, {steps: 15});
       await page.mouse.up();
       await frame.getByRole('dialog', {name: 'Freehand result'}).getByRole('button', {name: 'Apply simplification', exact: true}).click();
+      // The stroke stays selected; its restore control belongs to the Select tool.
+      await frame.getByRole('button', {name: 'Select', exact: true}).click();
       await expect(frame.getByRole('button', {name: 'Restore original stroke', exact: true})).toBeVisible();
     };
     await draw();
