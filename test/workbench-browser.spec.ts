@@ -712,6 +712,58 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`creates, hides, and deletes a ruler guide by finger from one Ruler guides control in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+      const input = await TabletInput.attach(page);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+      });
+      const ruler = (await frame.getByTestId('canvas-top-ruler').boundingBox())!;
+      const guides = frame.locator('[class*="guideOverlay"] line');
+      const guideAtThree = async () => (await guides.evaluateAll(lines => lines.map(line => line.getBoundingClientRect().y)))
+        .some(y => Math.abs(frameBox.y + y - at(3, 3).y) < 4);
+      // A finger drags a guide down out of the top ruler to y = 3.
+      const from = { x: at(3, 3).x, y: frameBox.y + ruler.y + ruler.height / 2 };
+      const to = at(3, 3);
+      await input.touch(Array.from({ length: 13 }, (_, i) => ({ x: from.x, y: from.y + (to.y - from.y) * i / 12 })));
+      await expect.poll(guideAtThree, { message: 'No guide at y = 3 after a finger drag from the ruler' }).toBe(true);
+      // One control owns ruler guides: turning it off hides them, turning it on restores them.
+      const zoom = frame.getByRole('button', { name: 'Zoom and display', exact: true });
+      await input.touch([await stableCenter(zoom)]);
+      const control = frame.getByRole('button', { name: 'Ruler guides', exact: true });
+      await expect(control).toHaveAttribute('aria-pressed', 'true');
+      await input.touch([await stableCenter(control)]);
+      await expect.poll(guideAtThree).toBe(false);
+      await input.touch([await stableCenter(control)]);
+      await expect.poll(guideAtThree).toBe(true);
+      await input.touch([await stableCenter(zoom)]);
+      // Dragging the guide back onto its ruler deletes it.
+      await input.touch(Array.from({ length: 13 }, (_, i) => ({ x: to.x + 40, y: to.y + (from.y - to.y) * i / 12 })));
+      await expect.poll(guideAtThree, { message: 'The guide survives being dragged onto its ruler' }).toBe(false);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
