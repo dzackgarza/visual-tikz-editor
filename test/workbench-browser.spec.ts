@@ -453,6 +453,56 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`sweeps an arc the way the pen went round, past a half circle, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+      const input = await TabletInput.attach(page);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+      });
+      const rail = frame.locator('[data-diagram-tools]');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Insert', exact: true }))]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Arc', exact: true }))]);
+      await input.penStroke([at(0, 0)]);
+      await input.penStroke([at(3, 0)]);
+      // Hover counterclockwise through a quarter, a half, and five eighths of the circle, then tap at three quarters.
+      for (let degrees = 10; degrees <= 260; degrees += 10) {
+        const radians = degrees * Math.PI / 180;
+        await input.penHover(at(3 * Math.cos(radians), 3 * Math.sin(radians)));
+      }
+      await input.penStroke([at(0, -3)]);
+      await expect.poll(async () => (await editorDebug(page)).source).toMatch(/arc/);
+      const arc = (await editorDebug(page)).source.split('\n').find(line => line.includes('arc'))!;
+      const angle = (raw: string) => {
+        const pair = /atan2\(([-\d.]+),([-\d.]+)\)/.exec(raw);
+        return pair ? Math.atan2(Number(pair[1]), Number(pair[2])) * 180 / Math.PI : Number(raw.replace(/[{}]/g, ''));
+      };
+      const start = angle(/start angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
+      const end = angle(/end angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
+      assert.ok(Math.abs(end - start - 270) < 1e-6, `The arc sweeps ${end - start} degrees, not 270 counterclockwise: ${arc}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
