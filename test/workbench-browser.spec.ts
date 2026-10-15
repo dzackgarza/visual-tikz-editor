@@ -361,6 +361,50 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`keeps the rail and its popups off the rulers docked left, docked bottom, and floating in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator('[data-diagram-tools]');
+      await expect(rail).toBeVisible();
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const rulers = await Promise.all(['canvas-top-ruler', 'canvas-left-ruler'].map(async id => ({ id, box: (await frame.getByTestId(id).boundingBox())! })));
+      const clear = (what: string, box: { x: number; y: number; width: number; height: number }) => {
+        for (const ruler of rulers) {
+          const overlapX = Math.min(box.x + box.width, ruler.box.x + ruler.box.width) - Math.max(box.x, ruler.box.x);
+          const overlapY = Math.min(box.y + box.height, ruler.box.y + ruler.box.height) - Math.max(box.y, ruler.box.y);
+          assert.ok(overlapX <= 0 || overlapY <= 0, `${what} covers ${ruler.id}`);
+        }
+      };
+      const drag = async (to: { x: number; y: number }) => {
+        const from = await stableCenter(rail.getByRole('button', { name: 'Move toolbar', exact: true }));
+        await input.touch(Array.from({ length: 13 }, (_, i) => ({ x: from.x + (to.x - from.x) * i / 12, y: from.y + (to.y - from.y) * i / 12 })));
+      };
+      const placements = [
+        { dock: 'left', to: null },
+        { dock: 'bottom', to: { x: frameBox.x + frameBox.width / 2, y: frameBox.y + frameBox.height - 20 } },
+        { dock: 'floating', to: { x: frameBox.x + 130, y: frameBox.y + 150 } }
+      ] as const;
+      for (const placement of placements) {
+        if (placement.to) await drag(placement.to);
+        await expect(rail).toHaveAttribute('data-dock', placement.dock);
+        clear(`the ${placement.dock} rail`, (await rail.boundingBox())!);
+        for (const name of ['Insert', /^Drawing color/, 'Zoom and display'] as const) {
+          const button = typeof name === 'string' ? rail.getByRole('button', { name, exact: true }) : rail.getByRole('button', { name });
+          await input.touch([await stableCenter(button)]);
+          const popup = frame.getByRole('dialog', { name: 'Tool options' });
+          await expect(popup).toBeVisible();
+          clear(`the ${String(name)} popup of the ${placement.dock} rail`, (await popup.boundingBox())!);
+          await input.touch([await stableCenter(button)]);
+          await expect(popup).toHaveCount(0);
+        }
+      }
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
