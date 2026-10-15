@@ -607,15 +607,15 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
         await input.touch([await centerOf(frame.getByRole('button', { name: 'Curve actions', exact: true }))]);
         await input.touch([await centerOf(frame.getByRole('button', { name: 'Select multiple nodes', exact: true }))]);
-        const anchors = frame.locator('[data-handle-kind="move-handle"][data-source-id="path:0"]');
+        const anchors = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]');
         const points = await anchors.evaluateAll(nodes => nodes.map(node => {
           const box = node.getBoundingClientRect();
           return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
         }).sort((a, b) => a.x - b.x));
         assert.ok(points.length >= 5, `anchors: ${points.length}`);
         for (const point of [points[1], points[2]]) await tap({ x: frameBox.x + point.x, y: frameBox.y + point.y });
-        await expect(frame.getByRole('button', { name: '2 selected nodes', exact: true })).toBeVisible();
-        await input.touch([await centerOf(frame.getByRole('button', { name: 'Delete selected nodes', exact: true }))]);
+        await expect(frame.getByRole('button', { name: '2 points selected', exact: true })).toBeVisible();
+        await input.touch([await centerOf(frame.getByRole('button', { name: 'Delete points', exact: true }))]);
         await expect.poll(async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length).toBe(2);
         assert.match((await editorDebug(page)).source, /\(2,0\)[\s\S]*\(14,0\)[\s\S]*\(18,0\)/);
         assert.doesNotMatch((await editorDebug(page)).source, /\(6,0\)|\(10,0\)/);
@@ -665,7 +665,8 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
         const pointAt = async (x: number) => {
           const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
-          const anchors = await frame.locator('[data-handle-kind="move-handle"][data-source-id="path:0"]').evaluateAll(nodes => nodes.map(node => {
+          // Anchors are the square handles; round ones are control points.
+          const anchors = await frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]').evaluateAll(nodes => nodes.map(node => {
             const box = node.getBoundingClientRect();
             return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
           }).sort((a, b) => a.x - b.x));
@@ -688,6 +689,31 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).source).not.toMatch(/\(6,0\)/);
       });
     }
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`adds a curve point with a finger double tap, as its hint says, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (2,0) .. controls (6,8) and (10,8) .. (14,0);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const curve = frame.locator('svg [data-source-id="path:0"]').first();
+      await expect(curve).toBeVisible();
+      const input = await TabletInput.attach(page);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      await input.touch([await strokePoint(page, curve, .25)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
+      const hint = await frame.locator('body').innerText();
+      assert.doesNotMatch(hint, /click/i, 'The canvas hint names a mouse gesture');
+      assert.match(hint, /Double-tap the curve to add a point/);
+      await input.doubleTap(await strokePoint(page, curve, .5));
+      await expect.poll(async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length).toBe(2);
+    });
   }
 
   it('copies the final drawing immediately after switching to rendered view', async function () {

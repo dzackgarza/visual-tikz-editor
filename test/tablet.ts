@@ -126,6 +126,12 @@ export class TabletInput {
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   }
 
+  async doubleTap(point: Point): Promise<void> {
+    await this.touch([point]);
+    await new Promise(resolve => setTimeout(resolve, 80));
+    await this.touch([point]);
+  }
+
   /** One finger held still past the editor's 550 ms long-press threshold. */
   async longPress(point: Point): Promise<void> {
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 1, ...point }] });
