@@ -716,6 +716,53 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`keeps an original stroke as an editable curve whose points are counted in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await input.penStroke(waveAcross(viewport, .45, .4, 120));
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      const drawn = await frame.locator('svg [data-source-id]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')))]);
+      assert.equal(drawn.length, 1);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      await input.touch([await strokePoint(page, frame.locator(`svg [data-source-id="${drawn[0]}"]`).first(), .5)]);
+      const anchors = frame.locator(`rect[data-handle-kind="move-handle"][data-source-id="${drawn[0]}"]`);
+      await expect(anchors.first()).toBeVisible();
+      const count = await anchors.count();
+      await expect(frame.getByText(`${count} points`, { exact: true })).toBeVisible();
+      assert.equal(count, ((await editorDebug(page)).source.match(/--|\.\. controls/g) ?? []).length + 1);
+    });
+
+    it(`reaches edit commands by pen from the selection control in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (4,-2) circle (2cm);
+\draw (10,-4) rectangle (14,0);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const penTap = async (point: { x: number; y: number }) => input.penStroke([point]);
+      await penTap(await stableCenter(frame.getByRole('button', { name: 'Select', exact: true })));
+      await penTap(await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), .5));
+      await penTap(await stableCenter(frame.getByRole('button', { name: 'Selection actions', exact: true })));
+      const menu = frame.getByRole('menu').first();
+      for (const name of ['Cut', 'Copy', 'Duplicate', 'Delete']) await expect(menu.getByRole('menuitem', { name, exact: true })).toBeVisible();
+      await penTap(await stableCenter(menu.getByRole('menuitem', { name: 'Duplicate', exact: true })));
+      await expect.poll(async () => ((await editorDebug(page)).source.match(/circle/g) ?? []).length).toBe(2);
+    });
+  }
+
   it('copies the final drawing immediately after switching to rendered view', async function () {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('before drawing'));
