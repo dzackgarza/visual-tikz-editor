@@ -117,7 +117,7 @@ index f20fa9c3..53e68095 100644
    "devDependencies": {
      "@types/react": "^19.0.0",
 diff --git a/packages/app/src/app-menu/default-menu.ts b/packages/app/src/app-menu/default-menu.ts
-index 59fab7a8..5a4692ad 100644
+index 59fab7a8..ff3ec1b2 100644
 --- a/packages/app/src/app-menu/default-menu.ts
 +++ b/packages/app/src/app-menu/default-menu.ts
 @@ -112,7 +112,8 @@ export const APP_MENU_DEFINITION = [
@@ -140,6 +140,15 @@ index 59fab7a8..5a4692ad 100644
        },
        {
          kind: "command",
+@@ -495,7 +495,7 @@ export const APP_MENU_DEFINITION = [
+       {
+         kind: "command",
+         commandId: APP_MENU_COMMAND_IDS.TOGGLE_GUIDES,
+-        label: "Guide Lines"
++        label: "Ruler Guides"
+       },
+       {
+         kind: "command",
 @@ -504,8 +504,8 @@ export const APP_MENU_DEFINITION = [
        },
        {
@@ -151,19 +160,24 @@ index 59fab7a8..5a4692ad 100644
        },
        {
          kind: "submenu",
-@@ -513,8 +513,8 @@ export const APP_MENU_DEFINITION = [
+@@ -513,13 +513,8 @@ export const APP_MENU_DEFINITION = [
          items: [
            {
              kind: "command",
 -            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID,
 -            label: "Snap to Grid"
+-          },
+-          {
+-            kind: "command",
+-            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES,
+-            label: "Snap to Guides"
 +            commandId: APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK,
 +            label: "Lock to Lattice"
            },
            {
              kind: "command",
 diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
-index af9d6c30..2d08a3d0 100644
+index af9d6c30..fcd01bed 100644
 --- a/packages/app/src/app-menu/types.ts
 +++ b/packages/app/src/app-menu/types.ts
 @@ -18,6 +18,7 @@ export const APP_MENU_COMMAND_IDS = {
@@ -182,33 +196,39 @@ index af9d6c30..2d08a3d0 100644
    PATH_JOIN: "path.join",
    PATH_REVERSE: "path.reverse",
    PATH_CLOSE: "path.close",
-@@ -87,8 +89,8 @@ export const APP_MENU_COMMAND_IDS = {
+@@ -87,9 +89,8 @@ export const APP_MENU_COMMAND_IDS = {
    ZOOM_OUT: "view.zoom-out",
    TOGGLE_GRID: "view.toggle-grid",
    TOGGLE_TRANSPARENCY_GRID: "view.toggle-transparency-grid",
 -  TOGGLE_INFINITE_CANVAS: "view.toggle-infinite-canvas",
 -  TOGGLE_SNAP_GRID: "view.toggle-snap-grid",
+-  TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
 +  TOGGLE_OUTPUT_BOUNDS: "view.toggle-output-bounds",
 +  TOGGLE_LATTICE_LOCK: "view.toggle-lattice-lock",
-   TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
    TOGGLE_SNAP_OBJECT_POINTS: "view.toggle-snap-object-points",
    TOGGLE_SNAP_OBJECT_GAPS: "view.toggle-snap-object-gaps",
+   TOGGLE_SNAP_HAPTICS: "view.toggle-snap-haptics",
 diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
-index bc368718..efd7f3e1 100644
+index bc368718..af8bddf6 100644
 --- a/packages/app/src/context-menu/canvas-context-menu.ts
 +++ b/packages/app/src/context-menu/canvas-context-menu.ts
-@@ -152,8 +152,8 @@ const PATH_ITEMS: readonly AppMenuItem[] = [
+@@ -152,13 +152,8 @@ const PATH_ITEMS: readonly AppMenuItem[] = [
  const SNAP_ITEMS: readonly AppMenuItem[] = [
    {
      kind: "command",
 -    commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID,
 -    label: "Snap to Grid"
+-  },
+-  {
+-    kind: "command",
+-    commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES,
+-    label: "Snap to Guides"
 +    commandId: APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK,
 +    label: "Lock to Lattice"
    },
    {
      kind: "command",
-@@ -393,27 +393,17 @@ function buildSingleSelectionSubmenuItems(includePathSubmenu: boolean): readonly
+@@ -393,27 +388,17 @@ function buildSingleSelectionSubmenuItems(includePathSubmenu: boolean): readonly
    return items;
  }
  
@@ -243,7 +263,7 @@ index bc368718..efd7f3e1 100644
      ...buildSingleSelectionSubmenuItems(includePathSubmenu)
    ];
  }
-@@ -492,6 +482,7 @@ export function buildCanvasContextMenuDefinition(
+@@ -492,6 +477,7 @@ export function buildCanvasContextMenuDefinition(
      includeEditEquationForSingleNode?: boolean;
      nodePositioningAction?: "position-relative" | "convert-absolute" | null;
      includePathSubmenuForSingleSelection?: boolean;
@@ -251,7 +271,7 @@ index bc368718..efd7f3e1 100644
      includeFlattenForeach?: boolean;
      includeMatrixMultiRemoveRow?: boolean;
      includeMatrixMultiRemoveColumn?: boolean;
-@@ -503,13 +494,13 @@ export function buildCanvasContextMenuDefinition(
+@@ -503,13 +489,13 @@ export function buildCanvasContextMenuDefinition(
  ) {
    const includeFlattenForeach = options.includeFlattenForeach === true;
    const includePathSubmenuForSingleSelection = options.includePathSubmenuForSingleSelection === true;
@@ -267,7 +287,7 @@ index bc368718..efd7f3e1 100644
    const selectionMultiItems = withMatrixMultiItems(buildMultiSelectionItems(includeFlattenForeach), options);
    const singleMatrixItems = buildSingleSelectionItems(includeFlattenForeach, false);
  
-@@ -534,6 +525,12 @@ export function buildCanvasContextMenuDefinition(
+@@ -534,6 +520,12 @@ export function buildCanvasContextMenuDefinition(
          label: "Paste",
          accelerator: "CmdOrCtrl+V"
        },
@@ -280,6 +300,15 @@ index bc368718..efd7f3e1 100644
        { kind: "separator" },
        {
          kind: "command",
+@@ -554,7 +546,7 @@ export function buildCanvasContextMenuDefinition(
+       {
+         kind: "command",
+         commandId: APP_MENU_COMMAND_IDS.TOGGLE_GUIDES,
+-        label: "Guide Lines"
++        label: "Ruler Guides"
+       },
+       {
+         kind: "submenu",
 diff --git a/packages/app/src/index.ts b/packages/app/src/index.ts
 index 1672d1d6..48a1138b 100644
 --- a/packages/app/src/index.ts
@@ -643,7 +672,7 @@ index 00000000..85ec8212
 +    lastEditWarningToken: next.lastEditWarningToken + (released ? 1 : 0) };
 +}
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6e..ac7a9f3d 100644
+index e0845d6e..941bdaf6 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
 @@ -1,3 +1,5 @@
@@ -672,15 +701,16 @@ index e0845d6e..ac7a9f3d 100644
      hoveredElementId: null,
      activeCanvasDragKind: null,
      activeSourceScrubSourceId: null,
-@@ -51,7 +48,6 @@ function initialUiState(): WorkspaceEphemeralState {
+@@ -51,8 +48,6 @@ function initialUiState(): WorkspaceEphemeralState {
      showGrid: true,
      showTransparencyGrid: false,
      snapModes: {
 -      grid: true,
-       guides: true,
+-      guides: true,
        points: true,
        gaps: true
-@@ -60,6 +56,7 @@ function initialUiState(): WorkspaceEphemeralState {
+     },
+@@ -60,6 +55,7 @@ function initialUiState(): WorkspaceEphemeralState {
      showGuides: true,
      showDocumentBounds: true,
      freehandSmoothingPx: DEFAULT_FREEHAND_SMOOTHING_PX,
@@ -688,7 +718,7 @@ index e0845d6e..ac7a9f3d 100644
      bucketFillColor: DEFAULT_BUCKET_FILL_COLOR,
      selectedAddShape: DEFAULT_ADD_SHAPE_PRESET,
      selectedAddMatrixRows: DEFAULT_ADD_MATRIX_ROWS,
-@@ -67,7 +64,7 @@ function initialUiState(): WorkspaceEphemeralState {
+@@ -67,7 +63,7 @@ function initialUiState(): WorkspaceEphemeralState {
      creationStrokeColor: DEFAULT_CREATION_STROKE_COLOR,
      creationFillColor: DEFAULT_CREATION_FILL_COLOR,
      fitToContentRequestToken: 0,
@@ -697,7 +727,7 @@ index e0845d6e..ac7a9f3d 100644
      canvasFitToContentScale: null,
      zoomRequestToken: 0,
      zoomRequestDirection: null,
-@@ -100,6 +97,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
+@@ -100,6 +96,7 @@ function actionLabel(kind: HistoryEntry["kind"]): string {
      case "align": return "Aligned elements";
      case "distribute": return "Distributed elements";
      case "flatten-foreach": return "Flattened foreach";
@@ -705,7 +735,7 @@ index e0845d6e..ac7a9f3d 100644
    }
  }
  
-@@ -107,63 +105,7 @@ function prependDeveloperLog(
+@@ -107,63 +104,7 @@ function prependDeveloperLog(
    logs: WorkspaceEphemeralState["developerLogs"],
    entry: WorkspaceEphemeralState["developerLogs"][number]
  ): WorkspaceEphemeralState["developerLogs"] {
@@ -770,7 +800,7 @@ index e0845d6e..ac7a9f3d 100644
  }
  
  function applyEditWarningToDocument(doc: DocumentSession, message: string | null): DocumentSession {
-@@ -199,7 +141,8 @@ function updateDocument(
+@@ -199,7 +140,8 @@ function updateDocument(
    if (!current) {
      return workspace;
    }
@@ -780,7 +810,7 @@ index e0845d6e..ac7a9f3d 100644
    if (next === current) {
      return workspace;
    }
-@@ -749,6 +692,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -749,6 +691,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        if (activeDoc.assistantLockReason) {
          return state;
        }
@@ -791,7 +821,7 @@ index e0845d6e..ac7a9f3d 100644
        let result: EditActionResult;
        if (
          action.precomputedResult != null &&
-@@ -934,6 +881,48 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -934,6 +880,48 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
  
@@ -840,7 +870,7 @@ index e0845d6e..ac7a9f3d 100644
      case "SET_SOURCE_TRANSIENT": {
        const documentId = activeDocumentIdFromAction(state, action.documentId);
        workspace = updateDocument(workspace, documentId, (doc) => {
-@@ -1027,6 +1016,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1027,6 +1015,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
  
@@ -859,7 +889,7 @@ index e0845d6e..ac7a9f3d 100644
      case "SELECT": {
        workspace = updateDocument(workspace, activeId, (doc) => {
          if (action.additive) {
-@@ -1094,6 +1095,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1094,6 +1094,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, toolMode: action.mode };
        break;
  
@@ -870,7 +900,7 @@ index e0845d6e..ac7a9f3d 100644
      case "SET_CANVAS_TRANSFORM":
        ui = { ...ui, canvasTransform: action.transform };
        break;
-@@ -1108,6 +1113,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1108,6 +1112,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, activeCanvasDragKind: action.kind };
        break;
  
@@ -882,7 +912,7 @@ index e0845d6e..ac7a9f3d 100644
        const nextValue = Math.max(
          FREEHAND_SMOOTHING_MIN_PX,
 diff --git a/packages/app/src/store/types.ts b/packages/app/src/store/types.ts
-index 450957d0..e1cbc4df 100644
+index 450957d0..778ad03f 100644
 --- a/packages/app/src/store/types.ts
 +++ b/packages/app/src/store/types.ts
 @@ -11,9 +11,13 @@ import type {
@@ -899,7 +929,7 @@ index 450957d0..e1cbc4df 100644
    | "addMatrix"
    | "addShape"
    | "addPath"
-@@ -23,14 +27,14 @@ export type ToolMode =
+@@ -23,15 +27,14 @@ export type ToolMode =
    | "addRect"
    | "addEllipse"
    | "addCircle"
@@ -909,14 +939,15 @@ index 450957d0..e1cbc4df 100644
  export type CanvasDragKind = "element" | "resize" | "rotate" | "handle" | "pan" | "marquee" | "tool-create";
  export type CanvasAid = "grid" | "rulers" | "guides" | "transparencyGrid" | "documentBounds";
 -export type SnapMode = "grid" | "guides" | "points" | "gaps";
-+export type SnapMode = "guides" | "points" | "gaps";
++export type SnapMode = "points" | "gaps";
  
  export type SnapModes = {
 -  grid: boolean;
-   guides: boolean;
+-  guides: boolean;
    points: boolean;
    gaps: boolean;
-@@ -81,7 +85,8 @@ export type HistoryEntry = {
+ };
+@@ -81,7 +84,8 @@ export type HistoryEntry = {
      | "reorder"
      | "align"
      | "distribute"
@@ -926,7 +957,7 @@ index 450957d0..e1cbc4df 100644
    label: string;
    /** Optional key used to coalesce drag updates into one undo step. */
    mergeKey?: string;
-@@ -137,6 +142,7 @@ export type DocumentSession = {
+@@ -137,6 +141,7 @@ export type DocumentSession = {
    history: HistoryEntry[];
    historyIndex: number;
    selectedElementIds: ReadonlySet<string>;
@@ -934,7 +965,7 @@ index 450957d0..e1cbc4df 100644
    focusedScopeId: string | null;
    activeHandleId: string | null;
    fileRef: DocumentFileRef | null;
-@@ -170,6 +176,7 @@ export type WorkspaceEphemeralState = {
+@@ -170,6 +175,7 @@ export type WorkspaceEphemeralState = {
    // ── canvas slice ─────────────────────────────────────────────────────────────
    toolMode: ToolMode;
    canvasTransform: CanvasTransform;
@@ -942,7 +973,7 @@ index 450957d0..e1cbc4df 100644
    hoveredElementId: string | null;
    activeCanvasDragKind: CanvasDragKind | null;
    /** Source id currently being edited via source-number scrubbing. */
-@@ -183,6 +190,7 @@ export type WorkspaceEphemeralState = {
+@@ -183,6 +189,7 @@ export type WorkspaceEphemeralState = {
    showGuides: boolean;
    showDocumentBounds: boolean;
    freehandSmoothingPx: number;
@@ -950,7 +981,7 @@ index 450957d0..e1cbc4df 100644
    bucketFillColor: string;
    selectedAddShape: Exclude<NodeShapePresetId, "custom">;
    selectedAddMatrixRows: number;
-@@ -247,6 +255,7 @@ export type EditorState = {
+@@ -247,6 +254,7 @@ export type EditorState = {
  
    // ── selection slice ──────────────────────────────────────────────────────────
    selectedElementIds: ReadonlySet<string>;
@@ -958,7 +989,7 @@ index 450957d0..e1cbc4df 100644
    focusedScopeId: string | null;
    activeHandleId: string | null;
    activeDocumentId: string;
-@@ -258,6 +267,7 @@ export type EditorState = {
+@@ -258,6 +266,7 @@ export type EditorState = {
    // ── canvas slice ─────────────────────────────────────────────────────────────
    toolMode: ToolMode;
    canvasTransform: CanvasTransform;
@@ -966,7 +997,7 @@ index 450957d0..e1cbc4df 100644
    hoveredElementId: string | null;
    activeCanvasDragKind: CanvasDragKind | null;
    /** Source id currently being edited via source-number scrubbing. */
-@@ -271,6 +281,7 @@ export type EditorState = {
+@@ -271,6 +280,7 @@ export type EditorState = {
    showGuides: boolean;
    showDocumentBounds: boolean;
    freehandSmoothingPx: number;
@@ -974,7 +1005,7 @@ index 450957d0..e1cbc4df 100644
    bucketFillColor: string;
    selectedAddShape: Exclude<NodeShapePresetId, "custom">;
    selectedAddMatrixRows: number;
-@@ -354,6 +365,15 @@ export type EditorAction =
+@@ -354,6 +364,15 @@ export type EditorAction =
        source: string;
        changedSourceIds?: string[] | null;
      }
@@ -990,7 +1021,7 @@ index 450957d0..e1cbc4df 100644
    | { type: "COMPUTE_REQUESTED"; requestId: string; documentId?: string }
    | { type: "SNAPSHOT_READY"; requestId: string; snapshot: SessionSnapshot; documentId?: string }
    | { type: "REORDER_TABS"; fromId: string; toId: string }
-@@ -387,6 +407,7 @@ export type EditorAction =
+@@ -387,6 +406,7 @@ export type EditorAction =
    | { type: "UNDO" }
    | { type: "REDO" }
    // Selection
@@ -998,7 +1029,7 @@ index 450957d0..e1cbc4df 100644
    | { type: "SELECT"; id: string; additive: boolean }
    | { type: "SELECT_RANGE"; ids: string[] }
    | { type: "CLEAR_SELECTION"; preserveFocusedScope?: boolean }
-@@ -394,10 +415,12 @@ export type EditorAction =
+@@ -394,10 +414,12 @@ export type EditorAction =
    | { type: "SET_ACTIVE_HANDLE"; handleId: string | null }
    // Canvas
    | { type: "SET_TOOL_MODE"; mode: ToolMode }
@@ -4793,10 +4824,10 @@ index 00000000..a3cd7fb7
 +.action[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/ZoomDisplayControl.tsx b/packages/app/src/ui/ZoomDisplayControl.tsx
 new file mode 100644
-index 00000000..e1966506
+index 00000000..e45afbd7
 --- /dev/null
 +++ b/packages/app/src/ui/ZoomDisplayControl.tsx
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,53 @@
 +import { useState } from "react";
 +import { useEditorStore } from "../store/store";
 +import { CANVAS_ZOOM_BASE_SCALE, CANVAS_ZOOM_PRESET_PERCENTS } from "../store/workspace-state";
@@ -4811,6 +4842,7 @@ index 00000000..e1966506
 +  const [open, setOpen] = useState(false);
 +  const showGrid = useEditorStore((state) => state.showGrid);
 +  const showRulers = useEditorStore((state) => state.showRulers);
++  const showGuides = useEditorStore((state) => state.showGuides);
 +  const showDocumentBounds = useEditorStore((state) => state.showDocumentBounds);
 +  const canvasTransform = useEditorStore((state) => state.canvasTransform);
 +  const canvasFitToContentScale = useEditorStore((state) => state.canvasFitToContentScale);
@@ -4839,6 +4871,7 @@ index 00000000..e1966506
 +        <div className={css.levels}>{zoomOptions.map((level) => <button type="button" key={level}
 +          className={css.action} aria-pressed={zoomPercent === level} onClick={() => requestZoomPercent(level)}>{level}%</button>)}</div>
 +        {([{ aid: "grid", label: "Grid", checked: showGrid }, { aid: "rulers", label: "Rulers", checked: showRulers },
++          { aid: "guides", label: "Ruler guides", checked: showGuides },
 +          { aid: "documentBounds", label: "Output bounds", checked: showDocumentBounds }] as const).map(({ aid, label, checked }) =>
 +          <button type="button" key={aid} className={css.action} aria-pressed={checked}
 +            onClick={() => dispatch({ type: "TOGGLE_CANVAS_AID", aid })}>{label}</button>)}
@@ -4849,10 +4882,27 @@ index 00000000..e1966506
 +  );
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-index cf4cf2cf..3c71ef92 100644
+index cf4cf2cf..43654ce1 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-@@ -94,14 +94,14 @@
+@@ -38,6 +38,16 @@
+   user-select: none;
+ }
+ 
++.rulerCorner,
++.topRulerSlot,
++.leftRulerSlot {
++  /* The canvas's interaction layer draws past its cell; the rulers sit above it so they take their own presses,
++     and a finger dragging a guide out of a ruler is a guide drag, not a page scroll. */
++  position: relative;
++  z-index: 2;
++  touch-action: none;
++}
++
+ .topRulerSlot {
+   grid-column: 2;
+   grid-row: 1;
+@@ -94,14 +104,14 @@
  }
  
  .rulerTickMinor {
@@ -4870,7 +4920,7 @@ index cf4cf2cf..3c71ef92 100644
    vector-effect: non-scaling-stroke;
  }
  
-@@ -122,10 +122,7 @@
+@@ -122,10 +132,7 @@
    overflow: hidden;
    touch-action: none;
    outline: none;
@@ -4882,7 +4932,7 @@ index cf4cf2cf..3c71ef92 100644
  }
  
  .viewportTool {
-@@ -163,7 +160,7 @@
+@@ -163,7 +170,7 @@
    position: absolute;
    inset: 0;
    background: #fff;
@@ -4891,7 +4941,7 @@ index cf4cf2cf..3c71ef92 100644
    pointer-events: none;
    -webkit-user-select: none;
    user-select: none;
-@@ -192,6 +189,14 @@
+@@ -192,6 +199,14 @@
    box-shadow: none;
  }
  
@@ -4906,7 +4956,7 @@ index cf4cf2cf..3c71ef92 100644
  :global([data-canvas-invert]) .svgLayer {
    background: #e8e8e8;
    filter: invert(1) hue-rotate(180deg);
-@@ -323,59 +328,34 @@
+@@ -323,59 +338,34 @@
  }
  
  .gridMinor {
@@ -4976,7 +5026,7 @@ index cf4cf2cf..3c71ef92 100644
  }
  
  .hitRegions {
-@@ -390,6 +370,16 @@
+@@ -390,6 +380,16 @@
    fill: transparent;
  }
  
@@ -9431,7 +9481,7 @@ index c69a45af..d9ae7072 100644
        tryInsertPathWorldPoint
      ]
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
-index 7113da3e..6f086a32 100644
+index 7113da3e..b47c9051 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
 @@ -1,9 +1,11 @@
@@ -9458,7 +9508,7 @@ index 7113da3e..6f086a32 100644
    verticalMinor: number[];
    verticalMajor: number[];
    verticalAxisX: number | null;
-@@ -34,12 +39,14 @@ export type GridLines = {
+@@ -34,12 +39,13 @@ export type GridLines = {
  };
  
  export type UseCanvasGuidesAndRulersArgs = {
@@ -9469,12 +9519,12 @@ index 7113da3e..6f086a32 100644
    guidePreview: GuidePreview | null;
 +  latticeLock: boolean;
    snapModes: {
-     guides: boolean;
+-    guides: boolean;
 -    grid: boolean;
      points: boolean;
      gaps: boolean;
    };
-@@ -58,9 +65,12 @@ export type UseCanvasGuidesAndRulersArgs = {
+@@ -58,9 +64,12 @@ export type UseCanvasGuidesAndRulersArgs = {
  
  export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
    const {
@@ -9487,7 +9537,7 @@ index 7113da3e..6f086a32 100644
      snapModes,
      gridMinorTargetPx,
      canvasTransform,
-@@ -75,6 +85,15 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -75,20 +84,28 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
      LEFT_RULER_DRAG_SOURCE_WIDTH_PX
    } = args;
  
@@ -9502,8 +9552,15 @@ index 7113da3e..6f086a32 100644
 +
    const snapGuideInput = useMemo(
      () => ({
-       x: showGuides && snapModes.guides ? guides.vertical : [],
-@@ -85,10 +104,8 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+-      x: showGuides && snapModes.guides ? guides.vertical : [],
+-      y: showGuides && snapModes.guides ? guides.horizontal : []
++      // Shown ruler guides are snapped to; hidden ones are not. One setting owns both.
++      x: showGuides ? guides.vertical : [],
++      y: showGuides ? guides.horizontal : []
+     }),
+-    [guides.horizontal, guides.vertical, showGuides, snapModes.guides]
++    [guides.horizontal, guides.vertical, showGuides]
+   );
  
    const snapSettingsPatch = useMemo(
      () => ({
@@ -10990,7 +11047,7 @@ index 44b105be..f1cfbce3 100644
      logClipboardDebug("Clipboard write unavailable: navigator.clipboard missing.");
      return false;
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
-index 3ab44838..76a2966c 100644
+index 3ab44838..4003fd0f 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts
 +++ b/packages/app/src/ui/editor-command-runtime.ts
 @@ -98,11 +98,11 @@ type RuntimeInput = {
@@ -11067,7 +11124,7 @@ index 3ab44838..76a2966c 100644
          dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
        }
      },
-@@ -911,15 +918,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -911,20 +918,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        checked: showTransparencyGrid,
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" }); }
      },
@@ -11079,16 +11136,21 @@ index 3ab44838..76a2966c 100644
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "documentBounds" }); }
      },
 -    [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID]: {
-+    [APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK]: {
-       enabled: true,
+-      enabled: true,
 -      checked: snapModes.grid,
 -      run: () => { dispatch({ type: "TOGGLE_SNAP_MODE", mode: "grid" }); }
+-    },
+-    [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES]: {
++    [APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK]: {
+       enabled: true,
+-      checked: snapModes.guides,
+-      run: () => { dispatch({ type: "TOGGLE_SNAP_MODE", mode: "guides" }); }
 +      checked: latticeLock,
 +      run: () => { updateCanvasSettings({ latticeLock: !latticeLock }); }
      },
-     [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES]: {
+     [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_POINTS]: {
        enabled: true,
-@@ -1098,6 +1105,7 @@ export function useEditorCommandRuntime(
+@@ -1098,6 +1100,7 @@ export function useEditorCommandRuntime(
      onAddNodeAdornment?: (kind: "label" | "pin") => void;
      onPositionNodeRelativeTo?: () => void;
      onConvertNodePositionToAbsolute?: () => void;
@@ -11096,7 +11158,7 @@ index 3ab44838..76a2966c 100644
      onShowCompiledPicture?: () => void;
      onOpenSettings?: () => void;
      onFocusAssistant?: () => void;
-@@ -1126,11 +1134,11 @@ export function useEditorCommandRuntime(
+@@ -1126,11 +1129,11 @@ export function useEditorCommandRuntime(
    const tabCount = useEditorStore((s) => s.tabOrder.length);
    const dirty = useEditorStore((s) => s.documents[s.activeDocumentId]?.dirty ?? false);
    const fileRef = useEditorStore((s) => s.documents[s.activeDocumentId]?.fileRef ?? null);
@@ -11109,7 +11171,7 @@ index 3ab44838..76a2966c 100644
    const showRulers = useEditorStore((s) => s.showRulers);
    const showGuides = useEditorStore((s) => s.showGuides);
    const showDocumentBounds = useEditorStore((s) => s.showDocumentBounds);
-@@ -1203,11 +1211,11 @@ export function useEditorCommandRuntime(
+@@ -1203,11 +1206,11 @@ export function useEditorCommandRuntime(
          tabCount,
          dirty,
          fileRef,
@@ -11122,7 +11184,7 @@ index 3ab44838..76a2966c 100644
          showRulers,
          showGuides,
          showDocumentBounds,
-@@ -1234,6 +1242,7 @@ export function useEditorCommandRuntime(
+@@ -1234,6 +1237,7 @@ export function useEditorCommandRuntime(
          onAddNodeAdornment: options.onAddNodeAdornment,
          onPositionNodeRelativeTo: options.onPositionNodeRelativeTo,
          onConvertNodePositionToAbsolute: options.onConvertNodePositionToAbsolute,
@@ -11130,7 +11192,7 @@ index 3ab44838..76a2966c 100644
          onShowCompiledPicture: options.onShowCompiledPicture,
          onOpenSettings: options.onOpenSettings,
          onCheckForUpdates: options.onCheckForUpdates,
-@@ -1256,11 +1265,11 @@ export function useEditorCommandRuntime(
+@@ -1256,11 +1260,11 @@ export function useEditorCommandRuntime(
        tabCount,
        dirty,
        fileRef,
@@ -11143,7 +11205,7 @@ index 3ab44838..76a2966c 100644
        showRulers,
        showGuides,
        showDocumentBounds,
-@@ -1287,6 +1296,7 @@ export function useEditorCommandRuntime(
+@@ -1287,6 +1291,7 @@ export function useEditorCommandRuntime(
        options.onAddNodeAdornment,
        options.onPositionNodeRelativeTo,
        options.onConvertNodePositionToAbsolute,
