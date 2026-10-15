@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { chromium, expect, type Browser, type BrowserContext, type FrameLocator, type Page } from "@playwright/test";
 
 import { geometryTraces } from "./geometry-traces";
-import { buildWorkbench, editorDebug, editorFrame, startWorkbench, stableCenter, storyScreenshot, strokePoint, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
+import { buildWorkbench, editorDebug, editorFrame, startWorkbench, settledCenter, stableCenter, storyScreenshot, strokePoint, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
 import type { EditorSnapshot } from '../src/host';
 
 const freehandTool = (frame: FrameLocator) => frame.getByRole('button', { name: 'Freehand', exact: true });
@@ -242,6 +242,9 @@ describe("standalone workbench host boundary", function () {
       await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw[^;]*--[^;]*;/);
 
       await input.touch([await center(rail.getByRole('button', { name: 'Select', exact: true }))]);
+      // The inserted line stays selected and its control may cover the circle; tap empty canvas to dismiss it.
+      await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
       await input.longPress(await strokePoint(page, frame.locator('circle[data-source-id]').first(), .5));
       await input.touch([await center(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Delete', exact: true }))]);
       await expect(frame.locator('circle[data-source-id]')).toHaveCount(0);
@@ -559,10 +562,10 @@ describe("standalone workbench host boundary", function () {
         await expect(lock).toHaveAttribute('aria-pressed', 'true');
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await tap({ x: viewport.x + viewport.width - 20, y: viewport.y + viewport.height - 20 });
-        await tap(await centerOf(frame.locator('svg [data-source-id="path:1"]').first()));
+        await tap(await settledCenter(frame.locator('svg [data-source-id="path:1"]').first()));
         assert.deepEqual((await editorDebug(page)).selection, ['path:0'], 'A locked curve stays selected');
         const anchor = frame.locator('[data-handle-kind="move-handle"][data-source-id="path:0"]').first();
-        await tap(await centerOf(anchor));
+        await tap(await settledCenter(anchor));
         await expect.poll(async () => (await editorDebug(page)).handle).not.toBeNull();
         assert.deepEqual((await editorDebug(page)).selection, ['path:0']);
         const before = (await editorDebug(page)).viewport;
@@ -636,7 +639,7 @@ describe("standalone workbench host boundary", function () {
           await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
           await expect(page.locator('.cm-content')).toBeVisible();
         }
-        const [label, railBox] = [await stableCenter(origin), (await rail.boundingBox())!];
+        const [label, railBox] = [await settledCenter(origin), (await rail.boundingBox())!];
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         assert.ok(label.x > viewport.x && label.x < viewport.x + viewport.width && label.y > viewport.y && label.y < viewport.y + viewport.height, `origin ${moment} is off the canvas`);
         assert.ok(label.x > railBox.x + railBox.width, `origin ${moment} is under the rail`);

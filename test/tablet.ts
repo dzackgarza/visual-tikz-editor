@@ -58,21 +58,33 @@ export const editorFrame = (page: Page): FrameLocator => page.frameLocator('ifra
  * clicks require; a touch aimed at a box measured mid-layout lands elsewhere.
  */
 export async function stableCenter(locator: Locator): Promise<Point> {
-  let previous = await locator.boundingBox();
+  // A finger scrolls a scrollable control to reach a button; canvas items use settledCenter.
+  await locator.scrollIntoViewIfNeeded();
+  return settledCenter(locator);
+}
+
+/** The centre of a canvas item once its box stops moving; never scrolls its container. */
+export async function settledCenter(locator: Locator): Promise<Point> {
+  // Settled means the same box on three reads 100 ms apart.
+  const boxes: Array<{ x: number; y: number; width: number; height: number } | null> = [await locator.boundingBox()];
   for (let attempt = 0; attempt < 50; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 100));
-    const box = await locator.boundingBox();
-    if (box !== null && previous !== null && box.x === previous.x && box.y === previous.y &&
-        box.width === previous.width && box.height === previous.height) {
-      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    boxes.push(await locator.boundingBox());
+    const [a, b, c] = boxes.slice(-3);
+    if (boxes.length >= 3 && a && b && c && [b, c].every(box => box.x === a.x && box.y === a.y && box.width === a.width && box.height === a.height)) {
+      const center = { x: c.x + c.width / 2, y: c.y + c.height / 2 };
+      const window = locator.page().viewportSize()!;
+      if (center.x < 0 || center.y < 0 || center.x > window.width || center.y > window.height)
+        throw new Error(`${locator} is outside the window at ${JSON.stringify(center)}; a finger cannot reach it`);
+      return center;
     }
-    previous = box;
   }
   throw new Error(`${locator} did not settle within 5 s`);
 }
 
 /** A page point on the drawn stroke of `element`, `fraction` of the way along it. */
 export async function strokePoint(page: Page, element: Locator, fraction: number): Promise<Point> {
+  await settledCenter(element);
   const local = await element.evaluate((geometry: SVGGeometryElement, at) => {
     const point = geometry.getPointAtLength(geometry.getTotalLength() * at);
     const matrix = geometry.getScreenCTM()!;
