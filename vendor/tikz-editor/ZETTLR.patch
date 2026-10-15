@@ -310,7 +310,7 @@ index 20b8b673..faf832b4 100644
    writeText?: (text: string) => Promise<void>;
    readCustomText?: (
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
-index 4850a87e..87e1e052 100644
+index 4850a87e..755ae417 100644
 --- a/packages/app/src/settings/storage.ts
 +++ b/packages/app/src/settings/storage.ts
 @@ -1,5 +1,5 @@
@@ -320,7 +320,7 @@ index 4850a87e..87e1e052 100644
  import { getActiveEditorPlatform } from "../platform/current";
  
  const STORAGE_KEY = "tikz-editor:settings";
-@@ -36,11 +36,36 @@ export function loadSettings(): AppSettings {
+@@ -36,11 +36,38 @@ export function loadSettings(): AppSettings {
        },
        canvas: {
          ...DEFAULT_SETTINGS.canvas,
@@ -351,6 +351,8 @@ index 4850a87e..87e1e052 100644
 +      toolbar: {
 +        dock: isToolbarDock(parsed.toolbar?.dock) ? parsed.toolbar.dock : DEFAULT_SETTINGS.toolbar.dock,
 +        lassoShape: parsed.toolbar?.lassoShape === "ellipse" || parsed.toolbar?.lassoShape === "rectangle" ? parsed.toolbar.lassoShape : "freehand",
++        circleConstruction: parsed.toolbar?.circleConstruction === "diameter" || parsed.toolbar?.circleConstruction === "three-points" ? parsed.toolbar.circleConstruction : "centre",
++        arcConstruction: parsed.toolbar?.arcConstruction === "three-points" ? "three-points" : "centre",
 +        x: typeof parsed.toolbar?.x === "number" && Number.isFinite(parsed.toolbar.x) ? parsed.toolbar.x : DEFAULT_SETTINGS.toolbar.x,
 +        y: typeof parsed.toolbar?.y === "number" && Number.isFinite(parsed.toolbar.y) ? parsed.toolbar.y : DEFAULT_SETTINGS.toolbar.y,
 +        items: Array.isArray(parsed.toolbar?.items)
@@ -359,7 +361,7 @@ index 4850a87e..87e1e052 100644
        },
        rendering: {
          ...DEFAULT_SETTINGS.rendering,
-@@ -52,6 +77,16 @@ export function loadSettings(): AppSettings {
+@@ -52,6 +79,16 @@ export function loadSettings(): AppSettings {
    }
  }
  
@@ -377,10 +379,10 @@ index 4850a87e..87e1e052 100644
    if (!Number.isFinite(value)) {
      return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
 diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
-index af0a7abe..3508c0e0 100644
+index af0a7abe..a3119e39 100644
 --- a/packages/app/src/settings/types.ts
 +++ b/packages/app/src/settings/types.ts
-@@ -9,6 +9,15 @@ export type EditorSettings = {
+@@ -9,6 +9,22 @@ export type EditorSettings = {
  
  export type ColorPickerAccuracy = "approximate" | "exact";
  
@@ -391,12 +393,19 @@ index af0a7abe..3508c0e0 100644
 +export type ToolbarToolId = (typeof TOOLBAR_TOOL_IDS)[number];
 +export type ToolbarItem = { kind: "tool"; id: ToolbarToolId } | { kind: "separator" } | { kind: "spacer" };
 +export type ToolbarDock = "top" | "left" | "bottom" | "right" | "floating";
-+export type ToolbarSettings = { items: ToolbarItem[]; dock: ToolbarDock; x: number; y: number; lassoShape: "freehand" | "ellipse" | "rectangle" };
++export type CircleConstruction = "centre" | "diameter" | "three-points";
++export type ArcConstruction = "centre" | "three-points";
++export type ToolbarSettings = {
++  items: ToolbarItem[]; dock: ToolbarDock; x: number; y: number; lassoShape: "freehand" | "ellipse" | "rectangle";
++  /** How the Circle and Arc tools take their points: by centre, or through tapped points (IPE's constructions). */
++  circleConstruction: CircleConstruction;
++  arcConstruction: ArcConstruction;
++};
 +
  export type GridSize = "fine" | "standard" | "coarse";
  
  export type ColorScheme = "system" | "light" | "dark";
-@@ -20,7 +29,14 @@ export type GeneralSettings = {
+@@ -20,7 +36,14 @@ export type GeneralSettings = {
  };
  
  export type CanvasSettings = {
@@ -411,7 +420,7 @@ index af0a7abe..3508c0e0 100644
    handleSizePx: number;
    zoomSpeed: number;
    snapHapticsEnabled: boolean;
-@@ -49,7 +65,11 @@ export type AppSettings = {
+@@ -49,7 +72,11 @@ export type AppSettings = {
    canvas: CanvasSettings;
    colorPicker: {
      accuracy: ColorPickerAccuracy;
@@ -423,7 +432,7 @@ index af0a7abe..3508c0e0 100644
    rendering: RenderingSettings;
  };
  
-@@ -81,13 +101,43 @@ export const DEFAULT_SETTINGS: AppSettings = {
+@@ -81,13 +108,45 @@ export const DEFAULT_SETTINGS: AppSettings = {
      formatterMaxLineLength: 100
    },
    canvas: {
@@ -448,6 +457,8 @@ index af0a7abe..3508c0e0 100644
 +  toolbar: {
 +    dock: "left",
 +    lassoShape: "freehand",
++    circleConstruction: "centre",
++    arcConstruction: "centre",
 +    x: 0.5,
 +    y: 0.5,
 +    items: [
@@ -3969,7 +3980,7 @@ index 0ddde08e..dcd5a6c1 100644
 +.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
 +.insertChoice:disabled { opacity: .5; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..698f494c 100644
+index a3293df2..93bb7c41 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -3996,7 +4007,7 @@ index a3293df2..698f494c 100644
  import popupCss from "./ToolbarToolPopup.module.css";
  import type { ToolMode } from "../store/types";
 +import { useSettingsStore } from "../settings/useSettingsStore";
-+import type { ToolbarToolId } from "../settings/types";
++import type { ToolbarSettings, ToolbarToolId } from "../settings/types";
  import css from "./Toolbar.module.css";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
@@ -4255,7 +4266,7 @@ index a3293df2..698f494c 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +362,174 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +362,179 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -4340,11 +4351,15 @@ index a3293df2..698f494c 100644
 +    return toolDef ? renderStandardButton(toolDef) : null;
 +  };
 +
-+  const insertionModes: { mode: ToolMode; label: string }[] = [
++  // Circle and Arc entries also choose how the tool takes its points (IPE's constructions).
++  const insertionModes: { mode: ToolMode; label: string; construction?: Pick<ToolbarSettings, "circleConstruction"> | Pick<ToolbarSettings, "arcConstruction"> }[] = [
 +    { mode: "addLine", label: "Line" }, { mode: "addArrow", label: "Arrow" },
 +    { mode: "addPath", label: "Path" },
-+    { mode: "addBezier", label: "Curve" }, { mode: "addArc", label: "Arc" },
-+    { mode: "addPoint", label: "Point" }, { mode: "addCircle", label: "Circle" },
++    { mode: "addBezier", label: "Curve" }, { mode: "addArc", label: "Arc", construction: { arcConstruction: "centre" } },
++    { mode: "addArc", label: "Arc through three points", construction: { arcConstruction: "three-points" } },
++    { mode: "addPoint", label: "Point" }, { mode: "addCircle", label: "Circle", construction: { circleConstruction: "centre" } },
++    { mode: "addCircle", label: "Circle on a diameter", construction: { circleConstruction: "diameter" } },
++    { mode: "addCircle", label: "Circle through three points", construction: { circleConstruction: "three-points" } },
 +    { mode: "addEllipse", label: "Ellipse" }, { mode: "addRect", label: "Rectangle" },
 +    { mode: "addNode", label: "Node or text" }, { mode: "addGrid", label: "Grid" },
 +    { mode: "addImage", label: "Image" }
@@ -4353,8 +4368,9 @@ index a3293df2..698f494c 100644
 +    popup={<ToolbarPopupSection title={insertSection === "all" ? "Insert" : insertSection === "shape" ? "Insert shape" : "Insert matrix"}>
 +      {insertSection === "all" ? <>
 +        <div className={css.insertChoices}>
-+          {insertionModes.map(({ mode, label }) => <button type="button" key={mode} className={css.insertChoice}
++          {insertionModes.map(({ mode, label, construction }) => <button type="button" key={label} className={css.insertChoice}
 +            disabled={getToolCapabilityStatus(mode).status === "unsupported"} onClick={() => {
++              if (construction) updateToolbarSettings(construction);
 +              dispatch({ type: "SET_TOOL_MODE", mode }); setOpenPopupMode(null);
 +            }}>{label}</button>)}
 +          {([{ enabled: true, label: "Freehand geometry" }, { enabled: false, label: "Freehand ink" }] as const).map(({ enabled, label }) =>
@@ -4430,7 +4446,7 @@ index a3293df2..698f494c 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +558,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +563,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -4442,7 +4458,7 @@ index a3293df2..698f494c 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +618,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +623,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -4450,7 +4466,7 @@ index a3293df2..698f494c 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +661,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +666,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -4458,7 +4474,7 @@ index a3293df2..698f494c 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +677,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +682,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4480,7 +4496,7 @@ index a3293df2..698f494c 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +699,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +704,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -4488,7 +4504,7 @@ index a3293df2..698f494c 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +707,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +712,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -4500,7 +4516,7 @@ index a3293df2..698f494c 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +720,74 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +725,74 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4577,7 +4593,7 @@ index a3293df2..698f494c 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +798,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +803,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -4591,7 +4607,7 @@ index a3293df2..698f494c 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +814,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +819,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -4600,7 +4616,7 @@ index a3293df2..698f494c 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +839,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +844,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -4978,7 +4994,7 @@ index cf4cf2cf..3c71ef92 100644
    pointer-events: none;
  }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..42887f18 100644
+index 4e22ccfa..6403dbe6 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,17 @@ preflightPositionNodeRelativeToAction,
@@ -5050,7 +5066,7 @@ index 4e22ccfa..42887f18 100644
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
-+ArcDraft,
++ArcDraft, TapDraft,
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
@@ -5186,7 +5202,7 @@ index 4e22ccfa..42887f18 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -912,11 +982,104 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -912,11 +982,105 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
@@ -5289,10 +5305,11 @@ index 4e22ccfa..42887f18 100644
    const [bezierBendDraft, setBezierBendDraft] = useState<Extract<DragState, { kind: "tool-bezier-bend" }> | null>(null);
    const [pendingBezier, setPendingBezier] = useState<PendingBezier | null>(null);
 +  const [arcDraft, setArcDraft] = useState<ArcDraft | null>(null);
++  const [tapDraft, setTapDraft] = useState<TapDraft | null>(null);
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1096,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1097,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -5301,7 +5318,7 @@ index 4e22ccfa..42887f18 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1107,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1108,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -5315,7 +5332,7 @@ index 4e22ccfa..42887f18 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1200,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1201,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -5338,7 +5355,7 @@ index 4e22ccfa..42887f18 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,7 +1270,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,7 +1271,9 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -5348,7 +5365,7 @@ index 4e22ccfa..42887f18 100644
      activeHandleIdOverride: contextMenuHandleIdOverride
    });
  
-@@ -1157,15 +1297,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1157,15 +1298,22 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
    const pathDraftRef = useRef<PathToolDraft | null>(null);
@@ -5372,7 +5389,7 @@ index 4e22ccfa..42887f18 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1300,7 +1447,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1448,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -5380,7 +5397,7 @@ index 4e22ccfa..42887f18 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1467,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1468,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -5391,7 +5408,7 @@ index 4e22ccfa..42887f18 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1651,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1652,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -5415,7 +5432,7 @@ index 4e22ccfa..42887f18 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1666,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1667,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -5429,7 +5446,7 @@ index 4e22ccfa..42887f18 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1810,7 +1933,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,7 +1934,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -5437,7 +5454,7 @@ index 4e22ccfa..42887f18 100644
      svgResult,
      canvasTransform,
      marqueeDraft,
-@@ -1819,10 +1941,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1819,10 +1942,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      ROTATE_HANDLE_OFFSET_PX
    });
  
@@ -5461,7 +5478,7 @@ index 4e22ccfa..42887f18 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,9 +1972,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,9 +1973,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -5474,7 +5491,7 @@ index 4e22ccfa..42887f18 100644
      snapModes,
      gridMinorTargetPx,
      canvasTransform,
-@@ -1857,44 +1994,49 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +1995,50 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -5490,6 +5507,7 @@ index 4e22ccfa..42887f18 100644
      pathSegmentDraft,
      pendingBezier,
 +    arcDraft,
++    tapDraft,
      bezierBendDraft,
      canvasTransform
    });
@@ -5533,7 +5551,7 @@ index 4e22ccfa..42887f18 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -2055,17 +2197,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2199,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -5558,7 +5576,7 @@ index 4e22ccfa..42887f18 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2221,220 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2223,220 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -5803,7 +5821,7 @@ index 4e22ccfa..42887f18 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2449,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2451,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -5811,7 +5829,7 @@ index 4e22ccfa..42887f18 100644
          return;
        }
  
-@@ -2141,7 +2457,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2459,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -5819,7 +5837,7 @@ index 4e22ccfa..42887f18 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2473,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2475,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -5827,7 +5845,7 @@ index 4e22ccfa..42887f18 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,7 +2487,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,7 +2489,6 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -5835,7 +5853,7 @@ index 4e22ccfa..42887f18 100644
      },
      [applyActionWithFeedback, creationStrokeColor, dispatch, setDragState]
    );
-@@ -3064,9 +3377,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3379,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -5845,7 +5863,7 @@ index 4e22ccfa..42887f18 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3147,7 +3457,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3459,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -5856,7 +5874,7 @@ index 4e22ccfa..42887f18 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3483,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3485,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -5866,7 +5884,7 @@ index 4e22ccfa..42887f18 100644
      ]
    );
  
-@@ -3192,6 +3505,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3507,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -5945,7 +5963,7 @@ index 4e22ccfa..42887f18 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3605,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3607,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -5958,10 +5976,13 @@ index 4e22ccfa..42887f18 100644
      pendingBezier,
 +    arcDraft,
 +    setArcDraft,
++    tapDraft,
++    setTapDraft,
++    creationFillColor,
      snapshot,
      source,
      setWarning,
-@@ -3267,16 +3655,231 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,16 +3660,231 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -6195,7 +6216,7 @@ index 4e22ccfa..42887f18 100644
    );
  
    const {
-@@ -3306,6 +3909,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +3914,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -6203,7 +6224,7 @@ index 4e22ccfa..42887f18 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,12 +3934,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,12 +3939,11 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -6217,7 +6238,7 @@ index 4e22ccfa..42887f18 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -3345,7 +3948,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3345,7 +3953,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomSpeed,
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
@@ -6225,7 +6246,7 @@ index 4e22ccfa..42887f18 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,25 +4051,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,25 +4056,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -6251,7 +6272,7 @@ index 4e22ccfa..42887f18 100644
    useEffect(() => {
      if (toolMode === "select") {
        setPathDraft(null);
-@@ -3706,15 +4289,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4294,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -6275,7 +6296,7 @@ index 4e22ccfa..42887f18 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4402,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4407,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -6283,7 +6304,7 @@ index 4e22ccfa..42887f18 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4415,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4420,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -6291,7 +6312,7 @@ index 4e22ccfa..42887f18 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4426,72 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4431,72 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -6364,7 +6385,7 @@ index 4e22ccfa..42887f18 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4514,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4519,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -6387,7 +6408,7 @@ index 4e22ccfa..42887f18 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4545,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4550,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -6402,7 +6423,7 @@ index 4e22ccfa..42887f18 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4571,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4576,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -6436,7 +6457,7 @@ index 4e22ccfa..42887f18 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4603,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4608,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6446,7 +6467,7 @@ index 4e22ccfa..42887f18 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4616,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4621,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6476,7 +6497,7 @@ index 4e22ccfa..42887f18 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +4665,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +4670,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -6484,7 +6505,7 @@ index 4e22ccfa..42887f18 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +4674,80 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4679,80 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -7515,7 +7536,7 @@ index a7b0a7e2..59f89791 100644
 +  });
 +}
 diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
-index 5660d6d8..4ca2001f 100644
+index 5660d6d8..8cfbb61d 100644
 --- a/packages/app/src/ui/canvas-panel/geometry.ts
 +++ b/packages/app/src/ui/canvas-panel/geometry.ts
 @@ -1,4 +1,5 @@
@@ -7562,6 +7583,37 @@ index 5660d6d8..4ca2001f 100644
    return {
      minorStep,
      majorStep: minorStep * OVERLAY_MAJOR_STEP_MULTIPLE
+@@ -291,3 +282,30 @@ export function distanceSquared(a: WorldPoint, b: WorldPoint): number {
+   const dy = a.y - b.y;
+   return dx * dx + dy * dy;
+ }
++
++type PlanePoint = { x: number; y: number };
++
++/** The circle with the segment from a to b as its diameter. */
++export function circleOnDiameter(a: PlanePoint, b: PlanePoint): { center: PlanePoint; radius: number } {
++  return { center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, radius: Math.hypot(b.x - a.x, b.y - a.y) / 2 };
++}
++
++/** The circle through three points, or null when they lie on one line. */
++export function circleThroughThree(a: PlanePoint, b: PlanePoint, c: PlanePoint): { center: PlanePoint; radius: number } | null {
++  const dx = b.x - a.x, dy = b.y - a.y;
++  const ex = c.x - a.x, ey = c.y - a.y;
++  const determinant = 2 * (dx * ey - dy * ex);
++  if (Math.abs(determinant) < 1e-10 * Math.max(1, dx * dx + dy * dy, ex * ex + ey * ey)) return null;
++  const d2 = dx * dx + dy * dy, e2 = ex * ex + ey * ey;
++  const center = { x: a.x + (ey * d2 - dy * e2) / determinant, y: a.y + (dx * e2 - ex * d2) / determinant };
++  return { center, radius: Math.hypot(center.x - a.x, center.y - a.y) };
++}
++
++/** Start angle and signed sweep, in degrees, of the arc about center from start to end that passes through via. */
++export function arcThroughThree(center: PlanePoint, start: PlanePoint, via: PlanePoint, end: PlanePoint): { startAngle: number; sweep: number } {
++  const angleOf = (point: PlanePoint) => Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI;
++  const turn = (degrees: number) => ((degrees % 360) + 360) % 360;
++  const startAngle = angleOf(start);
++  const counterclockwise = turn(angleOf(end) - startAngle);
++  return { startAngle, sweep: turn(angleOf(via) - startAngle) < counterclockwise ? counterclockwise : counterclockwise - 360 };
++}
 diff --git a/packages/app/src/ui/canvas-panel/interaction-helpers.ts b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 index f22aaafd..e1fdeccb 100644
 --- a/packages/app/src/ui/canvas-panel/interaction-helpers.ts
@@ -8327,7 +8379,7 @@ index 00000000..97b948c8
 +  return { kind: "success", source: nextSource };
 +}
 diff --git a/packages/app/src/ui/canvas-panel/types.ts b/packages/app/src/ui/canvas-panel/types.ts
-index dac6b0b3..052677b4 100644
+index dac6b0b3..bd9fea2b 100644
 --- a/packages/app/src/ui/canvas-panel/types.ts
 +++ b/packages/app/src/ui/canvas-panel/types.ts
 @@ -1,8 +1,9 @@
@@ -8368,17 +8420,20 @@ index dac6b0b3..052677b4 100644
      }
    ;
  
-@@ -269,6 +274,9 @@ export type PendingBezier = {
+@@ -269,6 +274,12 @@ export type PendingBezier = {
    endWorld: WorldPoint;
  };
  
 +/** An arc being placed; sweep is the signed, unwrapped turn in degrees from start to the pointer, following the pen round. */
++/** Points tapped so far for a construction through tapped points; the construction fixes how many it needs. */
++export type TapConstruction = "circle-diameter" | "circle-three-points" | "arc-three-points";
++export type TapDraft = { construction: TapConstruction; points: WorldPoint[] };
 +export type ArcDraft = { center: WorldPoint; start?: WorldPoint; sweep?: number; bypassLattice?: boolean };
 +
  export type PathAppendTarget = {
    elementId: string;
    end: "start" | "end";
-@@ -280,10 +288,7 @@ export type PathToolDraft = {
+@@ -280,10 +291,7 @@ export type PathToolDraft = {
    appendTarget?: PathAppendTarget;
  };
  
@@ -8391,10 +8446,10 @@ index dac6b0b3..052677b4 100644
  export type TextSelectionOverlay = {
    sourceId: string;
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
-index de0ccae2..43d65abc 100644
+index de0ccae2..50244477 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
-@@ -1,5 +1,8 @@
+@@ -1,13 +1,16 @@
 +import { snapArcEndpointToLattice, type LatticeTransform } from "tikz-editor/edit/snapping";
  import { useMemo } from "react";
 -import { pt, worldPoint } from "tikz-editor/coords/index";
@@ -8404,11 +8459,12 @@ index de0ccae2..43d65abc 100644
  import { PT_PER_CM } from "tikz-editor/edit/format";
  import type { ScenePathCommand } from "tikz-editor/semantic/types";
  import type { WorldPoint } from "../coords/types";
-@@ -7,7 +10,7 @@ import type { SvgViewBox } from "tikz-editor/svg/types";
+ import type { SvgViewBox } from "tikz-editor/svg/types";
  import type { NodeShapePresetId } from "tikz-editor/edit/inspector";
  import type { CanvasTransform, ToolMode } from "../../store/types";
- import { distanceSquared, fmt, worldToSvgPoint, worldToSvgY } from "./geometry";
+-import { distanceSquared, fmt, worldToSvgPoint, worldToSvgY } from "./geometry";
 -import { resolveBezierControlsFromBend } from "./interaction-helpers";
++import { arcThroughThree, circleOnDiameter, circleThroughThree, distanceSquared, fmt, worldToSvgPoint, worldToSvgY } from "./geometry";
 +import { resolveBezierControlsFromBend, type BezierLattice } from "./interaction-helpers";
  import { resolveAddShapeDraft, resolveAddShapeOriginFromDrag } from "./add-shape-draft";
  import {
@@ -8418,11 +8474,11 @@ index de0ccae2..43d65abc 100644
  import { resolveFreehandPreviewSegments } from "./freehand-tool";
  import { buildAnchoredGridPreviewLines } from "./panel-helpers";
 -import type { CanvasSnapshot, DragState, FreehandToolDraft, PathToolDraft, PendingBezier } from "./types";
-+import type { ArcDraft, CanvasSnapshot, DragState, FreehandToolDraft, PathToolDraft, PendingBezier } from "./types";
++import type { ArcDraft, TapDraft, CanvasSnapshot, DragState, FreehandToolDraft, PathToolDraft, PendingBezier } from "./types";
  import type { ToolPreview } from "./overlays";
  
  const TOOL_PREVIEW_CIRCLE_RADIUS_PT = 0.8 * PT_PER_CM;
-@@ -34,10 +37,12 @@ export type UseCanvasDerivedStateArgs = {
+@@ -34,10 +37,13 @@ export type UseCanvasDerivedStateArgs = {
    toolCursorWorld: WorldPoint | null;
    selectedAddShape: Exclude<NodeShapePresetId, "custom">;
    freehandDraft: FreehandToolDraft | null;
@@ -8431,12 +8487,13 @@ index de0ccae2..43d65abc 100644
    pathSegmentDraft: Extract<DragState, { kind: "tool-path-segment" }> | null;
    pendingBezier: PendingBezier | null;
 +  arcDraft: ArcDraft | null;
++  tapDraft: TapDraft | null;
 +  latticeLock: boolean;
 +  latticeTransform?: LatticeTransform;
    bezierBendDraft: Extract<DragState, { kind: "tool-bezier-bend" }> | null;
    canvasTransform: CanvasTransform;
  };
-@@ -50,20 +55,65 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -50,20 +56,89 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
      toolCursorWorld,
      selectedAddShape,
      freehandDraft,
@@ -8445,6 +8502,7 @@ index de0ccae2..43d65abc 100644
      pathSegmentDraft,
      pendingBezier,
 +    arcDraft,
++    tapDraft,
 +    latticeLock,
 +    latticeTransform,
      bezierBendDraft,
@@ -8458,6 +8516,29 @@ index de0ccae2..43d65abc 100644
      }
  
 -    if (toolMode === "addNode" || toolMode === "addMatrix" || (toolMode === "addShape" && !toolDraft)) {
++    if (tapDraft && toolCursorWorld) {
++      // The construction through the points tapped so far and the pointer.
++      const [first, second] = tapDraft.points;
++      const toSvg = (point: { x: number; y: number }) => worldToSvgPoint(wp(point.x, point.y), svgResult.viewBox);
++      const line = (): ToolPreview => {
++        const [from, to] = [toSvg(first), toSvg(toolCursorWorld)];
++        return { kind: "line", x1: from.x, y1: from.y, x2: to.x, y2: to.y, arrow: false };
++      };
++      const circlePreview = (circle: { center: { x: number; y: number }; radius: number }): ToolPreview => {
++        const center = toSvg(circle.center);
++        return { kind: "circle", cx: center.x, cy: center.y, r: circle.radius };
++      };
++      if (tapDraft.construction === "circle-diameter") return circlePreview(circleOnDiameter(first, toolCursorWorld));
++      if (!second) return line();
++      const circle = circleThroughThree(first, second, toolCursorWorld);
++      if (!circle) return line();
++      if (tapDraft.construction === "circle-three-points") return circlePreview(circle);
++      const { startAngle, sweep } = arcThroughThree(circle.center, first, second, toolCursorWorld);
++      const commands: ScenePathCommand[] = [{ kind: "M", to: first }];
++      appendArcCommand(commands, first, { rx: circle.radius, ry: circle.radius, startAngle, endAngle: startAngle + sweep }, worldTransform(1, 0, 0, 1, 0, 0));
++      return { kind: "path", d: encodeArcPreview(commands, svgResult.viewBox) };
++    }
++
 +    if (toolMode === "addArc" && arcDraft) {
 +      const center = worldToSvgPoint(arcDraft.center, svgResult.viewBox);
 +      const cursor = toolCursorWorld ? worldToSvgPoint(toolCursorWorld, svgResult.viewBox) : center;
@@ -8504,7 +8585,7 @@ index de0ccae2..43d65abc 100644
        const liveWorld = toolDraft?.currentWorld ?? toolCursorWorld;
        if (!liveWorld) {
          return null;
-@@ -82,7 +132,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -82,7 +157,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        }
  
        const segments: Extract<ToolPreview, { kind: "freehand" }>["segments"] = [];
@@ -8513,7 +8594,7 @@ index de0ccae2..43d65abc 100644
          if (segment.kind === "line") {
            const from = worldToSvgPoint(segment.from, svgResult.viewBox);
            const to = worldToSvgPoint(segment.to, svgResult.viewBox);
-@@ -117,7 +167,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -117,7 +192,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
      }
  
      const makeBezierPreview = (startWorld: WorldPoint, endWorld: WorldPoint, bendWorld: WorldPoint): ToolPreview => {
@@ -8522,7 +8603,7 @@ index de0ccae2..43d65abc 100644
        const start = worldToSvgPoint(startWorld, svgResult.viewBox);
        const end = worldToSvgPoint(controls.endWorld, svgResult.viewBox);
        const c1 = worldToSvgPoint(controls.control1, svgResult.viewBox);
-@@ -182,7 +232,8 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -182,7 +257,8 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
            const controls = resolveBezierControlsFromBend(
              pathSegmentDraft.startWorld,
              pathSegmentDraft.endWorld,
@@ -8532,7 +8613,7 @@ index de0ccae2..43d65abc 100644
            );
            const from = worldToSvgPoint(pathSegmentDraft.startWorld, svgResult.viewBox);
            const c1 = worldToSvgPoint(controls.control1, svgResult.viewBox);
-@@ -394,6 +445,21 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -394,6 +470,21 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        };
      }
  
@@ -8554,16 +8635,16 @@ index de0ccae2..43d65abc 100644
      const dx = toolDraft.currentWorld.x - toolDraft.startWorld.x;
      const dy = toolDraft.currentWorld.y - toolDraft.startWorld.y;
      const radius = Math.hypot(dx, dy);
-@@ -404,7 +470,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -404,7 +495,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        cy: start.y,
        r: radius > 1e-4 ? radius : TOOL_PREVIEW_CIRCLE_RADIUS_PT
      };
 -  }, [bezierBendDraft, canvasTransform.scale, freehandDraft, freehandSmoothingPx, pathDraft, pathSegmentDraft, pendingBezier, selectedAddShape, svgResult, toolCursorWorld, toolDraft, toolMode]);
-+  }, [arcDraft, latticeTransform, latticeLock, bezierBendDraft, canvasTransform.scale, freehandDraft, pathDraft, pathSegmentDraft, pendingBezier, selectedAddShape, svgResult, toolCursorWorld, toolDraft, toolMode]);
++  }, [arcDraft, tapDraft, latticeTransform, latticeLock, bezierBendDraft, canvasTransform.scale, freehandDraft, pathDraft, pathSegmentDraft, pendingBezier, selectedAddShape, svgResult, toolCursorWorld, toolDraft, toolMode]);
  
    return {
      toolPreview
-@@ -442,3 +508,12 @@ function encodeTranslatedPathPreview(
+@@ -442,3 +533,12 @@ function encodeTranslatedPathPreview(
    }
    return parts.join(" ");
  }
@@ -9426,10 +9507,10 @@ index 8078a5d4..89bbc24e 100644
    const hitRegions = useMemo(() => {
      if (!snapshot.scene || !svgResult) return [];
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..86725a45 100644
+index 709cc1b9..7b579548 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-@@ -1,6 +1,6 @@
+@@ -1,18 +1,23 @@
  import { useCallback, useEffect, type MouseEvent as ReactMouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
  import { viewportPoint, clientPoint as makeClientPoint, worldPoint, pt, px } from "tikz-editor/coords/index";
 -import { buildSnapContext, resolveSnapSettings, snapToolPointer, type SnapGuideInput, type SnapLine, type SnapSettingsPatch } from "tikz-editor/edit/snapping";
@@ -9437,7 +9518,12 @@ index 709cc1b9..86725a45 100644
  import type { NodeAnchorTarget } from "tikz-editor/semantic/types";
  import type { ClientPoint, WorldBounds, WorldPoint } from "../coords/types";
  import type { CanvasTransform, ToolMode } from "../../store/types";
-@@ -10,9 +10,10 @@ import { createPathToolDraft, pathToolCloseRadiusWorld, pathToolCurrentPoint, pa
+ import { resolveEndpointAnchorSnap } from "./endpoint-anchor-snap";
+-import { clientToWorldPoint, distanceSquared } from "./geometry";
++import { arcThroughThree, circleOnDiameter, circleThroughThree, clientToWorldPoint, distanceSquared } from "./geometry";
++import { useSettingsStore } from "../../settings/useSettingsStore";
++import type { ElementTemplate } from "tikz-editor/edit/actions";
+ import { createPathToolDraft, pathToolCloseRadiusWorld, pathToolCurrentPoint, pathToolShouldClose } from "./path-tool";
  import { resolvePathEndpointSnap } from "./path-endpoint-snap";
  import { createFreehandToolDraft } from "./freehand-tool";
  import { isToolCreateMode } from "../tool-config";
@@ -9446,10 +9532,12 @@ index 709cc1b9..86725a45 100644
  import type { MatrixCellAnchorHint } from "./endpoint-anchor-snap";
  import type {
 +  ArcDraft,
++  TapConstruction,
++  TapDraft,
    ApplyActionWithFeedbackFn,
    CanvasDispatch,
    CanvasEditParseOptions,
-@@ -37,12 +38,16 @@ export type UseCanvasToolInteractionsArgs = {
+@@ -37,12 +42,18 @@ export type UseCanvasToolInteractionsArgs = {
    closeTextEditingSession: () => void;
    startMarqueeSelection: (pointerId: number, clientPoint: ClientPoint, additiveSelection: boolean) => boolean;
    pendingTouchViewportRef: MutableRefObject<PendingTouchViewport | null>;
@@ -9463,10 +9551,20 @@ index 709cc1b9..86725a45 100644
    pendingBezier: PendingBezier | null;
 +  arcDraft: ArcDraft | null;
 +  setArcDraft: StateSetter<ArcDraft | null>;
++  tapDraft: TapDraft | null;
++  setTapDraft: StateSetter<TapDraft | null>;
    snapshot: CanvasSnapshot;
    source: string;
    setWarning: StateSetter<string | null>;
-@@ -91,12 +96,15 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -75,6 +86,7 @@ export type UseCanvasToolInteractionsArgs = {
+   selectedAddMatrixRows: number;
+   selectedAddMatrixColumns: number;
+   creationStrokeColor: string;
++  creationFillColor: string;
+   pathDraft: PathToolDraft | null;
+   pathSegmentDraft: Extract<DragState, { kind: "tool-path-segment" }> | null;
+   dragRef: MutableRefObject<DragState | null>;
+@@ -91,12 +103,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -9479,24 +9577,35 @@ index 709cc1b9..86725a45 100644
      pendingBezier,
 +    arcDraft,
 +    setArcDraft,
++    tapDraft,
++    setTapDraft,
      snapshot,
      source,
      setWarning,
-@@ -137,18 +145,29 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -129,6 +146,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+     selectedAddMatrixRows,
+     selectedAddMatrixColumns,
+     creationStrokeColor,
++    creationFillColor,
+     pathDraft,
+     pathSegmentDraft,
+     dragRef,
+@@ -137,18 +155,30 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      freehandDraft,
      parseOptions
    } = args;
 +  useEffect(() => {
 +    if (toolMode !== "addArc") setArcDraft(null);
-+  }, [toolMode, setArcDraft]);
++    setTapDraft(null);
++  }, [toolMode, setArcDraft, setTapDraft]);
 +
 +  useEffect(() => {
 +    function cancelArc(event: KeyboardEvent) {
-+      if (event.key === "Escape") setArcDraft(null);
++      if (event.key === "Escape") { setArcDraft(null); setTapDraft(null); }
 +    }
 +    window.addEventListener("keydown", cancelArc);
 +    return () => window.removeEventListener("keydown", cancelArc);
-+  }, [setArcDraft]);
++  }, [setArcDraft, setTapDraft]);
    const finalizePendingTouchViewportTap = useCallback(
      (pointerId: number) => {
        const pending = pendingTouchViewportRef.current;
@@ -9514,7 +9623,7 @@ index 709cc1b9..86725a45 100644
    );
  
    useEffect(() => {
-@@ -200,6 +219,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -200,6 +230,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          !pendingBezier &&
          !freehandDraft &&
          (toolMode === "addNode" ||
@@ -9523,7 +9632,7 @@ index 709cc1b9..86725a45 100644
            toolMode === "addMatrix" ||
            (isToolCreateMode(toolMode) && toolMode !== "addFreehand"));
  
-@@ -211,10 +232,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -211,10 +243,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        setDragTooltip({
          kind: "tool-create",
          anchor: makeClientPoint(px(event.clientX), px(event.clientY)),
@@ -9536,7 +9645,7 @@ index 709cc1b9..86725a45 100644
    );
  
    const onBackgroundClick = useCallback(
-@@ -223,7 +244,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -223,7 +255,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          suppressNextBackgroundClickRef.current = false;
          return;
        }
@@ -9545,7 +9654,7 @@ index 709cc1b9..86725a45 100644
          return;
        }
        if (event.shiftKey || event.ctrlKey || event.metaKey) {
-@@ -267,7 +288,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -267,7 +299,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -9555,7 +9664,7 @@ index 709cc1b9..86725a45 100644
        if (canPan) {
          const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
          setDragState({
-@@ -280,7 +302,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -280,7 +313,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -9564,7 +9673,7 @@ index 709cc1b9..86725a45 100644
          const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
          const world = clientToWorldPoint(clientPoint, interactionSvgRef.current, svgResult.viewBox);
          if (!world) {
-@@ -316,8 +338,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -316,8 +349,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            });
            return;
          }
@@ -9574,7 +9683,7 @@ index 709cc1b9..86725a45 100644
            ? buildSnapContext({
                sceneElements: snapshot.scene.elements,
                selectedSourceIds: [],
-@@ -327,8 +348,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -327,8 +359,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                viewportWorld: viewportWorldBounds
              })
            : null;
@@ -9585,7 +9694,7 @@ index 709cc1b9..86725a45 100644
                context: toolSnapContext,
                pointer: world,
                kind: toolMode === "addPath" ? "line-end" : "node",
-@@ -337,7 +358,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -337,7 +369,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            : { snappedPoint: world, offset: undefined, lines: [] as SnapLine[] };
          const snappedStart = startSnapResult.snappedPoint ?? world;
          const lineToolStartAnchorSnap =
@@ -9594,10 +9703,40 @@ index 709cc1b9..86725a45 100644
              ? resolveEndpointAnchorSnap({
                  pointerWorld: world,
                  zoom: toolSnapContext?.zoom ?? canvasTransform.scale,
-@@ -351,14 +372,55 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -351,14 +383,85 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          setToolCursorWorld(resolvedStart);
          event.preventDefault();
  
++        const { circleConstruction, arcConstruction } = useSettingsStore.getState().settings.toolbar;
++        const construction: TapConstruction | null = toolMode === "addCircle"
++          ? circleConstruction === "diameter" ? "circle-diameter" : circleConstruction === "three-points" ? "circle-three-points" : null
++          : toolMode === "addArc" && arcConstruction === "three-points" ? "arc-three-points" : null;
++        if (construction) {
++          const points = [...(tapDraft?.construction === construction ? tapDraft.points : []), resolvedStart];
++          if (points.length < (construction === "circle-diameter" ? 2 : 3)) {
++            setTapDraft({ construction, points });
++            return;
++          }
++          setTapDraft(null);
++          const [first, second, third] = points;
++          const circle = construction === "circle-diameter" ? circleOnDiameter(first, second) : circleThroughThree(first, second, third);
++          if (!circle) { setWarning("Choose three points that are not on one line."); return; }
++          const center = worldPoint(pt(circle.center.x), pt(circle.center.y));
++          const template: ElementTemplate = construction === "arc-three-points"
++            ? (() => {
++                const { startAngle, sweep } = arcThroughThree(circle.center, first, second, third);
++                return { kind: "arc", start: first, end: third, startAngle, endAngle: startAngle + sweep, strokeColor: creationStrokeColor } as const;
++              })()
++            : { kind: "circle", edge: first, strokeColor: creationStrokeColor, fillColor: creationFillColor };
++          queueSelectionForAddedElement(first);
++          const result = applyActionWithFeedback({ kind: "addElement", template, at: center });
++          if (!result.sourceChanged) pendingAddedSelectionRef.current = null;
++          suppressNextBackgroundClickRef.current = true;
++          setToolCursorWorld(null);
++          setSnapLines([]);
++          return;
++        }
++
 +        if (toolMode === "addArc") {
 +          const draft = arcDraft;
 +          if (draft === null) {
@@ -9652,7 +9791,7 @@ index 709cc1b9..86725a45 100644
            setNodeAnchorOverlay(null);
            setFreehandDraft(nextFreehandDraft);
            setDragTooltip(null);
-@@ -366,7 +428,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -366,7 +469,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              kind: "tool-freehand",
              pointerId: event.pointerId,
              points: nextFreehandDraft.points,
@@ -9661,7 +9800,7 @@ index 709cc1b9..86725a45 100644
            };
            setDragState(nextFreehandDrag);
            logSnapDebug({
-@@ -375,7 +437,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -375,7 +478,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              dragKind: "tool-freehand",
              rawPoint: world,
              snappedPoint: resolvedStart,
@@ -9670,7 +9809,7 @@ index 709cc1b9..86725a45 100644
            });
            return;
          }
-@@ -384,7 +446,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -384,7 +487,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            const activeDraft = pathDraftRef.current;
            if (!activeDraft) {
              // Check if click is near an endpoint of an existing open path
@@ -9679,7 +9818,7 @@ index 709cc1b9..86725a45 100644
                ? resolvePathEndpointSnap({
                    pointerWorld: resolvedStart,
                    zoom: canvasTransform.scale,
-@@ -515,7 +577,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -515,7 +618,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            return;
          }
  
@@ -9688,7 +9827,7 @@ index 709cc1b9..86725a45 100644
            event.preventDefault();
            event.stopPropagation();
            setDragTooltip(null);
-@@ -535,6 +597,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -535,6 +638,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              toolCursorWorld != null &&
              distanceSquared(world, toolCursorWorld) <= previewToleranceWorld * previewToleranceWorld;
            const nodeAt = previewMatchesClick ? toolCursorWorld : snapResult.snappedPoint ?? world;
@@ -9701,7 +9840,7 @@ index 709cc1b9..86725a45 100644
            setSnapLines(snapResult.lines);
            logSnapDebug({
              phase: "tool-add-node",
-@@ -558,7 +626,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -558,7 +667,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                    columns: selectedAddMatrixColumns,
                    matrixKind: "nodes"
                  }
@@ -9714,7 +9853,7 @@ index 709cc1b9..86725a45 100644
              at: nodeAt
            });
            if (!ok.sourceChanged) {
-@@ -566,7 +638,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -566,7 +679,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            }
            if (ok.sourceChanged) {
              suppressNextBackgroundClickRef.current = true;
@@ -9722,7 +9861,7 @@ index 709cc1b9..86725a45 100644
              setToolDraft(null);
              setToolCursorWorld(null);
              setSnapLines([]);
-@@ -609,7 +680,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -609,7 +721,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -9731,7 +9870,17 @@ index 709cc1b9..86725a45 100644
          if (event.pointerType === "touch") {
            const pending = pendingTouchViewportRef.current;
            if (!event.isPrimary || (pending && pending.pointerId !== event.pointerId)) {
-@@ -669,6 +740,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -653,6 +765,9 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+       canvasTransform,
+       dispatch,
+       creationStrokeColor,
++      creationFillColor,
++      tapDraft,
++      setTapDraft,
+       finalizePathDraft,
+       logSnapDebug,
+       queueSelectionForAddedElement,
+@@ -669,6 +784,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        nodeAnchorTargets,
        matrixCellAnchorHints,
        pendingBezier,
@@ -9740,7 +9889,7 @@ index 709cc1b9..86725a45 100644
        toolMode,
        toolCursorWorld,
        snapGuideInput,
-@@ -704,7 +777,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -704,7 +821,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        if (event.button !== 0 || event.target !== event.currentTarget) {
          return;
        }
@@ -9749,7 +9898,7 @@ index 709cc1b9..86725a45 100644
          if (toolMode !== "magnify") {
            onInteractionPointerDown(event as unknown as ReactPointerEvent<SVGSVGElement>);
          }
-@@ -812,6 +885,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -812,6 +929,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchors =
@@ -9757,7 +9906,7 @@ index 709cc1b9..86725a45 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -826,7 +900,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -826,7 +944,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpoint =
@@ -9766,7 +9915,7 @@ index 709cc1b9..86725a45 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -851,7 +925,23 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -851,7 +969,23 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -9791,7 +9940,7 @@ index 709cc1b9..86725a45 100644
        setToolCursorWorld(cursorWorld);
        updateInitialPlacementTooltip(event, cursorWorld);
        if (!toolDraft && !bezierBendDraft && !pathSegmentDraft) {
-@@ -883,6 +973,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -883,6 +1017,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
@@ -9799,7 +9948,7 @@ index 709cc1b9..86725a45 100644
        toolMode,
        snapGuideInput,
        snapSettingsPatch,
-@@ -996,6 +1087,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -996,6 +1131,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchorsEnter =
@@ -9807,7 +9956,7 @@ index 709cc1b9..86725a45 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -1010,7 +1102,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1010,7 +1146,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpointEnter =
@@ -9816,7 +9965,7 @@ index 709cc1b9..86725a45 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -1035,7 +1127,23 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1035,7 +1171,23 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -9841,7 +9990,7 @@ index 709cc1b9..86725a45 100644
        setToolCursorWorld(cursorWorld);
        updateInitialPlacementTooltip(event, cursorWorld);
        if (!toolDraft && !bezierBendDraft && !pathSegmentDraft) {
-@@ -1067,6 +1175,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1067,6 +1219,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
@@ -10623,10 +10772,10 @@ index e3ffc872..3a088d9c 100644
        if (!browserWrite) {
 diff --git a/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx b/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx
 new file mode 100644
-index 00000000..aa902528
+index 00000000..d7b28102
 --- /dev/null
 +++ b/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,102 @@
 +import { useState } from "react";
 +import { worldPoint, pt } from "tikz-editor/coords/index";
 +import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
@@ -10636,6 +10785,7 @@ index 00000000..aa902528
 +import { useSettingsStore } from "../../settings/useSettingsStore";
 +import { useEditorStore } from "../../store/store";
 +import { SidePanel } from "../SidePanel";
++import { circleOnDiameter, circleThroughThree } from "../canvas-panel/geometry";
 +import css from "./InspectorPanel.module.css";
 +
 +type CircleConstruction = "radius" | "diameter" | "three-points";
@@ -10670,18 +10820,14 @@ index 00000000..aa902528
 +    if (required.some((key) => !drafts[key].trim() || !Number.isFinite(values[key]))) { setError("Complete each field with a finite number before inserting geometry."); return; }
 +    let { x, y, radius } = values;
 +    if (!arc && construction === "diameter") {
-+      x = (values.x + values.x2) / 2;
-+      y = (values.y + values.y2) / 2;
-+      radius = Math.hypot(values.x2 - values.x, values.y2 - values.y) / 2;
++      const circle = circleOnDiameter({ x: values.x, y: values.y }, { x: values.x2, y: values.y2 });
++      ({ x, y } = circle.center);
++      radius = circle.radius;
 +    } else if (!arc && construction === "three-points") {
-+      const dx = values.x2 - values.x, dy = values.y2 - values.y;
-+      const ex = values.x3 - values.x, ey = values.y3 - values.y;
-+      const determinant = 2 * (dx * ey - dy * ex);
-+      if (Math.abs(determinant) < 1e-10) { setError("Choose three distinct points that are not on one line."); return; }
-+      const d2 = dx * dx + dy * dy, e2 = ex * ex + ey * ey;
-+      x = values.x + (ey * d2 - dy * e2) / determinant;
-+      y = values.y + (dx * e2 - ex * d2) / determinant;
-+      radius = Math.hypot(x - values.x, y - values.y);
++      const circle = circleThroughThree({ x: values.x, y: values.y }, { x: values.x2, y: values.y2 }, { x: values.x3, y: values.y3 });
++      if (!circle) { setError("Choose three distinct points that are not on one line."); return; }
++      ({ x, y } = circle.center);
++      radius = circle.radius;
 +    }
 +    if (!(radius > 0) || !Number.isFinite(radius)) { setError("Radius must be positive."); return; }
 +    let at = worldPoint(pt(x * PT_PER_CM), pt(y * PT_PER_CM));
