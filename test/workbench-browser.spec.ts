@@ -743,7 +743,8 @@ describe("standalone workbench host boundary", function () {
       const guideAtThree = async () => (await guides.evaluateAll(lines => lines.map(line => line.getBoundingClientRect().y)))
         .some(y => Math.abs(frameBox.y + y - at(3, 3).y) < 4);
       // A finger drags a guide down out of the top ruler to y = 3.
-      const from = { x: at(3, 3).x, y: frameBox.y + ruler.y + ruler.height / 2 };
+      // The ruler's box is already in page coordinates.
+      const from = { x: at(3, 3).x, y: ruler.y + ruler.height / 2 };
       const to = at(3, 3);
       await input.touch(Array.from({ length: 13 }, (_, i) => ({ x: from.x, y: from.y + (to.y - from.y) * i / 12 })));
       await expect.poll(guideAtThree, { message: 'No guide at y = 3 after a finger drag from the ruler' }).toBe(true);
