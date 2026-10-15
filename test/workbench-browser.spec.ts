@@ -270,6 +270,29 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`repeats an element from its long press in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (2,1) -- (8,3);\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const line = frame.locator('svg [data-source-id="path:0"]').first();
+      await expect(line).toBeVisible();
+      const input = await TabletInput.attach(page);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      await input.longPress(await strokePoint(page, line, .5));
+      await input.touch([await stableCenter(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Repeat...', exact: true }))]);
+      const repeat = frame.getByTestId('repeat-modal');
+      await expect(repeat).toBeVisible();
+      await frame.getByTestId('repeat-columns-input').fill('3');
+      await input.touch([await stableCenter(frame.getByTestId('repeat-confirm-button'))]);
+      await expect.poll(async () => ((await editorDebug(page)).source.match(/\\draw|\\foreach/g) ?? []).length).toBeGreaterThan(1);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`states geometry in lattice units, never cm or px, in the inspector and Repeat in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
@@ -303,7 +326,7 @@ describe("standalone workbench host boundary", function () {
       assert.doesNotMatch(gridText, physical, `Grid inspector: ${gridText.match(physical)?.[0]}`);
       await input.longPress(await strokePoint(page, line, .5));
       await input.touch([await stableCenter(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Repeat...', exact: true }))]);
-      const repeat = frame.getByTestId('repeat-horizontal-step-input').locator('xpath=ancestor::*[@role="dialog"][1]');
+      const repeat = frame.getByTestId('repeat-modal');
       await expect(repeat).toBeVisible();
       const repeatText = await repeat.innerText();
       assert.doesNotMatch(repeatText, physical, `Repeat: ${repeatText.match(physical)?.[0]}`);
