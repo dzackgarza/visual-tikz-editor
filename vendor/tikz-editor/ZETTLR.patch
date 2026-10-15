@@ -12338,6 +12338,36 @@ index 00000000..73851152
 +  }
 +  return { ...rest, value: valuePt / ptPerUnit, defaultValue: defaultPt / ptPerUnit, step: 0.25, unit: LATTICE_UNIT, ptPerUnit };
 +}
+diff --git a/packages/core/src/edit/path-editing.ts b/packages/core/src/edit/path-editing.ts
+index feb259fd..dd7bc00d 100644
+--- a/packages/core/src/edit/path-editing.ts
++++ b/packages/core/src/edit/path-editing.ts
+@@ -141,7 +141,9 @@ export function buildPathBodyFromSegments(
+ }
+ 
+ export function analyzeExplicitPathStatement(source: string, statement: PathStatement): PathEditEligibility {
+-  const firstItem = statement.items[0];
++  // Options written before the first coordinate (\draw[red] (0,0) -- ...) style the path and leave its points editable.
++  const start = statement.items.findIndex((item) => item.kind !== "PathOption");
++  const firstItem = start < 0 ? undefined : statement.items[start];
+   const lastItem = statement.items[statement.items.length - 1];
+   if (!firstItem || !lastItem) {
+     return { kind: "ineligible", reason: "Path has no editable items." };
+@@ -152,12 +154,12 @@ export function analyzeExplicitPathStatement(source: string, statement: PathStat
+ 
+   const anchors: ExplicitPathAnchor[] = [{
+     index: 0,
+-    coordinateIndex: 0,
++    coordinateIndex: start,
+     item: firstItem,
+     raw: source.slice(firstItem.span.from, firstItem.span.to)
+   }];
+   const segments: ExplicitPathSegment[] = [];
+-  let cursor = 0;
++  let cursor = start;
+   let closed = false;
+   let closureKind: ExplicitPathAnalysis["closureKind"] = null;
+ 
 diff --git a/packages/core/src/edit/property-write-builders.ts b/packages/core/src/edit/property-write-builders.ts
 index 6bf34090..eddc93f0 100644
 --- a/packages/core/src/edit/property-write-builders.ts
