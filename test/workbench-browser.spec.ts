@@ -655,6 +655,63 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`shears a square from its right edge after a second tap with the pen in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (2,2) rectangle (6,6);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const square = frame.locator('svg [data-source-id="path:2"]').first();
+      await expect(square).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+      const unit = Math.hypot(xTen.x - origin.x, xTen.y - origin.y) / 10;
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+      });
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      await input.penStroke([at(2, 4)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:2']);
+      // A second tap on the selected square switches its frame to rotate-and-shear handles, as in Inkscape.
+      await input.penStroke([at(2, 4.2)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:2']);
+      const edge = at(6, 4);
+      const handles = await frame.locator('[data-resize-role="right"]').evaluateAll(nodes => nodes.map(node => {
+        const box = node.getBoundingClientRect();
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      }));
+      // Grab the handle at the right edge's midpoint if the frame shows one there, else the edge itself.
+      const grip = [...handles.map(point => ({ x: point.x + frameBox.x, y: point.y + frameBox.y })), edge]
+        .filter(point => Math.hypot(point.x - edge.x, point.y - edge.y) < 24)[0];
+      const target = { x: grip.x, y: grip.y - 2 * unit };
+      await input.penDown(grip);
+      for (let i = 1; i <= 10; i++) await input.penMove({ x: grip.x, y: grip.y + (target.y - grip.y) * i / 10 });
+      await input.penUp(target);
+      // A shear that lifts the right edge by 2 keeps the width at 4 and makes the outline 6 tall.
+      // The outline box includes the stroke, so allow a few tenths of a unit.
+      await expect.poll(async () => {
+        const box = (await square.boundingBox())!;
+        return Math.abs(box.width / unit - 4) < .3 && Math.abs(box.height / unit - 6) < .3;
+      }, { message: 'The square is not 4 wide and 6 tall after the shear' }).toBe(true);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
