@@ -254,7 +254,12 @@ describe("standalone workbench host boundary", function () {
         for (let step = 1; step <= 12; step++) await input.penMove(at(4, -5 + step / 2));
         // The drag is live: the square's top edge is drawn at the circle's top.
         await expect.poll(async () => Math.abs((await frame.locator('svg [data-source-id="path:3"]').first().boundingBox())!.y - at(0, 2).y)).toBeLessThan(3);
-        await expect(guides.first()).toBeVisible();
+        // A horizontal guide has no height, so Playwright's area-based visibility cannot judge it; require a drawn length and stroke.
+        await expect.poll(async () => guides.first().evaluate(line => {
+          const box = line.getBoundingClientRect();
+          const style = getComputedStyle(line);
+          return Math.max(box.width, box.height) > 20 && style.visibility === 'visible' && style.stroke !== 'none' && Number(style.opacity) > 0;
+        }).catch(() => false)).toBe(true);
         await storyScreenshot(page, `alignment-guide-${locked ? 'locked' : 'free'}-${tablet.name}`);
         await input.penUp(at(4, 1));
         await expect.poll(async () => (await editorDebug(page)).source).toMatch(/rectangle/);
