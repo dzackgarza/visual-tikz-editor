@@ -628,7 +628,7 @@ describe("standalone workbench host boundary", function () {
       await input.touch([await stableCenter(rail.getByRole('button', { name: 'Select', exact: true }))]);
       await expect.poll(async () => [...(await editorDebug(page)).selection].sort()).toEqual(['path:2', 'path:3']);
       const corner = at(7, 3);
-      const handles = await frame.locator('[data-resize-role]').evaluateAll(nodes => nodes.map(node => {
+      const handles = await frame.locator('[data-handle-kind="group-scale"]').evaluateAll(nodes => nodes.map(node => {
         const box = node.getBoundingClientRect();
         return { role: node.getAttribute('data-resize-role'), x: box.x + box.width / 2, y: box.y + box.height / 2 };
       }));
@@ -639,10 +639,18 @@ describe("standalone workbench host boundary", function () {
       await input.penDown(nearest);
       for (let i = 1; i <= 10; i++) await input.penMove({ x: nearest.x + (target.x - nearest.x) * i / 10, y: nearest.y + (target.y - nearest.y) * i / 10 });
       await input.penUp(target);
-      await expect.poll(async () => (await editorDebug(page)).source).not.toContain('(2,2) circle (1)');
-      const source = (await editorDebug(page)).source;
-      assert.match(source, /\(3,3\) circle \(\{?2(cm)?\}?\)/, source);
-      assert.match(source, /\(11,3\) circle \(\{?2(cm)?\}?\)/, source);
+      // The rendered circles: centres at (3,3) and (11,3), each 4 units across.
+      const unit = Math.hypot(at(1, 0).x - at(0, 0).x, at(1, 0).y - at(0, 0).y);
+      const circle = async (id: string) => {
+        const box = (await frame.locator(`svg [data-source-id="${id}"]`).first().boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width };
+      };
+      for (const [id, x, y] of [['path:2', 3, 3], ['path:3', 11, 3]] as const) {
+        await expect.poll(async () => Math.round((await circle(id)).width / unit * 10) / 10, `${id} is not 4 units across`).toBe(4);
+        const centre = await circle(id);
+        const expected = at(x, y);
+        assert.ok(Math.hypot(centre.x - expected.x, centre.y - expected.y) < 4, `${id} centre at ${JSON.stringify(centre)}, expected (${x},${y}) at ${JSON.stringify(expected)}: ${(await editorDebug(page)).source}`);
+      }
     });
   }
 
