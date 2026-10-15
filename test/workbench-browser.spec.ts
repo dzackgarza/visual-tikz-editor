@@ -335,19 +335,18 @@ describe("standalone workbench host boundary", function () {
       await expect(zoom).toBeVisible();
       const readout = (await zoom.innerText()).trim();
       const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-      const range = async (testId: string, along: 'x' | 'y') => {
-        const ticks = await frame.getByTestId(testId).locator('text').evaluateAll((texts, axis) => texts.map(text => {
-          const box = text.getBoundingClientRect();
-          return { value: Number(text.textContent), at: axis === 'x' ? box.x + box.width / 2 : box.y + box.height / 2 };
-        }).filter(tick => Number.isFinite(tick.value)), along);
-        const lo = along === 'x' ? viewport.x : viewport.y;
-        const hi = along === 'x' ? viewport.x + viewport.width : viewport.y + viewport.height;
-        const visible = ticks.filter(tick => tick.at >= lo && tick.at <= hi).map(tick => tick.value);
-        return { min: Math.min(...visible), max: Math.max(...visible) };
-      };
-      const [x, y] = [await range('canvas-top-ruler', 'x'), await range('canvas-left-ruler', 'y')];
-      assert.ok(x.min <= -20 && x.max >= 20, `x range ${x.min}..${x.max}`);
-      assert.ok(y.min <= -20 && y.max >= 20, `y range ${y.min}..${y.max}`);
+      // Measure the view the author sees once startup layout has settled.
+      await settledCenter(frame.locator('text', { hasText: '(0,0)' }).first());
+      // Ruler labels are drawn rotated, so read the range from the axes and the scale: one lattice unit is one cm here.
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const [vertical, horizontal] = await frame.locator('line[class*="gridAxis"]').evaluateAll(lines => lines.map(line => line.getBoundingClientRect()));
+      const unitPx = (await editorDebug(page)).viewport.scale * 28.4527559055;
+      const originX = frameBox.x + vertical.x + vertical.width / 2;
+      const originY = frameBox.y + horizontal.y + horizontal.height / 2;
+      const x = { min: -(originX - viewport.x) / unitPx, max: (viewport.x + viewport.width - originX) / unitPx };
+      const y = { min: -(viewport.y + viewport.height - originY) / unitPx, max: (originY - viewport.y) / unitPx };
+      assert.ok(x.min <= -20 && x.max >= 20, `x range ${x.min.toFixed(1)}..${x.max.toFixed(1)}`);
+      assert.ok(y.min <= -20 && y.max >= 20, `y range ${y.min.toFixed(1)}..${y.max.toFixed(1)}`);
       const input = await TabletInput.attach(page);
       // The popup lists the current zoom beside its presets, so move away first: the startup zoom must still be offered.
       await input.touch([await stableCenter(zoom)]);
