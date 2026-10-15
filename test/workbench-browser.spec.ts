@@ -959,6 +959,38 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`shows every recorded sample and every fitted anchor the freehand result counts in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      await input.penStroke(waveAcross(viewport, .45, .4, 160));
+      await expect(result).toBeVisible();
+      const counts = async () => {
+        const text = await result.innerText();
+        return {
+          samples: Number(/(\d+) raw samples/.exec(text)![1]),
+          anchors: Number(/(\d+) fitted anchors/.exec(text)![1]),
+          drawnSamples: await frame.getByTestId('freehand-raw-samples').locator('circle').count(),
+          drawnAnchors: await frame.getByTestId('freehand-fitted-anchors').locator('circle').count()
+        };
+      };
+      // What the author reads in the result is what the canvas shows, once the fit has rendered.
+      await expect.poll(async () => { const c = await counts(); return c.drawnSamples === c.samples && c.drawnAnchors === c.anchors && c.anchors > 1; },
+        { message: 'The canvas does not show the samples and anchors the result counts' }).toBe(true);
+      await storyScreenshot(page, `freehand-samples-${tablet.name}`);
+      // Moving the simplification slider refits; the counts and the canvas still agree.
+      const slider = result.getByRole('slider').nth(1);
+      await slider.fill('1.2');
+      await expect.poll(async () => { const c = await counts(); return c.drawnSamples === c.samples && c.drawnAnchors === c.anchors; },
+        { message: 'After refitting, the canvas and the counts disagree' }).toBe(true);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
