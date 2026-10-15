@@ -213,6 +213,58 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`shows an alignment guide when a dragged square meets a circle's top, locked and free, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (0,0) circle (2);
+\draw (4,-6) rectangle (6,-4);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+      });
+      const rail = frame.locator('[data-diagram-tools]');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Select', exact: true }))]);
+      const guides = frame.locator('[class*="snapOverlay"] [class*="snapLine"]');
+      for (const locked of [true, false]) {
+        const lock = rail.getByRole('button', { name: 'Lock to lattice', exact: true });
+        if ((await lock.getAttribute('aria-pressed')) !== String(locked)) await input.touch([await stableCenter(lock)]);
+        await expect(lock).toHaveAttribute('aria-pressed', String(locked));
+        // Grab the square's left edge and lift its top edge from y = -4 to the circle's top, y = 2.
+        const grab = at(4, -5);
+        await input.penDown(grab);
+        for (let step = 1; step <= 12; step++) await input.penMove(at(4, -5 + step / 2));
+        // The drag is live: the square's top edge is drawn at the circle's top.
+        await expect.poll(async () => Math.abs((await frame.locator('svg [data-source-id="path:3"]').first().boundingBox())!.y - at(0, 2).y)).toBeLessThan(3);
+        await expect(guides.first()).toBeVisible();
+        await storyScreenshot(page, `alignment-guide-${locked ? 'locked' : 'free'}-${tablet.name}`);
+        await input.penUp(at(4, 1));
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/rectangle/);
+        await input.touch([await stableCenter(rail.getByRole('button', { name: 'Undo', exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toContain('(4,-6) rectangle (6,-4)');
+      }
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`shows every drawing-rail control without scrolling in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
