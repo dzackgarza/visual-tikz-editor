@@ -921,6 +921,44 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const railBox = (await frame.locator('[data-diagram-tools]').boundingBox())!;
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      const clear = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+        Math.min(a.x + a.width, b.x + b.width) <= Math.max(a.x, b.x) || Math.min(a.y + a.height, b.y + b.height) <= Math.max(a.y, b.y);
+      // Free canvas to the right of the rail, in fractions of the viewport.
+      const left = (railBox.x + railBox.width - viewport.x) / viewport.width + .03;
+      const corners = [[left, .12], [.72, .12], [left, .82], [.72, .82]] as const;
+      for (const [index, [fx, fy]] of corners.entries()) {
+        const before = (await editorDebug(page)).source;
+        await input.penStroke(waveAcross(viewport, fx, fy, 110));
+        await expect(result, `No freehand result for a stroke at (${fx.toFixed(2)}, ${fy})`).toBeVisible();
+        // Each kept stroke stays drawn, so this one is the element numbered by its index once it renders.
+        const idsNow = () => frame.locator('svg [data-source-id]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')!))]);
+        await expect.poll(async () => (await idsNow()).length).toBe(index + 1);
+        const ids = await idsNow();
+        const stroke = (await frame.locator(`svg [data-source-id="${ids[ids.length - 1]}"]`).first().boundingBox())!;
+        const popup = (await result.boundingBox())!;
+        assert.ok(clear(popup, stroke), `The freehand result covers a stroke drawn at (${fx.toFixed(2)}, ${fy})`);
+        assert.ok(clear(popup, (await frame.locator('[data-diagram-tools]').boundingBox())!), 'The freehand result covers the rail');
+        await page.keyboard.press('Escape');
+        await expect(result).toHaveCount(0);
+        // Escape closes the result without fitting: the recorded stroke stays as drawn.
+        const source = (await editorDebug(page)).source;
+        assert.notEqual(source, before, 'Escape removed the stroke');
+        const draws = source.split('\n').filter(line => line.trim().startsWith('\\draw'));
+        assert.doesNotMatch(draws[draws.length - 1], /\.\. controls/, 'Escape applied the fit');
+      }
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
