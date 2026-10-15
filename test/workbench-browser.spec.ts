@@ -741,6 +741,27 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`gives a selected rectangle the shape control, not the curve control, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (2,-2) rectangle (8,2);\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
+      await expect(rectangle).toBeVisible();
+      const input = await TabletInput.attach(page);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      await input.touch([await strokePoint(page, rectangle, .1)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
+      await expect(frame.getByRole('button', { name: 'Selection actions', exact: true })).toBeVisible();
+      await expect(frame.getByRole('button', { name: 'Lock curve', exact: true })).toHaveCount(0);
+      await expect(frame.getByRole('button', { name: 'Curve actions', exact: true })).toHaveCount(0);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     for (const contact of ['touch', 'pen'] as const) {
       it(`deletes a chosen subset of a curve's points by ${contact} in ${tablet.name}`, async function () {
         await page.setViewportSize({ width: tablet.width, height: tablet.height });
