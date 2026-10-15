@@ -1124,10 +1124,20 @@ index 828d4bfb..1ac9eac5 100644
        })),
      tabOrder: [...state.tabOrder],
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..62111ee9 100644
+index 5818d92b..408b12e7 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
-@@ -298,7 +298,6 @@ export function App() {
+@@ -12,7 +12,8 @@ import { computeSnapshot, makeEmptySnapshot, setMathJaxFont, type ComputeRequest
+ import { applyEditAction } from "tikz-editor/edit/actions";
+ import { getRepeatSelectionEligibility } from "tikz-editor/edit/actions/repeat";
+ import { collectSourceWorldBounds } from "tikz-editor/edit/snapping";
+-import { PT_PER_CM } from "tikz-editor/edit/format";
++import { axisLatticeScale } from "tikz-editor/edit/lattice-units";
++import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
+ import { pt, worldPoint } from "tikz-editor/coords";
+ import { emitSvgModel, type SvgRenderModel } from "tikz-editor/svg";
+ import type { SceneFigure } from "tikz-editor/semantic/types";
+@@ -298,7 +299,6 @@ export function App() {
    } | null>(null);
    const [svgExportSvgResult, setSvgExportSvgResult] = useState<EmitSvgResult | null>(null);
    const [pngExportSvgResult, setPngExportSvgResult] = useState<EmitSvgResult | null>(null);
@@ -1135,7 +1145,7 @@ index 5818d92b..62111ee9 100644
    const [pendingClose, setPendingClose] = useState<{ intent: CloseIntent; dirtyDocumentIds: string[] } | null>(null);
    const [pendingFileConflict, setPendingFileConflict] = useState<PendingFileConflict | null>(null);
    const requestCloseIntentRef = useRef<(intent: CloseIntent) => void>(() => {});
-@@ -1534,7 +1533,6 @@ export function App() {
+@@ -1534,7 +1534,6 @@ export function App() {
          };
        },
        setCanvasTransform: (transform) => {
@@ -1143,7 +1153,7 @@ index 5818d92b..62111ee9 100644
          requestAnimationFrame(() => {
            dispatch({ type: "SET_CANVAS_TRANSFORM", transform });
          });
-@@ -1596,17 +1594,6 @@ export function App() {
+@@ -1596,17 +1595,6 @@ export function App() {
      });
    }, [platform.id, snapshot.source, source]);
  
@@ -1161,7 +1171,7 @@ index 5818d92b..62111ee9 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1709,13 +1696,6 @@ export function App() {
+@@ -1709,13 +1697,6 @@ export function App() {
          return;
        }
  
@@ -1175,7 +1185,7 @@ index 5818d92b..62111ee9 100644
        // Ctrl/Cmd+Shift+E: edit equation when possible, otherwise insert equation.
        if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && key === "e") {
          const edited = runtime.runCommand(APP_MENU_COMMAND_IDS.EDIT_EQUATION, "shortcut");
-@@ -1758,19 +1738,14 @@ export function App() {
+@@ -1758,19 +1739,14 @@ export function App() {
            if (!canvasShortcutContext) {
              return;
            }
@@ -1197,7 +1207,7 @@ index 5818d92b..62111ee9 100644
              return;
            }
            // If there's a text selection anywhere, let native copy work for it.
-@@ -1786,7 +1761,7 @@ export function App() {
+@@ -1786,7 +1762,7 @@ export function App() {
  
          if (!e.shiftKey && key === "x") {
            // If canvas is focused, let the native cut event fire there.
@@ -1206,7 +1216,7 @@ index 5818d92b..62111ee9 100644
              return;
            }
            // If there's a text selection anywhere, let native cut work for it.
-@@ -1802,7 +1777,7 @@ export function App() {
+@@ -1802,7 +1778,7 @@ export function App() {
  
          if (!e.shiftKey && key === "v") {
            // If canvas is focused, let the native paste event fire there (supports DataTransfer).
@@ -1215,7 +1225,7 @@ index 5818d92b..62111ee9 100644
              return;
            }
            // Otherwise, paste directly via async clipboard API.
-@@ -1872,7 +1847,6 @@ export function App() {
+@@ -1872,7 +1848,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -1223,7 +1233,7 @@ index 5818d92b..62111ee9 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1865,6 @@ export function App() {
+@@ -1891,7 +1866,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -1231,7 +1241,7 @@ index 5818d92b..62111ee9 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +2003,17 @@ export function App() {
+@@ -2030,13 +2004,17 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -1250,7 +1260,7 @@ index 5818d92b..62111ee9 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,11 +2026,11 @@ export function App() {
+@@ -2049,22 +2027,23 @@ export function App() {
              : null
          }
        />
@@ -1264,7 +1274,9 @@ index 5818d92b..62111ee9 100644
        <div className={css.body}>
          <DockLayout
            repeatPreviewModel={repeatPreviewModel}
-@@ -2062,9 +2039,9 @@ export function App() {
++          onOpenRepeat={handleOpenRepeatCommand}
+           onSubmitPrompt={handleAssistantPrompt}
+           onInterruptTurn={handleInterruptAssistantTurn}
            onNewChat={handleAssistantNewChat}
          />
        </div>
@@ -1276,6 +1288,60 @@ index 5818d92b..62111ee9 100644
        </Suspense>
        {showOpenExampleModal ? (
          <Suspense fallback={null}>
+@@ -2150,12 +2129,11 @@ export function App() {
+           <RepeatModal
+             columns={repeatModalState.columns}
+             rows={repeatModalState.rows}
+-            horizontalStepCm={repeatModalState.horizontalStepPt / PT_PER_CM}
+-            verticalStepCm={repeatModalState.verticalStepPt / PT_PER_CM}
+-            horizontalGapCm={(repeatModalState.horizontalStepPt - repeatModalState.selectionWidthPt) / PT_PER_CM}
+-            verticalGapCm={(repeatModalState.verticalStepPt - repeatModalState.selectionHeightPt) / PT_PER_CM}
+-            selectionWidthCm={repeatModalState.selectionWidthPt / PT_PER_CM}
+-            selectionHeightCm={repeatModalState.selectionHeightPt / PT_PER_CM}
++            horizontalStepPt={repeatModalState.horizontalStepPt}
++            verticalStepPt={repeatModalState.verticalStepPt}
++            selectionWidthPt={repeatModalState.selectionWidthPt}
++            selectionHeightPt={repeatModalState.selectionHeightPt}
++            scale={axisLatticeScale(resolveFigureCoordinateFrame(source, { activeFigureId }))}
+             onColumnsChange={(columns) => {
+               setRepeatModalState((current) => current == null ? current : {
+                 ...current,
+@@ -2168,17 +2146,11 @@ export function App() {
+                 rows: clampRepeatCount(rows)
+               });
+             }}
+-            onHorizontalStepChange={(horizontalStepCm) => {
+-              setRepeatModalState((current) => current == null ? current : {
+-                ...current,
+-                horizontalStepPt: numericInputToPt(horizontalStepCm)
+-              });
++            onHorizontalStepChange={(horizontalStepPt) => {
++              setRepeatModalState((current) => current == null ? current : { ...current, horizontalStepPt });
+             }}
+-            onVerticalStepChange={(verticalStepCm) => {
+-              setRepeatModalState((current) => current == null ? current : {
+-                ...current,
+-                verticalStepPt: numericInputToPt(verticalStepCm)
+-              });
++            onVerticalStepChange={(verticalStepPt) => {
++              setRepeatModalState((current) => current == null ? current : { ...current, verticalStepPt });
+             }}
+             onClose={() => {
+               setRepeatModalState(null);
+@@ -2345,13 +2317,6 @@ function clampRepeatCount(value: number): number {
+   return Math.max(1, Math.floor(value));
+ }
+ 
+-function numericInputToPt(valueCm: number): number {
+-  if (!Number.isFinite(valueCm)) {
+-    return 0;
+-  }
+-  return valueCm * PT_PER_CM;
+-}
+-
+ async function blobToBase64(blob: Blob): Promise<string> {
+   const arrayBuffer = await blob.arrayBuffer();
+   const bytes = new Uint8Array(arrayBuffer);
 diff --git a/packages/app/src/ui/CanvasContextMenu.module.css b/packages/app/src/ui/CanvasContextMenu.module.css
 index 558a0a1b..c5ed3f6d 100644
 --- a/packages/app/src/ui/CanvasContextMenu.module.css
@@ -2913,7 +2979,7 @@ index 67578882..8673a8d8 100644
    /* Map to app design tokens */
    --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb9..de3dd7ec 100644
+index ba28ddb9..7077be7f 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
 @@ -91,6 +91,7 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
@@ -2953,7 +3019,15 @@ index ba28ddb9..de3dd7ec 100644
  }
  
  /** Strip assistant tabs if assistant is not available on this platform,
-@@ -395,8 +400,13 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
+@@ -360,6 +365,7 @@ function syncLayoutStateToStore(model: Model, dispatch: (action: EditorAction) =
+ 
+ export type DockLayoutProps = {
+   repeatPreviewModel: SvgRenderModel | null;
++  onOpenRepeat: () => void;
+   onSubmitPrompt: (
+     prompt: string,
+     model: string | null,
+@@ -395,8 +401,13 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
  }
  
  function createInitialModel(): Model {
@@ -2968,10 +3042,12 @@ index ba28ddb9..de3dd7ec 100644
    try {
      return Model.fromJson(json);
    } catch {
-@@ -405,8 +415,24 @@ function createInitialModel(): Model {
+@@ -404,9 +415,25 @@ function createInitialModel(): Model {
+   }
  }
  
- export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn, onNewChat }: DockLayoutProps) {
+-export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn, onNewChat }: DockLayoutProps) {
++export function DockLayout({ repeatPreviewModel, onOpenRepeat, onSubmitPrompt, onInterruptTurn, onNewChat }: DockLayoutProps) {
 +  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
    const dispatch = useEditorStore((s) => s.dispatch);
    const [model, setModel] = useState(createInitialModel);
@@ -2993,7 +3069,25 @@ index ba28ddb9..de3dd7ec 100644
  
    // Factory — renders panel content for each tab
    const factory = useCallback(
-@@ -472,6 +498,14 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -422,7 +449,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+         case "canvas":
+           return (
+             <Suspense fallback={<div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading canvas…</div>}>
+-              <MemoCanvasPanel repeatPreviewModel={repeatPreviewModel} />
++              <MemoCanvasPanel repeatPreviewModel={repeatPreviewModel} onOpenRepeat={onOpenRepeat} />
+             </Suspense>
+           );
+         case "figure-navigator":
+@@ -445,7 +472,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+           return <div>Unknown panel: {component}</div>;
+       }
+     },
+-    [repeatPreviewModel, onSubmitPrompt, onInterruptTurn, onNewChat]
++    [repeatPreviewModel, onOpenRepeat, onSubmitPrompt, onInterruptTurn, onNewChat]
+   );
+ 
+   // On model change: persist + sync to Zustand
+@@ -472,6 +499,14 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
      getModel: () => modelRef.current,
      getCurrentJson: () => modelRef.current.toJson(),
      togglePanel(panelId: string) {
@@ -3008,7 +3102,7 @@ index ba28ddb9..de3dd7ec 100644
        const m = modelRef.current;
        const existing = m.getNodeById(panelId);
        if (existing) {
-@@ -523,10 +557,12 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -523,10 +558,12 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
        syncLayoutStateToStore(m, dispatchRef.current);
      },
      applyPreset(preset: keyof typeof LAYOUT_PRESETS) {
@@ -3021,7 +3115,7 @@ index ba28ddb9..de3dd7ec 100644
        const sanitized = sanitizeLayout(json);
        const newModel = Model.fromJson(sanitized);
        saveDockLayout(sanitized);
-@@ -536,7 +572,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -536,7 +573,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
      resetLayout() {
        this.applyPreset("default");
      },
@@ -3030,7 +3124,7 @@ index ba28ddb9..de3dd7ec 100644
  
    useEffect(() => {
      activeDockHandle = handle;
-@@ -590,11 +626,36 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -590,11 +627,36 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    }, [figureCount]);
  
    return (
@@ -3073,6 +3167,132 @@ index ba28ddb9..de3dd7ec 100644
 +    </div>
    );
  }
+diff --git a/packages/app/src/ui/RepeatModal.tsx b/packages/app/src/ui/RepeatModal.tsx
+index c1ad662b..6badc2f7 100644
+--- a/packages/app/src/ui/RepeatModal.tsx
++++ b/packages/app/src/ui/RepeatModal.tsx
+@@ -1,19 +1,20 @@
++import { LATTICE_UNIT, type AxisLatticeScale } from "tikz-editor/edit/lattice-units";
+ import { Modal } from "./Modal";
+ import css from "./RepeatModal.module.css";
+ 
+ type RepeatModalProps = {
+   columns: number;
+   rows: number;
+-  horizontalStepCm: number;
+-  verticalStepCm: number;
+-  horizontalGapCm: number;
+-  verticalGapCm: number;
+-  selectionWidthCm: number;
+-  selectionHeightCm: number;
++  horizontalStepPt: number;
++  verticalStepPt: number;
++  selectionWidthPt: number;
++  selectionHeightPt: number;
++  /** Steps are stated in lattice units on each axis the figure's lattice lies along, and in pt where it is skewed. */
++  scale: AxisLatticeScale;
+   onColumnsChange: (value: number) => void;
+   onRowsChange: (value: number) => void;
+-  onHorizontalStepChange: (value: number) => void;
+-  onVerticalStepChange: (value: number) => void;
++  onHorizontalStepChange: (valuePt: number) => void;
++  onVerticalStepChange: (valuePt: number) => void;
+   onClose: () => void;
+   onConfirm: () => void;
+ };
+@@ -21,12 +22,11 @@ type RepeatModalProps = {
+ export function RepeatModal({
+   columns,
+   rows,
+-  horizontalStepCm,
+-  verticalStepCm,
+-  horizontalGapCm,
+-  verticalGapCm,
+-  selectionWidthCm,
+-  selectionHeightCm,
++  horizontalStepPt,
++  verticalStepPt,
++  selectionWidthPt,
++  selectionHeightPt,
++  scale,
+   onColumnsChange,
+   onRowsChange,
+   onHorizontalStepChange,
+@@ -35,6 +35,8 @@ export function RepeatModal({
+   onConfirm
+ }: RepeatModalProps) {
+   const confirmDisabled = columns <= 1 && rows <= 1;
++  const horizontal = axisReading(scale.x);
++  const vertical = axisReading(scale.y);
+ 
+   return (
+     <Modal
+@@ -81,23 +83,23 @@ export function RepeatModal({
+             />
+           </label>
+           <label className={css.field}>
+-            <span>H Step (cm)</span>
++            <span>H step ({horizontal.unit})</span>
+             <input
+               data-testid="repeat-horizontal-step-input"
+               type="number"
+               step={0.1}
+-              value={formatUiNumber(horizontalStepCm)}
+-              onChange={(event) => { onHorizontalStepChange(Number(event.target.value)); }}
++              value={formatUiNumber(horizontal.fromPt(horizontalStepPt))}
++              onChange={(event) => { onHorizontalStepChange(horizontal.toPt(Number(event.target.value))); }}
+             />
+           </label>
+           <label className={css.field}>
+-            <span>V Step (cm)</span>
++            <span>V step ({vertical.unit})</span>
+             <input
+               data-testid="repeat-vertical-step-input"
+               type="number"
+               step={0.1}
+-              value={formatUiNumber(verticalStepCm)}
+-              onChange={(event) => { onVerticalStepChange(Number(event.target.value)); }}
++              value={formatUiNumber(vertical.fromPt(verticalStepPt))}
++              onChange={(event) => { onVerticalStepChange(vertical.toPt(Number(event.target.value))); }}
+             />
+           </label>
+         </div>
+@@ -105,14 +107,14 @@ export function RepeatModal({
+         <div className={css.metrics}>
+           <div className={css.metricRow}>
+             <span className={css.metricLabel}>Selection</span>
+-            <strong>{formatMetric(selectionWidthCm)} × {formatMetric(selectionHeightCm)}</strong>
++            <strong>{horizontal.format(selectionWidthPt)} × {vertical.format(selectionHeightPt)}</strong>
+           </div>
+           <div className={css.metricRow}>
+             <span className={css.metricLabel}>Gap</span>
+             <strong>
+-              <span data-testid="repeat-horizontal-gap">{formatMetric(horizontalGapCm)}</span>
++              <span data-testid="repeat-horizontal-gap">{horizontal.format(horizontalStepPt - selectionWidthPt)}</span>
+               {" × "}
+-              <span data-testid="repeat-vertical-gap">{formatMetric(verticalGapCm)}</span>
++              <span data-testid="repeat-vertical-gap">{vertical.format(verticalStepPt - selectionHeightPt)}</span>
+             </strong>
+           </div>
+         </div>
+@@ -132,8 +134,15 @@ export function RepeatModal({
+   );
+ }
+ 
+-function formatMetric(value: number): string {
+-  return `${formatUiNumber(value)} cm`;
++function axisReading(ptPerUnit: number | null) {
++  const unit = ptPerUnit === null ? "pt" : LATTICE_UNIT;
++  const fromPt = (valuePt: number) => ptPerUnit === null ? valuePt : valuePt / ptPerUnit;
++  return {
++    unit,
++    fromPt,
++    toPt: (value: number) => !Number.isFinite(value) ? 0 : ptPerUnit === null ? value : value * ptPerUnit,
++    format: (valuePt: number) => `${formatUiNumber(fromPt(valuePt))} ${unit}`
++  };
+ }
+ 
+ function formatUiNumber(value: number): string {
 diff --git a/packages/app/src/ui/SettingsModal.module.css b/packages/app/src/ui/SettingsModal.module.css
 index dd056fad..1da24da9 100644
 --- a/packages/app/src/ui/SettingsModal.module.css
@@ -3653,6 +3873,19 @@ index 681cb41c..308ca76a 100644
      case "addArrow":
      case "addBezier":
        return snapHint;
+diff --git a/packages/app/src/ui/StylesPanel.tsx b/packages/app/src/ui/StylesPanel.tsx
+index 4fba726b..d9fd6960 100644
+--- a/packages/app/src/ui/StylesPanel.tsx
++++ b/packages/app/src/ui/StylesPanel.tsx
+@@ -175,7 +175,7 @@ export function StylesPanel() {
+               kind: "transform",
+               current: property.write.transformContext,
+               key: property.write.transformContext.key,
+-              value: Number(nextValue)
++              value: property.ptPerUnit === undefined ? Number(nextValue) : Number(nextValue) * property.ptPerUnit
+             }));
+             return;
+           }
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
 index 0ddde08e..dcd5a6c1 100644
 --- a/packages/app/src/ui/Toolbar.module.css
@@ -4723,7 +4956,7 @@ index cf4cf2cf..0c7d3db4 100644
    pointer-events: none;
  }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..4624aa47 100644
+index 4e22ccfa..3d3eb841 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,17 @@ preflightPositionNodeRelativeToAction,
@@ -4815,7 +5048,7 @@ index 4e22ccfa..4624aa47 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,6 +783,43 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +783,50 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -4857,9 +5090,18 @@ index 4e22ccfa..4624aa47 100644
 +);
 +
  export const CanvasPanel = memo(function CanvasPanel({
-   repeatPreviewModel = null
+-  repeatPreviewModel = null
++  repeatPreviewModel,
++  onOpenRepeat
  }: {
-@@ -774,6 +837,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+-  repeatPreviewModel?: SvgRenderModel | null;
++  repeatPreviewModel: SvgRenderModel | null;
++  /** The app owns the Repeat dialog; the canvas context menu opens it through this. */
++  onOpenRepeat: () => void;
+ }) {
+   const platform = getActiveEditorPlatform();
+   const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
+@@ -774,6 +840,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -4868,7 +5110,7 @@ index 4e22ccfa..4624aa47 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -792,7 +857,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -792,7 +860,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid,
      showTransparencyGrid,
      snapModes,
@@ -4876,7 +5118,7 @@ index 4e22ccfa..4624aa47 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +878,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +881,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -4885,7 +5127,7 @@ index 4e22ccfa..4624aa47 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -832,7 +898,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -832,7 +901,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
      snapModes: s.snapModes,
@@ -4893,7 +5135,7 @@ index 4e22ccfa..4624aa47 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +910,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +913,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -4905,7 +5147,7 @@ index 4e22ccfa..4624aa47 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,14 +956,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +959,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -4922,7 +5164,7 @@ index 4e22ccfa..4624aa47 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -912,11 +979,104 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -912,11 +982,104 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
    const [pathDraft, setPathDraft] = useState<PathToolDraft | null>(null);
@@ -5028,7 +5270,7 @@ index 4e22ccfa..4624aa47 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1093,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1096,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -5037,7 +5279,7 @@ index 4e22ccfa..4624aa47 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1104,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1107,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -5051,7 +5293,7 @@ index 4e22ccfa..4624aa47 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1197,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1200,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -5074,15 +5316,17 @@ index 4e22ccfa..4624aa47 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,6 +1267,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,7 +1270,9 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
 +    onSimplifySelectedPath: selectedPathForFit ? () => simplifySelectedPath() : undefined,
      onOpenEditEquation: handleOpenEditEquationCommand,
++    onOpenRepeat,
      activeHandleIdOverride: contextMenuHandleIdOverride
    });
-@@ -1157,15 +1293,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+ 
+@@ -1157,15 +1297,22 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
    const pathDraftRef = useRef<PathToolDraft | null>(null);
@@ -5106,7 +5350,7 @@ index 4e22ccfa..4624aa47 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1300,7 +1443,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1447,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -5114,7 +5358,7 @@ index 4e22ccfa..4624aa47 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1463,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1467,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -5125,7 +5369,7 @@ index 4e22ccfa..4624aa47 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1647,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1651,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -5149,7 +5393,7 @@ index 4e22ccfa..4624aa47 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1662,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1666,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -5163,7 +5407,7 @@ index 4e22ccfa..4624aa47 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1810,7 +1929,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,7 +1933,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -5171,7 +5415,7 @@ index 4e22ccfa..4624aa47 100644
      svgResult,
      canvasTransform,
      marqueeDraft,
-@@ -1819,10 +1937,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1819,10 +1941,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      ROTATE_HANDLE_OFFSET_PX
    });
  
@@ -5195,7 +5439,7 @@ index 4e22ccfa..4624aa47 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,9 +1968,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,9 +1972,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -5208,7 +5452,7 @@ index 4e22ccfa..4624aa47 100644
      snapModes,
      gridMinorTargetPx,
      canvasTransform,
-@@ -1857,44 +1990,49 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +1994,49 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -5267,7 +5511,7 @@ index 4e22ccfa..4624aa47 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -2055,17 +2193,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2197,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -5292,7 +5536,7 @@ index 4e22ccfa..4624aa47 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2217,220 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2221,220 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -5537,7 +5781,7 @@ index 4e22ccfa..4624aa47 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2445,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2449,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -5545,7 +5789,7 @@ index 4e22ccfa..4624aa47 100644
          return;
        }
  
-@@ -2141,7 +2453,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2457,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -5553,7 +5797,7 @@ index 4e22ccfa..4624aa47 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2469,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2473,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -5561,7 +5805,7 @@ index 4e22ccfa..4624aa47 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,7 +2483,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,7 +2487,6 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -5569,7 +5813,7 @@ index 4e22ccfa..4624aa47 100644
      },
      [applyActionWithFeedback, creationStrokeColor, dispatch, setDragState]
    );
-@@ -3064,9 +3373,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3377,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -5579,7 +5823,7 @@ index 4e22ccfa..4624aa47 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3147,7 +3453,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3457,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -5590,7 +5834,7 @@ index 4e22ccfa..4624aa47 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3479,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3483,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -5600,7 +5844,7 @@ index 4e22ccfa..4624aa47 100644
      ]
    );
  
-@@ -3192,6 +3501,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3505,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -5679,7 +5923,7 @@ index 4e22ccfa..4624aa47 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3601,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3605,15 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -5695,7 +5939,7 @@ index 4e22ccfa..4624aa47 100644
      snapshot,
      source,
      setWarning,
-@@ -3267,16 +3651,231 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,16 +3655,231 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -5929,7 +6173,7 @@ index 4e22ccfa..4624aa47 100644
    );
  
    const {
-@@ -3306,6 +3905,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +3909,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -5937,7 +6181,7 @@ index 4e22ccfa..4624aa47 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,12 +3930,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,12 +3934,11 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -5951,7 +6195,7 @@ index 4e22ccfa..4624aa47 100644
      sourceBoundsSvg,
      sourceBoundsSvgRef,
      resizeFramesBySource,
-@@ -3345,7 +3944,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3345,7 +3948,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomSpeed,
      MIN_SCALE,
      MAX_SCALE: maxZoomScale,
@@ -5959,7 +6203,7 @@ index 4e22ccfa..4624aa47 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,25 +4047,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,25 +4051,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -5985,7 +6229,7 @@ index 4e22ccfa..4624aa47 100644
    useEffect(() => {
      if (toolMode === "select") {
        setPathDraft(null);
-@@ -3706,15 +4285,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4289,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -6009,7 +6253,7 @@ index 4e22ccfa..4624aa47 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4398,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4402,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -6017,7 +6261,7 @@ index 4e22ccfa..4624aa47 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4411,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4415,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -6025,7 +6269,7 @@ index 4e22ccfa..4624aa47 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4422,72 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4426,72 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -6098,7 +6342,7 @@ index 4e22ccfa..4624aa47 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4510,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4514,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -6121,7 +6365,7 @@ index 4e22ccfa..4624aa47 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4541,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4545,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -6136,7 +6380,7 @@ index 4e22ccfa..4624aa47 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4567,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4571,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -6170,7 +6414,7 @@ index 4e22ccfa..4624aa47 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4599,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4603,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6180,7 +6424,7 @@ index 4e22ccfa..4624aa47 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4612,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4616,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6210,7 +6454,7 @@ index 4e22ccfa..4624aa47 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +4661,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +4665,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -6218,7 +6462,7 @@ index 4e22ccfa..4624aa47 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +4670,80 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4674,80 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -10415,10 +10659,18 @@ index 00000000..aa902528
 +  </SidePanel.Section>;
 +}
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..c4732b1e 100644
+index d5c65582..3818bbae 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-@@ -58,6 +58,7 @@ import { useInspectorMutations } from "./useInspectorMutations";
+@@ -11,6 +11,7 @@ RiItalic
+ } from "@remixicon/react";
+ import { useCallback,useEffect,useMemo,useState,type FocusEvent,type JSX } from "react";
+ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
++import { LATTICE_UNIT } from "tikz-editor/edit/lattice-units";
+ import {
+ getInspectorDescriptor,
+ NODE_INNER_SEP_DEFAULT,
+@@ -58,6 +59,7 @@ import { useInspectorMutations } from "./useInspectorMutations";
  import { useInspectorPreviewScrub } from "./useInspectorPreviewScrub";
  import css from "./InspectorPanel.module.css";
  import { RenderedTooltip } from "../RenderedTooltip";
@@ -10426,7 +10678,7 @@ index d5c65582..c4732b1e 100644
  import { SidePanel } from "../SidePanel";
  import {
  getToolLabel,
-@@ -91,6 +92,7 @@ export function InspectorPanel() {
+@@ -91,6 +93,7 @@ export function InspectorPanel() {
    const toolMode = useEditorStore((s) => s.toolMode);
    const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
    const creationFillColor = useEditorStore((s) => s.creationFillColor);
@@ -10434,7 +10686,34 @@ index d5c65582..c4732b1e 100644
    const freehandSmoothingPx = useEditorStore((s) => s.freehandSmoothingPx);
    const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
  
-@@ -1879,6 +1881,7 @@ export function InspectorPanel() {
+@@ -208,7 +211,7 @@ export function InspectorPanel() {
+     const mutations = buildTransformSetPropertyMutations(
+       write.transformContext,
+       write.transformContext.key,
+-      next
++      property.kind === "number" && property.ptPerUnit !== undefined ? next * property.ptPerUnit : next
+     );
+     if (mutations.length === 0) {
+       return;
+@@ -295,7 +298,7 @@ export function InspectorPanel() {
+       const mutations = buildTransformSetPropertyMutations(
+         write.transformContext,
+         write.transformContext.key,
+-        next
++        property.ptPerUnit !== undefined ? next * property.ptPerUnit : next
+       );
+       for (const mutation of mutations) {
+         dispatch({
+@@ -321,7 +324,7 @@ export function InspectorPanel() {
+     value: number
+   ): string {
+     const formatted = formatNumber(value);
+-    if (property.unit) {
++    if (property.unit && property.unit !== LATTICE_UNIT) {
+       return `${formatted}${property.unit}`;
+     }
+     return formatted;
+@@ -1879,6 +1882,7 @@ export function InspectorPanel() {
                </SidePanel.Section>
              ) : null}
  
@@ -10442,7 +10721,7 @@ index d5c65582..c4732b1e 100644
              {isFreehand ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
-@@ -1886,6 +1889,11 @@ export function InspectorPanel() {
+@@ -1886,6 +1890,11 @@ export function InspectorPanel() {
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
@@ -10454,6 +10733,82 @@ index d5c65582..c4732b1e 100644
                      <label className={css.propertyLabel} htmlFor="inspector-freehand-smoothing">
                        Smoothing
                      </label>
+diff --git a/packages/app/src/ui/inspector-panel/panel-helpers.tsx b/packages/app/src/ui/inspector-panel/panel-helpers.tsx
+index c6e6ffe4..a780384f 100644
+--- a/packages/app/src/ui/inspector-panel/panel-helpers.tsx
++++ b/packages/app/src/ui/inspector-panel/panel-helpers.tsx
+@@ -49,6 +49,8 @@ export type MultiInspectorNumberProperty = {
+   minExclusive?: number;
+   max?: number;
+   unit?: string;
++  /** Present when the value is in lattice units; one figure, so one frame, so every merged property shares it. */
++  ptPerUnit?: number;
+   defaultValue?: number;
+   clearKeys?: string[];
+   writes: SetPropertyWriteTarget[];
+@@ -799,6 +801,7 @@ export function buildMultiInspectorProperty(properties: InspectorProperty[]): Mu
+         ? Math.min(...numberProperties.map((property) => property.max as number))
+         : undefined,
+       unit: base.unit,
++      ptPerUnit: base.ptPerUnit,
+       defaultValue: consensusDefaultValue(numberProperties),
+       clearKeys,
+       writes,
+diff --git a/packages/app/src/ui/inspector-panel/useInspectorModel.ts b/packages/app/src/ui/inspector-panel/useInspectorModel.ts
+index 1ca2e7ee..a3297a22 100644
+--- a/packages/app/src/ui/inspector-panel/useInspectorModel.ts
++++ b/packages/app/src/ui/inspector-panel/useInspectorModel.ts
+@@ -17,6 +17,8 @@ import {
+   type TransformInspectorMutationContext
+ } from "tikz-editor/edit/property-write-builders";
+ import { resolvePropertyTarget } from "tikz-editor/edit/property-target";
++import { axisLatticeScale, latticeShiftField } from "tikz-editor/edit/lattice-units";
++import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
+ import { buildStylesCascadeModel } from "tikz-editor/edit/styles-cascade";
+ import { resolveFigureBoundsState } from "tikz-editor/edit/figure-bounds";
+ import type { SceneElement } from "tikz-editor/semantic/types";
+@@ -89,32 +91,29 @@ function buildScopeInspectorDescriptor(
+     resolved.kind === "found" ? resolved.target.options?.entries : null
+   );
+   const transformValues = transformContext.values;
++  const latticeScale = axisLatticeScale(resolveFigureCoordinateFrame(source, parseOptions ?? {}));
+   const sections: InspectorSection[] = [
+     {
+       id: "transform",
+       title: "Transform",
+       sourceLevel: "command",
+       properties: [
+-        {
++        latticeShiftField({
+           kind: "number",
+           id: "xshift",
+           label: "X shift",
+-          value: transformValues.xshift,
+-          step: 0.1,
+-          unit: "pt",
+-          defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
++          valuePt: transformValues.xshift,
++          defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
+           write: buildScopeTransformWriteTarget(scopeId, writable, readOnlyReason, "xshift", transformContext)
+-        },
+-        {
++        }, latticeScale.x),
++        latticeShiftField({
+           kind: "number",
+           id: "yshift",
+           label: "Y shift",
+-          value: transformValues.yshift,
+-          step: 0.1,
+-          unit: "pt",
+-          defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
++          valuePt: transformValues.yshift,
++          defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
+           write: buildScopeTransformWriteTarget(scopeId, writable, readOnlyReason, "yshift", transformContext)
+-        },
++        }, latticeScale.y),
+         {
+           kind: "number",
+           id: "xscale",
 diff --git a/packages/app/src/ui/objects-panel/ObjectsPanel.module.css b/packages/app/src/ui/objects-panel/ObjectsPanel.module.css
 index 3e120bf3..89f15b27 100644
 --- a/packages/app/src/ui/objects-panel/ObjectsPanel.module.css
@@ -11453,10 +11808,25 @@ index 3f807ed2..25908061 100644
 +  return turns === 0 ? expression : `${expression}${turns > 0 ? "+" : ""}${turns * 360}`;
 +}
 diff --git a/packages/core/src/edit/inspector.ts b/packages/core/src/edit/inspector.ts
-index 2746595a..da8ac5b8 100644
+index 2746595a..d7e84291 100644
 --- a/packages/core/src/edit/inspector.ts
 +++ b/packages/core/src/edit/inspector.ts
-@@ -528,7 +528,7 @@ export function getInspectorDescriptor(
+@@ -1,4 +1,6 @@
+ import { TREE_CHILD_NODE_READONLY_KEYS } from "./tree-editing.js";
++import { axisLatticeScale, LATTICE_UNIT, latticeShiftField } from "./lattice-units.js";
++import { resolveFigureCoordinateFrame } from "./coordinate-frame.js";
+ import {
+   makeForeachTemplateTargetId,
+   makePicTemplateTargetId,
+@@ -375,6 +377,7 @@ export function getInspectorDescriptor(
+     resolveTarget
+   );
+   const transformValues = transformContext.values;
++  const latticeScale = axisLatticeScale(resolveFigureCoordinateFrame(snapshot.source, snapshot.parseOptions));
+   const strokeColor = normalizeInspectorColorValue(resolveInspectorStrokeColor(element, inlineTarget.targetKind));
+   const strokeColorSyntax = resolveColorSyntaxValue(
+     resolvedInlineTarget,
+@@ -528,7 +531,7 @@ export function getInspectorDescriptor(
                kind: "color",
                id: "adornment-text-color",
                label: "Text color",
@@ -11465,7 +11835,7 @@ index 2746595a..da8ac5b8 100644
                syntaxValue: textColorSyntax,
                options: colorOptionsForValue(textColor),
                write: makeSetPropertyWriteTarget(inlineTarget, "text")
-@@ -537,7 +537,7 @@ export function getInspectorDescriptor(
+@@ -537,7 +540,7 @@ export function getInspectorDescriptor(
                kind: "color",
                id: "adornment-draw-color",
                label: "Draw",
@@ -11474,7 +11844,7 @@ index 2746595a..da8ac5b8 100644
                syntaxValue: strokeColorSyntax,
                options: colorOptionsForValue(strokeColor),
                write: makeSetPropertyWriteTarget(inlineTarget, "draw")
-@@ -546,7 +546,7 @@ export function getInspectorDescriptor(
+@@ -546,7 +549,7 @@ export function getInspectorDescriptor(
                kind: "color",
                id: "adornment-fill-color",
                label: "Fill",
@@ -11483,7 +11853,42 @@ index 2746595a..da8ac5b8 100644
                syntaxValue: fillColorSyntax,
                options: colorOptionsForValue(fillColor),
                write: makeSetPropertyWriteTarget(inlineTarget, "fill")
-@@ -647,7 +647,16 @@ export function getInspectorDescriptor(
+@@ -600,26 +603,22 @@ export function getInspectorDescriptor(
+       title: "Transform",
+       sourceLevel: "command",
+       properties: [
+-        {
++        latticeShiftField({
+           kind: "number",
+           id: "xshift",
+           label: "X shift",
+-          value: transformValues.xshift,
+-          step: 0.1,
+-          unit: "pt",
+-          defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
++          valuePt: transformValues.xshift,
++          defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
+           write: makeTransformSetPropertyWriteTarget(inlineTarget, "xshift", transformContext)
+-        },
+-        {
++        }, latticeScale.x),
++        latticeShiftField({
+           kind: "number",
+           id: "yshift",
+           label: "Y shift",
+-          value: transformValues.yshift,
+-          step: 0.1,
+-          unit: "pt",
+-          defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
++          valuePt: transformValues.yshift,
++          defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
+           write: makeTransformSetPropertyWriteTarget(inlineTarget, "yshift", transformContext)
+-        },
++        }, latticeScale.y),
+         {
+           kind: "number",
+           id: "xscale",
+@@ -647,7 +646,16 @@ export function getInspectorDescriptor(
            unit: "deg",
            defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.rotate,
            write: makeTransformSetPropertyWriteTarget(inlineTarget, "rotate", transformContext)
@@ -11501,7 +11906,7 @@ index 2746595a..da8ac5b8 100644
        ]
      },
      {
-@@ -659,7 +668,7 @@ export function getInspectorDescriptor(
+@@ -659,7 +667,7 @@ export function getInspectorDescriptor(
            kind: "color",
            id: "stroke-color",
            label: "Color",
@@ -11510,7 +11915,7 @@ index 2746595a..da8ac5b8 100644
            syntaxValue: strokeColorSyntax,
            options: colorOptionsForValue(strokeColor),
            write: {
-@@ -840,7 +849,7 @@ export function getInspectorDescriptor(
+@@ -840,7 +848,7 @@ export function getInspectorDescriptor(
            kind: "color",
            id: "node-text-color",
            label: "Text color",
@@ -11519,7 +11924,7 @@ index 2746595a..da8ac5b8 100644
            syntaxValue: textColorSyntax,
            options: colorOptionsForValue(textColor),
            write: makeSetPropertyWriteTarget(inlineTarget, "text")
-@@ -902,7 +911,7 @@ export function getInspectorDescriptor(
+@@ -902,7 +910,7 @@ export function getInspectorDescriptor(
          kind: "color",
          id: "fill-color",
          label: "Color",
@@ -11528,7 +11933,51 @@ index 2746595a..da8ac5b8 100644
          syntaxValue: fillColorSyntax,
          options: colorOptionsForValue(fillColor),
          write: makeSetPropertyWriteTarget(inlineTarget, "fill")
-@@ -1353,7 +1362,7 @@ export function getInspectorDescriptor(
+@@ -1294,14 +1302,23 @@ export function getInspectorDescriptor(
+         id: "grid",
+         title: "Grid",
+         sourceLevel: "command",
+-        properties: [
++        properties: gridInspectorState.skewed ? [
++          {
++            kind: "text",
++            id: "grid-skewed",
++            label: "Step",
++            value: "Set in the source",
++            write: gridWriteTarget,
++            readOnlyReason: "This figure's lattice is skewed, so grid steps have no reading in lattice units."
++          }
++        ] : [
+           {
+             kind: "number",
+             id: "grid-step",
+             label: "Step",
+             value: gridInspectorState.step,
+             step: 0.1,
+-            unit: "cm",
++            unit: LATTICE_UNIT,
+             minExclusive: 0,
+             defaultValue: 1,
+             clearKeys: uniqueStrings(GRID_STEP_CLEAR_KEYS),
+@@ -1313,7 +1330,7 @@ export function getInspectorDescriptor(
+             label: "X step",
+             value: gridInspectorState.xstep,
+             step: 0.1,
+-            unit: "cm",
++            unit: LATTICE_UNIT,
+             minExclusive: 0,
+             defaultValue: 1,
+             clearKeys: uniqueStrings(GRID_XSTEP_CLEAR_KEYS),
+@@ -1325,7 +1342,7 @@ export function getInspectorDescriptor(
+             label: "Y step",
+             value: gridInspectorState.ystep,
+             step: 0.1,
+-            unit: "cm",
++            unit: LATTICE_UNIT,
+             minExclusive: 0,
+             defaultValue: 1,
+             clearKeys: uniqueStrings(GRID_YSTEP_CLEAR_KEYS),
+@@ -1353,7 +1370,7 @@ export function getInspectorDescriptor(
            kind: "color",
            id: "text-color",
            label: "Color",
@@ -11537,7 +11986,7 @@ index 2746595a..da8ac5b8 100644
            syntaxValue: textColorSyntax,
            options: colorOptionsForValue(textColor),
            write: makeSetPropertyWriteTarget(inlineTarget, "text")
-@@ -3330,3 +3339,12 @@ function canonicalDecorationName(raw: string | null | undefined): string | null
+@@ -3330,3 +3347,12 @@ function canonicalDecorationName(raw: string | null | undefined): string | null
    const normalized = raw.trim().toLowerCase().replace(/\s+/g, " ");
    return normalized.length > 0 ? normalized : null;
  }
@@ -11550,6 +11999,379 @@ index 2746595a..da8ac5b8 100644
 +  const code = Number.parseInt(hex[1], 16);
 +  return `rgba(${(code >> 16) & 255},${(code >> 8) & 255},${code & 255},${opacity})`;
 +}
+diff --git a/packages/core/src/edit/inspector/grid-state.ts b/packages/core/src/edit/inspector/grid-state.ts
+index 1e5c44ee..555a88f1 100644
+--- a/packages/core/src/edit/inspector/grid-state.ts
++++ b/packages/core/src/edit/inspector/grid-state.ts
+@@ -4,19 +4,19 @@ import type { OptionListAst } from "../../options/types.js";
+ import { parseCoordinateLike, parseLength } from "../../semantic/coords/parse-length.js";
+ import type { SceneElement } from "../../semantic/types.js";
+ import type { StyleChainEntry } from "../../semantic/style-chain.js";
+-import { CM_PER_PT } from "../format.js";
++import { PT_PER_CM } from "../format.js";
++import { axisLatticeScale, type AxisLatticeScale } from "../lattice-units.js";
++import { resolveFigureCoordinateFrame } from "../coordinate-frame.js";
+ import type { EditParseOptions } from "../parse-options.js";
+ import { normalizeOptionKey } from "../option-key.js";
+ import { findPathStatementById } from "../statement-find.js";
+ 
+-const GRID_DEFAULT_STEP_CM = 1;
++const GRID_DEFAULT_STEP_PT = PT_PER_CM;
+ 
+-export type GridInspectorState = {
+-  keywordId: string;
+-  step: number;
+-  xstep: number;
+-  ystep: number;
+-};
++/** Grid steps in lattice units; skewed when the figure's lattice is not axis-aligned, so steps have no lattice reading. */
++export type GridInspectorState =
++  | { keywordId: string; skewed: false; step: number; xstep: number; ystep: number }
++  | { keywordId: string; skewed: true };
+ 
+ export function resolveGridInspectorState(
+   element: SceneElement,
+@@ -37,9 +37,12 @@ export function resolveGridInspectorState(
+   if (!gridKeyword) {
+     return null;
+   }
+-  const values = resolveGridStepValuesFromStyleChainAndOptions(element.styleChain, gridKeyword.options);
++  const scale = axisLatticeScale(resolveFigureCoordinateFrame(source, parseOptions));
++  const values = resolveGridStepValuesFromStyleChainAndOptions(element.styleChain, gridKeyword.options, scale);
++  if ("skewed" in values) return { keywordId: gridKeyword.keyword.id, skewed: true };
+   return {
+     keywordId: gridKeyword.keyword.id,
++    skewed: false,
+     step: values.step,
+     xstep: values.xstep,
+     ystep: values.ystep
+@@ -88,19 +91,25 @@ function collectGridKeywords(
+ 
+ function resolveGridStepValuesFromStyleChainAndOptions(
+   styleChain: readonly StyleChainEntry[],
+-  optionItem: Extract<PathItem, { kind: "PathOption" }> | null
+-): { step: number; xstep: number; ystep: number } {
++  optionItem: Extract<PathItem, { kind: "PathOption" }> | null,
++  scale: AxisLatticeScale
++): GridStepValues {
+   const optionLists = [
+     ...styleChain.flatMap((entry) => entry.rawOptions),
+     ...(optionItem ? [optionItem.options] : [])
+   ];
+ 
+-  return resolveGridStepValuesFromOptionLists(optionLists);
++  return resolveGridStepValuesFromOptionLists(optionLists, scale);
+ }
+ 
+-function resolveGridStepValuesFromOptionLists(optionLists: readonly OptionListAst[]): { step: number; xstep: number; ystep: number } {
+-  let xstep = GRID_DEFAULT_STEP_CM;
+-  let ystep = GRID_DEFAULT_STEP_CM;
++type GridStepValues = { step: number; xstep: number; ystep: number } | { skewed: true };
++
++function resolveGridStepValuesFromOptionLists(optionLists: readonly OptionListAst[], scale: AxisLatticeScale): GridStepValues {
++  if (scale.x === null || scale.y === null) return { skewed: true };
++  const { x: ptPerX, y: ptPerY } = scale;
++  // TikZ's default grid step is 1cm, an absolute length.
++  let xstep = GRID_DEFAULT_STEP_PT / ptPerX;
++  let ystep = GRID_DEFAULT_STEP_PT / ptPerY;
+ 
+   for (const optionList of optionLists) {
+     for (const entry of optionList.entries) {
+@@ -110,17 +119,19 @@ function resolveGridStepValuesFromOptionLists(optionLists: readonly OptionListAs
+ 
+       const key = normalizeOptionKey(entry.key);
+       if (key === "step") {
+-        const parsed = parseGridStepValueCm(entry.valueRaw);
+-        if (!parsed) {
++        const pair = parseCoordinateLike(entry.valueRaw);
++        const x = parseGridStepUnits(pair ? pair.x : entry.valueRaw, ptPerX);
++        const y = parseGridStepUnits(pair ? pair.y : entry.valueRaw, ptPerY);
++        if (x == null || y == null) {
+           continue;
+         }
+-        xstep = parsed.x;
+-        ystep = parsed.y;
++        xstep = x;
++        ystep = y;
+         continue;
+       }
+ 
+       if (key === "xstep" || key === "x step") {
+-        const parsed = parseGridLengthCm(entry.valueRaw);
++        const parsed = parseGridStepUnits(entry.valueRaw, ptPerX);
+         if (parsed != null) {
+           xstep = parsed;
+         }
+@@ -128,7 +139,7 @@ function resolveGridStepValuesFromOptionLists(optionLists: readonly OptionListAs
+       }
+ 
+       if (key === "ystep" || key === "y step") {
+-        const parsed = parseGridLengthCm(entry.valueRaw);
++        const parsed = parseGridStepUnits(entry.valueRaw, ptPerY);
+         if (parsed != null) {
+           ystep = parsed;
+         }
+@@ -137,44 +148,20 @@ function resolveGridStepValuesFromOptionLists(optionLists: readonly OptionListAs
+   }
+ 
+   return {
+-    step: Math.abs(xstep - ystep) <= 1e-6 ? xstep : GRID_DEFAULT_STEP_CM,
++    step: Math.abs(xstep - ystep) <= 1e-6 ? xstep : GRID_DEFAULT_STEP_PT / ptPerX,
+     xstep,
+     ystep
+   };
+ }
+ 
+-function parseGridStepValueCm(raw: string): { step: number | null; x: number; y: number } | null {
+-  const pair = parseCoordinateLike(raw);
+-  if (pair) {
+-    const x = parseGridLengthCm(pair.x);
+-    const y = parseGridLengthCm(pair.y);
+-    if (x == null || y == null) {
+-      return null;
+-    }
+-    return {
+-      step: Math.abs(x - y) <= 1e-6 ? x : null,
+-      x,
+-      y
+-    };
+-  }
+-
+-  const scalar = parseGridLengthCm(raw);
+-  if (scalar == null) {
+-    return null;
+-  }
+-  return {
+-    step: scalar,
+-    x: scalar,
+-    y: scalar
+-  };
+-}
+-
+-function parseGridLengthCm(raw: string): number | null {
+-  const parsedPt = parseLength(raw, "cm");
+-  if (parsedPt == null || !Number.isFinite(parsedPt) || parsedPt <= 0) {
++/** A bare number is in the picture's xy units, the lattice; a dimension is absolute and divides by the frame. */
++function parseGridStepUnits(raw: string, ptPerUnit: number): number | null {
++  const trimmed = raw.trim();
++  const value = /^[+-]?(\d+\.?\d*|\.\d+)$/.test(trimmed) ? Number(trimmed) : (parseLength(trimmed, "pt") ?? NaN) / ptPerUnit;
++  if (!Number.isFinite(value) || value <= 0) {
+     return null;
+   }
+-  return normalizeTinyNumber(parsedPt * CM_PER_PT);
++  return normalizeTinyNumber(value);
+ }
+ 
+ function normalizeTinyNumber(value: number): number {
+diff --git a/packages/core/src/edit/inspector/matrix-tree-descriptors.ts b/packages/core/src/edit/inspector/matrix-tree-descriptors.ts
+index 026164ba..fa368209 100644
+--- a/packages/core/src/edit/inspector/matrix-tree-descriptors.ts
++++ b/packages/core/src/edit/inspector/matrix-tree-descriptors.ts
+@@ -1,4 +1,6 @@
+ import type { PathItem } from "../../ast/types.js";
++import { axisLatticeScale, latticeShiftField } from "../lattice-units.js";
++import { resolveFigureCoordinateFrame } from "../coordinate-frame.js";
+ import type { OptionEntry, OptionListAst } from "../../options/types.js";
+ import { parseLength } from "../../semantic/coords/parse-length.js";
+ import type { SceneElement } from "../../semantic/types.js";
+@@ -107,6 +109,7 @@ export function buildMatrixInspectorDescriptor(
+   const readOnlyReason = undefined;
+   const transformContext = resolveTransformInspectorMutationContext(source, matrixId, parseOptions, resolveTarget);
+   const transformValues = transformContext.values;
++  const latticeScale = axisLatticeScale(resolveFigureCoordinateFrame(source, parseOptions));
+   const rowSepPt = resolveMatrixSpacingPt(resolved.target.options, "row sep");
+   const columnSepPt = resolveMatrixSpacingPt(resolved.target.options, "column sep");
+   const drawColor = resolveMatrixColorOption(resolved.target.options, "draw");
+@@ -123,14 +126,12 @@ export function buildMatrixInspectorDescriptor(
+         title: "Transform",
+         sourceLevel: "command",
+         properties: [
+-          {
++          latticeShiftField({
+             kind: "number",
+             id: "xshift",
+             label: "X shift",
+-            value: transformValues.xshift,
+-            step: 0.1,
+-            unit: "pt",
+-            defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
++            valuePt: transformValues.xshift,
++            defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
+             write: {
+               mode: "setProperty",
+               elementId: matrixId,
+@@ -144,15 +145,13 @@ export function buildMatrixInspectorDescriptor(
+               writable,
+               reason: readOnlyReason
+             }
+-          },
+-          {
++          }, latticeScale.x),
++          latticeShiftField({
+             kind: "number",
+             id: "yshift",
+             label: "Y shift",
+-            value: transformValues.yshift,
+-            step: 0.1,
+-            unit: "pt",
+-            defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
++            valuePt: transformValues.yshift,
++            defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
+             write: {
+               mode: "setProperty",
+               elementId: matrixId,
+@@ -166,7 +165,7 @@ export function buildMatrixInspectorDescriptor(
+               writable,
+               reason: readOnlyReason
+             }
+-          },
++          }, latticeScale.y),
+           {
+             kind: "number",
+             id: "xscale",
+@@ -341,6 +340,7 @@ export function buildTreeInspectorDescriptor(
+   const readOnlyReason = undefined;
+   const transformContext = resolveTransformInspectorMutationContext(source, sourceId, parseOptions, resolveTarget);
+   const transformValues = transformContext.values;
++  const latticeScale = axisLatticeScale(resolveFigureCoordinateFrame(source, parseOptions));
+ 
+   const resolveRootLayoutWriteTargetId = (key: string): string => {
+     if (!TREE_ROOT_LAYOUT_KEYS.has(normalizeOptionKey(key))) {
+@@ -378,14 +378,12 @@ export function buildTreeInspectorDescriptor(
+         title: "Transform",
+         sourceLevel: "command",
+         properties: [
+-          {
++          latticeShiftField({
+             kind: "number",
+             id: "xshift",
+             label: "X shift",
+-            value: transformValues.xshift,
+-            step: 0.1,
+-            unit: "pt",
+-            defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
++            valuePt: transformValues.xshift,
++            defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
+             write: {
+               mode: "setProperty",
+               elementId: sourceId,
+@@ -399,15 +397,13 @@ export function buildTreeInspectorDescriptor(
+               writable,
+               reason: readOnlyReason
+             }
+-          },
+-          {
++          }, latticeScale.x),
++          latticeShiftField({
+             kind: "number",
+             id: "yshift",
+             label: "Y shift",
+-            value: transformValues.yshift,
+-            step: 0.1,
+-            unit: "pt",
+-            defaultValue: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
++            valuePt: transformValues.yshift,
++            defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
+             write: {
+               mode: "setProperty",
+               elementId: sourceId,
+@@ -421,7 +417,7 @@ export function buildTreeInspectorDescriptor(
+               writable,
+               reason: readOnlyReason
+             }
+-          },
++          }, latticeScale.y),
+           {
+             kind: "number",
+             id: "xscale",
+diff --git a/packages/core/src/edit/inspector/types.ts b/packages/core/src/edit/inspector/types.ts
+index bc59eb6c..fd0fd1c6 100644
+--- a/packages/core/src/edit/inspector/types.ts
++++ b/packages/core/src/edit/inspector/types.ts
+@@ -109,6 +109,8 @@ export type InspectorProperty =
+       minExclusive?: number;
+       max?: number;
+       unit?: string;
++      /** Present when the value is in lattice units: writes multiply by it to get points. */
++      ptPerUnit?: number;
+       defaultValue?: number;
+       clearKeys?: string[];
+       write?: SetPropertyWriteTarget;
+diff --git a/packages/core/src/edit/lattice-units.ts b/packages/core/src/edit/lattice-units.ts
+new file mode 100644
+index 00000000..73851152
+--- /dev/null
++++ b/packages/core/src/edit/lattice-units.ts
+@@ -0,0 +1,35 @@
++import type { WorldTransform } from "../coords/transforms.js";
++import { LATTICE_UNIT_PT } from "./snapping/grid-snaps.js";
++import type { InspectorProperty } from "./inspector/types.js";
++
++/**
++ * Points per lattice step along each canvas axis, or null where the figure's
++ * lattice vector for that axis is skewed off the canvas axis, so a canvas-axis
++ * length is not a whole number of lattice steps.
++ */
++/** The unit label of a value stated in lattice units; such values are written to TikZ as bare numbers. */
++export const LATTICE_UNIT = "units";
++
++export type AxisLatticeScale = { x: number | null; y: number | null };
++
++/** The frame maps source points, where one lattice step is LATTICE_UNIT_PT, to world points. */
++export function axisLatticeScale(frame: WorldTransform): AxisLatticeScale {
++  return {
++    x: Math.abs(frame.b) < 1e-9 ? Math.abs(frame.a) * LATTICE_UNIT_PT : null,
++    y: Math.abs(frame.c) < 1e-9 ? Math.abs(frame.d) * LATTICE_UNIT_PT : null
++  };
++}
++
++type ShiftField = Extract<InspectorProperty, { kind: "number" }>;
++
++/** A canvas-axis shift stated in lattice units; read-only in pt when the lattice is skewed on that axis. */
++export function latticeShiftField(field: Omit<ShiftField, "unit" | "ptPerUnit" | "value" | "defaultValue" | "step"> & {
++  valuePt: number;
++  defaultPt: number;
++}, ptPerUnit: number | null): ShiftField {
++  const { valuePt, defaultPt, ...rest } = field;
++  if (ptPerUnit === null) {
++    return { ...rest, value: valuePt, defaultValue: defaultPt, step: 0.1, unit: "pt", readOnlyReason: "This figure's lattice is skewed on this axis; move the element on the canvas instead." };
++  }
++  return { ...rest, value: valuePt / ptPerUnit, defaultValue: defaultPt / ptPerUnit, step: 0.25, unit: LATTICE_UNIT, ptPerUnit };
++}
+diff --git a/packages/core/src/edit/property-write-builders.ts b/packages/core/src/edit/property-write-builders.ts
+index 6bf34090..eddc93f0 100644
+--- a/packages/core/src/edit/property-write-builders.ts
++++ b/packages/core/src/edit/property-write-builders.ts
+@@ -7,7 +7,7 @@ import type { EditParseOptions } from "./parse-options.js";
+ import type { StyleLevel } from "./actions.js";
+ import type { SemanticPropertyId } from "./property-registry.js";
+ import { resolvePropertyTarget, type PropertyTargetResolution } from "./property-target.js";
+-import { formatNumber } from "./format.js";
++import { formatNumber, PT_PER_CM } from "./format.js";
+ import { normalizeOptionKey } from "./option-key.js";
+ import { uniqueStrings } from "./statement-find.js";
+ import {
+@@ -1199,7 +1199,7 @@ function buildTransformMutation(
+   const isDefault = Math.abs(normalizedValue - defaultValue) <= 1e-6;
+   return {
+     key,
+-    value: isDefault ? "" : formatInspectorLength(normalizedValue) + (key === "xshift" || key === "yshift" ? "pt" : ""),
++    value: isDefault ? "" : key === "xshift" || key === "yshift" ? formatShiftCm(normalizedValue) : formatInspectorLength(normalizedValue),
+     clearKeys: uniqueStrings(isDefault ? [key, ...clearKeys] : clearKeys)
+   };
+ }
+@@ -1226,6 +1226,11 @@ function buildRotateTransformMutation(
+   );
+ }
+ 
++/** Shifts are written in cm to four places, so whole lattice steps of the default frame round-trip exactly. */
++function formatShiftCm(valuePt: number): string {
++  return `${Number((valuePt / PT_PER_CM).toFixed(4))}cm`;
++}
++
+ function formatInspectorLength(value: number): string {
+   const rounded = Math.round(value * 100) / 100;
+   const normalized = Math.abs(rounded) < 1e-9 ? 0 : rounded;
 diff --git a/packages/core/src/edit/snapping/context.ts b/packages/core/src/edit/snapping/context.ts
 index 2f522fd2..c8d3a13e 100644
 --- a/packages/core/src/edit/snapping/context.ts
@@ -11937,6 +12759,58 @@ index 3688b6d8..c8645237 100644
 +
 +/** Source centimetres are mapped through this affine frame before snapping. */
 +export type LatticeTransform = { a: number; b: number; c: number; d: number; e: number; f: number };
+diff --git a/packages/core/src/edit/styles-cascade.ts b/packages/core/src/edit/styles-cascade.ts
+index e9ab7758..a232458b 100644
+--- a/packages/core/src/edit/styles-cascade.ts
++++ b/packages/core/src/edit/styles-cascade.ts
+@@ -28,7 +28,9 @@ import {
+   lineJoinPresetFromStyle,
+   lineWidthPresetLabel
+ } from "./inspector/preset-values.js";
+-import { resolveTransformInspectorValues } from "./property-write-builders.js";
++import { DEFAULT_TRANSFORM_INSPECTOR_VALUES, resolveTransformInspectorValues } from "./property-write-builders.js";
++import { axisLatticeScale, latticeShiftField } from "./lattice-units.js";
++import { resolveFigureCoordinateFrame } from "./coordinate-frame.js";
+ import {
+   FOREACH_TEMPLATE_TARGET_PREFIX,
+   makeStyleSourceTargetId,
+@@ -629,27 +631,26 @@ function buildAddPropertyTemplates(
+ ): Record<string, InspectorProperty> {
+   const propertyMap = new Map(descriptor.sections.flatMap((section) => section.properties.map((property) => [property.id, property] as const)));
+   const transformValues = resolveTransformInspectorValues(source, descriptor.writeTargetId, snapshot.parseOptions);
++  const latticeScale = axisLatticeScale(resolveFigureCoordinateFrame(source, snapshot.parseOptions));
+   const noopWrite: SetPropertyWriteTarget = { mode: "setProperty", elementId: descriptor.writeTargetId ?? "", level: "command", key: "", writable: true };
+   const templates: InspectorProperty[] = [
+     ...(descriptor.sections.flatMap((section) => section.properties)).filter((property) => isAddableProperty(property.id, property.kind)),
+-    {
++    latticeShiftField({
+       kind: "number",
+       id: "xshift",
+       label: "X shift",
+-      value: transformValues.xshift,
+-      step: 0.1,
+-      unit: "pt",
++      valuePt: transformValues.xshift,
++      defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.xshift,
+       write: { ...noopWrite, key: "xshift", transformContext: { key: "xshift", values: transformValues } }
+-    },
+-    {
++    }, latticeScale.x),
++    latticeShiftField({
+       kind: "number",
+       id: "yshift",
+       label: "Y shift",
+-      value: transformValues.yshift,
+-      step: 0.1,
+-      unit: "pt",
++      valuePt: transformValues.yshift,
++      defaultPt: DEFAULT_TRANSFORM_INSPECTOR_VALUES.yshift,
+       write: { ...noopWrite, key: "yshift", transformContext: { key: "yshift", values: transformValues } }
+-    },
++    }, latticeScale.y),
+     {
+       kind: "number",
+       id: "xscale",
 diff --git a/packages/core/src/render/index.ts b/packages/core/src/render/index.ts
 index 11af4026..20e7e86f 100644
 --- a/packages/core/src/render/index.ts

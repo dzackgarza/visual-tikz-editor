@@ -319,11 +319,19 @@ describe("standalone workbench host boundary", function () {
       const lineText = await panel.innerText();
       assert.doesNotMatch(lineText, physical, `Line inspector: ${lineText.match(physical)?.[0]}`);
       assert.match(lineText, /X shift[\s\S]{0,40}units/, 'X shift is not stated in lattice units');
+      // Two lattice units of shift is two centimetres in the default frame.
+      const xshift = panel.locator('[class*="compactNumberField"]', { hasText: 'X shift' }).locator('input');
+      await xshift.fill('2');
+      await xshift.press('Enter');
+      await expect.poll(async () => (await editorDebug(page)).source).toMatch(/xshift=2cm/);
       await input.touch([await strokePoint(page, grid, .5)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:1']);
       await expect(panel.getByText('Step', { exact: false }).first()).toBeVisible();
       const gridText = await panel.innerText();
       assert.doesNotMatch(gridText, physical, `Grid inspector: ${gridText.match(physical)?.[0]}`);
+      // In portrait the panel lies over the line; close it before reaching for the line.
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Close properties', exact: true }))]);
+      await expect(panel).toHaveCount(0);
       await input.longPress(await strokePoint(page, line, .5));
       await input.touch([await stableCenter(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Repeat...', exact: true }))]);
       const repeat = frame.getByTestId('repeat-modal');
