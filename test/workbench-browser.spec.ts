@@ -116,6 +116,57 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`lands drawn points on the lattice by default, under a lock toggle on the rail, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+      const input = await TabletInput.attach(page);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+      // Screen position of lattice coordinates (x, y), from the two reference segments of length 10.
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+      });
+      const rail = frame.locator('[data-diagram-tools]');
+      const drawLine = async () => {
+        await input.touch([await stableCenter(rail.getByRole('button', { name: 'Insert', exact: true }))]);
+        await input.touch([await stableCenter(frame.getByRole('button', { name: 'Line', exact: true }))]);
+        const [from, to] = [at(3.5, 2.5), at(6.5, 4.5)];
+        await input.penStroke([from, { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }, to]);
+        await expect.poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length).toBeGreaterThan(2);
+        const lines = (await editorDebug(page)).source.split('\n').map(line => line.trim()).filter(line => line.startsWith('\\draw'));
+        const added = lines[lines.length - 1];
+        await input.touch([await stableCenter(rail.getByRole('button', { name: 'Undo', exact: true }))]);
+        return [...added.matchAll(/-?\d+(?:\.\d+)?/g)].map(match => Number(match[0]));
+      };
+      const locked = await drawLine();
+      assert.ok(locked.length >= 4 && locked.every(Number.isInteger), `A line drawn with default settings leaves the lattice: ${locked}`);
+      const lock = rail.getByRole('button', { name: 'Lock to lattice', exact: true });
+      await expect(lock).toHaveAttribute('aria-pressed', 'true');
+      await input.touch([await stableCenter(lock)]);
+      await expect(lock).toHaveAttribute('aria-pressed', 'false');
+      const free = await drawLine();
+      assert.ok(free.some(value => !Number.isInteger(value)), `With the lock off the line still lands on the lattice: ${free}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`shows every drawing-rail control without scrolling in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
