@@ -5080,7 +5080,7 @@ index cf4cf2cf..4a0d0a4e 100644
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..af691dd9 100644
+index 4e22ccfa..2d264b12 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,19 @@ preflightPositionNodeRelativeToAction,
@@ -5131,7 +5131,7 @@ index 4e22ccfa..af691dd9 100644
 +simplifyCurveRange,
 +authoredCurvePath,
 +editAuthoredCurveNodes,
-+smoothAuthoredCurveSegments,
++smoothAuthoredCurveJoints,
 +type FreehandInterpretation,
 +type FreehandPointerSample
  } from "./freehand-tool";
@@ -6139,7 +6139,7 @@ index 4e22ccfa..af691dd9 100644
 +    const sourcePrefix = /^\s*\\draw(?:\[[^\]]*\])?/.exec(selectedPathForFit.original)?.[0];
 +    if (!interpretation || !sourcePrefix) return;
 +    const fitted = interpretation.source.replace(/^\\draw(?:\[[^\]]*\])?/, sourcePrefix);
-+    const fittedSource = autoSmoothNodes ? smoothAuthoredCurveSegments(selectedPathForFit.sourcePath, fitted) : fitted;
++    const fittedSource = autoSmoothNodes ? smoothAuthoredCurveJoints(fitted) : fitted;
 +    const oldSegments = selectedPathForFit.sourcePath.commands.filter((command) => command.kind === "C").length;
 +    const newSegments = (fittedSource.match(/\.\.\s+controls\b/gu) ?? []).length;
 +    if (newSegments >= oldSegments) {
@@ -6181,7 +6181,7 @@ index 4e22ccfa..af691dd9 100644
 +    }
 +    const beforeCount = selectedPathForFit.sourcePath.commands.length - 1;
 +    const afterCount = (replacement.match(/\.\.\s+controls\b/gu) ?? []).length;
-+    const fitted = autoSmoothNodes ? smoothAuthoredCurveSegments(selectedPathForFit.sourcePath, replacement, start, end + afterCount - beforeCount) : replacement;
++    const fitted = autoSmoothNodes ? smoothAuthoredCurveJoints(replacement, start, end + afterCount - beforeCount + 1) : replacement;
 +    dispatch({
 +      type: "REPLACE_FREEHAND_RESULT",
 +      from: selectedPathForFit.from,
@@ -7583,7 +7583,7 @@ index 00000000..3bf63832
 +  return strokes;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-index a7b0a7e2..9b2da344 100644
+index a7b0a7e2..0d4a24c8 100644
 --- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
 @@ -2,18 +2,21 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
@@ -7939,7 +7939,7 @@ index a7b0a7e2..9b2da344 100644
  function polylineLength(points: readonly WorldPoint[]): number {
    let length = 0;
    for (let i = 1; i < points.length; i += 1) {
-@@ -182,10 +424,75 @@ function distanceSquared(a: WorldPoint, b: WorldPoint): number {
+@@ -182,10 +424,123 @@ function distanceSquared(a: WorldPoint, b: WorldPoint): number {
    return dx * dx + dy * dy;
  }
  
@@ -7957,13 +7957,34 @@ index a7b0a7e2..9b2da344 100644
 +  const commands: ScenePath["commands"] = [{ kind: "M", to: coordinates[0] }];
 +  for (let index = 1; index < coordinates.length; index += 3) {
 +    commands.push({ kind: "C", c1: coordinates[index], c2: coordinates[index + 1], to: coordinates[index + 2] });
-   }
--  const rounded = Math.round(value);
--  return Math.max(FREEHAND_SMOOTHING_MIN_PX, Math.min(FREEHAND_SMOOTHING_MAX_PX, rounded));
++  }
 +  return { ...path, commands, transform: undefined };
 +}
 +
 +const authoredCubicSegmentPattern = /\s+\.\.\s+controls\s+(\([^)]+\))\s+and\s+(\([^)]+\))\s+\.\.\s+(\([^)]+\))/gu;
++
++type CmPoint = { x: number; y: number };
++
++/** A plain (x,y) coordinate of an authored curve, in the source's centimetre units. */
++function parseCmPoint(text: string): CmPoint | null {
++  const match = /^\(\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*,\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*\)$/u.exec(text.trim());
++  return match ? { x: Number(match[1]), y: Number(match[2]) } : null;
++}
++
++function formatCmPoint(point: CmPoint): string {
++  return `(${formatNumber(point.x)},${formatNumber(point.y)})`;
++}
++
++/** The handle from node toward handle, rescaled to length; a zero handle points along fallback. */
++function handleOfLength(node: CmPoint, handle: CmPoint, fallback: CmPoint, length: number): CmPoint {
++  const dx = handle.x - node.x, dy = handle.y - node.y;
++  const size = Math.hypot(dx, dy);
++  const [ux, uy] = size > 1e-9 ? [dx / size, dy / size] : (() => {
++    const fx = fallback.x - node.x, fy = fallback.y - node.y, fs = Math.hypot(fx, fy) || 1;
++    return [fx / fs, fy / fs];
++  })();
++  return { x: node.x + ux * length, y: node.y + uy * length };
++}
 +
 +export function editAuthoredCurveNodes(
 +  path: ScenePath,
@@ -7988,36 +8009,63 @@ index a7b0a7e2..9b2da344 100644
 +  for (let index = 0; index < survivors.length - 1; index++) {
 +    const left = survivors[index], right = survivors[index + 1];
 +    const incoming = segments[right - 1];
-+    if (operation === "delete" && !autoSmooth && right === left + 1) {
-+      output.push(incoming[0]);
++    const outgoing = segments[left];
++    if (operation === "delete") {
++      // Segments the deletion did not touch keep their bytes; the bridge keeps the outer handles'
++      // directions, so its joints stay as smooth as they were. Smoothing rebalances its handle lengths.
++      if (right === left + 1) { output.push(incoming[0]); continue; }
++      let c1 = outgoing[1], c2 = incoming[2];
++      if (autoSmooth) {
++        const from = left === 0 ? parseCmPoint(/\([^)]*\)\s*$/.exec(source.slice(0, segments[0].index))?.[0] ?? "") : parseCmPoint(segments[left - 1][3]);
++        const to = parseCmPoint(incoming[3]), h1 = parseCmPoint(outgoing[1]), h2 = parseCmPoint(incoming[2]);
++        if (!from || !to || !h1 || !h2) return null;
++        const third = Math.hypot(to.x - from.x, to.y - from.y) / 3;
++        c1 = formatCmPoint(handleOfLength(from, h1, to, third));
++        c2 = formatCmPoint(handleOfLength(to, h2, from, third));
++      }
++      output.push(` .. controls ${c1} and ${c2} .. ${incoming[3]}`);
 +      continue;
 +    }
-+    const outgoing = segments[left];
-+    const smoothStart = operation === "delete" ? autoSmooth : selected.has(left);
-+    const smoothEnd = operation === "delete" ? autoSmooth : selected.has(right);
-+    const c1 = smoothStart ? formatPointCm(smooth[index].control1) : outgoing[1];
-+    const c2 = smoothEnd ? formatPointCm(smooth[index].control2) : incoming[2];
-+    if (right === left + 1) {
-+      output.push(incoming[0].replace(/(\.\.\s+controls\s+)\([^)]+\)(\s+and\s+)\([^)]+\)/u, (_, first: string, second: string) => first + c1 + second + c2));
-+    } else output.push(` .. controls ${c1} and ${c2} .. ${incoming[3]}`);
++    const c1 = selected.has(left) ? formatPointCm(smooth[index].control1) : outgoing[1];
++    const c2 = selected.has(right) ? formatPointCm(smooth[index].control2) : incoming[2];
++    output.push(incoming[0].replace(/(\.\.\s+controls\s+)\([^)]+\)(\s+and\s+)\([^)]+\)/u, (_, first: string, second: string) => first + c1 + second + c2));
 +  }
 +  const last = segments[segments.length - 1];
 +  output.push(source.slice(last.index + last[0].length));
 +  return output.join("");
 +}
 +
-+/** Smooth only selected fitted segments, keeping remote source bytes unchanged. */
-+export function smoothAuthoredCurveSegments(path: ScenePath, source: string, fromSegment = 0, toSegment?: number): string {
-+  const authored = authoredCurvePath(path, source);
-+  if (!authored) return source;
-+  const anchors = authored.commands.flatMap((command) => command.kind === "M" || command.kind === "C" ? [command.to] : []);
-+  const smooth = catmullRomToBezierSegments(anchors);
++/**
++ * Remove corners at the joints between segments fromSegment..toSegment: each joint's two handles turn to
++ * one shared direction, keeping their lengths; fitted tangents elsewhere keep their bytes.
++ */
++export function smoothAuthoredCurveJoints(source: string, fromSegment = 0, toSegment?: number): string {
++  const segments = [...source.matchAll(authoredCubicSegmentPattern)];
++  const last = Math.min(toSegment ?? segments.length, segments.length);
++  const handles = segments.map((segment) => [parseCmPoint(segment[1]), parseCmPoint(segment[2])]);
++  for (let joint = Math.max(fromSegment, 1); joint < last; joint++) {
++    const node = parseCmPoint(segments[joint - 1][3]);
++    const incoming = handles[joint - 1][1], outgoing = handles[joint][0];
++    if (!node || !incoming || !outgoing) continue;
++    const inLength = Math.hypot(node.x - incoming.x, node.y - incoming.y);
++    const outLength = Math.hypot(outgoing.x - node.x, outgoing.y - node.y);
++    if (inLength < 1e-9 || outLength < 1e-9) continue;
++    const ux = (node.x - incoming.x) / inLength + (outgoing.x - node.x) / outLength;
++    const uy = (node.y - incoming.y) / inLength + (outgoing.y - node.y) / outLength;
++    const size = Math.hypot(ux, uy);
++    if (size < 1e-9) continue;
++    handles[joint - 1][1] = { x: node.x - ux / size * inLength, y: node.y - uy / size * inLength };
++    handles[joint][0] = { x: node.x + ux / size * outLength, y: node.y + uy / size * outLength };
+   }
+-  const rounded = Math.round(value);
+-  return Math.max(FREEHAND_SMOOTHING_MIN_PX, Math.min(FREEHAND_SMOOTHING_MAX_PX, rounded));
 +  let index = 0;
-+  return source.replace(authoredCubicSegmentPattern, (segment, _c1: string, _c2: string, _to: string) => {
++  return source.replace(authoredCubicSegmentPattern, (segment: string) => {
 +    const current = index++;
-+    if (current < fromSegment || current >= (toSegment ?? smooth.length)) return segment;
++    const [c1, c2] = handles[current];
++    if (!c1 || !c2) return segment;
 +    return segment.replace(/(\.\.\s+controls\s+)\([^)]+\)(\s+and\s+)\([^)]+\)/u,
-+      (_, first: string, second: string) => first + formatPointCm(smooth[current].control1) + second + formatPointCm(smooth[current].control2));
++      (_, first: string, second: string) => first + formatCmPoint(c1) + second + formatCmPoint(c2));
 +  });
  }
 diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
@@ -8749,10 +8797,10 @@ index 0766ca92..1c23b820 100644
      const ancestors = scopeOverlay.ancestorScopeIdsBySourceId.get(sourceId) ?? [];
 diff --git a/packages/app/src/ui/canvas-panel/semantic-curve-edit.ts b/packages/app/src/ui/canvas-panel/semantic-curve-edit.ts
 new file mode 100644
-index 00000000..97b948c8
+index 00000000..61a7b3a6
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/semantic-curve-edit.ts
-@@ -0,0 +1,184 @@
+@@ -0,0 +1,188 @@
 +import { originalStrokes } from "../../original-ink";
 +import { applyEditAction, type EditAction } from "tikz-editor/edit/actions";
 +import { resolveEligibleExplicitPath, resolveActivePathPointHandle, resolvePathControlHandle } from "tikz-editor/edit/path-editing";
@@ -8924,14 +8972,18 @@ index 00000000..97b948c8
 +    nextSource = result.newSource;
 +    return { kind: "success", source: nextSource };
 +  };
++  const originalCount = handlesFor(nextSource).nodes.length;
 +  for (const index of indices.sort((left, right) => right - left)) {
 +    const result = perform(index, operation);
 +    if (result.kind !== "success") return result;
 +  }
 +  if (operation === "delete" && autoSmooth) {
-+    const count = handlesFor(nextSource).nodes.length;
-+    for (let index = count - 1; index >= 0; index--) {
-+      const result = perform(index, "smooth");
++    // Only the surviving neighbours of deleted nodes are smoothed; every other node keeps its tangent.
++    const deleted = new Set(indices);
++    const survivors = Array.from({ length: originalCount }, (_, index) => index).filter((index) => !deleted.has(index));
++    const neighbours = survivors.flatMap((original, position) => deleted.has(original - 1) || deleted.has(original + 1) ? [position] : []);
++    for (const position of neighbours.reverse()) {
++      const result = perform(position, "smooth");
 +      if (result.kind !== "success") return result;
 +    }
 +  }
