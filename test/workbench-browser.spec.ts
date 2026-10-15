@@ -270,6 +270,33 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`labels the rulers in lattice steps when the figure scales its lattice in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
+\draw (0,0) -- (10,0);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const axis = frame.locator('svg [data-source-id="path:0"]').first();
+      await expect(axis).toBeAttached();
+      // Screen x of lattice x = 10, the segment's far end.
+      const tenX = await axis.evaluate((path: SVGGeometryElement) => {
+        const p = path.getPointAtLength(path.getTotalLength());
+        const m = path.getScreenCTM()!;
+        return p.x * m.a + p.y * m.c + m.e;
+      });
+      const labels = await frame.getByTestId('canvas-top-ruler').locator('text').evaluateAll(texts =>
+        texts.map(text => ({ label: text.textContent?.trim() ?? '', x: text.getBoundingClientRect().x + text.getBoundingClientRect().width / 2 })));
+      const ten = labels.find(entry => entry.label === '10');
+      assert.ok(ten, `No ruler label 10 among ${labels.map(entry => entry.label).join(' ')}`);
+      assert.ok(Math.abs(ten.x - tenX) < 12, `Ruler label 10 sits at ${ten.x}, lattice x = 10 at ${tenX}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
@@ -810,6 +837,36 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
       });
     }
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`edits a point on a styled curve from its control in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw[red, thick] (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const curve = frame.locator('svg [data-source-id="path:0"]').first();
+      await expect(curve).toBeVisible();
+      const input = await TabletInput.attach(page);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      await input.touch([await strokePoint(page, curve, .2)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
+      await expect(frame.getByText('3 points', { exact: true })).toBeVisible();
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const middle = await frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]').evaluateAll(nodes => nodes.map(node => {
+        const box = node.getBoundingClientRect();
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      }).sort((a, b) => a.x - b.x)[1]);
+      await input.touch([{ x: frameBox.x + middle.x, y: frameBox.y + middle.y }]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Make corner', exact: true }))]);
+      await expect.poll(async () => (await editorDebug(page)).source).not.toMatch(/\(5,4\) \.\. \(6,0\) \.\. controls \(7,-4\)/);
+      assert.match((await editorDebug(page)).source, /\\draw\[red, thick\]/);
+    });
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
