@@ -8740,10 +8740,38 @@ index 48b963b4..260a5c99 100644
    if (nextDraft === draft || !segment.endAnchor) {
      return nextDraft;
 diff --git a/packages/app/src/ui/canvas-panel/scope-overlay.ts b/packages/app/src/ui/canvas-panel/scope-overlay.ts
-index 0766ca92..1c23b820 100644
+index 0766ca92..4972000f 100644
 --- a/packages/app/src/ui/canvas-panel/scope-overlay.ts
 +++ b/packages/app/src/ui/canvas-panel/scope-overlay.ts
-@@ -228,19 +228,48 @@ export function resolveScopeAwareMarqueeSelection(input: {
+@@ -24,9 +24,14 @@ export type ResolveScopeAwareSelectionTargetInput = {
+   focusedScopeId?: string | null;
+ };
+ 
++/**
++ * transparentScopeIds are scopes the editor writes for itself (a freehand stroke's envelope that keeps its
++ * recorded original); they group nothing for the author, so their children select as their parent's children.
++ */
+ export function buildScopeOverlayIndex(
+   statements: readonly Statement[] | undefined,
+-  boundsBySourceId: SourceBoundsMap
++  boundsBySourceId: SourceBoundsMap,
++  transparentScopeIds: ReadonlySet<string>
+ ): ScopeOverlayIndex {
+   const scopesById = new Map<string, ScopeOverlayNode>();
+   const ancestorScopeIdsBySourceId = new Map<string, string[]>();
+@@ -58,6 +63,11 @@ export function buildScopeOverlayIndex(
+         continue;
+       }
+ 
++      if (transparentScopeIds.has(statement.id)) {
++        const innerBounds = visit(statement.body, parentScopeId, ancestors);
++        if (innerBounds) mergedBounds = mergedBounds ? mergeBounds(mergedBounds, innerBounds) : innerBounds;
++        continue;
++      }
+       const childBounds = visit(statement.body, statement.id, [...ancestors, statement.id]);
+       scopesById.set(statement.id, {
+         scopeId: statement.id,
+@@ -228,19 +238,48 @@ export function resolveScopeAwareMarqueeSelection(input: {
    selectionBounds: SvgBounds;
    sourceBoundsById: SourceBoundsMap;
    scopeOverlay: ScopeOverlayIndex;
@@ -10079,10 +10107,16 @@ index f100fe15..20ea0a68 100644
        contextMenuState,
        dispatch,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
-index 8078a5d4..bfbc7f34 100644
+index 8078a5d4..9db74cc5 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
-@@ -32,7 +32,9 @@ import type {
+@@ -1,4 +1,5 @@
+ import { useMemo } from "react";
++import { originalStrokes } from "../../original-ink";
+ import { svgBounds, svgPoint, worldBounds, worldPoint, worldVector, pt } from "tikz-editor/coords/index";
+ import type { NodeItem, PathItem, PathStatement, Statement } from "tikz-editor/ast/types";
+ import type { ResizeRole } from "tikz-editor/edit/actions";
+@@ -32,7 +33,9 @@ import type {
    AdornmentHighlightBox,
    CanvasSnapshot,
    DragState,
@@ -10092,7 +10126,7 @@ index 8078a5d4..bfbc7f34 100644
    ScopeHitBounds,
    SelectionBounds,
    SelectionBoxDisplay,
-@@ -54,11 +56,11 @@ import {
+@@ -54,11 +57,11 @@ import {
  export type UseCanvasSelectionDerivedStateArgs = {
    snapshot: Pick<CanvasSnapshot, "source" | "editHandles" | "scene" | "parseResult" | "semanticResult">;
    selectedElementIds: ReadonlySet<string>;
@@ -10105,7 +10139,7 @@ index 8078a5d4..bfbc7f34 100644
    viewportSize: { width: number; height: number };
    ROTATE_HANDLE_OFFSET_PX: number;
  };
-@@ -69,11 +71,11 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -69,11 +72,11 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
    const {
      snapshot,
      selectedElementIds,
@@ -10118,7 +10152,16 @@ index 8078a5d4..bfbc7f34 100644
      viewportSize,
      ROTATE_HANDLE_OFFSET_PX
    } = args;
-@@ -627,50 +629,23 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -244,7 +247,7 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+   const scopeOverlay = useMemo(
+     () =>
+       augmentScopeOverlayWithMatrices(
+-        buildScopeOverlayIndex(snapshot.parseResult?.figure.body, sourceBoundsSvg),
++        buildScopeOverlayIndex(snapshot.parseResult?.figure.body, sourceBoundsSvg, envelopeScopeIds(snapshot.parseResult?.figure.body, snapshot.source)),
+         snapshot.scene?.elements,
+         sourceBoundsSvg
+       ),
+@@ -627,50 +630,23 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
    const curveControlLines = useMemo(
      () =>
        snapshot.scene
@@ -10178,7 +10221,7 @@ index 8078a5d4..bfbc7f34 100644
    const handleDisplays = useMemo<HandleDisplay[]>(() => {
      if (!svgResult) return [];
  
-@@ -696,30 +671,6 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -696,30 +672,6 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
          continue;
        }
  
@@ -10209,7 +10252,7 @@ index 8078a5d4..bfbc7f34 100644
        if (handle.kind === "path-point" && treeChildSourceIds.has(handle.sourceRef.sourceId)) {
          continue;
        }
-@@ -739,7 +690,77 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -739,7 +691,77 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
        });
      }
  
@@ -10288,7 +10331,7 @@ index 8078a5d4..bfbc7f34 100644
        const resizeFrame = resizeFramesBySource.get(sourceId) ?? null;
        if (resizeFrame) {
          const resizeDisabled =
-@@ -827,7 +848,7 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -827,7 +849,7 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
      }
  
      return displays;
@@ -10297,6 +10340,25 @@ index 8078a5d4..bfbc7f34 100644
  
    const hitRegions = useMemo(() => {
      if (!snapshot.scene || !svgResult) return [];
+@@ -1416,3 +1438,18 @@ function buildMatrixEdgeHitRegions(
+ 
+   return regions;
+ }
++
++/** The scopes that wrap a recorded freehand stroke with its original: Scope statements inside an envelope. */
++function envelopeScopeIds(statements: readonly Statement[] | undefined, source: string): ReadonlySet<string> {
++  const envelopes = originalStrokes(source);
++  const ids = new Set<string>();
++  const visit = (items: readonly Statement[]) => {
++    for (const statement of items) {
++      if (statement.kind !== "Scope") continue;
++      if (envelopes.some((entry) => statement.span.from >= entry.from && statement.span.to <= entry.to)) ids.add(statement.id);
++      visit(statement.body);
++    }
++  };
++  visit(statements ?? []);
++  return ids;
++}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 index 709cc1b9..7b579548 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
