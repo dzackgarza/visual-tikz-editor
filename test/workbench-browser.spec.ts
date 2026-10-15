@@ -1025,6 +1025,76 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`selects a fitted stroke itself, not the envelope that keeps its original, in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      await input.penStroke(waveAcross(viewport, .45, .4, 160));
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Apply simplification', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      const rail = frame.locator('[data-diagram-tools]');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Select', exact: true }))]);
+      // Start from an empty selection, then tap the fitted path.
+      await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+      const ids = await frame.locator('svg [data-source-id^="path:"]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')!))]);
+      const fitted = ids[ids.length - 1];
+      await input.touch([await strokePoint(page, frame.locator(`svg [data-source-id="${fitted}"]`).first(), .5)]);
+      await expect.poll(async () => (await editorDebug(page)).selection, { message: 'Tapping the fitted stroke selected its recovery envelope' }).toEqual([fitted]);
+      await expect(frame.getByRole('button', { name: 'Lock curve', exact: true })).toBeVisible();
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`simplifies a fitted stroke again and again until it converges in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      // A long wavy stroke, so a fit has many anchors to shed.
+      const wave = Array.from({ length: 60 }, (_, i) => ({ x: viewport.x + viewport.width * .35 + i * 6, y: viewport.y + viewport.height * .45 + Math.sin(i / 4) * 30 }));
+      await input.penStroke(wave);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Apply simplification', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      const rail = frame.locator('[data-diagram-tools]');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Select', exact: true }))]);
+      // The fit is the path inside the stroke's envelope scope.
+      const ids = await frame.locator('svg [data-source-id^="path:"]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')!))]);
+      const curve = frame.locator(`svg [data-source-id="${ids[ids.length - 1]}"]`).first();
+      await input.touch([await strokePoint(page, curve, .3)]);
+      await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+      // A tap that lands on an anchor selects that point; the curve's own actions are one tap away.
+      const whole = frame.getByRole('button', { name: 'Select entire curve', exact: true });
+      if (await whole.isVisible()) await input.touch([await stableCenter(whole)]);
+      const anchors = async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length + 1;
+      const counts = [await anchors()];
+      for (let step = 0; step < 8; step++) {
+        await expect(frame.getByRole('button', { name: 'Curve actions', exact: true }),
+          `No Curve actions before simplify step ${step + 1} (anchors ${counts.join(' → ')}, selection ${JSON.stringify((await editorDebug(page)).selection)})`).toBeVisible();
+        await input.touch([await stableCenter(frame.getByRole('button', { name: 'Curve actions', exact: true }))]);
+        const simplify = frame.getByRole('button', { name: 'Simplify curve', exact: true });
+        await input.touch([await stableCenter(simplify)]);
+        await page.waitForTimeout(300);
+        const now = await anchors();
+        if (now === counts[counts.length - 1]) break;
+        counts.push(now);
+      }
+      // Each step sheds anchors until the fit is final, and the author is told so.
+      assert.ok(counts.length >= 3, `Simplify could not be repeated: anchors ${counts.join(' → ')}`);
+      assert.ok(counts.every((count, index) => index === 0 || count < counts[index - 1]), `anchors ${counts.join(' → ')}`);
+      assert.ok(counts[counts.length - 1] >= 2, `Simplification collapsed the curve: ${counts.join(' → ')}`);
+      await expect(frame.getByRole('alert').or(frame.getByText(/simpler fit|already as simple/i)).first()).toBeVisible();
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
