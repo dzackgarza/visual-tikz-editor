@@ -558,8 +558,10 @@ describe("standalone workbench host boundary", function () {
         await expect(frame.locator('[data-selection-highlight="path:0"]')).toBeVisible();
         const lock = frame.getByRole('button', { name: 'Lock curve', exact: true });
         await expect(lock).toHaveAttribute('aria-pressed', 'false');
+        await storyScreenshot(page, `curve-selected-${contact}-${tablet.name}`);
         await input.touch([await centerOf(lock)]);
         await expect(lock).toHaveAttribute('aria-pressed', 'true');
+        await storyScreenshot(page, `curve-locked-${contact}-${tablet.name}`);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await tap({ x: viewport.x + viewport.width - 20, y: viewport.y + viewport.height - 20 });
         await tap(await settledCenter(frame.locator('svg [data-source-id="path:1"]').first()));
@@ -609,6 +611,8 @@ describe("standalone workbench host boundary", function () {
         await tap({ x: frameBox.x + onCurve.x, y: frameBox.y + onCurve.y });
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
         await input.touch([await centerOf(frame.getByRole('button', { name: 'Curve actions', exact: true }))]);
+        await expect(frame.getByRole('button', { name: 'Select multiple nodes', exact: true })).toBeVisible();
+        await storyScreenshot(page, `curve-actions-${contact}-${tablet.name}`);
         await input.touch([await centerOf(frame.getByRole('button', { name: 'Select multiple nodes', exact: true }))]);
         const anchors = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]');
         const points = await anchors.evaluateAll(nodes => nodes.map(node => {
@@ -679,6 +683,7 @@ describe("standalone workbench host boundary", function () {
         await expect(frame.getByRole('button', { name: '1 point selected', exact: true })).toBeVisible();
         for (const name of ['Make corner', 'Smooth points', 'Delete points', 'Split here'])
           await expect(frame.getByRole('button', { name, exact: true })).toBeVisible();
+        await storyScreenshot(page, `point-selected-${contact}-${tablet.name}`);
         await expect(frame.getByRole('button', { name: 'Point actions', exact: true })).toHaveCount(0);
         await input.longPress(await pointAt(1));
         await expect(frame.getByRole('menu')).toHaveCount(0);
