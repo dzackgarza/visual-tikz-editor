@@ -7563,7 +7563,7 @@ index 5660d6d8..4ca2001f 100644
      minorStep,
      majorStep: minorStep * OVERLAY_MAJOR_STEP_MULTIPLE
 diff --git a/packages/app/src/ui/canvas-panel/interaction-helpers.ts b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
-index f22aaafd..e4da0b40 100644
+index f22aaafd..e1fdeccb 100644
 --- a/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 +++ b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 @@ -1,5 +1,8 @@
@@ -7663,7 +7663,7 @@ index f22aaafd..e4da0b40 100644
    };
  }
  
-@@ -199,27 +208,59 @@ export function createBezierTemplateFromBend(
+@@ -199,27 +208,66 @@ export function createBezierTemplateFromBend(
    startWorld: WorldPoint,
    endWorld: WorldPoint,
    bendWorld: WorldPoint,
@@ -7704,6 +7704,13 @@ index f22aaafd..e4da0b40 100644
 +  return frame ? applyMatrix(frame, snapped) : snapped;
 +}
 +
++/** The sweep from the arc's start to the point, taken as the turn nearest the previous sweep, so it continues the way the pen went. */
++export function continueArcSweep(center: WorldPoint, start: WorldPoint, previousSweep: number, point: WorldPoint): number {
++  const degreesTo = (target: WorldPoint) => Math.atan2(target.y - center.y, target.x - center.x) * 180 / Math.PI;
++  const raw = degreesTo(point) - degreesTo(start);
++  return raw + Math.round((previousSweep - raw) / 360) * 360;
++}
++
  export function resolveToolCreateCurrentWorld(
    startWorld: WorldPoint,
    rawCurrentWorld: WorldPoint,
@@ -7730,7 +7737,7 @@ index f22aaafd..e4da0b40 100644
  }
  
  export function snapPointDeltaToAxisStepMultiples(
-@@ -333,14 +374,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
+@@ -333,14 +381,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
    return worldPoint(pt(sumX / count), pt(sumY / count));
  }
  
@@ -7755,7 +7762,7 @@ index f22aaafd..e4da0b40 100644
    return [
      { label: "X", value: formatTooltipLengthCm(point.x) },
      { label: "Y", value: formatTooltipLengthCm(point.y) }
-@@ -481,8 +530,13 @@ export function projectResizeDimensionsFromOppositeCorner(
+@@ -481,8 +537,13 @@ export function projectResizeDimensionsFromOppositeCorner(
  export function resolveToolCreateSize(
    mode: ToolCreateMode,
    startWorld: WorldPoint,
@@ -7770,7 +7777,7 @@ index f22aaafd..e4da0b40 100644
    if (mode === "addCircle") {
      const radius = Math.hypot(currentWorld.x - startWorld.x, currentWorld.y - startWorld.y);
      const diameter = clampTooltipScalar(radius * 2);
-@@ -506,11 +560,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
+@@ -506,11 +567,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
  
  function formatTooltipLength(valuePt: number): string {
    const clamped = clampTooltipScalar(valuePt);
@@ -8320,7 +8327,7 @@ index 00000000..97b948c8
 +  return { kind: "success", source: nextSource };
 +}
 diff --git a/packages/app/src/ui/canvas-panel/types.ts b/packages/app/src/ui/canvas-panel/types.ts
-index dac6b0b3..be694437 100644
+index dac6b0b3..052677b4 100644
 --- a/packages/app/src/ui/canvas-panel/types.ts
 +++ b/packages/app/src/ui/canvas-panel/types.ts
 @@ -1,8 +1,9 @@
@@ -8361,16 +8368,17 @@ index dac6b0b3..be694437 100644
      }
    ;
  
-@@ -269,6 +274,8 @@ export type PendingBezier = {
+@@ -269,6 +274,9 @@ export type PendingBezier = {
    endWorld: WorldPoint;
  };
  
-+export type ArcDraft = { center: WorldPoint; start?: WorldPoint; bypassLattice?: boolean };
++/** An arc being placed; sweep is the signed, unwrapped turn in degrees from start to the pointer, following the pen round. */
++export type ArcDraft = { center: WorldPoint; start?: WorldPoint; sweep?: number; bypassLattice?: boolean };
 +
  export type PathAppendTarget = {
    elementId: string;
    end: "start" | "end";
-@@ -280,10 +287,7 @@ export type PathToolDraft = {
+@@ -280,10 +288,7 @@ export type PathToolDraft = {
    appendTarget?: PathAppendTarget;
  };
  
@@ -8383,7 +8391,7 @@ index dac6b0b3..be694437 100644
  export type TextSelectionOverlay = {
    sourceId: string;
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
-index de0ccae2..e6173e2f 100644
+index de0ccae2..43d65abc 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 @@ -1,5 +1,8 @@
@@ -8428,7 +8436,7 @@ index de0ccae2..e6173e2f 100644
    bezierBendDraft: Extract<DragState, { kind: "tool-bezier-bend" }> | null;
    canvasTransform: CanvasTransform;
  };
-@@ -50,20 +55,62 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -50,20 +55,65 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
      toolCursorWorld,
      selectedAddShape,
      freehandDraft,
@@ -8469,7 +8477,10 @@ index de0ccae2..e6173e2f 100644
 +          const endLocal = applyMatrix(inverse, requested);
 +          const radius = Math.hypot(startLocal.x - centerLocal.x, startLocal.y - centerLocal.y);
 +          const startAngle = Math.atan2(startLocal.y - centerLocal.y, startLocal.x - centerLocal.x) * 180 / Math.PI;
-+          const endAngle = Math.atan2(endLocal.y - centerLocal.y, endLocal.x - centerLocal.x) * 180 / Math.PI;
++          // Draw the way the pen went round: the end's turn nearest the tracked sweep.
++          const rawEnd = Math.atan2(endLocal.y - centerLocal.y, endLocal.x - centerLocal.x) * 180 / Math.PI;
++          const sweep = rawEnd - startAngle + Math.round(((arcDraft.sweep ?? 0) - (rawEnd - startAngle)) / 360) * 360;
++          const endAngle = startAngle + sweep;
 +          const commands: ScenePathCommand[] = [{ kind: "M", to: arcDraft.start }];
 +          appendArcCommand(commands, arcDraft.start, { rx: radius, ry: radius, startAngle, endAngle }, frame);
 +          return { kind: "path", d: encodeArcPreview(commands, svgResult.viewBox) };
@@ -8493,7 +8504,7 @@ index de0ccae2..e6173e2f 100644
        const liveWorld = toolDraft?.currentWorld ?? toolCursorWorld;
        if (!liveWorld) {
          return null;
-@@ -82,7 +129,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -82,7 +132,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        }
  
        const segments: Extract<ToolPreview, { kind: "freehand" }>["segments"] = [];
@@ -8502,7 +8513,7 @@ index de0ccae2..e6173e2f 100644
          if (segment.kind === "line") {
            const from = worldToSvgPoint(segment.from, svgResult.viewBox);
            const to = worldToSvgPoint(segment.to, svgResult.viewBox);
-@@ -117,7 +164,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -117,7 +167,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
      }
  
      const makeBezierPreview = (startWorld: WorldPoint, endWorld: WorldPoint, bendWorld: WorldPoint): ToolPreview => {
@@ -8511,7 +8522,7 @@ index de0ccae2..e6173e2f 100644
        const start = worldToSvgPoint(startWorld, svgResult.viewBox);
        const end = worldToSvgPoint(controls.endWorld, svgResult.viewBox);
        const c1 = worldToSvgPoint(controls.control1, svgResult.viewBox);
-@@ -182,7 +229,8 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -182,7 +232,8 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
            const controls = resolveBezierControlsFromBend(
              pathSegmentDraft.startWorld,
              pathSegmentDraft.endWorld,
@@ -8521,7 +8532,7 @@ index de0ccae2..e6173e2f 100644
            );
            const from = worldToSvgPoint(pathSegmentDraft.startWorld, svgResult.viewBox);
            const c1 = worldToSvgPoint(controls.control1, svgResult.viewBox);
-@@ -394,6 +442,21 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -394,6 +445,21 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        };
      }
  
@@ -8543,7 +8554,7 @@ index de0ccae2..e6173e2f 100644
      const dx = toolDraft.currentWorld.x - toolDraft.startWorld.x;
      const dy = toolDraft.currentWorld.y - toolDraft.startWorld.y;
      const radius = Math.hypot(dx, dy);
-@@ -404,7 +467,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -404,7 +470,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        cy: start.y,
        r: radius > 1e-4 ? radius : TOOL_PREVIEW_CIRCLE_RADIUS_PT
      };
@@ -8552,7 +8563,7 @@ index de0ccae2..e6173e2f 100644
  
    return {
      toolPreview
-@@ -442,3 +505,12 @@ function encodeTranslatedPathPreview(
+@@ -442,3 +508,12 @@ function encodeTranslatedPathPreview(
    }
    return parts.join(" ");
  }
@@ -9415,7 +9426,7 @@ index 8078a5d4..89bbc24e 100644
    const hitRegions = useMemo(() => {
      if (!snapshot.scene || !svgResult) return [];
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..eb69e582 100644
+index 709cc1b9..86725a45 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 @@ -1,6 +1,6 @@
@@ -9431,7 +9442,7 @@ index 709cc1b9..eb69e582 100644
  import { createFreehandToolDraft } from "./freehand-tool";
  import { isToolCreateMode } from "../tool-config";
 -import { formatTooltipCoordinateRows } from "./interaction-helpers";
-+import { formatTooltipCoordinateRows, magneticArcAngle, resolveToolCreateCurrentWorld } from "./interaction-helpers";
++import { continueArcSweep, formatTooltipCoordinateRows, magneticArcAngle, resolveToolCreateCurrentWorld } from "./interaction-helpers";
  import type { MatrixCellAnchorHint } from "./endpoint-anchor-snap";
  import type {
 +  ArcDraft,
@@ -9583,7 +9594,7 @@ index 709cc1b9..eb69e582 100644
              ? resolveEndpointAnchorSnap({
                  pointerWorld: world,
                  zoom: toolSnapContext?.zoom ?? canvasTransform.scale,
-@@ -351,14 +372,53 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -351,14 +372,55 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          setToolCursorWorld(resolvedStart);
          event.preventDefault();
  
@@ -9610,9 +9621,11 @@ index 709cc1b9..eb69e582 100644
 +            arcPoint = latticeEndpoint.point;
 +          }
 +          queueSelectionForAddedElement(draft.start);
++          const startAngle = Math.atan2(draft.start.y - draft.center.y, draft.start.x - draft.center.x) * 180 / Math.PI;
++          const sweep = continueArcSweep(draft.center, draft.start, draft.sweep ?? 0, arcPoint);
 +          const result = applyActionWithFeedback({
 +            kind: "addElement",
-+            template: { kind: "arc", start: draft.start, end: arcPoint, strokeColor: creationStrokeColor },
++            template: { kind: "arc", start: draft.start, end: arcPoint, startAngle, endAngle: startAngle + sweep, strokeColor: creationStrokeColor },
 +            at: draft.center
 +          });
 +          if (!result.sourceChanged) {
@@ -9639,7 +9652,7 @@ index 709cc1b9..eb69e582 100644
            setNodeAnchorOverlay(null);
            setFreehandDraft(nextFreehandDraft);
            setDragTooltip(null);
-@@ -366,7 +426,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -366,7 +428,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              kind: "tool-freehand",
              pointerId: event.pointerId,
              points: nextFreehandDraft.points,
@@ -9648,7 +9661,7 @@ index 709cc1b9..eb69e582 100644
            };
            setDragState(nextFreehandDrag);
            logSnapDebug({
-@@ -375,7 +435,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -375,7 +437,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              dragKind: "tool-freehand",
              rawPoint: world,
              snappedPoint: resolvedStart,
@@ -9657,7 +9670,7 @@ index 709cc1b9..eb69e582 100644
            });
            return;
          }
-@@ -384,7 +444,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -384,7 +446,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            const activeDraft = pathDraftRef.current;
            if (!activeDraft) {
              // Check if click is near an endpoint of an existing open path
@@ -9666,7 +9679,7 @@ index 709cc1b9..eb69e582 100644
                ? resolvePathEndpointSnap({
                    pointerWorld: resolvedStart,
                    zoom: canvasTransform.scale,
-@@ -515,7 +575,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -515,7 +577,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            return;
          }
  
@@ -9675,7 +9688,7 @@ index 709cc1b9..eb69e582 100644
            event.preventDefault();
            event.stopPropagation();
            setDragTooltip(null);
-@@ -535,6 +595,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -535,6 +597,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              toolCursorWorld != null &&
              distanceSquared(world, toolCursorWorld) <= previewToleranceWorld * previewToleranceWorld;
            const nodeAt = previewMatchesClick ? toolCursorWorld : snapResult.snappedPoint ?? world;
@@ -9688,7 +9701,7 @@ index 709cc1b9..eb69e582 100644
            setSnapLines(snapResult.lines);
            logSnapDebug({
              phase: "tool-add-node",
-@@ -558,7 +624,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -558,7 +626,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                    columns: selectedAddMatrixColumns,
                    matrixKind: "nodes"
                  }
@@ -9701,7 +9714,7 @@ index 709cc1b9..eb69e582 100644
              at: nodeAt
            });
            if (!ok.sourceChanged) {
-@@ -566,7 +636,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -566,7 +638,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            }
            if (ok.sourceChanged) {
              suppressNextBackgroundClickRef.current = true;
@@ -9709,7 +9722,7 @@ index 709cc1b9..eb69e582 100644
              setToolDraft(null);
              setToolCursorWorld(null);
              setSnapLines([]);
-@@ -609,7 +678,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -609,7 +680,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -9718,7 +9731,7 @@ index 709cc1b9..eb69e582 100644
          if (event.pointerType === "touch") {
            const pending = pendingTouchViewportRef.current;
            if (!event.isPrimary || (pending && pending.pointerId !== event.pointerId)) {
-@@ -669,6 +738,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -669,6 +740,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        nodeAnchorTargets,
        matrixCellAnchorHints,
        pendingBezier,
@@ -9727,7 +9740,7 @@ index 709cc1b9..eb69e582 100644
        toolMode,
        toolCursorWorld,
        snapGuideInput,
-@@ -704,7 +775,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -704,7 +777,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        if (event.button !== 0 || event.target !== event.currentTarget) {
          return;
        }
@@ -9736,7 +9749,7 @@ index 709cc1b9..eb69e582 100644
          if (toolMode !== "magnify") {
            onInteractionPointerDown(event as unknown as ReactPointerEvent<SVGSVGElement>);
          }
-@@ -812,6 +883,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -812,6 +885,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchors =
@@ -9744,7 +9757,7 @@ index 709cc1b9..eb69e582 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -826,7 +898,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -826,7 +900,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpoint =
@@ -9753,7 +9766,7 @@ index 709cc1b9..eb69e582 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -851,7 +923,21 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -851,7 +925,23 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -9761,7 +9774,6 @@ index 709cc1b9..eb69e582 100644
 +      let cursorWorld = closeCandidateWorld ?? hoverPathEndpoint?.world ?? hoverEndpointAnchor?.world ?? snapped.snappedPoint ?? world;
 +      if (toolMode === "addArc" && arcDraft) {
 +        const bypassLattice = event.ctrlKey || event.metaKey;
-+        if (Boolean(arcDraft.bypassLattice) !== bypassLattice) setArcDraft({ ...arcDraft, bypassLattice });
 +        cursorWorld = resolveToolCreateCurrentWorld(arcDraft.center, cursorWorld, "addCircle", event.shiftKey, snapSettingsPatch.latticeTransform);
 +        if (arcDraft.start && !snapSettingsPatch.latticeLock && !event.shiftKey) {
 +          cursorWorld = magneticArcAngle(arcDraft.center, world, snapSettingsPatch.latticeTransform) ?? cursorWorld;
@@ -9772,11 +9784,14 @@ index 709cc1b9..eb69e582 100644
 +            if (endpoint.kind === "point") cursorWorld = endpoint.point;
 +          } else cursorWorld = snapToUnitLattice(cursorWorld, snapSettingsPatch.latticeTransform);
 +        }
++        // The raw pointer moves smoothly, so the sweep follows it round even while the end jumps between lattice points.
++        const sweep = arcDraft.start ? continueArcSweep(arcDraft.center, arcDraft.start, arcDraft.sweep ?? 0, world) : undefined;
++        if (Boolean(arcDraft.bypassLattice) !== bypassLattice || sweep !== arcDraft.sweep) setArcDraft({ ...arcDraft, bypassLattice, sweep });
 +      }
        setToolCursorWorld(cursorWorld);
        updateInitialPlacementTooltip(event, cursorWorld);
        if (!toolDraft && !bezierBendDraft && !pathSegmentDraft) {
-@@ -883,6 +969,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -883,6 +973,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
@@ -9784,7 +9799,7 @@ index 709cc1b9..eb69e582 100644
        toolMode,
        snapGuideInput,
        snapSettingsPatch,
-@@ -996,6 +1083,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -996,6 +1087,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchorsEnter =
@@ -9792,7 +9807,7 @@ index 709cc1b9..eb69e582 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -1010,7 +1098,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1010,7 +1102,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpointEnter =
@@ -9801,7 +9816,7 @@ index 709cc1b9..eb69e582 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -1035,7 +1123,21 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1035,7 +1127,23 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -9809,7 +9824,6 @@ index 709cc1b9..eb69e582 100644
 +      let cursorWorld = closeCandidateWorld ?? hoverPathEndpointEnter?.world ?? hoverEndpointAnchor?.world ?? snapped.snappedPoint ?? world;
 +      if (toolMode === "addArc" && arcDraft) {
 +        const bypassLattice = event.ctrlKey || event.metaKey;
-+        if (Boolean(arcDraft.bypassLattice) !== bypassLattice) setArcDraft({ ...arcDraft, bypassLattice });
 +        cursorWorld = resolveToolCreateCurrentWorld(arcDraft.center, cursorWorld, "addCircle", event.shiftKey, snapSettingsPatch.latticeTransform);
 +        if (arcDraft.start && !snapSettingsPatch.latticeLock && !event.shiftKey) {
 +          cursorWorld = magneticArcAngle(arcDraft.center, world, snapSettingsPatch.latticeTransform) ?? cursorWorld;
@@ -9820,11 +9834,14 @@ index 709cc1b9..eb69e582 100644
 +            if (endpoint.kind === "point") cursorWorld = endpoint.point;
 +          } else cursorWorld = snapToUnitLattice(cursorWorld, snapSettingsPatch.latticeTransform);
 +        }
++        // The raw pointer moves smoothly, so the sweep follows it round even while the end jumps between lattice points.
++        const sweep = arcDraft.start ? continueArcSweep(arcDraft.center, arcDraft.start, arcDraft.sweep ?? 0, world) : undefined;
++        if (Boolean(arcDraft.bypassLattice) !== bypassLattice || sweep !== arcDraft.sweep) setArcDraft({ ...arcDraft, bypassLattice, sweep });
 +      }
        setToolCursorWorld(cursorWorld);
        updateInitialPlacementTooltip(event, cursorWorld);
        if (!toolDraft && !bezierBendDraft && !pathSegmentDraft) {
-@@ -1067,6 +1169,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1067,6 +1175,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,

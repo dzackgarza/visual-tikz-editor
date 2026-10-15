@@ -444,8 +444,8 @@ describe("standalone workbench host boundary", function () {
       const arc = (await editorDebug(page)).source.split('\n').find(line => line.includes('arc'))!;
       // The editor writes angles as numbers or as atan2(y,x) of a lattice direction.
       const angle = (raw: string) => {
-        const pair = /atan2\(([-\d.]+),([-\d.]+)\)/.exec(raw);
-        return pair ? Math.atan2(Number(pair[1]), Number(pair[2])) * 180 / Math.PI : Number(raw.replace(/[{}]/g, ''));
+        const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
+        return pair ? Math.atan2(Number(pair[1]), Number(pair[2])) * 180 / Math.PI + Number(pair[3] ?? 0) : Number(raw.replace(/[{}]/g, ''));
       };
       const end = angle(/end angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
       assert.ok(Math.abs(end - 180) < 1e-6, `The free arc ends at ${end} degrees, not 180: ${arc}`);
@@ -493,8 +493,8 @@ describe("standalone workbench host boundary", function () {
       await expect.poll(async () => (await editorDebug(page)).source).toMatch(/arc/);
       const arc = (await editorDebug(page)).source.split('\n').find(line => line.includes('arc'))!;
       const angle = (raw: string) => {
-        const pair = /atan2\(([-\d.]+),([-\d.]+)\)/.exec(raw);
-        return pair ? Math.atan2(Number(pair[1]), Number(pair[2])) * 180 / Math.PI : Number(raw.replace(/[{}]/g, ''));
+        const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
+        return pair ? Math.atan2(Number(pair[1]), Number(pair[2])) * 180 / Math.PI + Number(pair[3] ?? 0) : Number(raw.replace(/[{}]/g, ''));
       };
       const start = angle(/start angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
       const end = angle(/end angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
