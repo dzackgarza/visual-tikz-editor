@@ -559,6 +559,94 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`rotates a square 45 degrees by its handle with the pen in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,6);\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const square = frame.locator('svg [data-source-id="path:0"]').first();
+      await expect(square).toBeVisible();
+      const input = await TabletInput.attach(page);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
+      await input.penStroke([await strokePoint(page, square, .1)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
+      const handle = await settledCenter(frame.getByTestId('canvas-rotate-handle'));
+      const centre = await settledCenter(square);
+      // Turn the handle 45 degrees counterclockwise about the square's centre (screen y grows downward).
+      const radius = Math.hypot(handle.x - centre.x, handle.y - centre.y);
+      const from = Math.atan2(centre.y - handle.y, handle.x - centre.x);
+      const path = Array.from({ length: 10 }, (_, i) => {
+        const angle = from + (Math.PI / 4) * i / 9;
+        return { x: centre.x + radius * Math.cos(angle), y: centre.y - radius * Math.sin(angle) };
+      });
+      await input.penDown(path[0]);
+      for (const point of path.slice(1)) await input.penMove(point);
+      await input.penUp(path[path.length - 1]);
+      await expect.poll(async () => (await editorDebug(page)).source).toMatch(/rotate/);
+      const source = (await editorDebug(page)).source;
+      assert.match(source, /rotate( around)?=\{?45\b/, `The square did not turn 45 degrees: ${source}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`scales a lasso-selected pair by 2 from a corner of their frame in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (2,2) circle (1);
+\draw (6,2) circle (1);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+      });
+      const rail = frame.locator('[data-diagram-tools]');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Lasso', exact: true }))]);
+      // A loop round both circles and clear of the axes.
+      await input.penStroke([at(.5, .5), at(8, .5), at(8, 3.6), at(.5, 3.6), at(.5, .6)]);
+      await expect.poll(async () => [...(await editorDebug(page)).selection].sort()).toEqual(['path:2', 'path:3']);
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Select', exact: true }))]);
+      await expect.poll(async () => [...(await editorDebug(page)).selection].sort()).toEqual(['path:2', 'path:3']);
+      const corner = at(7, 3);
+      const handles = await frame.locator('[data-resize-role]').evaluateAll(nodes => nodes.map(node => {
+        const box = node.getBoundingClientRect();
+        return { role: node.getAttribute('data-resize-role'), x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      }));
+      const nearest = handles.map(entry => ({ ...entry, x: entry.x + frameBox.x, y: entry.y + frameBox.y }))
+        .sort((a, b) => Math.hypot(a.x - corner.x, a.y - corner.y) - Math.hypot(b.x - corner.x, b.y - corner.y))[0];
+      assert.ok(nearest && Math.hypot(nearest.x - corner.x, nearest.y - corner.y) < 16, `No frame corner handle at (7,3) for the pair: ${JSON.stringify(handles)}`);
+      const target = at(13, 5);
+      await input.penDown(nearest);
+      for (let i = 1; i <= 10; i++) await input.penMove({ x: nearest.x + (target.x - nearest.x) * i / 10, y: nearest.y + (target.y - nearest.y) * i / 10 });
+      await input.penUp(target);
+      await expect.poll(async () => (await editorDebug(page)).source).not.toContain('(2,2) circle (1)');
+      const source = (await editorDebug(page)).source;
+      assert.match(source, /\(3,3\) circle \(\{?2(cm)?\}?\)/, source);
+      assert.match(source, /\(11,3\) circle \(\{?2(cm)?\}?\)/, source);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
