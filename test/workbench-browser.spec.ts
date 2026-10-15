@@ -2568,6 +2568,37 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByLabel('Authored source')).toHaveValue(fitted);
   });
 
+  it("refits translucent ink the same way from the host and from the canvas", async function () {
+    const strokes = [{
+      key: "translucent-stroke", intent: "geometry", color: "#11223380",
+      samples: Array.from({ length: 20 }, (_, i) => ({
+        x: i * 4, y: 12 + Math.sin(i) * .2, time: i * 8,
+        pressure: .5, altitude: 1.1, azimuth: .7, roll: .2,
+        hoverHeight: 0, buttons: 1, capabilities: 15, id: i, tool: 0, phase: i === 0 ? 0 : 1, predicted: false,
+      })),
+    }];
+    await page.goto(`${url}embedding.html`);
+    await expect(page.locator("#status")).toHaveText("Loaded");
+    await page.getByLabel("Original strokes").fill(JSON.stringify(strokes));
+    await page.getByRole("button", { name: "Import strokes", exact: true }).click();
+    await expect(page.getByLabel("Authored source")).toHaveValue(/translucent-stroke/);
+    const imported = await page.getByLabel("Authored source").inputValue();
+    await page.getByLabel("Stroke key").fill(strokes[0].key);
+    await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
+    await expect(page.getByLabel("Authored source")).not.toHaveValue(imported);
+    const hostFit = await page.getByLabel("Authored source").inputValue();
+    await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
+    await expect(page.getByLabel("Authored source")).toHaveValue(imported);
+    const frame = page.frameLocator('#editor');
+    await frame.locator('[data-canvas-viewport="true"]').scrollIntoViewIfNeeded();
+    await frame.locator('[data-canvas-viewport="true"]').press('v');
+    const snapshot = await hostSnapshot();
+    const line = (await frame.locator(`path[data-source-id="${snapshot.originalInk[0].sourceIds[0]}"]`).first().boundingBox())!;
+    await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
+    await frame.getByRole('button', { name: 'Reapply original fit', exact: true }).click();
+    await expect(page.getByLabel('Authored source'), 'The canvas refit differs from the host refit').toHaveValue(hostFit);
+  });
+
   it("exports an image resource that renders outside its document while offline", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
