@@ -4713,7 +4713,7 @@ index cf4cf2cf..0c7d3db4 100644
    pointer-events: none;
  }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..520a290a 100644
+index 4e22ccfa..587ab434 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -25,12 +25,16 @@ preflightPositionNodeRelativeToAction,
@@ -5969,10 +5969,23 @@ index 4e22ccfa..520a290a 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4418,47 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4418,67 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
++  // The selection control's own content height, measured, so placement can keep all of it on screen.
++  const [selectionControlHeight, setSelectionControlHeight] = useState(112);
++  const selectionControlObserver = useRef<MutationObserver | null>(null);
++  const measureSelectionControl = useCallback((element: HTMLDivElement | null) => {
++    selectionControlObserver.current?.disconnect();
++    selectionControlObserver.current = null;
++    if (!element) return;
++    const measure = () => setSelectionControlHeight(element.scrollHeight);
++    const observer = new MutationObserver(measure);
++    observer.observe(element, { childList: true, subtree: true, characterData: true });
++    selectionControlObserver.current = observer;
++    measure();
++  }, []);
 +  const selectionPopupStyle = (() => {
 +    // The control never covers what it acts on or the rail: it goes below,
 +    // above, right of, or left of the selection, whichever first fits inside
@@ -5985,7 +5998,7 @@ index 4e22ccfa..520a290a 100644
 +    const topEdge = Math.max((viewport?.top ?? 0), inset("top")) + 8;
 +    const bottomEdge = Math.min((viewport?.bottom ?? window.innerHeight), window.innerHeight - inset("bottom")) - 8;
 +    const width = Math.max(0, Math.min(300, rightEdge - leftEdge));
-+    const height = Math.min(curveActionsOpen && selectedCurve ? 240 : 112, Math.max(0, bottomEdge - topEdge));
++    const height = Math.min(selectionControlHeight, Math.max(0, bottomEdge - topEdge));
 +    const bounds = [...selectedElementIds].flatMap((id) => {
 +      const box = sourceBoundsSvg.get(id) ?? scopeOverlay.boundsByScopeId.get(id);
 +      return box ? [box] : [];
@@ -6010,14 +6023,21 @@ index 4e22ccfa..520a290a 100644
 +    }));
 +    const clearOfOthers = fitting.find((place) => others.every((item) => item.right <= place.left || item.left >= place.left + width ||
 +      item.bottom <= place.top || item.top >= place.top + height));
-+    const place = clearOfOthers ?? fitting[0] ?? { left: alongX, top: clamp(box.bottom, topEdge, Math.max(topEdge, bottomEdge - height)) };
-+    return { left: place.left, top: place.top, width, maxHeight: Math.max(0, bottomEdge - place.top) };
++    const place = clearOfOthers ?? fitting[0];
++    if (place) return { left: place.left, top: place.top, width, maxHeight: Math.max(0, bottomEdge - place.top) };
++    // Nothing holds the whole control: take the roomier side above or below the
++    // selection, still clear of it, and let the control scroll within that side.
++    const roomBelow = bottomEdge - Math.max(box.bottom, topEdge);
++    const roomAbove = Math.min(box.top, bottomEdge) - topEdge;
++    return roomBelow >= roomAbove
++      ? { left: alongX, top: Math.max(box.bottom, topEdge), width, maxHeight: Math.max(0, roomBelow) }
++      : { left: alongX, top: topEdge + Math.max(0, roomAbove - height), width, maxHeight: Math.max(0, roomAbove) };
 +  })();
 +
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4481,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4501,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -6040,7 +6060,7 @@ index 4e22ccfa..520a290a 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4512,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4532,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -6055,7 +6075,7 @@ index 4e22ccfa..520a290a 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4538,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4558,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -6089,7 +6109,7 @@ index 4e22ccfa..520a290a 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4570,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4590,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -6099,7 +6119,7 @@ index 4e22ccfa..520a290a 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4583,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4603,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -6129,7 +6149,7 @@ index 4e22ccfa..520a290a 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3974,6 +4640,79 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +4660,80 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -6144,18 +6164,19 @@ index 4e22ccfa..520a290a 100644
 +        </div>
 +      ) : null}
 +      {selectedElementIds.size > 0 && !selectedCurve && !freehandResultOffer ? (
-+        <div className={freehandPopupCss.rangeControls} onPointerDown={(event) => event.stopPropagation()} style={selectionPopupStyle}>
++        <div ref={measureSelectionControl} className={freehandPopupCss.rangeControls} onPointerDown={(event) => event.stopPropagation()} style={selectionPopupStyle}>
 +          {selectionCommandsApplicable ? <button type="button" aria-haspopup="menu" onClick={openSelectionCommands}>
 +            {pointCommandContext ? "Point actions" : selectedElementIds.size === 1 ? "Selection actions" : `${selectedElementIds.size} selected · Actions`}
 +          </button> : null}
 +        </div>
 +      ) : null}
 +      {selectedCurve && !freehandResultOffer ? (
-+        <div className={freehandPopupCss.rangeControls} style={selectionPopupStyle} onPointerDown={(event) => event.stopPropagation()}>
++        <div ref={measureSelectionControl} className={freehandPopupCss.rangeControls} style={selectionPopupStyle} onPointerDown={(event) => event.stopPropagation()}>
 +          <button type="button" className={freehandPopupCss.lockToggle} aria-pressed={lockedCurveId !== null}
 +            onClick={() => setLockedCurveId(lockedCurveId ? null : selectedCurve.path.sourceRef.sourceId)}>
 +            <span aria-hidden="true">{lockedCurveId ? "🔒" : "🔓"}</span>Lock curve
 +          </button>
++          <span className={freehandPopupCss.pointCount}>{selectedCurve.handles.length} point{selectedCurve.handles.length === 1 ? "" : "s"}</span>
 +          <button type="button" aria-expanded={curveActionsOpen} onClick={() => setCurveActionsOpen(!curveActionsOpen)}>
 +            {selectedNodeIndices.size ? `${selectedNodeIndices.size} point${selectedNodeIndices.size === 1 ? "" : "s"} selected` : "Curve actions"}
 +          </button>
@@ -6459,10 +6480,10 @@ index f0ff59f8..bbb89875 100644
                      onHandlePointerDown={onHandlePointerDown}
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
-index 00000000..330fa7fb
+index 00000000..99ade90d
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,114 @@
 +.popup {
 +  position: fixed;
 +  z-index: 200;
@@ -6576,6 +6597,7 @@ index 00000000..330fa7fb
 +
 +.lockToggle { display: flex; align-items: center; justify-content: center; gap: 6px; }
 +.lockToggle[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
++.pointCount { justify-self: center; color: var(--text-muted); font-size: 13px; }
 diff --git a/packages/app/src/ui/canvas-panel/eraser-sweep.ts b/packages/app/src/ui/canvas-panel/eraser-sweep.ts
 new file mode 100644
 index 00000000..3bf63832
@@ -9526,7 +9548,7 @@ index 43f01253..ae977eb0 100644
 +    Math.abs(left.scale - right.scale) < 1e-6;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af8..0ae4b5e5 100644
+index de737af8..c7ab861a 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 @@ -7,10 +7,14 @@ import {
@@ -9616,12 +9638,12 @@ index de737af8..0ae4b5e5 100644
      const translateX = fitLeft - (fitViewBox.x - renderViewBox.x) * scale;
      const translateY = fitTop - (fitViewBox.y - renderViewBox.y) * scale;
  
-@@ -119,6 +133,39 @@ export function useCanvasViewportPersistence({
+@@ -119,6 +133,50 @@ export function useCanvasViewportPersistence({
      return true;
    }, [baseSvgResult, dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, svgResult, viewportRef]);
  
-+  /** Centre the origin in the canvas area the rail leaves: "fit" also sizes a 40 cm page to it; "current" keeps the zoom. */
-+  const centerOnPage = useCallback((zoom: "fit" | "current"): boolean => {
++  /** Centre the origin in the canvas area the rail leaves, sizing a 40 cm page to it. */
++  const centerOnPage = useCallback((): boolean => {
 +    const viewBox = baseSvgResult?.viewBox ?? svgResult?.viewBox;
 +    const renderViewBox = svgResult?.viewBox ?? viewBox;
 +    const viewport = viewportRef.current;
@@ -9630,8 +9652,7 @@ index de737af8..0ae4b5e5 100644
 +    const width = 40 * PT_PER_CM * (Math.abs(frame.a) + Math.abs(frame.c));
 +    const height = 40 * PT_PER_CM * (Math.abs(frame.b) + Math.abs(frame.d));
 +    const free = railFreeArea(viewport);
-+    const scale = zoom === "current" ? canvasTransformRef.current.scale
-+      : clamp(Math.min(free.width / Math.max(width, 1), free.height / Math.max(height, 1)), MIN_SCALE, MAX_SCALE);
++    const scale = clamp(Math.min(free.width / Math.max(width, 1), free.height / Math.max(height, 1)), MIN_SCALE, MAX_SCALE);
 +    previousViewBoxRef.current = renderViewBox;
 +    const transform = {
 +      translateX: free.left + free.width / 2 + (viewBox.x - frame.e) * scale - (viewBox.x - renderViewBox.x) * scale,
@@ -9641,22 +9662,34 @@ index de737af8..0ae4b5e5 100644
 +    autoViewRef.current = transform;
 +    dispatchCanvasTransform(transform);
 +    return true;
-+  }, [autoViewRef, baseSvgResult, canvasTransformRef, coordinateFrame, dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, previousViewBoxRef, svgResult, viewportRef]);
++  }, [autoViewRef, baseSvgResult, coordinateFrame, dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, previousViewBoxRef, svgResult, viewportRef]);
 +
 +  // Until the author pans or zooms, the startup view follows the rail: when the
 +  // space it takes changes, the origin is centred again in the space it leaves.
++  // The view moves by exactly how far the free area's centre moved, which depends
++  // only on the inset change, never on the SVG view box at that instant.
 +  useEffect(() => {
++    let insets = railInsets();
 +    const recentre = () => {
-+      if (autoViewRef.current !== null && sameTransform(autoViewRef.current, canvasTransformRef.current)) centerOnPage("current");
++      const next = railInsets();
++      const shiftX = ((next.left - insets.left) - (next.right - insets.right)) / 2;
++      const shiftY = ((next.top - insets.top) - (next.bottom - insets.bottom)) / 2;
++      insets = next;
++      const current = canvasTransformRef.current;
++      if (autoViewRef.current === null || !sameTransform(autoViewRef.current, current)) return;
++      const moved = { translateX: current.translateX + shiftX, translateY: current.translateY + shiftY, scale: current.scale };
++      autoViewRef.current = moved;
++      canvasTransformRef.current = moved;
++      dispatchCanvasTransform(moved);
 +    };
 +    window.addEventListener("tikz-rail-insets", recentre);
 +    return () => window.removeEventListener("tikz-rail-insets", recentre);
-+  }, [autoViewRef, canvasTransformRef, centerOnPage]);
++  }, [autoViewRef, canvasTransformRef, dispatchCanvasTransform]);
 +
    const activeFigureViewportKey = useMemo(
      () => makeFigureViewportKey(activeDocumentId, activeFigureId),
      [activeDocumentId, activeFigureId]
-@@ -154,6 +201,25 @@ export function useCanvasViewportPersistence({
+@@ -154,6 +212,25 @@ export function useCanvasViewportPersistence({
    }, [tabOrder]);
  
    useLayoutEffect(() => {
@@ -9682,7 +9715,7 @@ index de737af8..0ae4b5e5 100644
      const pendingAutoFit = pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey;
      if (previousFigureViewportKeyRef.current === activeFigureViewportKey && !pendingAutoFit) {
        return;
-@@ -179,10 +245,10 @@ export function useCanvasViewportPersistence({
+@@ -179,10 +256,10 @@ export function useCanvasViewportPersistence({
      const hasVisited = visitedFigureKeysRef.current.has(activeFigureViewportKey);
      if (!hasVisited || pendingAutoFit) {
        visitedFigureKeysRef.current.add(activeFigureViewportKey);
@@ -9692,11 +9725,11 @@ index de737af8..0ae4b5e5 100644
 +        setFitToContentModeActive(false);
        }
 -      const didFit = fitToContent();
-+      const didFit = centerOnPage("fit");
++      const didFit = centerOnPage();
        previousFigureViewportKeyRef.current = activeFigureViewportKey;
        if (didFit) {
          pendingFirstVisitAutoFitKeyRef.current = null;
-@@ -196,9 +262,11 @@ export function useCanvasViewportPersistence({
+@@ -196,9 +273,11 @@ export function useCanvasViewportPersistence({
      previousFigureViewportKeyRef.current = activeFigureViewportKey;
    }, [
      activeFigureViewportKey,
@@ -9709,7 +9742,7 @@ index de737af8..0ae4b5e5 100644
      fitToContentModeActiveRef,
      saveFigureViewportState,
      setFitToContentModeActive
-@@ -214,8 +282,10 @@ export function useCanvasViewportPersistence({
+@@ -214,8 +293,10 @@ export function useCanvasViewportPersistence({
      if (pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey) {
        return;
      }
@@ -9722,16 +9755,22 @@ index de737af8..0ae4b5e5 100644
  
    const handledFitRequestRef = useRef(0);
    useEffect(() => {
-@@ -390,3 +460,15 @@ function computeFitToContentScale(
+@@ -390,3 +471,21 @@ function computeFitToContentScale(
  function makeFigureViewportKey(documentId: string, figureId: string | null): string {
    return `${documentId}::${figureId ?? "__all__"}`;
  }
 +
++function railInsets(): { left: number; right: number; top: number; bottom: number } {
++  const style = getComputedStyle(document.documentElement);
++  const inset = (edge: string) => Number.parseFloat(style.getPropertyValue(`--rail-inset-${edge}`));
++  return { left: inset("left"), right: inset("right"), top: inset("top"), bottom: inset("bottom") };
++}
++
 +/** The part of the canvas viewport, in viewport coordinates, that the docked rail leaves visible. */
 +function railFreeArea(viewport: HTMLElement): { left: number; top: number; width: number; height: number } {
 +  const rect = viewport.getBoundingClientRect();
-+  const style = getComputedStyle(document.documentElement);
-+  const inset = (edge: string) => Number.parseFloat(style.getPropertyValue(`--rail-inset-${edge}`));
++  const insets = railInsets();
++  const inset = (edge: "left" | "right" | "top" | "bottom") => insets[edge];
 +  const left = Math.max(0, inset("left") - rect.left);
 +  const right = Math.max(0, inset("right") - (window.innerWidth - rect.right));
 +  const top = Math.max(0, inset("top") - rect.top);
