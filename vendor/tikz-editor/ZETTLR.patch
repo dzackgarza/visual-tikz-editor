@@ -4676,7 +4676,7 @@ index b12fedb2..0bb553c9 100644
 +
 +.matrixPickerCell { flex: 0 0 44px; min-width: 44px; }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
-index 8aeb4133..50d346db 100644
+index 8aeb4133..20dc3ad9 100644
 --- a/packages/app/src/ui/ToolbarToolPopup.tsx
 +++ b/packages/app/src/ui/ToolbarToolPopup.tsx
 @@ -1,4 +1,5 @@
@@ -4686,12 +4686,12 @@ index 8aeb4133..50d346db 100644
  import css from "./ToolbarToolPopup.module.css";
  
  export function ToolbarToolPopup({
-@@ -17,6 +18,35 @@ export function ToolbarToolPopup({
+@@ -17,6 +18,49 @@ export function ToolbarToolPopup({
    popupClassName?: string;
  }) {
    const rootRef = useRef<HTMLDivElement | null>(null);
 +  const popupRef = useRef<HTMLDivElement | null>(null);
-+  const [popupPosition, setPopupPosition] = useState({ left: 0, top: 0 });
++  const [popupPosition, setPopupPosition] = useState({ left: 0, top: 0, maxHeight: 0 });
 +
 +  useLayoutEffect(() => {
 +    if (!open) return;
@@ -4699,16 +4699,30 @@ index 8aeb4133..50d346db 100644
 +      const anchor = rootRef.current?.getBoundingClientRect();
 +      const popup = popupRef.current;
 +      if (!anchor || !popup) return;
-+      const dock = rootRef.current?.closest("[data-diagram-tools]")?.getAttribute("data-dock");
-+      const left = dock === "left" ? anchor.right + 8
-+        : dock === "right" ? anchor.left - popup.offsetWidth - 8
-+          : anchor.left;
-+      const top = dock === "left" || dock === "right"
-+        ? anchor.top - 8
-+        : anchor.bottom + popup.offsetHeight + 8 > window.innerHeight ? anchor.top - popup.offsetHeight - 4 : anchor.bottom + 4;
++      const rail = rootRef.current?.closest("[data-diagram-tools]");
++      const dock = rail?.getAttribute("data-dock");
++      // A rail popup stays inside the canvas cell, which excludes the rulers; other popups stay inside the window.
++      const canvas = rail ? document.querySelector("[data-canvas-viewport]")?.getBoundingClientRect() : undefined;
++      const bounds = canvas ?? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
++      const width = popup.offsetWidth;
++      const height = popup.scrollHeight;
++      if (dock === "left" || dock === "right") {
++        // Beside a vertical rail the popup cannot cover its button; it scrolls if the canvas is shorter.
++        const left = dock === "left" ? anchor.right + 8 : anchor.left - width - 8;
++        const top = Math.max(bounds.top + 8, Math.min(anchor.top - 8, bounds.bottom - height - 8));
++        setPopupPosition({ left: Math.max(bounds.left + 8, Math.min(left, bounds.right - width - 8)), top, maxHeight: bounds.bottom - 8 - top });
++        return;
++      }
++      // Above or below the button, never over it: the side that holds it, else the roomier side, scrolling there.
++      const below = { top: anchor.bottom + 4, bottom: bounds.bottom - 8 };
++      const above = { top: bounds.top + 8, bottom: anchor.top - 4 };
++      const room = (side: typeof below) => side.bottom - side.top;
++      const side = room(below) >= height ? below : room(above) >= height ? above : room(below) >= room(above) ? below : above;
++      const top = side === below ? below.top : Math.max(above.top, above.bottom - height);
 +      setPopupPosition({
-+        left: Math.max(8, Math.min(left, window.innerWidth - popup.offsetWidth - 8)),
-+        top: Math.max(8, Math.min(top, window.innerHeight - popup.offsetHeight - 8))
++        left: Math.max(bounds.left + 8, Math.min(anchor.left, bounds.right - width - 8)),
++        top,
++        maxHeight: side.bottom - top
 +      });
 +    }
 +    positionPopup();
@@ -4722,7 +4736,7 @@ index 8aeb4133..50d346db 100644
  
    useEffect(() => {
      if (!open) {
-@@ -28,7 +58,7 @@ export function ToolbarToolPopup({
+@@ -28,7 +72,7 @@ export function ToolbarToolPopup({
        if (!target) {
          return;
        }
@@ -4731,7 +4745,7 @@ index 8aeb4133..50d346db 100644
          onClose();
        }
      }
-@@ -55,15 +85,18 @@ export function ToolbarToolPopup({
+@@ -55,15 +99,18 @@ export function ToolbarToolPopup({
    return (
      <div className={css.root} ref={rootRef}>
        {children}
@@ -4743,7 +4757,7 @@ index 8aeb4133..50d346db 100644
            role="dialog"
            aria-label="Tool options"
            data-testid={popupTestId}
-+          style={{ position: "fixed", ...popupPosition, maxHeight: `calc(100dvh - ${popupPosition.top + 8}px)`, overflowY: "auto" }}
++          style={{ position: "fixed", ...popupPosition, overflowY: "auto" }}
          >
            {popup}
 -        </div>

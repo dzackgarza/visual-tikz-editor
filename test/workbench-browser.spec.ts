@@ -398,7 +398,7 @@ describe("standalone workbench host boundary", function () {
           await expect(popup).toBeVisible();
           clear(`the ${String(name)} popup of the ${placement.dock} rail`, (await popup.boundingBox())!);
           await input.touch([await stableCenter(button)]);
-          await expect(popup).toHaveCount(0);
+          await expect(popup, `the ${String(name)} popup of the ${placement.dock} rail stays open after a second tap`).toHaveCount(0);
         }
       }
     });
