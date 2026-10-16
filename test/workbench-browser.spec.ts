@@ -1472,7 +1472,7 @@ describe("standalone workbench host boundary", function () {
       await input.touch([await center(rail.getByRole('button', { name: 'Layers', exact: true }))]);
       const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
       await expect(panel).toBeVisible();
-      await expect(panel.getByText('Layers', { exact: true })).toBeVisible();
+      await expect(panel.getByRole('tabpanel').getByText('Layers', { exact: true })).toBeVisible();
       await expect(panel.getByText('Line', { exact: true })).toBeVisible();
     });
   }

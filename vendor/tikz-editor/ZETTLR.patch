@@ -22,7 +22,7 @@ index 4b04e6f0..5d645412 100644
      mode: "addBucket",
      source: String.raw`\draw[fill=green!18, draw=black] (-1,-0.25) rectangle (1,0.25);`
 diff --git a/apps/landing/src/App.tsx b/apps/landing/src/App.tsx
-index ac3169df..d3c1b601 100644
+index ac3169df..c43e4a07 100644
 --- a/apps/landing/src/App.tsx
 +++ b/apps/landing/src/App.tsx
 @@ -177,6 +177,15 @@ const TOOL_COPY: Record<ToolPreviewMode, { name?: string; description: ReactNode
@@ -41,6 +41,15 @@ index ac3169df..d3c1b601 100644
    addBucket: {
      description: "Apply a fill color to an existing closed region."
    }
+@@ -236,7 +245,7 @@ const FEATURE_GROUPS = [
+     icon: RiSideBarLine,
+     items: [
+       "Inspect and edit stroke, fill, arrows, text, transforms, shapes, and styling in the Inspector.",
+-      "Manage object visibility, grouping, renaming, and layer order in the Objects panel.",
++      "Manage object visibility, grouping, renaming, and layer order in the Layers panel.",
+       "Edit TikZ styles in the Styles panel, similar to CSS editing in browser devtools."
+     ]
+   },
 diff --git a/apps/landing/src/generated/tool-svgs.ts b/apps/landing/src/generated/tool-svgs.ts
 index 9dde7f6e..566e2d80 100644
 --- a/apps/landing/src/generated/tool-svgs.ts
@@ -117,7 +126,7 @@ index f20fa9c3..53e68095 100644
    "devDependencies": {
      "@types/react": "^19.0.0",
 diff --git a/packages/app/src/app-menu/default-menu.ts b/packages/app/src/app-menu/default-menu.ts
-index 59fab7a8..ff3ec1b2 100644
+index 59fab7a8..1b5f797f 100644
 --- a/packages/app/src/app-menu/default-menu.ts
 +++ b/packages/app/src/app-menu/default-menu.ts
 @@ -112,7 +112,8 @@ export const APP_MENU_DEFINITION = [
@@ -176,6 +185,15 @@ index 59fab7a8..ff3ec1b2 100644
            },
            {
              kind: "command",
+@@ -553,7 +548,7 @@ export const APP_MENU_DEFINITION = [
+       {
+         kind: "command",
+         commandId: APP_MENU_COMMAND_IDS.TOGGLE_OBJECTS_PANEL,
+-        label: "Objects Panel"
++        label: "Layers Panel"
+       },
+       {
+         kind: "command",
 diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
 index af9d6c30..fcd01bed 100644
 --- a/packages/app/src/app-menu/types.ts
@@ -3118,18 +3136,21 @@ index 67578882..8673a8d8 100644
    /* Map to app design tokens */
    --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb9..7077be7f 100644
+index ba28ddb9..d1748bfa 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
-@@ -91,6 +91,7 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
+@@ -91,16 +91,17 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
  }
  
  function buildDefaultLayout(): IJsonModel {
 +  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
    const rightTabs: Array<{ type: "tab"; id: string; name: string; component: string; enableClose?: boolean }> = [
      { type: "tab", id: PANEL_IDS.inspector, name: "Inspector", component: "inspector" },
-     { type: "tab", id: PANEL_IDS.objects, name: "Objects", component: "objects" },
-@@ -100,7 +101,7 @@ function buildDefaultLayout(): IJsonModel {
+-    { type: "tab", id: PANEL_IDS.objects, name: "Objects", component: "objects" },
++    { type: "tab", id: PANEL_IDS.objects, name: "Layers", component: "objects" },
+     { type: "tab", id: PANEL_IDS.styles, name: "Styles", component: "styles" },
+   ];
+   if (isAssistantAvailable()) {
      rightTabs.push({ type: "tab", id: PANEL_IDS.assistant, name: "Assistant", component: "assistant" });
    }
  
@@ -3158,6 +3179,24 @@ index ba28ddb9..7077be7f 100644
  }
  
  /** Strip assistant tabs if assistant is not available on this platform,
+@@ -188,7 +193,7 @@ function sanitizeLayout(json: IJsonModel): IJsonModel {
+ function buildSourceOnTopLayout(): IJsonModel {
+   const rightTabs: Array<{ type: "tab"; id: string; name: string; component: string; enableClose?: boolean }> = [
+     { type: "tab", id: PANEL_IDS.inspector, name: "Inspector", component: "inspector" },
+-    { type: "tab", id: PANEL_IDS.objects, name: "Objects", component: "objects" },
++    { type: "tab", id: PANEL_IDS.objects, name: "Layers", component: "objects" },
+     { type: "tab", id: PANEL_IDS.styles, name: "Styles", component: "styles" },
+   ];
+   if (isAssistantAvailable()) {
+@@ -260,7 +265,7 @@ function buildCanvasOnlyLayout(): IJsonModel {
+ function buildWideInspectorLayout(): IJsonModel {
+   const rightTabs: Array<{ type: "tab"; id: string; name: string; component: string; enableClose?: boolean }> = [
+     { type: "tab", id: PANEL_IDS.inspector, name: "Inspector", component: "inspector" },
+-    { type: "tab", id: PANEL_IDS.objects, name: "Objects", component: "objects" },
++    { type: "tab", id: PANEL_IDS.objects, name: "Layers", component: "objects" },
+     { type: "tab", id: PANEL_IDS.styles, name: "Styles", component: "styles" },
+   ];
+   if (isAssistantAvailable()) {
 @@ -360,6 +365,7 @@ function syncLayoutStateToStore(model: Model, dispatch: (action: EditorAction) =
  
  export type DockLayoutProps = {
@@ -3241,6 +3280,15 @@ index ba28ddb9..7077be7f 100644
        const m = modelRef.current;
        const existing = m.getNodeById(panelId);
        if (existing) {
+@@ -483,7 +518,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+           canvas: "Canvas",
+           "figure-navigator": "Figures",
+           inspector: "Inspector",
+-          objects: "Objects",
++          objects: "Layers",
+           styles: "Styles",
+           assistant: "Assistant",
+         };
 @@ -523,10 +558,12 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
        syncLayoutStateToStore(m, dispatchRef.current);
      },
@@ -3291,7 +3339,7 @@ index ba28ddb9..7077be7f 100644
 +                aria-selected={inspectorTab === tab}
 +                onClick={() => setInspectorTab(tab)}
 +              >
-+                {tab === "inspector" ? "Properties" : tab === "objects" ? "Objects" : "Style"}
++                {tab === "inspector" ? "Properties" : tab === "objects" ? "Layers" : "Style"}
 +              </button>
 +            ))}
 +            <button type="button" className="embed-inspector-close" aria-label="Close properties" onClick={closeInspector}>×</button>
