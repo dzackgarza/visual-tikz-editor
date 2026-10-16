@@ -1590,10 +1590,10 @@ index dd74530a..fef142b6 100644
 +.rgbaChannels input { width: 100%; box-sizing: border-box; }
 +.collectionActions { display: flex; gap: 8px; flex-wrap: wrap; }
 diff --git a/packages/app/src/ui/ColorPicker.tsx b/packages/app/src/ui/ColorPicker.tsx
-index 49a2d341..5b8dd1e4 100644
+index 49a2d341..323e0c21 100644
 --- a/packages/app/src/ui/ColorPicker.tsx
 +++ b/packages/app/src/ui/ColorPicker.tsx
-@@ -1,39 +1,19 @@
+@@ -1,43 +1,24 @@
 -import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 -import { rgbToXcolorExpression, type RgbColor, type RgbToXcolorMode } from "xcolor-rgb-convert";
 +import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1639,7 +1639,22 @@ index 49a2d341..5b8dd1e4 100644
  
  export type ColorPickerProps = {
    ariaLabel: string;
-@@ -75,7 +55,7 @@ export function ColorPickerField({
+-  options: readonly string[];
++  /** Whether the property accepts "none"; the picker offers it beside the saved and document colours. */
++  allowNone: boolean;
+   namedColorSwatches?: readonly NamedColorSwatch[];
+   value: string | null;
+   syntaxValue?: string | null;
+@@ -49,7 +30,7 @@ export type ColorPickerProps = {
+ 
+ export function ColorPickerField({
+   ariaLabel,
+-  options,
++  allowNone,
+   namedColorSwatches = [],
+   value,
+   syntaxValue = null,
+@@ -75,7 +56,7 @@ export function ColorPickerField({
    const normalizedValue = normalizeColorToken(value);
    const normalizedSyntaxValue = normalizeColorToken(syntaxValue);
    const displayLabel = mixed ? "mixed" : (normalizedSyntaxValue ?? normalizedValue ?? "none");
@@ -1648,7 +1663,7 @@ index 49a2d341..5b8dd1e4 100644
    const displaySwatchColor = displaySwatchToken
      ? cssColorForToken(displaySwatchToken, namedColorLookup)
      : null;
-@@ -193,7 +173,7 @@ export function ColorPickerField({
+@@ -193,7 +174,7 @@ export function ColorPickerField({
              style={displaySwatchColor != null ? { background: displaySwatchColor } : undefined}
              aria-hidden="true"
            />
@@ -1657,7 +1672,16 @@ index 49a2d341..5b8dd1e4 100644
          </span>
          <span className={css.triggerCaret} aria-hidden="true">
            <svg className={css.triggerCaretIcon} viewBox="0 0 12 8" focusable="false">
-@@ -227,776 +207,76 @@ export function ColorPickerField({
+@@ -215,7 +196,7 @@ export function ColorPickerField({
+             ariaLabel={ariaLabel}
+             value={value}
+             syntaxValue={syntaxValue}
+-            options={options}
++            allowNone={allowNone}
+             namedColorSwatches={normalizedNamedColorSwatches}
+             mixed={mixed}
+             disabled={disabled}
+@@ -227,776 +208,32 @@ export function ColorPickerField({
    );
  }
  
@@ -2382,7 +2406,22 @@ index 49a2d341..5b8dd1e4 100644
 -          ) : null}
 -        </div>
 -      )}
--    </div>
++/** Noteful's picker: saved colours as swatches, one spectrum control, and opacity. Collections live in Settings. */
++export function ColorPicker({ ariaLabel, allowNone, namedColorSwatches = [], value, syntaxValue = null, disabled = false, onChange }: ColorPickerProps) {
++  const settings = useSettingsStore((state) => state.settings.colorPicker);
++  const update = useSettingsStore((state) => state.updateColorPickerSettings);
++  const lookup = useMemo(() => buildNamedColorLookup(normalizeNamedColorSwatches(namedColorSwatches)), [namedColorSwatches]);
++  const token = value && /^rgba?\(/i.test(value) ? value : syntaxValue ?? value ?? "black";
++  const resolved = cssColorForToken(token, lookup) ?? "#000000";
++  const rgba = resolved.match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/i);
++  const rgb = rgba ? { r: Number(rgba[1]), g: Number(rgba[2]), b: Number(rgba[3]) } : resolveCustomRgbFromDriver(token, lookup);
++  const alpha = rgba ? Number(rgba[4] ?? 1) : 1;
++  const colors = [...new Set([...settings.palette, ...namedColorSwatches.map((swatch) => swatch.token), ...(allowNone ? ["none"] : [])])];
++  return <div className={css.coherentPicker} role="group" aria-label={ariaLabel}>
++    <div className={css.savedSwatches} aria-label="Saved colors">
++      {colors.map((color) => <button key={color} type="button" disabled={disabled} aria-label={`Choose ${color}`} title={color}
++        aria-pressed={token === color} style={{ background: cssColorForToken(color, lookup) ?? "transparent" }} onClick={() => onChange(color)}>{color === "none" ? "∅" : ""}</button>)}
+     </div>
 -  );
 -}
 -
@@ -2401,29 +2440,7 @@ index 49a2d341..5b8dd1e4 100644
 -  return {
 -    mode,
 -    maxMixes: 2
-+export function ColorPicker({ ariaLabel, options, namedColorSwatches = [], value, syntaxValue = null, disabled = false, onChange }: ColorPickerProps) {
-+  const settings = useSettingsStore((state) => state.settings.colorPicker);
-+  const update = useSettingsStore((state) => state.updateColorPickerSettings);
-+  const [name, setName] = useState("");
-+  const [hexDraft, setHexDraft] = useState<string | null>(null);
-+  const [hexError, setHexError] = useState(false);
-+  const lookup = useMemo(() => buildNamedColorLookup(normalizeNamedColorSwatches(namedColorSwatches)), [namedColorSwatches]);
-+  const token = value && /^rgba?\(/i.test(value) ? value : syntaxValue ?? value ?? "black";
-+  const resolved = cssColorForToken(token, lookup) ?? "#000000";
-+  const rgba = resolved.match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/i);
-+  const rgb = rgba ? { r: Number(rgba[1]), g: Number(rgba[2]), b: Number(rgba[3]) } : resolveCustomRgbFromDriver(token, lookup);
-+  const alpha = rgba ? Number(rgba[4] ?? 1) : 1;
-+  const hexValue = rgbToHex(rgb) + (alpha === 1 ? "" : Math.round(alpha * 255).toString(16).padStart(2, "0"));
-+  useEffect(() => { setHexDraft(null); setHexError(false); }, [token]);
-+  const commitHex = () => {
-+    if (hexDraft == null) return;
-+    const input = hexDraft.trim();
-+    if (!/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(input)) { setHexError(true); return; }
-+    const nextRgb = hexToRgb(input.slice(0, 7));
-+    const nextAlpha = input.length === 9 ? Number.parseInt(input.slice(7), 16) / 255 : alpha;
-+    onChange(`rgba(${nextRgb.r},${nextRgb.g},${nextRgb.b},${nextAlpha})`);
-+    setHexDraft(null); setHexError(false);
-   };
+-  };
 -}
 -
 -function isStandardTabColorSupported(
@@ -2453,57 +2470,20 @@ index 49a2d341..5b8dd1e4 100644
 -  }
 -
 -  return false;
-+  const colors = [...new Set([...settings.palette, ...options, ...namedColorSwatches.map((swatch) => swatch.token)])];
-+  const setChannel = (channel: "r" | "g" | "b" | "a", input: number) => {
-+    if (!Number.isFinite(input)) return;
-+    const next = { ...rgb, a: alpha, [channel]: Math.max(0, Math.min(channel === "a" ? 1 : 255, input)) };
-+    onChange(`rgba(${next.r},${next.g},${next.b},${next.a})`);
-+  };
-+  const saveCollection = () => {
-+    const title = name.trim();
-+    if (!title) return;
-+    const id = crypto.randomUUID();
-+    update({ collections: [...settings.collections, { id, name: title, colors: [...settings.palette] }], activeCollectionId: id });
-+    setName("");
-+  };
-+  return <div className={css.coherentPicker} role="group" aria-label={ariaLabel}>
-+    <div className={css.savedSwatches} aria-label="Saved colors">
-+      {colors.map((color) => <button key={color} type="button" disabled={disabled} aria-label={`Choose ${color}`} title={color}
-+        aria-pressed={token === color} style={{ background: cssColorForToken(color, lookup) ?? "transparent" }} onClick={() => onChange(color)}>{color === "none" ? "∅" : ""}</button>)}
-+    </div>
 +    <input type="color" aria-label="Choose color" value={rgbToHex(rgb)} disabled={disabled} onChange={(event) => {
 +      const next = hexToRgb(event.currentTarget.value);
 +      onChange(alpha === 1 ? event.currentTarget.value : `rgba(${next.r},${next.g},${next.b},${alpha})`);
 +    }} />
-+    <label>Hex color
-+      <input type="text" aria-label="Hex color" value={hexDraft ?? hexValue} disabled={disabled}
-+        placeholder="#RRGGBB or #RRGGBBAA" spellCheck={false} autoCapitalize="none"
-+        aria-invalid={hexError} onChange={(event) => { setHexDraft(event.currentTarget.value); setHexError(false); }}
-+        onBlur={commitHex} onKeyDown={(event) => {
-+          if (event.key === "Enter") { event.preventDefault(); commitHex(); }
-+          if (event.key === "Escape") { event.preventDefault(); setHexDraft(null); setHexError(false); }
-+        }} />
++    <label>Opacity: {Math.round(alpha * 100)}%
++      <input type="range" aria-label="Opacity" min={0} max={1} step={0.01} value={alpha} disabled={disabled}
++        onChange={(event) => onChange(`rgba(${rgb.r},${rgb.g},${rgb.b},${event.currentTarget.valueAsNumber})`)} />
 +    </label>
-+    {hexError ? <div role="alert">Enter six or eight hexadecimal digits after #.</div> : null}
-+    <div className={css.rgbaChannels}>{(["r", "g", "b", "a"] as const).map((channel) => <label key={channel}>
-+      {channel === "a" ? "Opacity" : channel.toUpperCase()}
-+      <input type="number" min={0} max={channel === "a" ? 1 : 255} step={channel === "a" ? 0.01 : 1}
-+        value={channel === "a" ? alpha : rgb[channel]} disabled={disabled} onChange={(event) => setChannel(channel, event.currentTarget.valueAsNumber)} />
-+    </label>)}</div>
 +    <button type="button" disabled={disabled || settings.palette.includes(token)} onClick={() => update({ palette: [...settings.palette, token] })}>Save color</button>
-+    <label>Palette collection<select aria-label="Palette collection" value={settings.activeCollectionId} onChange={(event) => {
-+      const collection = settings.collections.find((entry) => entry.id === event.currentTarget.value);
-+      if (collection) update({ activeCollectionId: collection.id, palette: [...collection.colors] });
-+    }}><option value="">Current colors</option>{settings.collections.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select></label>
-+    <input aria-label="New palette name" placeholder="New palette name" value={name} onChange={(event) => setName(event.currentTarget.value)} />
-+    <div className={css.collectionActions}><button type="button" disabled={!name.trim()} onClick={saveCollection}>Create collection</button>
-+      <button type="button" disabled={!settings.activeCollectionId} onClick={() => update({ collections: settings.collections.map((entry) => entry.id === settings.activeCollectionId ? { ...entry, colors: [...settings.palette] } : entry) })}>Save collection</button>
-+      <button type="button" disabled={!settings.activeCollectionId} onClick={() => update({ collections: settings.collections.filter((entry) => entry.id !== settings.activeCollectionId), activeCollectionId: "" })}>Delete collection</button></div>
 +  </div>;
  }
  
  function resolveCustomRgbFromDriver(
-@@ -1041,20 +321,6 @@ function normalizeColorToken(value: string | null): string | null {
+@@ -1041,20 +278,6 @@ function normalizeColorToken(value: string | null): string | null {
    return normalized.length === 0 ? null : normalized;
  }
  
@@ -2524,7 +2504,7 @@ index 49a2d341..5b8dd1e4 100644
  function normalizeNamedColorSwatches(swatches: readonly NamedColorSwatch[]): NamedColorSwatch[] {
    const normalized: NamedColorSwatch[] = [];
    const seen = new Set<string>();
-@@ -1083,190 +349,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
+@@ -1083,190 +306,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
    return lookup;
  }
  
@@ -2715,7 +2695,7 @@ index 49a2d341..5b8dd1e4 100644
  export function cssColorForToken(token: string, namedColorLookup: ReadonlyMap<string, string> | null = null): string | null {
    const normalizedToken = normalizeColorToken(token);
    if (!normalizedToken || normalizedToken === "none") {
-@@ -1392,134 +474,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
+@@ -1392,134 +431,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
    );
  }
  
@@ -3390,17 +3370,16 @@ index dd056fad..1da24da9 100644
 +  .navItem { width: 100%; }
 +}
 diff --git a/packages/app/src/ui/SettingsModal.tsx b/packages/app/src/ui/SettingsModal.tsx
-index e849b257..1fd6a8ee 100644
+index e849b257..9291412b 100644
 --- a/packages/app/src/ui/SettingsModal.tsx
 +++ b/packages/app/src/ui/SettingsModal.tsx
-@@ -1,34 +1,19 @@
+@@ -1,34 +1,18 @@
  import { useState } from "react";
  import { useSettingsStore } from "../settings/useSettingsStore";
 -import { EDITOR_FONT_SIZE_OPTIONS, type ColorPickerAccuracy, type ColorScheme, type GridSize, type MathJaxFont } from "../settings/types";
 +import { DEFAULT_SETTINGS, type GridSize, type ToolbarDock } from "../settings/types";
  import { Modal } from "./Modal";
 +import { ColorPicker, cssColorForToken } from "./ColorPicker";
-+import { TOOL_COLOR_OPTIONS } from "./tool-config";
  import css from "./SettingsModal.module.css";
  
 -type CategoryId = "general" | "editor" | "canvas";
@@ -3435,7 +3414,7 @@ index e849b257..1fd6a8ee 100644
  
  type SettingsModalProps = {
    onClose: () => void;
-@@ -36,44 +21,33 @@ type SettingsModalProps = {
+@@ -36,44 +20,33 @@ type SettingsModalProps = {
  
  export function SettingsModal({ onClose }: SettingsModalProps) {
    const [activeCategory, setActiveCategory] = useState<CategoryId>(rememberedCategory);
@@ -3492,7 +3471,7 @@ index e849b257..1fd6a8ee 100644
    };
  
    return (
-@@ -109,208 +83,23 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -109,208 +82,23 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
            </nav>
  
            <div className={css.content}>
@@ -3709,7 +3688,7 @@ index e849b257..1fd6a8ee 100644
 -
 +              {selectedPaletteIndex !== null && settings.colorPicker.palette[selectedPaletteIndex] !== undefined && <ColorPicker
 +                ariaLabel={`Palette color ${selectedPaletteIndex + 1}`} value={settings.colorPicker.palette[selectedPaletteIndex]}
-+                syntaxValue={settings.colorPicker.palette[selectedPaletteIndex]} options={TOOL_COLOR_OPTIONS}
++                syntaxValue={settings.colorPicker.palette[selectedPaletteIndex]} allowNone={false}
 +                onChange={(color) => updatePaletteColor(selectedPaletteIndex, color)} />}
 +              <button type="button" onClick={() => updateColorPickerSettings({ palette: [...settings.colorPicker.palette, "black"] })}>Add color</button>
 +              <div className={css.resetRow}><button type="button" className={css.resetButton} onClick={resetActiveCategoryToDefaults}>Reset to Defaults</button></div>
@@ -3717,7 +3696,7 @@ index e849b257..1fd6a8ee 100644
              {activeCategory === "canvas" && (
                <div className={css.panel}>
                  <div className={css.panelTitle}>Canvas</div>
-@@ -332,6 +121,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -332,6 +120,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                      </select>
                    </div>
  
@@ -3734,7 +3713,7 @@ index e849b257..1fd6a8ee 100644
                    <div className={css.settingRow}>
                      <label className={css.settingLabel} htmlFor="setting-handle-size">
                        Edit Handle Size
-@@ -373,31 +172,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -373,31 +171,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                    </div>
                  </div>
  
@@ -3946,7 +3925,7 @@ index 681cb41c..308ca76a 100644
      case "addBezier":
        return snapHint;
 diff --git a/packages/app/src/ui/StylesPanel.tsx b/packages/app/src/ui/StylesPanel.tsx
-index 4fba726b..d9fd6960 100644
+index 4fba726b..16c1c9f8 100644
 --- a/packages/app/src/ui/StylesPanel.tsx
 +++ b/packages/app/src/ui/StylesPanel.tsx
 @@ -175,7 +175,7 @@ export function StylesPanel() {
@@ -3958,6 +3937,15 @@ index 4fba726b..d9fd6960 100644
              }));
              return;
            }
+@@ -569,7 +569,7 @@ function renderValueEditor(
+           ariaLabel={property.label}
+           value={property.value}
+           syntaxValue={property.syntaxValue}
+-          options={property.options}
++          allowNone={property.options.includes("none")}
+           namedColorSwatches={namedColorSwatches}
+           disabled={!writable}
+           onChange={(value) => { onPropertyChange(declaration, property, value); }}
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
 index 0ddde08e..dcd5a6c1 100644
 --- a/packages/app/src/ui/Toolbar.module.css
@@ -4032,7 +4020,7 @@ index 0ddde08e..dcd5a6c1 100644
 +.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
 +.insertChoice:disabled { opacity: .5; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..93bb7c41 100644
+index a3293df2..b674249c 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -4043,13 +4031,13 @@ index a3293df2..93bb7c41 100644
  import { RiDownloadCloudLine } from "@remixicon/react";
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
-@@ -8,16 +10,17 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
+@@ -8,16 +10,16 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
  import { getToolCapabilityStatus } from "./capabilities";
  import { RenderedTooltip } from "./RenderedTooltip";
  import {
 -  resolveToolbarToolMode,
    TOOL_BUTTONS,
-   TOOL_COLOR_OPTIONS,
+-  TOOL_COLOR_OPTIONS,
    CaretDownIcon,
    type ToolPopupKind
  } from "./tool-config";
@@ -4063,7 +4051,7 @@ index a3293df2..93bb7c41 100644
  import css from "./Toolbar.module.css";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
-@@ -26,26 +29,59 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,26 +28,59 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -4125,7 +4113,7 @@ index a3293df2..93bb7c41 100644
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +92,145 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +91,145 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -4272,7 +4260,7 @@ index a3293df2..93bb7c41 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -92,7 +263,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -92,12 +262,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
    const renderPopup = (popupKind: ToolPopupKind) => {
      if (popupKind === "bucket-color") {
        return (
@@ -4281,7 +4269,13 @@ index a3293df2..93bb7c41 100644
            <ColorPicker
              ariaLabel="Bucket fill color"
              value={bucketFillColor}
-@@ -111,7 +282,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+             syntaxValue={bucketFillColor}
+-            options={TOOL_COLOR_OPTIONS}
++            allowNone
+             namedColorSwatches={projectNamedColorSwatches}
+             onChange={(nextValue) => {
+               dispatch({ type: "SET_BUCKET_FILL_COLOR", value: nextValue });
+@@ -111,7 +281,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -4299,7 +4293,7 @@ index a3293df2..93bb7c41 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +306,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +305,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -4318,7 +4312,7 @@ index a3293df2..93bb7c41 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +362,179 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +361,179 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -4386,7 +4380,7 @@ index a3293df2..93bb7c41 100644
 +    if (id === "line" || id === "shape" || id === "addMatrix" || id === "addBucket" || id === "lasso") return renderGroupedEmbeddedButton(id);
 +    if (id === "color") return <ToolbarToolPopup key={id} open={openPopupMode === "color"} onClose={() => setOpenPopupMode(null)}
 +      popup={<><ToolbarPopupSection title="Drawing color"><ColorPicker ariaLabel="Drawing color" value={creationStrokeColor}
-+        syntaxValue={creationStrokeColor} options={TOOL_COLOR_OPTIONS} namedColorSwatches={projectNamedColorSwatches}
++        syntaxValue={creationStrokeColor} allowNone={false} namedColorSwatches={projectNamedColorSwatches}
 +        onChange={(value) => dispatch({ type: "SET_CREATION_STROKE_COLOR", value })} /></ToolbarPopupSection>
 +        </>}>
 +      <button type="button" className={css.btn} aria-label={`Drawing color: ${creationStrokeColor}`} aria-haspopup="dialog"
@@ -4498,7 +4492,7 @@ index a3293df2..93bb7c41 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +563,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +562,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -4510,7 +4504,7 @@ index a3293df2..93bb7c41 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +623,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +622,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -4518,7 +4512,7 @@ index a3293df2..93bb7c41 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +666,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +665,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -4526,7 +4520,7 @@ index a3293df2..93bb7c41 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +682,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +681,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4548,7 +4542,7 @@ index a3293df2..93bb7c41 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +704,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +703,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -4556,7 +4550,7 @@ index a3293df2..93bb7c41 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +712,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +711,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -4568,7 +4562,7 @@ index a3293df2..93bb7c41 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +725,74 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +724,74 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -4645,7 +4639,7 @@ index a3293df2..93bb7c41 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +803,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +802,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -4659,7 +4653,7 @@ index a3293df2..93bb7c41 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +819,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +818,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -4668,7 +4662,7 @@ index a3293df2..93bb7c41 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +844,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +843,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -11788,7 +11782,7 @@ index 00000000..d7b28102
 +  </SidePanel.Section>;
 +}
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..11626d16 100644
+index d5c65582..c299dba0 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 @@ -11,6 +11,8 @@ RiItalic
@@ -11800,15 +11794,18 @@ index d5c65582..11626d16 100644
  import {
  getInspectorDescriptor,
  NODE_INNER_SEP_DEFAULT,
-@@ -34,6 +36,7 @@ import { propertyIdForWriteKey } from "tikz-editor/edit/property-registry";
- import { BASIC_PICKER_COLORS } from "../../colors/color-palette";
+@@ -31,9 +33,9 @@ type NodeMinimumDimensionKey,
+ type ShadowMutationContext
+ } from "tikz-editor/edit/property-write-builders";
+ import { propertyIdForWriteKey } from "tikz-editor/edit/property-registry";
+-import { BASIC_PICKER_COLORS } from "../../colors/color-palette";
  import { useProjectNamedColorSwatches } from "../../colors/project-named-colors";
  import { useEditorStore } from "../../store/store";
 +import { useSettingsStore } from "../../settings/useSettingsStore";
  import { getInspectorPropertyCapabilityStatus } from "../capabilities";
  import { ColorPickerField } from "../ColorPicker";
  import { MULTI_ARRANGE_ACTIONS,type MultiArrangeAction } from "./arrange-actions";
-@@ -58,6 +61,7 @@ import { useInspectorMutations } from "./useInspectorMutations";
+@@ -58,6 +60,7 @@ import { useInspectorMutations } from "./useInspectorMutations";
  import { useInspectorPreviewScrub } from "./useInspectorPreviewScrub";
  import css from "./InspectorPanel.module.css";
  import { RenderedTooltip } from "../RenderedTooltip";
@@ -11816,7 +11813,7 @@ index d5c65582..11626d16 100644
  import { SidePanel } from "../SidePanel";
  import {
  getToolLabel,
-@@ -91,7 +95,13 @@ export function InspectorPanel() {
+@@ -91,7 +94,13 @@ export function InspectorPanel() {
    const toolMode = useEditorStore((s) => s.toolMode);
    const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
    const creationFillColor = useEditorStore((s) => s.creationFillColor);
@@ -11831,7 +11828,7 @@ index d5c65582..11626d16 100644
    const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
  
    const {
-@@ -208,7 +218,7 @@ export function InspectorPanel() {
+@@ -208,7 +217,7 @@ export function InspectorPanel() {
      const mutations = buildTransformSetPropertyMutations(
        write.transformContext,
        write.transformContext.key,
@@ -11840,7 +11837,7 @@ index d5c65582..11626d16 100644
      );
      if (mutations.length === 0) {
        return;
-@@ -295,7 +305,7 @@ export function InspectorPanel() {
+@@ -295,7 +304,7 @@ export function InspectorPanel() {
        const mutations = buildTransformSetPropertyMutations(
          write.transformContext,
          write.transformContext.key,
@@ -11849,7 +11846,7 @@ index d5c65582..11626d16 100644
        );
        for (const mutation of mutations) {
          dispatch({
-@@ -321,7 +331,7 @@ export function InspectorPanel() {
+@@ -321,7 +330,7 @@ export function InspectorPanel() {
      value: number
    ): string {
      const formatted = formatNumber(value);
@@ -11858,7 +11855,25 @@ index d5c65582..11626d16 100644
        return `${formatted}${property.unit}`;
      }
      return formatted;
-@@ -1879,6 +1889,7 @@ export function InspectorPanel() {
+@@ -1852,7 +1861,7 @@ export function InspectorPanel() {
+                         ariaLabel="Creation stroke color"
+                         value={creationStrokeColor}
+                         syntaxValue={creationStrokeColor}
+-                        options={BASIC_PICKER_COLORS}
++                        allowNone={false}
+                         namedColorSwatches={toolProjectNamedColorSwatches}
+                         onChange={(nextValue) => {
+                           dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
+@@ -1867,7 +1876,7 @@ export function InspectorPanel() {
+                         ariaLabel="Creation fill color"
+                         value={creationFillColor === "none" ? "" : creationFillColor}
+                         syntaxValue={creationFillColor}
+-                        options={BASIC_PICKER_COLORS}
++                        allowNone
+                         namedColorSwatches={toolProjectNamedColorSwatches}
+                         onChange={(nextValue) => {
+                           dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
+@@ -1879,6 +1888,7 @@ export function InspectorPanel() {
                </SidePanel.Section>
              ) : null}
  
@@ -11866,7 +11881,7 @@ index d5c65582..11626d16 100644
              {isFreehand ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
-@@ -1886,25 +1897,21 @@ export function InspectorPanel() {
+@@ -1886,25 +1896,21 @@ export function InspectorPanel() {
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
@@ -11927,6 +11942,32 @@ index c6e6ffe4..a780384f 100644
        defaultValue: consensusDefaultValue(numberProperties),
        clearKeys,
        writes,
+diff --git a/packages/app/src/ui/inspector-panel/renderers/multi-property-renderer.tsx b/packages/app/src/ui/inspector-panel/renderers/multi-property-renderer.tsx
+index 68846e4f..25c57191 100644
+--- a/packages/app/src/ui/inspector-panel/renderers/multi-property-renderer.tsx
++++ b/packages/app/src/ui/inspector-panel/renderers/multi-property-renderer.tsx
+@@ -328,7 +328,7 @@ export function renderMultiInspectorProperty(property: MultiInspectorProperty, a
+               value={property.mixed ? null : (property.value ?? "none")}
+               syntaxValue={property.mixed ? null : property.syntaxValue}
+               mixed={property.mixed}
+-              options={property.options}
++              allowNone={property.options.includes("none")}
+               namedColorSwatches={projectNamedColorSwatches}
+               disabled={!writable}
+               triggerLabelClassName={valueClassName}
+diff --git a/packages/app/src/ui/inspector-panel/renderers/single-property-renderer.tsx b/packages/app/src/ui/inspector-panel/renderers/single-property-renderer.tsx
+index c16abc33..1d1b5f51 100644
+--- a/packages/app/src/ui/inspector-panel/renderers/single-property-renderer.tsx
++++ b/packages/app/src/ui/inspector-panel/renderers/single-property-renderer.tsx
+@@ -378,7 +378,7 @@ export function renderSingleInspectorProperty(property: InspectorProperty, api:
+               ariaLabel={property.label}
+               value={property.value ?? "none"}
+               syntaxValue={property.syntaxValue}
+-              options={property.options}
++              allowNone={property.options.includes("none")}
+               namedColorSwatches={projectNamedColorSwatches}
+               disabled={!writable}
+               triggerLabelClassName={valueClassName}
 diff --git a/packages/app/src/ui/inspector-panel/useInspectorModel.ts b/packages/app/src/ui/inspector-panel/useInspectorModel.ts
 index 1ca2e7ee..a3297a22 100644
 --- a/packages/app/src/ui/inspector-panel/useInspectorModel.ts
@@ -12165,10 +12206,18 @@ index f7e5e9b6..7503251d 100644
    text-align: center;
    font-size: calc(var(--app-ui-scale, 1) * 10px);
 diff --git a/packages/app/src/ui/source-panel/SourcePanel.tsx b/packages/app/src/ui/source-panel/SourcePanel.tsx
-index 4e8f0b66..4f6458b8 100644
+index 4e8f0b66..f93430fd 100644
 --- a/packages/app/src/ui/source-panel/SourcePanel.tsx
 +++ b/packages/app/src/ui/source-panel/SourcePanel.tsx
-@@ -190,9 +190,7 @@ const EMPTY_SYMBOLS: DocumentSymbols = {
+@@ -59,7 +59,6 @@ import { collectSymbols, type DocumentSymbols } from "tikz-editor/completion/ind
+ import { resolveDocHoverTarget } from "tikz-editor/completion/doc-hover";
+ import { recordProfilingSourcePanelSyncTiming } from "tikz-editor/profiling";
+ import type { SceneElement } from "tikz-editor/semantic/types";
+-import { NAMED_COLORS } from "tikz-editor/semantic/style/constants";
+ import { applySourcePatches, patchesMatchSourceTransition } from "tikz-editor/edit/source-patches";
+ import { tikz } from "@tikz-editor/lang-tikz";
+ import { tikzCompletion } from "./tikz-autocomplete";
+@@ -190,15 +189,12 @@ const EMPTY_SYMBOLS: DocumentSymbols = {
    coordinateNames: []
  };
  
@@ -12178,7 +12227,13 @@ index 4e8f0b66..4f6458b8 100644
  const DIAGNOSTIC_DEBOUNCE_MS = 120;
  const DOCS_TOOLTIP_HOVER_TIME_MS = 650;
  const MIN_FORMATTER_MAX_LINE_LENGTH = 40;
-@@ -584,55 +582,6 @@ const diagnosticTooltip = hoverTooltip((view, pos) => {
+ const MAX_FORMATTER_MAX_LINE_LENGTH = 240;
+ 
+-const SOURCE_PICKER_COLORS = uniqueStrings(["none", ...NAMED_COLORS]);
+ const ENABLE_TIKZ_AUTOCOMPLETE = true;
+ 
+ type MathJaxBrowserRuntime = {
+@@ -584,55 +580,6 @@ const diagnosticTooltip = hoverTooltip((view, pos) => {
    };
  });
  
@@ -12234,7 +12289,7 @@ index 4e8f0b66..4f6458b8 100644
  const docsTooltip = hoverTooltip(async (view, pos, side) => {
    const diagnostics = view.state.field(diagnosticsField, false);
    if (diagnostics && bestDiagnosticAt(diagnostics.list, pos)) {
-@@ -1245,7 +1194,7 @@ export function SourcePanel() {
+@@ -1245,7 +1192,7 @@ export function SourcePanel() {
          return;
        }
  
@@ -12243,7 +12298,7 @@ index 4e8f0b66..4f6458b8 100644
          ...parse.diagnostics.map((d) => ({ ...d, from: d.span.from, to: d.span.to, source: "parse" as const })),
          ...(semantic?.diagnostics ?? []).map((d) => ({
            ...d,
-@@ -1253,7 +1202,7 @@ export function SourcePanel() {
+@@ -1253,7 +1200,7 @@ export function SourcePanel() {
            to: d.span.to,
            source: "semantic" as const
          }))
@@ -12252,7 +12307,7 @@ index 4e8f0b66..4f6458b8 100644
        view.dispatch({ effects: setDiagnostics.of(list) });
      }, DIAGNOSTIC_DEBOUNCE_MS);
  
-@@ -1337,8 +1286,23 @@ export function SourcePanel() {
+@@ -1337,8 +1284,23 @@ export function SourcePanel() {
          result.push({ ...d, from: d.span.from, to: d.span.to, source: "semantic" });
        }
      }
@@ -12277,7 +12332,7 @@ index 4e8f0b66..4f6458b8 100644
  
    return (
      <div className={css.panel}>
-@@ -1347,7 +1311,11 @@ export function SourcePanel() {
+@@ -1347,7 +1309,11 @@ export function SourcePanel() {
  
        {diagnostics.length > 0 && (
          <div className={css.diagnostics}>
@@ -12290,7 +12345,7 @@ index 4e8f0b66..4f6458b8 100644
              const line = snapshot.parseResult
                ? snapshot.parseResult.source.slice(0, d.from).split("\n").length
                : null;
-@@ -1381,12 +1349,6 @@ export function SourcePanel() {
+@@ -1381,12 +1347,6 @@ export function SourcePanel() {
                </div>
              );
            })}
@@ -12303,7 +12358,16 @@ index 4e8f0b66..4f6458b8 100644
          </div>
        )}
  
-@@ -1750,7 +1712,6 @@ function normalizeDiagnostics(inputs: DiagnosticInput[], docLength: number): Dia
+@@ -1395,7 +1355,7 @@ export function SourcePanel() {
+         <div className={css.inlineColorPickerPopover} ref={colorPickerRef} style={inlineColorPopoverStyle}>
+           <ColorPicker
+             ariaLabel="Source color"
+-            options={SOURCE_PICKER_COLORS}
++            allowNone
+             namedColorSwatches={projectNamedColorSwatches}
+             value={activeColorPicker.currentToken}
+             syntaxValue={activeColorPicker.currentToken}
+@@ -1750,7 +1710,6 @@ function normalizeDiagnostics(inputs: DiagnosticInput[], docLength: number): Dia
        if (sa !== sb) return sb - sa;
        return Math.abs(a.to - a.from) - Math.abs(b.to - b.from);
      })
@@ -12311,21 +12375,37 @@ index 4e8f0b66..4f6458b8 100644
      .map((d) => {
        const { from, to: normalizedTo } = normalizeRange(d.from, d.to, docLength);
        let to = normalizedTo;
+@@ -1898,15 +1857,6 @@ function bestDiagnosticAt(diagnostics: Diagnostic[], pos: number): Diagnostic |
+   return best;
+ }
+ 
+-function uniqueStrings(values: Iterable<string>): string[] {
+-  const unique = new Set<string>();
+-  for (const value of values) {
+-    const trimmed = value.trim();
+-    if (trimmed.length === 0) continue;
+-    unique.add(trimmed);
+-  }
+-  return [...unique].sort((left, right) => left.localeCompare(right, "en", { sensitivity: "base" }));
+-}
+ 
+ function clamp(v: number, lo: number, hi: number) {
+   return Math.min(hi, Math.max(lo, v));
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870b..880da98a 100644
+index 0101870b..f66b9e69 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
-@@ -1,7 +1,9 @@
+@@ -1,7 +1,8 @@
  import React from "react";
+-import { BASIC_PICKER_COLORS } from "../colors/color-palette";
 +import { RiEraserLine } from "@remixicon/react";
- import { BASIC_PICKER_COLORS } from "../colors/color-palette";
  import type { SnapToolPointerKind } from "tikz-editor/edit/snapping";
  import type { ToolMode } from "../store/types";
 +import { getActiveEditorPlatform } from "../platform/current";
  
  // ── Custom Tool Icons ─────────────────────────────────────────────────────────
  // All icons use a consistent 20x20 viewBox with 1.5px stroke width
-@@ -14,6 +16,10 @@ function SelectIcon({ size = 20 }: { size?: number }) {
+@@ -14,6 +15,10 @@ function SelectIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -12336,7 +12416,7 @@ index 0101870b..880da98a 100644
  function MagnifyIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-@@ -32,6 +38,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
+@@ -32,6 +37,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -12351,7 +12431,7 @@ index 0101870b..880da98a 100644
  function MatrixIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" strokeLinecap="round" strokeLinejoin="round">
-@@ -135,6 +149,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
+@@ -135,6 +148,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -12367,14 +12447,14 @@ index 0101870b..880da98a 100644
  function BucketIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-@@ -166,26 +189,31 @@ export type ToolButtonDef = {
+@@ -166,26 +188,30 @@ export type ToolButtonDef = {
    separatorBefore?: true;
  };
  
 -export type ToolPopupKind = "bucket-color" | "shape-picker" | "matrix-picker";
 +export type ToolPopupKind = "bucket-color" | "shape-picker" | "matrix-picker" | "line-picker";
  
- export const TOOL_COLOR_OPTIONS = BASIC_PICKER_COLORS;
+-export const TOOL_COLOR_OPTIONS = BASIC_PICKER_COLORS;
  
  // Tool buttons in display order (bucket moved to end)
  export const TOOL_BUTTONS: readonly ToolButtonDef[] = [
@@ -12412,7 +12492,7 @@ index 0101870b..880da98a 100644
    { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
  ];
  
-@@ -214,14 +242,8 @@ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
+@@ -214,14 +240,8 @@ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
  const TOOL_CREATE_MODE_SET = new Set<ToolCreateMode>(TOOL_CREATE_MODES);
  
  export function toolModeFromShortcut(key: string): ToolMode | null {
@@ -12429,7 +12509,7 @@ index 0101870b..880da98a 100644
  }
  
  export function toolModePopupKind(mode: ToolMode): ToolPopupKind | null {
-@@ -262,6 +284,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -262,6 +282,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addEllipse: "Hold Shift to constrain to a circle",
    addGrid: "Hold Shift to constrain to a square",
    addCircle: "Drag from center to edge",
@@ -12437,7 +12517,7 @@ index 0101870b..880da98a 100644
    addPath: "Click to add points, drag to bend. Click start to close, or double-click/press Enter/Esc to finish.",
    addFreehand: "Press and drag to draw",
    addBezier: "Two drags: endpoints then curve",
-@@ -270,14 +293,16 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -270,14 +291,16 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addShape: "Drag to set size",
    addMatrix: "Pick rows/columns, then click to place",
    addNode: "Click to place text",
