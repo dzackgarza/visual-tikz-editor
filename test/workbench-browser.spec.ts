@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { copyFile } from "node:fs/promises";
-import { chromium, expect, type Browser, type BrowserContext, type FrameLocator, type Page } from "@playwright/test";
+import { chromium, expect, type Browser, type BrowserContext, type FrameLocator, type Locator, type Page } from "@playwright/test";
 
 import { geometryTraces } from "./geometry-traces";
 import { buildWorkbench, editorDebug, editorFrame, startWorkbench, settledCenter, stableCenter, storyScreenshot, strokePoint, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
@@ -1151,6 +1151,55 @@ describe("standalone workbench host boundary", function () {
       // Picking a swatch by finger sets the drawing colour.
       await input.touch([await stableCenter(swatches.nth(2))]);
       await expect(rail.getByRole('button', { name: `Drawing color: ${saved[2]}` })).toBeVisible();
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    it(`creates, renames, switches and deletes colour collections in Settings in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => { await input.touch([await stableCenter(locator)]); };
+      const rail = frame.locator('[data-diagram-tools]');
+      const railColors = () => rail.getByRole('button', { name: /^Use / }).evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')!.slice(4)));
+      const openColors = async () => {
+        await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
+        const dialog = frame.getByTestId('settings-modal');
+        await tap(dialog.getByTestId('settings-category-colors'));
+        return dialog;
+      };
+      const original = await railColors();
+      let dialog = await openColors();
+      const collection = dialog.getByLabel('Collection', { exact: true });
+      const names = () => collection.locator('option').allInnerTexts();
+      assert.deepEqual(await names(), ['Default']);
+      // A new collection starts from the current colours and becomes the rail's palette.
+      await tap(dialog.getByRole('button', { name: 'New collection' }));
+      await dialog.getByLabel('Collection name').fill('Roots');
+      assert.deepEqual(await names(), ['Default', 'Roots']);
+      assert.equal(await collection.locator('option:checked').innerText(), 'Roots');
+      await tap(dialog.getByRole('button', { name: 'Remove' }).first());
+      await expect.poll(railColors).toEqual(original.slice(1));
+      // Switching collections switches the rail's palette.
+      await collection.selectOption({ label: 'Default' });
+      await expect.poll(railColors).toEqual(original);
+      await collection.selectOption({ label: 'Roots' });
+      await expect.poll(railColors).toEqual(original.slice(1));
+      // Collections and the active choice survive a reload.
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await expect.poll(railColors).toEqual(original.slice(1));
+      dialog = await openColors();
+      assert.deepEqual(await names(), ['Default', 'Roots']);
+      // Deleting asks first, then returns the rail to the remaining collection.
+      await tap(dialog.getByRole('button', { name: 'Delete collection' }));
+      assert.deepEqual(await names(), ['Default', 'Roots'], 'Deleted without confirmation');
+      await tap(dialog.getByRole('button', { name: 'Delete Roots' }));
+      await expect.poll(names).toEqual(['Default']);
+      await expect.poll(railColors).toEqual(original);
+      await expect(dialog.getByRole('button', { name: 'Delete collection' })).toBeDisabled();
     });
   }
 
