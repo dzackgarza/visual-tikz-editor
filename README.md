@@ -4,6 +4,8 @@ Visual TikZ Editor edits one mathematical diagram and its TikZ source. It runs a
 
 This repository was extracted from [`zettlr-pandoc/packages/tikz-workbench`](https://github.com/dzackgarza/zettlr-pandoc/tree/tikz-workbench-module/packages/tikz-workbench). It holds the editor component, a standalone file host, the fork patches, and their pinned assets. The visual tools edit TikZ source through the host; the host owns the file.
 
+The [product and interface guidance](docs/guidance/README.md) records the intended tablet-first experience and ideal GUI.
+
 ## Run the standalone app
 
 Install [Bun](https://bun.sh/), [just](https://github.com/casey/just), and Zenity for the native Open and Save As dialogs. The test suite also uses Node.js. Native file workflows require Xvfb, D-Bus, xdotool, and ImageMagick. They run Chrome and the real Zenity chooser on a private display and session bus. Then run:
