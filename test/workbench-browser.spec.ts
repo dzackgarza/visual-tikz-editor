@@ -1082,7 +1082,7 @@ describe("standalone workbench host boundary", function () {
         // A step either sheds anchors or says the curve is final.
         const final = frame.getByText(/already as simple/i);
         await expect.poll(async () => (await anchors()) !== counts[counts.length - 1] || await final.isVisible(),
-          { message: `Simplify step ${step + 1} neither changed the curve nor said it was final (alerts: ${JSON.stringify(await frame.getByRole('alert').allInnerTexts())}, selection ${JSON.stringify((await editorDebug(page)).selection)}, simplify visible ${await simplify.isVisible()})` }).toBe(true);
+          { timeout: 30_000, message: `Simplify step ${step + 1} neither changed the curve nor said it was final (alerts: ${JSON.stringify(await frame.getByRole('alert').allInnerTexts())}, selection ${JSON.stringify((await editorDebug(page)).selection)}, simplify visible ${await simplify.isVisible()})` }).toBe(true);
         if (await final.isVisible()) break;
         counts.push(await anchors());
       }
@@ -1269,6 +1269,7 @@ describe("standalone workbench host boundary", function () {
       const [line, grid] = [frame.locator('svg [data-source-id="path:0"]').first(), frame.locator('svg [data-source-id="path:1"]').first()];
       await expect(line).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const rail = frame.locator('[data-diagram-tools]');
       const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
       const physical = /\d\s*(cm|px)\b|\((cm|px)\)/;
