@@ -119,7 +119,7 @@ export async function emptyCanvasGesture(frame: FrameLocator): Promise<Point[]> 
         if (points.every(point => {
           const target = document.elementFromPoint(point.x, point.y);
           return target !== null && element.contains(target) &&
-            target.closest('[data-source-id], button, input, aside, [role="dialog"], [data-testid="canvas-selection-hint"], [data-testid="canvas-drag-tooltip"]') === null;
+            target.closest('[data-source-id], [data-hit-region-target-id], [data-handle-kind], button, input, aside, [role="dialog"], [data-testid="canvas-selection-hint"], [data-testid="canvas-drag-tooltip"]') === null;
         })) return points.map(point => ({ x: point.x - bounds.left, y: point.y - bounds.top }));
       }
     }

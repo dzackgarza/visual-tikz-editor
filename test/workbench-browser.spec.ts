@@ -1485,14 +1485,22 @@ describe("standalone workbench host boundary", function () {
       const layerName = (await panel.getByRole('button', { name: 'Ground Layer', exact: true }).boundingBox())!;
       const childName = (await panel.getByRole('button', { name: 'Line', exact: true }).boundingBox())!;
       assert.ok(childName.x > layerName.x, 'The layer child is drawn to the left of its parent');
-      // Hiding writes transparent; showing removes it.
+      const line = frame.locator('svg [data-source-id]').first();
+      const drawnOpacity = () => line.evaluate(element => {
+        let opacity = Number(getComputedStyle(element).strokeOpacity);
+        for (let node: Element | null = element; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity);
+        return opacity;
+      });
+      // Hiding changes the painted line as well as its source; showing restores both.
+      await expect.poll(drawnOpacity).toBeGreaterThan(0);
       await tap(panel.getByRole('button', { name: 'Hide Ground', exact: true }));
       await expect.poll(source).toMatch(/\[name=Ground, transparent\]/);
+      await expect.poll(drawnOpacity).toBe(0);
       await tap(panel.getByRole('button', { name: 'Show Ground', exact: true }));
       await expect.poll(source).toMatch(/\[name=Ground\]/);
+      await expect.poll(drawnOpacity).toBeGreaterThan(0);
       // The pen drags the line of an unlocked layer, and not of a locked one.
       await tap(rail.getByRole('button', { name: 'Select', exact: true }));
-      const line = frame.locator('svg [data-source-id]').first();
       // With the panel open, the fitted view keeps the line in the canvas left of it.
       await fitDiagram(frame, input);
       const drag = async () => {
@@ -1864,7 +1872,7 @@ describe("standalone workbench host boundary", function () {
         await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
         await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
 \draw (2,-2) .. controls (5,6) and (9,-6) .. (12,2);
-\draw (4,10) -- (10,12);
+\draw (-6,14) -- (-2,18);
 \end{tikzpicture}`);
         await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
         const frame = editorFrame(page);
@@ -1899,18 +1907,25 @@ describe("standalone workbench host boundary", function () {
         await expect(lock).toHaveAttribute('aria-pressed', 'true');
         await storyScreenshot(page, `curve-locked-${contact}-${tablet.name}`);
         await tap((await emptyCanvasGesture(frame))[0]);
-        await tap(await settledCenter(frame.locator('svg [data-source-id="path:1"]').first()));
+        // The other line is separated from the curve and its floating control.
+        await tap(await strokePoint(page, frame.locator('svg [data-source-id="path:1"]').first(), .99));
+        await expect(lock).toHaveAttribute('aria-pressed', 'true');
         assert.deepEqual((await editorDebug(page)).selection, ['path:0'], 'A locked curve stays selected');
         const anchor = frame.locator('[data-handle-kind="move-handle"][data-source-id="path:0"]').first();
         await tap(await settledCenter(anchor));
         await expect.poll(async () => (await editorDebug(page)).handle).not.toBeNull();
+        await expect(lock).toHaveAttribute('aria-pressed', 'true');
         assert.deepEqual((await editorDebug(page)).selection, ['path:0']);
         const before = (await editorDebug(page)).viewport;
         await input.touch(await emptyCanvasGesture(frame));
         assert.notDeepEqual((await editorDebug(page)).viewport, before, 'Finger pan still works on a locked curve');
+        await expect(lock).toHaveAttribute('aria-pressed', 'true');
         assert.deepEqual((await editorDebug(page)).selection, ['path:0']);
         await input.touch([await centerOf(lock)]);
         await expect(lock).toHaveAttribute('aria-pressed', 'false');
+        // Positive baseline: that same line is selectable once the curve is unlocked.
+        await tap(await strokePoint(page, frame.locator('svg [data-source-id="path:1"]').first(), .99));
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:1']);
         await tap((await emptyCanvasGesture(frame))[0]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
       });
