@@ -1099,6 +1099,32 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`writes a colour picked at full opacity as an xcolor value in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator('[data-diagram-tools]');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: /^Drawing color/ }))]);
+      const popup = frame.getByRole('dialog', { name: 'Tool options' });
+      await expect(popup).toBeVisible();
+      // The platform colour control delivers its value as an input event, as a tablet's colour sheet does.
+      await popup.getByLabel('Choose color').fill('#ff0000');
+      await input.touch([await stableCenter(rail.getByRole('button', { name: /^Drawing color/ }))]);
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Insert', exact: true }))]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Line', exact: true }))]);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const from = { x: viewport.x + viewport.width * .5, y: viewport.y + viewport.height * .5 };
+      await input.penStroke([from, { x: from.x + 60, y: from.y }, { x: from.x + 120, y: from.y }]);
+      await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[/);
+      const draw = (await editorDebug(page)).source.split('\n').find(line => line.includes('\\draw['))!;
+      assert.doesNotMatch(draw, /#[0-9a-f]{6}/i, `A picked colour is written as HTML hex, which xcolor rejects: ${draw}`);
+      assert.match(draw, /rgb,255:red,255;green,0;blue,0/, draw);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
