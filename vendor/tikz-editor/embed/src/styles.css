@@ -20,3 +20,15 @@ html[data-color-scheme="dark"] #root > div > [data-diagram-tools] { border-color
 #root .flexlayout__tab input,
 #root .flexlayout__tab select,
 #root .flexlayout__tab button { min-height: 44px; font-size: 14px; }
+
+/* Floating panels and modal sheets live outside FlexLayout's canvas tab. */
+#root :is(.embed-inspector, dialog, [role="dialog"]) :is(button, input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea) {
+  min-width: 44px;
+  min-height: 44px;
+}
+#root :is(.embed-inspector, dialog, [role="dialog"]) :is(input, select, textarea) {
+  font-size: 14px;
+}
+#root :is(.embed-inspector, dialog, [role="dialog"]) label:has(input:is([type="checkbox"], [type="radio"])) {
+  min-height: 44px;
+}

@@ -3578,7 +3578,7 @@ index 67578882..8673a8d8 100644
    /* Map to app design tokens */
    --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb9..d1748bfa 100644
+index ba28ddb9..7a3cb4a2 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
 @@ -91,16 +91,17 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
@@ -3672,7 +3672,7 @@ index ba28ddb9..d1748bfa 100644
    const dispatch = useEditorStore((s) => s.dispatch);
    const [model, setModel] = useState(createInitialModel);
 +  const [inspectorOpen, setInspectorOpen] = useState(() => document.documentElement.dataset.embedInspector === "open");
-+  const [inspectorTab, setInspectorTab] = useState<"inspector" | "objects" | "styles">("inspector");
++  const [inspectorTab, setInspectorTab] = useState<"inspector" | "objects">("inspector");
 +
 +  useEffect(() => {
 +    if (!embedded) return;
@@ -3712,7 +3712,7 @@ index ba28ddb9..d1748bfa 100644
      getCurrentJson: () => modelRef.current.toJson(),
      togglePanel(panelId: string) {
 +      if (embedded) {
-+        if (panelId === PANEL_IDS.inspector || panelId === PANEL_IDS.objects || panelId === PANEL_IDS.styles) {
++        if (panelId === PANEL_IDS.inspector || panelId === PANEL_IDS.objects) {
 +          setInspectorTab(panelId);
 +          setInspectorOpen(true);
 +          document.documentElement.dataset.embedInspector = "open";
@@ -3753,7 +3753,7 @@ index ba28ddb9..d1748bfa 100644
  
    useEffect(() => {
      activeDockHandle = handle;
-@@ -590,11 +627,36 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -590,11 +627,35 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    }, [figureCount]);
  
    return (
@@ -3773,7 +3773,7 @@ index ba28ddb9..d1748bfa 100644
 +      {embedded && inspectorOpen && (
 +        <aside className="embed-inspector" aria-label="Diagram properties">
 +          <div className="embed-inspector-tabs" role="tablist" aria-label="Properties view">
-+            {(["inspector", "objects", "styles"] as const).map((tab) => (
++            {(["inspector", "objects"] as const).map((tab) => (
 +              <button
 +                key={tab}
 +                type="button"
@@ -3781,7 +3781,7 @@ index ba28ddb9..d1748bfa 100644
 +                aria-selected={inspectorTab === tab}
 +                onClick={() => setInspectorTab(tab)}
 +              >
-+                {tab === "inspector" ? "Properties" : tab === "objects" ? "Layers" : "Style"}
++                {tab === "inspector" ? "Properties" : "Layers"}
 +              </button>
 +            ))}
 +            <button type="button" className="embed-inspector-close" aria-label="Close properties" onClick={closeInspector}>×</button>
@@ -3789,7 +3789,6 @@ index ba28ddb9..d1748bfa 100644
 +          <div className="embed-inspector-content" role="tabpanel">
 +            {inspectorTab === "inspector" && <MemoInspectorPanel />}
 +            {inspectorTab === "objects" && <MemoObjectsPanel />}
-+            {inspectorTab === "styles" && <MemoStylesPanel />}
 +          </div>
 +        </aside>
 +      )}
