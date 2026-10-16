@@ -1600,6 +1600,72 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `offers touch-sized floating Properties controls and only mounted tabs in ${tablet.name}`, async function () {
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const source = String.raw`\begin{tikzpicture}
+\draw (0,0) rectangle (4,6);
+\end{tikzpicture}`;
+      await page.locator('.cm-content').fill(source);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await fitDiagram(frame, input);
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      const checkControls = async () => {
+        const controls = panel.locator('button,input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),select,textarea');
+        let checked = 0;
+        for (const control of await controls.all()) {
+          if (!(await control.isVisible())) continue;
+          await stableCenter(control);
+          const box = (await control.boundingBox())!;
+          assert.ok(box.width >= 44 && box.height >= 44, `${await control.evaluate(element => element.outerHTML)} is ${box.width}×${box.height}, below a finger target`);
+          checked++;
+        }
+        assert.ok(checked >= 4, 'The panel had no editable control baseline');
+        const body = panel.locator('.embed-inspector-content');
+        assert.ok(await body.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Properties controls overflow horizontally');
+      };
+      await tap(rail.getByRole('button', { name: 'Properties', exact: true }));
+      await checkControls();
+      assert.deepEqual(await panel.getByRole('tab').allInnerTexts(), ['Properties', 'Layers']);
+      await tap(panel.getByRole('button', { name: 'Close properties', exact: true }));
+      await input.touch([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), .06)]);
+      await tap(rail.getByRole('button', { name: 'Properties', exact: true }));
+      await checkControls();
+      assert.equal((await editorDebug(page)).source, source, 'Reaching the controls changed the drawing');
+      await storyScreenshot(page, `floating-properties-${tablet.name}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `offers touch-sized Repeat dialog controls in ${tablet.name}`, async function () {
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      await tap(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Select', exact: true }));
+      await fitDiagram(frame, input);
+      await input.longPress(await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), .5));
+      await tap(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Repeat...', exact: true }));
+      const repeat = frame.getByTestId('repeat-modal');
+      await expect(repeat).toBeVisible();
+      for (const control of await repeat.locator('button,input').all()) {
+        await stableCenter(control);
+        const box = (await control.boundingBox())!;
+        assert.ok(box.width >= 44 && box.height >= 44, `Repeat control is ${box.width}×${box.height}, below a finger target`);
+      }
+      await storyScreenshot(page, `repeat-touch-${tablet.name}`);
+      await tap(repeat.getByRole('button', { name: 'Close repeat dialog', exact: true }));
+      await expect(repeat).toHaveCount(0);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `inserts, deletes, and opens layers through touch routes in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
