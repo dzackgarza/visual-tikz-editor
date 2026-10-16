@@ -1578,6 +1578,41 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`refuses to move a coordinate into a layer drawn after the line that uses it in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\coordinate (a) at (-10,-14);
+\draw (a) -- (-4,-16);
+\begin{scope}[name=Front]
+\end{scope}
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id]').first()).toBeAttached();
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => { await input.touch([await stableCenter(locator)]); };
+      const source = async () => (await editorDebug(page)).source;
+      await tap(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Layers', exact: true }));
+      const aside = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      const panel = aside.getByRole('tabpanel');
+      const before = await source();
+      await tap(panel.getByRole('button', { name: 'Coordinate', exact: true }));
+      await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+      await tap(panel.getByRole('button', { name: 'Move selection to Front', exact: true }));
+      await expect(frame.getByTestId('canvas-warning-message')).toContainText('out of order');
+      assert.equal(await source(), before, 'The coordinate moved after the line that uses it');
+      // The line itself may join the later layer.
+      await tap(panel.getByRole('button', { name: 'Line', exact: true }));
+      await tap(panel.getByRole('button', { name: 'Move selection to Front', exact: true }));
+      await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Front\]\s*\\draw \(a\) -- \(-4,-16\);\s*\\end\{scope\}/);
+      await tap(aside.getByRole('button', { name: 'Close properties', exact: true }));
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`keeps panels and the freehand result clear of the drawing rail in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
