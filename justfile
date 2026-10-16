@@ -42,7 +42,7 @@ test: test-logic
 update-tikz-editor-vendor:
     bun run scripts/update-tikz-editor-vendor.mjs
 
-# Run the curated layer, snapping and colour logic tests against fork sources.
+# Run curated layer, snapping, colour, shortcut and geometry tests against fork sources.
 test-logic:
     bun run scripts/tikz-editor-dev.mjs test
 

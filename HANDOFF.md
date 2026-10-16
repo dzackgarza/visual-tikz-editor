@@ -1,71 +1,18 @@
-# Handoff: tablet remediation, remaining work
+# Release continuation
 
-The goal: every complaint in `COMPLAINTS.md` is fixed, proven by a story run by touch or pen at 768×1024 and 1024×768, and the ledger in the roadmap card has no `open` rows.
+The original requirements are `COMPLAINTS.md` and `PLAN-VTE-REMEDIATION-ROADMAP` in agent-memory. `PHASE-VTE-M7` records the current acceptance state and exact tested revision. This operational HANDOFF is retained and excluded from the old deletion check by the user's explicit authorization.
 
-The plan lives in the agent-memory vault and outranks this file for detail:
+## Release gates
 
-- Roadmap and complaint ledger: `PLAN-VTE-REMEDIATION-ROADMAP` (`agent-memory plan show PLAN-VTE-REMEDIATION-ROADMAP`)
-- Phase cards: `PHASE-VTE-M1` … `PHASE-VTE-M7`
-- Traps and advice: `agent-memory search --scope project "<topic>"`
+1. Confirm that M7 records a green full software gate for the current committed revision. Until that record exists, this is still remaining software work. Use a fresh isolated checkout and `bun install --frozen-lockfile`. The repository's pre-push hook runs `just test-push`, which has the same logic-test prerequisite and Mocha command as `just test`; use that as the full gate when publishing, rather than running both. Record the SHA, results and artifact paths in M7. Supersede the already-closed GitHub issue #3 with a pointer to that published implementation and evidence, explicitly retaining the physical gate. Preserve the user's unrelated `AGENTS.md` edit and `.agents`/`.hermes` symlinks.
+2. **The user will run the physical-tablet session.** Exercise the actual pen/finger workflows: drawing and erasing, constrained line/square drawing and axis movement, curve selection/locking and point editing, properties and Repeat, palette/settings, Layers, and save/reopen. Check both orientations and panel placement. Reopening deliberately unlocks layers; their names, contents, order and visibility stay in TikZ source. Record the actual device/browser and result in M7.
+3. After the physical gate passes, publish an immutable release pin at that tested revision with the standalone and qualification archives. Keep any uncompleted release steps explicit in M7.
 
-## How to work (read before touching anything)
+If a physical test finds a defect, commit its red story first. Edit the fork in `.cache/tikz-editor`, batch changes, then run `just tikz-editor-patch` and `just update-tikz-editor-vendor` once for the batch. Fork `bun install` changes `bun.lock`; do not include that lock rewrite in the patch. During fixes run affected story batches; the full suite is the gate. A negative gesture assertion needs a positive baseline in the same story, and existing geometry needs Fit before its first gesture.
 
-The last stretch was slow because of process, not the work itself. Each fix was followed by a 3-minute from-scratch rebuild and then a 25-minute full suite, and failures were fixed one at a time. Do not repeat that.
+## Unscheduled observations carried from the original handoff
 
-- **Edit the fork in `.cache/tikz-editor`.** Run `just tikz-editor-checkout` once if it is missing. It holds upstream `be197d8` with `ZETTLR.patch` applied and staged. Never hand-edit `vendor/tikz-editor/ZETTLR.patch` or `vendor/tikz-editor/src`.
-- **Batch your changes, then build once.** Run `just tikz-editor-patch` (typecheck plus patch, about 1 minute), then `just update-tikz-editor-vendor` (from-scratch build, about 3 minutes). The bundle alone takes about 90 s on this machine whatever the build mode, so don't rebuild per edit.
-- **During work, run only the affected stories,** all in one batch: `bun run test --grep "<regex covering every affected story>"`. Collect every failure from that run and fix them together.
-- **Run the full suite once per milestone,** as the gate. It takes about 25 minutes, and the box has 8 GB with other sessions' jobs on it. Check `free -m` first. If the run is reaped, run it in slices (`--grep portrait`, `--grep landscape`, and `--grep "portrait|landscape" --invert` via `bunx mocha --no-config --no-package --require tsx --timeout 240000 'test/*.spec.ts'`).
-- **Stories are already isolated.** Each story gets its own server, config directory and browser context (`test/workbench-browser.spec.ts` `beforeEach`). A story that fails only sometimes is not leaking state. Look at the view and the timing instead.
-- **Act on drawn items only after `fitDiagram(frame, input)`** (`test/tablet.ts`). The startup zoom is chosen from the canvas size at mount, so without the fit, figures can sit under the rail or a panel.
-- **Bugs:** commit a red story first, then the fix in a separate commit. A negative assertion such as "the locked line did not move" needs a positive baseline in the same story ("the unlocked line does move"), or it can pass vacuously.
+- Freehand fits can put two anchors very close together near each stroke end.
+- Opening a floating panel does not automatically re-fit or recenter the view; Fit diagram accounts for its occupied area.
 
-## Remaining work, in order
-
-### 1. Test infrastructure
-
-- **Remove the double page load per story.** `beforeEach` navigates, then nearly every story calls `setViewportSize` and `reload`. Create the context at the story's viewport and load once.
-  - Acceptance: no story reloads just to change the viewport; per-story time drops visibly in a batch run.
-- **Add a fast logic layer.** Logic such as layer moves (`packages/core/src/edit/actions/layer-actions.ts`), free and locked snapping (`packages/core/src/edit/snapping/index.ts`) and colour values (`packages/core/src/edit/color-value.ts`) is proven only through browser stories.
-  - Add unit tests that run in milliseconds against real sources. Upstream's vitest suite in the fork is stale: `test/edit-snapping*.spec.ts` uses a `grid` setting that no longer exists. Either make a curated, green, runnable subset with a just recipe, or delete what no longer applies.
-  - Acceptance: one command runs the logic tests in seconds, and stories keep only gesture and layout proofs.
-- **Audit the remaining stories for view dependence.** Any story that taps or long-presses a drawn item without `fitDiagram`, or aims at raw viewport fractions near the rail or panels, is a latent flake. Fix them all in one batch.
-
-### 2. Close M6 (layers)
-
-- Mark progress in `PHASE-VTE-M6`. One name, layers by touch and dependency safety have passing stories (`4d3b9d2`, `98361d9`, `d7ce161`, `82558e3`).
-- **Rendered review.** `test-results/workbench/layers-{portrait,landscape}.png` is regenerated by the layers story.
-  - Known blemish: the "Layer" chip is truncated ("La…") beside long names.
-  - Judge the panel against IPE and Inkscape, not just against the story.
-- **Decide whether lock must survive save and reopen.** Today lock is editor state for the open document, because TikZ has no lock key. If it must persist, it needs a host-side store; record the decision in the card either way.
-- **Fix the fallback overlap.** When no placement fits, the selection control's fallback (`CanvasPanel.tsx`, `selectionPopupStyle`) can still overlap the panel.
-- **Gate:** one full-suite run, then update the roadmap ledger row "Layers interface obfuscated" to `fixed:` with the story names.
-
-### 3. M1 (reopened): configurable keybindings
-
-- The user's decision: every command gets a keybinding the user can set in Settings, VS Code style, and touch routes stay mandatory.
-- Success criterion: a story rebinds a command's shortcut in Settings and runs the command with the new keys.
-- The command runtime is `packages/app/src/ui/editor-command-runtime.ts` (route table) and `app-menu/types.ts` (command ids).
-
-### 4. M7: ledger closure
-
-These roadmap ledger rows are still `open`:
-
-- **"Overall interface far too computer-based" (M1).** Close it with evidence across M2–M6, or name what still reads as desktop UI and fix it.
-- **"Missing be able to hold Shift" (M1, M3).** Needs a touch route for constrained drawing and moving, such as angle or axis constraint; it is currently keyboard only. Decide it by standard tablet-editor practice (Noteful/GoodNotes hold-to-straighten, IPE angle snap) and prove it with a story.
-- **"Coordinates overlayed still run in cm" (M3).** Possibly stale: the story "states geometry in lattice units, never cm or px, in the inspector and Repeat" exists. Verify every coordinate overlay (drag tooltip, inspector, rulers), then fix or close with a citation.
-- **"Layers interface obfuscated" (M6).** Closes after item 2 above.
-
-After the ledger:
-
-- Update `README.md` to describe the shipped controls.
-- Close issue #3 as superseded, with a pointer to this tree.
-- Publish a release pin.
-- Do a physical tablet session before pinning, because emulated touch is not the release gate.
-
-## Known defects not yet scheduled
-
-- Freehand fits put two anchors very close together at each stroke end.
-- Opening a panel does not re-fit or recentre the view; only Fit diagram accounts for the panel.
-- The M2 roadmap row still asks for one full green run after `c4a486d`. It is now covered by any full green run at HEAD, so record it there.
-- The M1 card's deletion-grep list includes `HANDOFF`, which this file now matches. Remove `HANDOFF` from that list, or delete this file when the work is done.
+These observations are retained here; this pass does not claim they were separately remediated.
