@@ -13843,15 +13843,16 @@ index 291bcb24..e59f47b3 100644
    return computeRotatedRectBounds(
      element.position.x,
 diff --git a/packages/core/src/edit/snapping/grid-snaps.ts b/packages/core/src/edit/snapping/grid-snaps.ts
-index 7eccc2f5..1d17eb4e 100644
+index 7eccc2f5..8f91f503 100644
 --- a/packages/core/src/edit/snapping/grid-snaps.ts
 +++ b/packages/core/src/edit/snapping/grid-snaps.ts
-@@ -2,11 +2,11 @@ import { worldPoint } from "../../coords/points.js";
+@@ -1,12 +1,10 @@
+ import { worldPoint } from "../../coords/points.js";
  import { pt } from "../../coords/scalars.js";
  import type { WorldPoint } from "../../coords/points.js";
- import { SNAP_EPSILON } from "./geometry.js";
+-import { SNAP_EPSILON } from "./geometry.js";
 -import { roundSnapValue } from "./point-snaps.js";
- import type { Axis, AxisMinOffset, AxisSnapBuckets } from "./types.js";
+-import type { Axis, AxisMinOffset, AxisSnapBuckets } from "./types.js";
  
 -const GRID_STEPS_CM = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
 -const PT_PER_CM = 28.4527559055;
@@ -13861,29 +13862,54 @@ index 7eccc2f5..1d17eb4e 100644
  
  export function pickGridStepPt(scale: number, targetPixels: number): number {
    const minStepPt = targetPixels / Math.max(scale, 1e-6);
-@@ -52,7 +52,7 @@ export function collectGridSnaps({
- 
-   for (const point of selectionPoints) {
-     if (enabledAxis !== "y") {
--      const gridX = roundSnapValue(Math.round(point.x / gridStep) * gridStep);
-+      const gridX = Math.round(point.x / gridStep) * gridStep;
-       const offsetX = gridX - point.x;
-       const absX = Math.abs(offsetX);
- 
-@@ -74,7 +74,7 @@ export function collectGridSnaps({
-     }
- 
-     if (enabledAxis !== "x") {
--      const gridY = roundSnapValue(Math.round(point.y / gridStep) * gridStep);
-+      const gridY = Math.round(point.y / gridStep) * gridStep;
-       const offsetY = gridY - point.y;
-       const absY = Math.abs(offsetY);
- 
-@@ -96,3 +96,55 @@ export function collectGridSnaps({
-     }
-   }
+@@ -33,66 +31,54 @@ export function snapToNextMultiple(value: number, step: number, direction: -1 |
+   return nextIndex * step;
  }
-+
+ 
+-export function collectGridSnaps({
+-  selectionPoints,
+-  minOffset,
+-  nearest,
+-  gridStep,
+-  enabledAxis
+-}: {
+-  selectionPoints: readonly WorldPoint[];
+-  minOffset: AxisMinOffset;
+-  nearest: AxisSnapBuckets;
+-  gridStep: number;
+-  enabledAxis?: Axis | null;
+-}): void {
+-  if (!(gridStep > 0)) {
+-    return;
+-  }
+-
+-  for (const point of selectionPoints) {
+-    if (enabledAxis !== "y") {
+-      const gridX = roundSnapValue(Math.round(point.x / gridStep) * gridStep);
+-      const offsetX = gridX - point.x;
+-      const absX = Math.abs(offsetX);
+-
+-      if (absX <= minOffset.x + SNAP_EPSILON) {
+-        if (absX + SNAP_EPSILON < minOffset.x) {
+-          nearest.x.length = 0;
+-        }
+-
+-        nearest.x.push({
+-          kind: "grid",
+-          axis: "x",
+-          from: worldPoint(pt(point.x), pt(point.y)),
+-          to: worldPoint(pt(gridX), pt(point.y)),
+-          offset: offsetX,
+-          key: gridX
+-        });
+-        minOffset.x = absX;
+-      }
+-    }
+-
+-    if (enabledAxis !== "x") {
+-      const gridY = roundSnapValue(Math.round(point.y / gridStep) * gridStep);
+-      const offsetY = gridY - point.y;
+-      const absY = Math.abs(offsetY);
 +/** Round in the source frame, then return to world coordinates. */
 +export function snapToUnitLattice(point: WorldPoint, transform?: import("./types.js").LatticeTransform): WorldPoint {
 +  const frame = transform ?? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
@@ -13895,9 +13921,23 @@ index 7eccc2f5..1d17eb4e 100644
 +  const y = Math.round((-frame.b * dx + frame.a * dy) / det / LATTICE_UNIT_PT) * LATTICE_UNIT_PT;
 +  return worldPoint(pt(frame.a * x + frame.c * y + frame.e), pt(frame.b * x + frame.d * y + frame.f));
 +}
-+
+ 
+-      if (absY <= minOffset.y + SNAP_EPSILON) {
+-        if (absY + SNAP_EPSILON < minOffset.y) {
+-          nearest.y.length = 0;
+-        }
 +export type LatticeArcEndpoint = { kind: "point"; point: WorldPoint } | { kind: "unavailable"; reason: string };
-+
+ 
+-        nearest.y.push({
+-          kind: "grid",
+-          axis: "y",
+-          from: worldPoint(pt(point.x), pt(point.y)),
+-          to: worldPoint(pt(point.x), pt(gridY)),
+-          offset: offsetY,
+-          key: gridY
+-        });
+-        minOffset.y = absY;
+-      }
 +/** Select a lattice point on the existing circle, preserving its radius exactly. */
 +export function snapArcEndpointToLattice(center: WorldPoint, start: WorldPoint, pointer: WorldPoint, transform?: import("./types.js").LatticeTransform): LatticeArcEndpoint {
 +  if (transform) {
@@ -13924,8 +13964,8 @@ index 7eccc2f5..1d17eb4e 100644
 +    for (let x = 0; x <= Math.floor(radius); x += 1) {
 +      const y = Math.round(Math.sqrt(radiusSquared - x * x));
 +      if (x * x + y * y === radiusSquared) include(x, y);
-+    }
-+  }
+     }
+   }
 +  const angle = Math.atan2(pointer.y - center.y, pointer.x - center.x);
 +  let best = candidates[0];
 +  let bestDistance = Number.POSITIVE_INFINITY;
@@ -13934,9 +13974,9 @@ index 7eccc2f5..1d17eb4e 100644
 +    if (distance < bestDistance) { best = candidate; bestDistance = distance; }
 +  }
 +  return { kind: "point", point: worldPoint(pt((Math.round(cx) + best[0]) * LATTICE_UNIT_PT), pt((Math.round(cy) + best[1]) * LATTICE_UNIT_PT)) };
-+}
+ }
 diff --git a/packages/core/src/edit/snapping/index.ts b/packages/core/src/edit/snapping/index.ts
-index 9ff1d00f..faa9253a 100644
+index 9ff1d00f..4e283050 100644
 --- a/packages/core/src/edit/snapping/index.ts
 +++ b/packages/core/src/edit/snapping/index.ts
 @@ -1,5 +1,5 @@
@@ -13951,7 +13991,7 @@ index 9ff1d00f..faa9253a 100644
    translatePoints
  } from "./geometry.js";
 -import { collectGridSnaps, pickGridStepPt, snapToNextMultiple } from "./grid-snaps.js";
-+import { collectGridSnaps, pickGridStepPt, snapToNextMultiple, snapToUnitLattice, snapArcEndpointToLattice, LATTICE_UNIT_PT } from "./grid-snaps.js";
++import { pickGridStepPt, snapToNextMultiple, snapToUnitLattice, snapArcEndpointToLattice, LATTICE_UNIT_PT } from "./grid-snaps.js";
  import {
    SNAP_CLUSTER_BREAK_PX,
    collectGuideSnaps,
@@ -13967,7 +14007,7 @@ index 9ff1d00f..faa9253a 100644
  };
  
  export {
-@@ -62,6 +65,29 @@ export function snapSelectionTranslation(input: SnapSelectionTranslationInput):
+@@ -62,6 +65,19 @@ export function snapSelectionTranslation(input: SnapSelectionTranslationInput):
      };
    }
  
@@ -13983,21 +14023,11 @@ index 9ff1d00f..faa9253a 100644
 +    };
 +  }
 +
-+  if (settings.latticeTransform) {
-+    const anchor = input.latticeAnchor ?? worldPoint(pt(input.selection.bounds.minX), pt(input.selection.bounds.minY));
-+    const moved = worldPoint(pt(anchor.x + input.rawDelta.x), pt(anchor.y + input.rawDelta.y));
-+    const target = snapToUnitLattice(moved, input.latticeTransform ?? settings.latticeTransform);
-+    const offset = worldPoint(pt(target.x - moved.x), pt(target.y - moved.y));
-+    if (Math.hypot(offset.x, offset.y) <= settings.thresholdPx / input.context.zoom) {
-+      const snappedDelta = worldPoint(pt(input.rawDelta.x + offset.x), pt(input.rawDelta.y + offset.y));
-+      return { offset, snappedDelta, lines: alignmentLinesAt(input, settings, snappedDelta) };
-+    }
-+  }
-+
++  // With the lock off nothing pulls toward the lattice: only other objects' points, guides and gaps attract.
    const movedSelection = {
      bounds: translateBounds(input.selection.bounds, input.rawDelta),
      snapPoints: translatePoints(input.selection.snapPoints, input.rawDelta)
-@@ -82,6 +108,20 @@ export function snapSelectionTranslation(input: SnapSelectionTranslationInput):
+@@ -82,6 +98,20 @@ export function snapSelectionTranslation(input: SnapSelectionTranslationInput):
    };
  }
  
@@ -14018,7 +14048,7 @@ index 9ff1d00f..faa9253a 100644
  export function snapHandlePosition(input: SnapHandlePositionInput): SnapResult {
    const settings = effectiveSettings(input.context, input.settings);
  
-@@ -93,6 +133,8 @@ export function snapHandlePosition(input: SnapHandlePositionInput): SnapResult {
+@@ -93,6 +123,8 @@ export function snapHandlePosition(input: SnapHandlePositionInput): SnapResult {
      };
    }
  
@@ -14027,7 +14057,7 @@ index 9ff1d00f..faa9253a 100644
    const referencePoints =
      input.allowSelfSnap || !input.sourceId
        ? input.context.referencePoints
-@@ -141,6 +183,8 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
+@@ -141,6 +173,8 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
      };
    }
  
@@ -14036,7 +14066,7 @@ index 9ff1d00f..faa9253a 100644
    if ((input.kind === "rect-corner" || input.kind === "circle-edge") && input.anchor) {
      // During anchored shape creation the start point is fixed.
      // Snapping against full draft bounds can pin offset to zero when the anchor
-@@ -161,6 +205,20 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
+@@ -161,6 +195,20 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
    });
  }
  
@@ -14057,48 +14087,39 @@ index 9ff1d00f..faa9253a 100644
  function snapPointerWithPointsAndGrid({
    context,
    settings,
-@@ -172,6 +230,10 @@ function snapPointerWithPointsAndGrid({
-   pointer: WorldPoint;
-   referencePoints: WorldPoint[];
- }): SnapResult {
-+  if (settings.latticeTransform) {
-+    const lattice = latticePointResult(pointer, settings.latticeTransform);
-+    if (Math.hypot(lattice.offset.x, lattice.offset.y) <= settings.thresholdPx / context.zoom) return lattice;
-+  }
-   const firstPass = collectPointAndGridSnaps({
-     context,
-     settings,
-@@ -303,12 +365,12 @@ function collectPointGridAndGapSnaps({
+@@ -303,15 +351,6 @@ function collectPointGridAndGapSnaps({
      enabledAxis
    });
  
 -  if (settings.grid.enabled) {
-+  if (!settings.latticeTransform) {
-     collectGridSnaps({
-       selectionPoints: selection.snapPoints,
-       minOffset,
-       nearest,
+-    collectGridSnaps({
+-      selectionPoints: selection.snapPoints,
+-      minOffset,
+-      nearest,
 -      gridStep: pickGridStepPt(context.zoom, settings.grid.minorTargetPx),
-+      gridStep: LATTICE_UNIT_PT,
-       enabledAxis
-     });
-   }
-@@ -368,12 +430,12 @@ function collectPointAndGridSnaps({
+-      enabledAxis
+-    });
+-  }
+ 
+   if (includeGaps && settings.gaps.enabled) {
+     collectGapSnaps({
+@@ -368,15 +407,6 @@ function collectPointAndGridSnaps({
      enabledAxis
    });
  
 -  if (settings.grid.enabled) {
-+  if (!settings.latticeTransform) {
-     collectGridSnaps({
-       selectionPoints,
-       minOffset,
-       nearest,
+-    collectGridSnaps({
+-      selectionPoints,
+-      minOffset,
+-      nearest,
 -      gridStep: pickGridStepPt(context.zoom, settings.grid.minorTargetPx),
-+      gridStep: LATTICE_UNIT_PT,
-       enabledAxis
-     });
-   }
-@@ -394,3 +456,8 @@ function shouldBypassSnapping(settings: SnapSettings, modifiers?: { ctrlOrMeta:
+-      enabledAxis
+-    });
+-  }
+ 
+   return {
+     nearest
+@@ -394,3 +424,8 @@ function shouldBypassSnapping(settings: SnapSettings, modifiers?: { ctrlOrMeta:
  function effectiveSettings(context: SnapContext, patch?: SnapSettingsPatch): SnapSettings {
    return resolveSnapSettings(patch, context.settings);
  }
@@ -14521,3 +14542,84 @@ index 1be8c49a..cfe86d66 100644
    | {
        mode: "mathjax";
        cacheKey: string;
+diff --git a/test/edit-snapping.spec.ts b/test/edit-snapping.spec.ts
+index 130bf203..976aab11 100644
+--- a/test/edit-snapping.spec.ts
++++ b/test/edit-snapping.spec.ts
+@@ -30,7 +30,6 @@ import {
+   rangeIntersection,
+   shiftPathCommand
+ } from "../packages/core/src/edit/snapping/geometry.js";
+-import { collectGridSnaps } from "../packages/core/src/edit/snapping/grid-snaps.js";
+ import { buildVisibleGaps, collectGapSnaps, createGapSnapLines } from "../packages/core/src/edit/snapping/gap-snaps.js";
+ import type { AxisMinOffset, AxisSnapBuckets, Gap, SelectionGeometry } from "../packages/core/src/edit/snapping/types.js";
+ import { wb, wp } from "./coords-helpers.js";
+@@ -277,44 +276,6 @@ describe("edit snapping core", () => {
+     expect(snapToNextMultiple(10, 0, 1)).toBe(10);
+     expect(snapToNextMultiple(10, -2, 1)).toBe(8);
+ 
+-    const context = buildSnapContext({
+-      sceneElements: [],
+-      selectedSourceIds: [],
+-      zoom: 1
+-    });
+-
+-    const snapped = snapHandlePosition({
+-      context,
+-      point: wp(gridStep + 3, 0)
+-    });
+-
+-    expect(snapped.snappedPoint?.x).toBeCloseTo(gridStep, 6);
+-    expect(snapped.lines).toEqual([]);
+-  });
+-
+-  it("collects direct grid snaps with invalid steps and axis gating", () => {
+-    const emptyNearest: AxisSnapBuckets = { x: [], y: [] };
+-    const emptyMinOffset: AxisMinOffset = { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY };
+-    collectGridSnaps({
+-      selectionPoints: [wp(3, 4)],
+-      minOffset: emptyMinOffset,
+-      nearest: emptyNearest,
+-      gridStep: 0
+-    });
+-    expect(emptyNearest).toEqual({ x: [], y: [] });
+-
+-    const nearest: AxisSnapBuckets = { x: [], y: [] };
+-    const minOffset: AxisMinOffset = { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY };
+-    collectGridSnaps({
+-      selectionPoints: [wp(3, 4)],
+-      minOffset,
+-      nearest,
+-      gridStep: 2,
+-      enabledAxis: "y"
+-    });
+-    expect(nearest.x).toEqual([]);
+-    expect(nearest.y).toHaveLength(1);
+-    expect(nearest.y[0]).toMatchObject({ kind: "grid", axis: "y", offset: 0 });
+   });
+ 
+   it("normalizes partial snap settings, guides, selected references, and viewport filters", () => {
+@@ -344,23 +305,6 @@ describe("edit snapping core", () => {
+     expect(context.visibleGaps).toEqual({ horizontal: [], vertical: [] });
+   });
+ 
+-  it("snaps selection translations to the grid when no point or gap target is nearer", () => {
+-    const context = buildSnapContext({
+-      sceneElements: [],
+-      selectedSourceIds: [],
+-      zoom: 1
+-    });
+-
+-    const snapped = snapSelectionTranslation({
+-      context,
+-      selection: selectionFromBounds(3, 5, 13, 15),
+-      rawDelta: wp(0, 0)
+-    });
+-
+-    expect(snapped.snappedDelta?.x).toBeCloseTo(-3, 6);
+-    expect(snapped.snappedDelta?.y).toBeCloseTo(-5, 6);
+-  });
+-
+   it("snaps to explicit guide lines", () => {
+     const context = buildSnapContext({
+       sceneElements: [],
