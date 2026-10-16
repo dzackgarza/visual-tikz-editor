@@ -15074,3 +15074,99 @@ index 130bf203..976aab11 100644
    it("snaps to explicit guide lines", () => {
      const context = buildSnapContext({
        sceneElements: [],
+diff --git a/test/tablet-logic.spec.ts b/test/tablet-logic.spec.ts
+new file mode 100644
+index 00000000..af660def
+--- /dev/null
++++ b/test/tablet-logic.spec.ts
+@@ -0,0 +1,76 @@
++import { describe, expect, it } from 'vitest';
++import { tikzColorOptions, tikzColorValue } from '../packages/core/src/edit/color-value.js';
++import { applyAddLayerAction, applyMoveIntoScopeAction } from '../packages/core/src/edit/actions/layer-actions.js';
++import { parseStatementSnapshot } from '../packages/core/src/edit/statement-ops.js';
++import { buildSnapContext, snapToolPointer, LATTICE_UNIT_PT } from '../packages/core/src/edit/snapping/index.js';
++import { wp } from './coords-helpers.js';
++
++// These exercise the same source transformations and snap entry point as the canvas,
++// without paying for a browser to prove arithmetic or dependency ordering.
++describe('tablet authoring logic', () => {
++  it('encodes picker channels and separates opacity from xcolor', () => {
++    expect(tikzColorOptions('draw', '#2196f3')).toEqual(['draw={rgb,255:red,33;green,150;blue,243}']);
++    expect(tikzColorOptions('fill', 'rgba(33, 150, 243, 0.35)')).toEqual([
++      'fill={rgb,255:red,33;green,150;blue,243}', 'fill opacity=0.35'
++    ]);
++    expect(tikzColorValue('#2196f380')).toEqual({ color: '{rgb,255:red,33;green,150;blue,243}', opacity: 128 / 255 });
++    expect(tikzColorValue('blue!30!red')).toEqual({ color: 'blue!30!red', opacity: null });
++    expect(() => tikzColorValue('#12345')).toThrow(Error);
++  });
++
++  it('quantizes a locked pointer but leaves a free pointer between lattice points', () => {
++    const pointer = wp(3.4 * LATTICE_UNIT_PT, -2.3 * LATTICE_UNIT_PT);
++    const context = buildSnapContext({ sceneElements: [], selectedSourceIds: [], zoom: 1 });
++    const locked = snapToolPointer({ context, pointer, kind: 'line-end', settings: { latticeLock: true } });
++    expect(locked.snappedPoint?.x).toBeCloseTo(3 * LATTICE_UNIT_PT, 8);
++    expect(locked.snappedPoint?.y).toBeCloseTo(-2 * LATTICE_UNIT_PT, 8);
++    const free = snapToolPointer({ context, pointer, kind: 'line-end', settings: { latticeLock: false } });
++    expect(free.snappedPoint).toEqual(pointer);
++  });
++
++  it('attracts a free pointer to a guide only within the screen threshold', () => {
++    const context = buildSnapContext({ sceneElements: [], selectedSourceIds: [], zoom: 2, guides: { x: [100] } });
++    const near = snapToolPointer({ context, pointer: wp(103, 73), kind: 'line-end' });
++    expect(near.snappedPoint).toEqual(wp(100, 73));
++    const far = snapToolPointer({ context, pointer: wp(105, 73), kind: 'line-end' });
++    expect(far.snappedPoint).toEqual(wp(105, 73));
++  });
++
++  it('moves a drawing into a named top-level scope without changing its geometry', () => {
++    const source = String.raw`\begin{tikzpicture}
++\draw[blue] (1,2) -- (4,6);
++\end{tikzpicture}`;
++    const added = applyAddLayerAction(source, 'Foreground');
++    expect(added.kind).toBe('success');
++    if (added.kind !== 'success') throw new Error('Adding a layer failed');
++    const snapshot = parseStatementSnapshot(added.newSource);
++    const scope = snapshot.all.find(ref => ref.statement.kind === 'Scope')!;
++    const path = snapshot.all.find(ref => ref.statement.kind === 'Path')!;
++    const moved = applyMoveIntoScopeAction(added.newSource, [path.id], scope.id);
++    expect(moved.kind).toBe('success');
++    if (moved.kind !== 'success') throw new Error('Moving into a layer failed');
++    const after = parseStatementSnapshot(moved.newSource);
++    const layer = after.all.find(ref => ref.statement.kind === 'Scope')!;
++    const drawing = after.all.find(ref => ref.statement.kind === 'Path')!;
++    expect(drawing.depth).toBe(1);
++    expect(drawing.span.from).toBeGreaterThan(layer.span.from);
++    expect(drawing.span.to).toBeLessThan(layer.span.to);
++    expect(moved.newSource.slice(drawing.span.from, drawing.span.to)).toBe(String.raw`\draw[blue] (1,2) -- (4,6);`);
++  });
++
++  it('refuses to move a definition behind its user but permits moving an unrelated path', () => {
++    const source = String.raw`\begin{tikzpicture}
++\coordinate (A) at (1,2);
++\draw (A) -- (4,6);
++\draw[red] (2,3) -- (5,7);
++\begin{scope}[name=Foreground]
++\end{scope}
++\end{tikzpicture}`;
++    const snapshot = parseStatementSnapshot(source);
++    const scope = snapshot.all.find(ref => ref.statement.kind === 'Scope')!;
++    const definition = snapshot.all.find(ref => source.slice(ref.span.from, ref.span.to).startsWith('\\coordinate'))!;
++    const independent = snapshot.all.find(ref => source.slice(ref.span.from, ref.span.to).startsWith('\\draw[red]'))!;
++    expect(applyMoveIntoScopeAction(source, [independent.id], scope.id).kind).toBe('success');
++    expect(applyMoveIntoScopeAction(source, [definition.id], scope.id).kind).toBe('unsupported');
++  });
++});
+diff --git a/vitest.config.ts b/vitest.config.ts
+index dcdc0876..5ea5a2a3 100644
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -7,7 +7,8 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
+ export default defineConfig({
+   cacheDir: process.env.VITE_CACHE_DIR ?? ".vite-temp",
+   test: {
+-    include: ["test/**/*.spec.ts"],
++    // Curated workbench logic suite; the upstream interaction tests target the old grid API.
++    include: ["test/tablet-logic.spec.ts"],
+     environment: "node",
+     coverage: {
+       provider: "v8",

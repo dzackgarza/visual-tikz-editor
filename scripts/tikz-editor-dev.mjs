@@ -18,6 +18,9 @@ const command = process.argv[2]
 if (command === 'checkout') {
   if (existsSync(checkout)) throw new Error(`${checkout} already exists; it holds fork edits, so it is never replaced`)
   await materialize(checkout)
+} else if (command === 'test') {
+  if (!existsSync(checkout)) await materialize(checkout)
+  run('bunx', [ 'vitest', 'run' ], checkout)
 } else if (command === 'watch') {
   if (!existsSync(checkout)) throw new Error(`No fork checkout at ${checkout}; run \`just tikz-editor-checkout\``)
   const embedApp = await syncEmbed(checkout)
@@ -29,5 +32,5 @@ if (command === 'checkout') {
   run('bunx', [ '--package', 'typescript@5.9.3', 'tsc', '--noEmit', '-p', path.join(embedApp, 'tsconfig.json') ], checkout)
   await writeFile(patchFile, await forkPatch(checkout))
 } else {
-  throw new Error(`Usage: tikz-editor-dev.mjs checkout | watch | patch (got ${command})`)
+  throw new Error(`Usage: tikz-editor-dev.mjs checkout | test | watch | patch (got ${command})`)
 }

@@ -130,6 +130,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -187,6 +188,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -238,6 +240,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -419,6 +422,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -465,6 +469,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -513,6 +518,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -562,6 +568,7 @@ describe("standalone workbench host boundary", function () {
       const square = frame.locator('svg [data-source-id="path:0"]').first();
       await expect(square).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
       await input.penStroke([await strokePoint(page, square, .1)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
@@ -597,6 +604,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -658,6 +666,7 @@ describe("standalone workbench host boundary", function () {
       const square = frame.locator('svg [data-source-id="path:2"]').first();
       await expect(square).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -713,6 +722,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -764,6 +774,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -809,6 +820,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
         const m = path.getScreenCTM()!;
@@ -976,6 +988,7 @@ describe("standalone workbench host boundary", function () {
       const curve = frame.locator('svg [data-source-id="path:0"]').first();
       await expect(curve).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
       await input.penStroke([await strokePoint(page, curve, .1)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
@@ -1001,6 +1014,7 @@ describe("standalone workbench host boundary", function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
       await input.penStroke(waveAcross(viewport, .45, .4, 160));
@@ -1695,6 +1709,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('[data-source-id]')).toHaveCount(3);
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const center = async (locator: ReturnType<typeof frame.locator>) => {
         return stableCenter(locator);
       };
@@ -1726,6 +1741,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('[data-source-id]')).toHaveCount(2);
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const center = async (locator: ReturnType<typeof frame.locator>) => {
         return stableCenter(locator);
       };
@@ -1764,6 +1780,7 @@ describe("standalone workbench host boundary", function () {
       const curve = frame.locator('[data-source-id]').first();
       await expect(curve).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
       const intersects = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
         Math.min(a.x + a.width, b.x + b.width) > Math.max(a.x, b.x) && Math.min(a.y + a.height, b.y + b.height) > Math.max(a.y, b.y);
@@ -1800,6 +1817,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
         const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const centerOf = async (locator: ReturnType<typeof frame.locator>) => {
           return stableCenter(locator);
@@ -1859,6 +1877,7 @@ describe("standalone workbench host boundary", function () {
       const curve = frame.locator('svg [data-source-id="path:0"]').first();
       await expect(curve).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
       await input.touch([await strokePoint(page, curve, .2)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
@@ -1885,6 +1904,7 @@ describe("standalone workbench host boundary", function () {
       const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
       await expect(rectangle).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
       await input.touch([await strokePoint(page, rectangle, .1)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
@@ -1907,6 +1927,7 @@ describe("standalone workbench host boundary", function () {
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const centerOf = async (locator: ReturnType<typeof frame.locator>) => {
           return stableCenter(locator);
@@ -1972,6 +1993,7 @@ describe("standalone workbench host boundary", function () {
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
         const tap = async (point: { x: number; y: number }) => contact === 'touch' ? input.touch([point]) : input.penStroke([point]);
         await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
         await tap(await strokePoint(page, curve, .15));
@@ -2021,6 +2043,7 @@ describe("standalone workbench host boundary", function () {
       const curve = frame.locator('svg [data-source-id="path:0"]').first();
       await expect(curve).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
       await input.touch([await strokePoint(page, curve, .25)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:0']);
@@ -2064,6 +2087,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
       const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
       const penTap = async (point: { x: number; y: number }) => input.penStroke([point]);
       await penTap(await stableCenter(frame.getByRole('button', { name: 'Select', exact: true })));
       await penTap(await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), .5));

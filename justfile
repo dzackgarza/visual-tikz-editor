@@ -42,6 +42,10 @@ test:
 update-tikz-editor-vendor:
     bun run scripts/update-tikz-editor-vendor.mjs
 
+# Run the curated layer, snapping and colour logic tests against fork sources.
+test-logic:
+    bun run scripts/tikz-editor-dev.mjs test
+
 # Materialize the tikz-editor fork for editing in .cache/tikz-editor.
 tikz-editor-checkout:
     bun run scripts/tikz-editor-dev.mjs checkout
