@@ -1,53 +1,18 @@
 #!/usr/bin/env node
 /** Reconstruct the vendored tikz-editor embed from its pinned upstream commit. */
 
-import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { materialize, pinnedUpstream, root, run, vendor } from './tikz-editor-checkout.mjs'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const vendor = path.join(root, 'vendor', 'tikz-editor')
-
-function provenanceValue (text, key) {
-  const match = new RegExp(`^${key}\\s*=\\s*"([^"]+)"$`, 'm').exec(text)
-  if (match === null) throw new Error(`vendor/tikz-editor/PROVENANCE.toml does not declare ${key}`)
-  return match[1]
-}
-
-function run (command, args, cwd) {
-  execFileSync(command, args, { cwd, stdio: 'inherit', env: process.env })
-}
-
-const provenance = await readFile(path.join(vendor, 'PROVENANCE.toml'), 'utf8')
-const repository = provenanceValue(provenance, 'upstream_repository')
-const commit = provenanceValue(provenance, 'upstream_commit')
-if (!/^[0-9a-f]{40}$/u.test(commit)) throw new Error(`Pinned tikz-editor commit is not a full Git object id: ${commit}`)
-
+const { commit } = await pinnedUpstream()
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'zettlr-tikz-editor-vendor-'))
 try {
-  const repositoryClone = path.join(temporary, 'repository')
   const upstream = path.join(temporary, 'upstream')
-  run('git', [ 'clone', '--quiet', '--no-checkout', repository, repositoryClone ], root)
-  run('git', [ '-C', repositoryClone, 'worktree', 'add', '--quiet', '--detach', upstream, commit ], root)
-  const observed = execFileSync('git', [ '-C', upstream, 'rev-parse', 'HEAD' ], { encoding: 'utf8' }).trim()
-  if (observed !== commit) throw new Error(`tikz-editor checkout drifted: expected ${commit}, observed ${observed}`)
-  run('git', [ '-C', upstream, 'apply', '--check', path.join(vendor, 'ZETTLR.patch') ], root)
-  run('git', [ '-C', upstream, 'apply', path.join(vendor, 'ZETTLR.patch') ], root)
-
+  await materialize(upstream)
   const embedApp = path.join(upstream, 'apps', 'zettlr-embed')
-  await cp(path.join(vendor, 'embed'), embedApp, { recursive: true })
-  // The drawing tools and public host boundary use one original-ink codec.
-  await cp(path.join(vendor, 'embed/src/original-ink.ts'), path.join(upstream, 'packages/app/src/original-ink.ts'))
-  await writeFile(
-    path.join(embedApp, 'index.html'),
-    '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>TikZ Editor</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>\n'
-  )
-
-  run('bun', [ 'install', '--no-save' ], upstream)
-  run('bunx', [ 'lezer-generator', '--typeScript', 'src/grammar/tikz.grammar', '-o', 'src/grammar/tikz-parser.ts' ], path.join(upstream, 'packages/lezer-tikz'))
   for (const name of [ 'lezer-tikz', 'lang-tikz', 'core' ]) {
     // The upstream workspace has no root TypeScript binary. Without an explicit
     // package, bunx can select an unrelated system tsc (4.8 on this host).

@@ -3,7 +3,7 @@ import { copyFile } from "node:fs/promises";
 import { chromium, expect, type Browser, type BrowserContext, type FrameLocator, type Locator, type Page } from "@playwright/test";
 
 import { geometryTraces } from "./geometry-traces";
-import { buildWorkbench, editorDebug, editorFrame, startWorkbench, settledCenter, stableCenter, storyScreenshot, strokePoint, strokePointClearOf, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
+import { buildWorkbench, editorDebug, editorFrame, startWorkbench, settledCenter, stableCenter, storyScreenshot, fitDiagram, strokePoint, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
 import type { EditorSnapshot } from '../src/host';
 
 const freehandTool = (frame: FrameLocator) => frame.getByRole('button', { name: 'Freehand', exact: true });
@@ -163,19 +163,12 @@ describe("standalone workbench host boundary", function () {
       await expect(lock).toHaveAttribute('aria-pressed', 'false');
       // Zoomed out, a lattice cell is a few pixels wide: points still move freely.
       const zoom = rail.getByRole('button', { name: 'Zoom and display', exact: true });
-      const startZoom = await zoom.innerText();
-      const zoomTo = async (level: string) => {
-        await input.touch([await stableCenter(zoom)]);
-        await input.touch([await stableCenter(frame.getByRole('button', { name: level, exact: true }))]);
-        await input.touch([await stableCenter(zoom)]);
-        await expect(zoom).toHaveText(level);
-      };
-      await zoomTo('5%');
+      await input.touch([await stableCenter(zoom)]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: '5%', exact: true }))]);
+      await input.touch([await stableCenter(zoom)]);
+      await expect(zoom).toHaveText('5%');
       const free = await drawLine();
       assert.ok(free.some(value => !Number.isInteger(value)), `With the lock off the line still lands on the lattice: ${free}`);
-      // The zoom persists in the shared workbench; later stories start where this one did.
-      await zoomTo(startZoom);
-      await input.touch([await stableCenter(lock)]);
     });
   }
 
@@ -1275,7 +1268,8 @@ describe("standalone workbench host boundary", function () {
       await expect(line).toBeVisible();
       const input = await TabletInput.attach(page);
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      await input.longPress(await strokePointClearOf(page, line, frame.locator('[data-diagram-tools]')));
+      await fitDiagram(frame, input);
+      await input.longPress(await strokePoint(page, line, .5));
       await input.touch([await stableCenter(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Repeat...', exact: true }))]);
       const repeat = frame.getByTestId('repeat-modal');
       await expect(repeat).toBeVisible();
@@ -1325,7 +1319,8 @@ describe("standalone workbench host boundary", function () {
       // In portrait the panel lies over the line; close it before reaching for the line.
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Close properties', exact: true }))]);
       await expect(panel).toHaveCount(0);
-      await input.longPress(await strokePointClearOf(page, line, frame.locator('[data-diagram-tools]')));
+      await fitDiagram(frame, input);
+      await input.longPress(await strokePoint(page, line, .5));
       await input.touch([await stableCenter(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Repeat...', exact: true }))]);
       const repeat = frame.getByTestId('repeat-modal');
       await expect(repeat).toBeVisible();
@@ -1377,7 +1372,8 @@ describe("standalone workbench host boundary", function () {
         return stableCenter(locator);
       };
       await input.touch([await tapCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      await input.longPress(await strokePointClearOf(page, frame.locator('circle[data-source-id]').first(), frame.locator('[data-diagram-tools]')));
+      await fitDiagram(frame, input);
+      await input.longPress(await strokePoint(page, frame.locator('circle[data-source-id]').first(), .5));
       const menu = frame.getByRole('menu').first();
       await expect(menu).toBeVisible();
       const items = (await menu.locator('button').allInnerTexts()).map(text => text.trim().replace(/\s+/g, ' '));
@@ -1464,7 +1460,8 @@ describe("standalone workbench host boundary", function () {
       // The inserted line stays selected and its control may cover the circle; tap empty canvas to dismiss it.
       await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
-      await input.longPress(await strokePointClearOf(page, frame.locator('circle[data-source-id]').first(), frame.locator('[data-diagram-tools]')));
+      await fitDiagram(frame, input);
+      await input.longPress(await strokePoint(page, frame.locator('circle[data-source-id]').first(), .5));
       await input.touch([await center(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Delete', exact: true }))]);
       await expect(frame.locator('circle[data-source-id]')).toHaveCount(0);
       assert.doesNotMatch((await editorDebug(page)).source, /circle/);
@@ -1538,8 +1535,10 @@ describe("standalone workbench host boundary", function () {
       // The pen drags the line of an unlocked layer, and not of a locked one.
       await tap(rail.getByRole('button', { name: 'Select', exact: true }));
       const line = frame.locator('svg [data-source-id]').first();
+      // With the panel open, the fitted view keeps the line in the canvas left of it.
+      await fitDiagram(frame, input);
       const drag = async () => {
-        const from = await strokePointClearOf(page, line, rail, frame.getByRole('complementary', { name: 'Diagram properties', exact: true }));
+        const from = await strokePoint(page, line, .5);
         await input.penDown(from);
         for (let step = 1; step <= 12; step++) await input.penMove({ x: from.x + step * 5, y: from.y - step * 3 });
         await input.penUp({ x: from.x + 60, y: from.y - 36 });
@@ -1693,7 +1692,8 @@ describe("standalone workbench host boundary", function () {
         return stableCenter(locator);
       };
       await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      await input.longPress(await strokePointClearOf(page, frame.locator('circle[data-source-id]').first(), frame.locator('[data-diagram-tools]')));
+      await fitDiagram(frame, input);
+      await input.longPress(await strokePoint(page, frame.locator('circle[data-source-id]').first(), .5));
       await input.touch([await center(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Copy', exact: true }))]);
       const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       await input.longPress({ x: viewport.x + viewport.width * .85, y: viewport.y + viewport.height * .2 });
@@ -1754,7 +1754,8 @@ describe("standalone workbench host boundary", function () {
         return stableCenter(locator);
       };
       await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      await input.longPress(await strokePointClearOf(page, line, frame.locator('[data-diagram-tools]')));
+      await fitDiagram(frame, input);
+      await input.longPress(await strokePoint(page, line, .5));
       const menu = frame.getByRole('menu').first();
       await input.touch([await center(menu.getByRole('menuitem', { name: /^Path/ }))]);
       await input.touch([await center(frame.getByRole('menuitem', { name: 'Reverse Path', exact: true }))]);

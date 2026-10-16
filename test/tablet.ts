@@ -4,7 +4,7 @@ import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { CDPSession, FrameLocator, Locator, Page } from "@playwright/test";
+import { expect, type CDPSession, type FrameLocator, type Locator, type Page } from "@playwright/test";
 
 export const TABLET_VIEWPORTS = [
   { name: "portrait", width: 768, height: 1024 },
@@ -94,14 +94,16 @@ export async function strokePoint(page: Page, element: Locator, fraction: number
   return { x: frame.x + local.x, y: frame.y + local.y };
 }
 
-/** A page point on the drawn stroke of `element` a finger can reach: at least 12 px outside every obstacle's box. */
-export async function strokePointClearOf(page: Page, element: Locator, ...obstacles: Locator[]): Promise<Point> {
-  const boxes = await Promise.all(obstacles.map(async obstacle => (await obstacle.boundingBox())!));
-  for (let step = 1; step < 20; step++) {
-    const point = await strokePoint(page, element, step / 20);
-    if (boxes.every(box => point.x < box.x - 12 || point.x > box.x + box.width + 12 || point.y < box.y - 12 || point.y > box.y + box.height + 12)) return point;
-  }
-  throw new Error(`Every point of ${element} lies under ${obstacles.join(' or ')}`);
+/**
+ * Fit the figure into the canvas the rail and an open panel leave free, by the user's route.
+ * The startup zoom depends on the canvas size at mount; a story acting on drawn items sets its view here.
+ */
+export async function fitDiagram(frame: FrameLocator, input: TabletInput): Promise<void> {
+  const zoom = frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Zoom and display', exact: true });
+  await input.touch([await stableCenter(zoom)]);
+  await input.touch([await stableCenter(frame.getByRole('button', { name: 'Fit diagram', exact: true }))]);
+  await input.touch([await stableCenter(zoom)]);
+  await expect(frame.getByRole('dialog', { name: 'Tool options' })).toHaveCount(0);
 }
 
 /** The part of `visualTikzEditorDebug()` the stories read; the iframe exposes more. */

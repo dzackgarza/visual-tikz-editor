@@ -42,6 +42,18 @@ test:
 update-tikz-editor-vendor:
     bun run scripts/update-tikz-editor-vendor.mjs
 
+# Materialize the tikz-editor fork for editing in .cache/tikz-editor.
+tikz-editor-checkout:
+    bun run scripts/tikz-editor-dev.mjs checkout
+
+# Rebuild the editor assets on every save in the fork checkout.
+tikz-editor-watch:
+    bun run scripts/tikz-editor-dev.mjs watch
+
+# Typecheck the fork checkout and write its changes to ZETTLR.patch.
+tikz-editor-patch:
+    bun run scripts/tikz-editor-dev.mjs patch
+
 # Rebuild the pinned Quiver assets.
 update-quiver-vendor:
     bun run scripts/update-quiver-vendor.mjs

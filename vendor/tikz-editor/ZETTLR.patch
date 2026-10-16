@@ -11375,7 +11375,7 @@ index 43f01253..ae977eb0 100644
 +    Math.abs(left.scale - right.scale) < 1e-6;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af8..165e0a95 100644
+index de737af8..738d9400 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 @@ -7,10 +7,15 @@ import {
@@ -11583,7 +11583,7 @@ index de737af8..165e0a95 100644
  
    const handledFitRequestRef = useRef(0);
    useEffect(() => {
-@@ -390,3 +472,21 @@ function computeFitToContentScale(
+@@ -390,3 +472,23 @@ function computeFitToContentScale(
  function makeFigureViewportKey(documentId: string, figureId: string | null): string {
    return `${documentId}::${figureId ?? "__all__"}`;
  }
@@ -11600,7 +11600,9 @@ index de737af8..165e0a95 100644
 +  const insets = railInsets();
 +  const inset = (edge: "left" | "right" | "top" | "bottom") => insets[edge];
 +  const left = Math.max(0, inset("left") - rect.left);
-+  const right = Math.max(0, inset("right") - (window.innerWidth - rect.right));
++  // An open properties panel floats over the canvas's right side; a fitted view stays left of it.
++  const panel = document.querySelector(".embed-inspector")?.getBoundingClientRect();
++  const right = Math.max(0, Math.max(inset("right"), panel ? window.innerWidth - panel.left : 0) - (window.innerWidth - rect.right));
 +  const top = Math.max(0, inset("top") - rect.top);
 +  const bottom = Math.max(0, inset("bottom") - (window.innerHeight - rect.bottom));
 +  return { left, top, width: Math.max(1, viewport.clientWidth - left - right), height: Math.max(1, viewport.clientHeight - top - bottom) };
