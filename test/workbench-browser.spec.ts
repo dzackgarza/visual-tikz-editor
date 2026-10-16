@@ -364,7 +364,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    it(`keeps the rail and its popups off the rulers docked left, docked bottom, and floating in ${tablet.name}`, async function () {
+    it(`keeps the rail and its popups off the rulers, and the popups off the rail, docked left, docked bottom, and floating in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
@@ -374,8 +374,8 @@ describe("standalone workbench host boundary", function () {
       await expect(rail).toBeVisible();
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
       const rulers = await Promise.all(['canvas-top-ruler', 'canvas-left-ruler'].map(async id => ({ id, box: (await frame.getByTestId(id).boundingBox())! })));
-      const clear = (what: string, box: { x: number; y: number; width: number; height: number }) => {
-        for (const ruler of rulers) {
+      const clear = (what: string, box: { x: number; y: number; width: number; height: number }, others: typeof rulers = []) => {
+        for (const ruler of [...rulers, ...others]) {
           const overlapX = Math.min(box.x + box.width, ruler.box.x + ruler.box.width) - Math.max(box.x, ruler.box.x);
           const overlapY = Math.min(box.y + box.height, ruler.box.y + ruler.box.height) - Math.max(box.y, ruler.box.y);
           assert.ok(overlapX <= 0 || overlapY <= 0, `${what} covers ${ruler.id}`);
@@ -399,7 +399,8 @@ describe("standalone workbench host boundary", function () {
           await input.touch([await stableCenter(button)]);
           const popup = frame.getByRole('dialog', { name: 'Tool options' });
           await expect(popup).toBeVisible();
-          clear(`the ${String(name)} popup of the ${placement.dock} rail`, (await popup.boundingBox())!);
+          // A popup beside the rail never covers its other columns or the saved colours.
+          clear(`the ${String(name)} popup of the ${placement.dock} rail`, (await popup.boundingBox())!, [{ id: 'the rail', box: (await rail.boundingBox())! }]);
           await input.touch([await stableCenter(button)]);
           await expect(popup, `the ${String(name)} popup of the ${placement.dock} rail stays open after a second tap`).toHaveCount(0);
         }
@@ -1148,6 +1149,7 @@ describe("standalone workbench host boundary", function () {
       for (const gone of ['Hex color', 'R', 'G', 'B']) await expect(popup.getByLabel(gone, { exact: true })).toHaveCount(0);
       for (const gone of ['Create collection', 'Save collection', 'Delete collection']) await expect(popup.getByRole('button', { name: gone })).toHaveCount(0);
       await expect(popup.getByRole('combobox')).toHaveCount(0);
+      await storyScreenshot(page, `color-popup-${tablet.name}`);
       // Picking a swatch by finger sets the drawing colour.
       await input.touch([await stableCenter(swatches.nth(2))]);
       await expect(rail.getByRole('button', { name: `Drawing color: ${saved[2]}` })).toBeVisible();
