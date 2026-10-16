@@ -1510,6 +1510,96 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `constrains pen drawing and moving through a touch toggle in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Lock to lattice', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Insert', exact: true }));
+      await tap(frame.getByRole('button', { name: 'Line', exact: true }));
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const from = { x: viewport.x + viewport.width * .55, y: viewport.y + viewport.height * .4 };
+      const draw = () => input.penStroke([from, { x: from.x + 60, y: from.y + 17.5 }, { x: from.x + 120, y: from.y + 35 }]);
+      const points = async () => {
+        const path = (await editorDebug(page)).scene?.elements.find(element => element.kind === 'Path');
+        const points = path?.commands?.flatMap(command => command.to ? [command.to] : []);
+        assert.ok(points && points.length >= 2, 'The drawn path has no editable geometry');
+        return points;
+      };
+      const angle = async () => {
+        const p = await points();
+        return Math.abs(Math.atan2(p[p.length - 1].y - p[0].y, p[p.length - 1].x - p[0].x) * 180 / Math.PI);
+      };
+      await draw();
+      assert.ok(Math.abs(await angle() - 15) > .5, 'The free baseline was already angle constrained');
+      await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
+      await expect(frame.locator('svg [data-source-id^="path:"]')).toHaveCount(0);
+      const constrain = rail.getByRole('button', { name: 'Constrain geometry', exact: true });
+      await expect(constrain).toHaveAttribute('aria-pressed', 'false');
+      await tap(constrain);
+      await expect(constrain).toHaveAttribute('aria-pressed', 'true');
+      await draw();
+      assert.ok(Math.abs(await angle() - 15) < .1, `The constrained line was at ${await angle()} degrees`);
+      await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Insert', exact: true }));
+      await tap(frame.getByRole('button', { name: 'Rectangle', exact: true }));
+      await input.penStroke([from, { x: from.x + 55, y: from.y + 22.5 }, { x: from.x + 110, y: from.y + 45 }]);
+      const square = await points();
+      const width = Math.max(...square.map(p => p.x)) - Math.min(...square.map(p => p.x));
+      const height = Math.max(...square.map(p => p.y)) - Math.min(...square.map(p => p.y));
+      assert.ok(width > 10 && Math.abs(width - height) < .1, `The constrained rectangle was ${width} by ${height}`);
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await fitDiagram(frame, input);
+      const shape = frame.locator('svg [data-source-id="path:0"]').first();
+      const drag = async () => {
+        const start = await strokePoint(page, shape, .125);
+        await input.penStroke([start, { x: start.x + 40, y: start.y + 11 }, { x: start.x + 80, y: start.y + 22 }]);
+      };
+      const before = (await points())[0];
+      await drag();
+      const constrained = (await points())[0];
+      assert.ok(constrained.x > before.x + 1, 'The constrained move did not move the shape');
+      assert.ok(Math.abs(constrained.y - before.y) < .1, 'The constrained move changed its other axis');
+      await tap(constrain);
+      await expect(constrain).toHaveAttribute('aria-pressed', 'false');
+      await fitDiagram(frame, input);
+      await drag();
+      const free = (await points())[0];
+      assert.ok(free.x > constrained.x + 1 && Math.abs(free.y - constrained.y) > 1, 'The free baseline could not move diagonally');
+    });
+
+    story({ viewport: tablet }, `edits figure bounds in scaled lattice units in ${tablet.name}`, async function () {
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}[x=2cm,y=0.5cm]
+\draw (0,0) rectangle (4,6);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await fitDiagram(frame, input);
+      await tap(rail.getByRole('button', { name: 'Properties', exact: true }));
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      await expect(panel.getByText('Figure Bounds', { exact: true })).toBeVisible();
+      await panel.locator('select').selectOption('fixed');
+      const field = (name: string) => panel.locator('[class*="compactNumberField"]', { hasText: name }).locator('input');
+      assert.ok(Math.abs(Number(await field('Width').inputValue()) - 4) < .05, 'Automatic width was converted to centimetres instead of lattice units');
+      assert.ok(Math.abs(Number(await field('Height').inputValue()) - 6) < .05, 'Automatic height was converted to centimetres instead of lattice units');
+      assert.doesNotMatch(await panel.innerText(), /\bcm\b|\bpx\b/);
+      await field('Width').fill('6');
+      await field('Width').press('Enter');
+      await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\useasboundingbox/);
+      const bounds = /\\useasboundingbox \(([-\d.]+),([-\d.]+)\) rectangle \(([-\d.]+),([-\d.]+)\)/.exec((await editorDebug(page)).source);
+      assert.ok(bounds, 'Fixed bounds were not written into TikZ');
+      assert.ok(Math.abs(Number(bounds[3]) - Number(bounds[1]) - 6) < .02, 'The width was not written as six lattice steps');
+      await storyScreenshot(page, `figure-bounds-units-${tablet.name}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `inserts, deletes, and opens layers through touch routes in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();

@@ -135,7 +135,7 @@ export type EditorDebug = {
   source: string;
   selection: string[];
   handle: string | null;
-  scene: { elements: { sourceRef: { sourceId: string } }[] } | null;
+  scene: { elements: { sourceRef: { sourceId: string }; kind?: string; commands?: { kind: string; to?: { x: number; y: number } }[] }[] } | null;
   viewport: { translateX: number; translateY: number; scale: number };
   canvasAids: { grid: boolean; rulers: boolean; documentBounds: boolean };
   settings: { canvas: { latticeLock: boolean } };
