@@ -1546,6 +1546,7 @@ describe("standalone workbench host boundary", function () {
         const parent = node.parentElement!.getBoundingClientRect();
         return box.left >= parent.left && box.right <= parent.right;
       }), 'The Layer badge is clipped by the title');
+      await input.touch([await stableCenter(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Select', exact: true }))]);
       const zoom = frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Zoom and display', exact: true });
       await input.touch([await stableCenter(zoom)]);
       await input.touch([await stableCenter(frame.getByRole('button', { name: '200%', exact: true }))]);
