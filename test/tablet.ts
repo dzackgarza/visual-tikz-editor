@@ -94,6 +94,16 @@ export async function strokePoint(page: Page, element: Locator, fraction: number
   return { x: frame.x + local.x, y: frame.y + local.y };
 }
 
+/** A page point on the drawn stroke of `element` a finger can reach: at least 12 px outside `obstacle`'s box. */
+export async function strokePointClearOf(page: Page, element: Locator, obstacle: Locator): Promise<Point> {
+  const box = (await obstacle.boundingBox())!;
+  for (let step = 1; step < 20; step++) {
+    const point = await strokePoint(page, element, step / 20);
+    if (point.x < box.x - 12 || point.x > box.x + box.width + 12 || point.y < box.y - 12 || point.y > box.y + box.height + 12) return point;
+  }
+  throw new Error(`Every point of ${element} lies under ${obstacle}`);
+}
+
 /** The part of `visualTikzEditorDebug()` the stories read; the iframe exposes more. */
 export type EditorDebug = {
   historyIndex: number;

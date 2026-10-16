@@ -3,7 +3,7 @@ import { copyFile } from "node:fs/promises";
 import { chromium, expect, type Browser, type BrowserContext, type FrameLocator, type Locator, type Page } from "@playwright/test";
 
 import { geometryTraces } from "./geometry-traces";
-import { buildWorkbench, editorDebug, editorFrame, startWorkbench, settledCenter, stableCenter, storyScreenshot, strokePoint, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
+import { buildWorkbench, editorDebug, editorFrame, startWorkbench, settledCenter, stableCenter, storyScreenshot, strokePoint, strokePointClearOf, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
 import type { EditorSnapshot } from '../src/host';
 
 const freehandTool = (frame: FrameLocator) => frame.getByRole('button', { name: 'Freehand', exact: true });
@@ -1558,7 +1558,7 @@ describe("standalone workbench host boundary", function () {
         return stableCenter(locator);
       };
       await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      await input.longPress(await strokePoint(page, frame.locator('circle[data-source-id]').first(), .5));
+      await input.longPress(await strokePointClearOf(page, frame.locator('circle[data-source-id]').first(), frame.locator('[data-diagram-tools]')));
       await input.touch([await center(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Copy', exact: true }))]);
       const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       await input.longPress({ x: viewport.x + viewport.width * .85, y: viewport.y + viewport.height * .2 });
@@ -1619,12 +1619,7 @@ describe("standalone workbench host boundary", function () {
         return stableCenter(locator);
       };
       await input.touch([await center(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      // Of the line's two ends, press the one the rail does not cover.
-      const lineBox = (await line.boundingBox())!;
-      const railBox = (await frame.locator('[data-diagram-tools]').boundingBox())!;
-      const lowerLeft = { x: lineBox.x + lineBox.width * .1, y: lineBox.y + lineBox.height * .9 };
-      const upperRight = { x: lineBox.x + lineBox.width * .9, y: lineBox.y + lineBox.height * .1 };
-      await input.longPress(lowerLeft.x > railBox.x + railBox.width ? lowerLeft : upperRight);
+      await input.longPress(await strokePointClearOf(page, line, frame.locator('[data-diagram-tools]')));
       const menu = frame.getByRole('menu').first();
       await input.touch([await center(menu.getByRole('menuitem', { name: /^Path/ }))]);
       await input.touch([await center(frame.getByRole('menuitem', { name: 'Reverse Path', exact: true }))]);
