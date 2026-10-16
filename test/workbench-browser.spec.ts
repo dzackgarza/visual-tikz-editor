@@ -1456,6 +1456,35 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `keeps typing native when Settings has a single-letter shortcut in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      const settings = frame.getByTestId('settings-modal');
+      await tap(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Settings', exact: true }));
+      await tap(settings.getByRole('button', { name: 'Keyboard shortcuts', exact: true }));
+      const search = settings.getByRole('searchbox', { name: 'Find command', exact: true });
+      await search.fill('Settings');
+      await tap(settings.getByRole('button', { name: 'Set shortcut for Settings', exact: true }));
+      await page.keyboard.press('q');
+      await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
+      await page.keyboard.press('q');
+      await expect(settings).toBeVisible();
+      await search.fill('');
+      await search.press('q');
+      await expect(search).toHaveValue('q');
+      await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Properties', exact: true }));
+      const mode = frame.getByRole('complementary', { name: 'Diagram properties', exact: true }).locator('select').first();
+      await expect(mode).toBeVisible();
+      await mode.press('q');
+      await expect(settings).toHaveCount(0);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `uses configured Undo, Delete and previously unassigned Layers shortcuts in ${tablet.name}`, async function () {
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const source = String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`;
