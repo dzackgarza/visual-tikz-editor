@@ -1275,7 +1275,7 @@ describe("standalone workbench host boundary", function () {
       await expect(line).toBeVisible();
       const input = await TabletInput.attach(page);
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      await input.longPress(await strokePoint(page, line, .5));
+      await input.longPress(await strokePointClearOf(page, line, frame.locator('[data-diagram-tools]')));
       await input.touch([await stableCenter(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Repeat...', exact: true }))]);
       const repeat = frame.getByTestId('repeat-modal');
       await expect(repeat).toBeVisible();
@@ -1325,7 +1325,7 @@ describe("standalone workbench host boundary", function () {
       // In portrait the panel lies over the line; close it before reaching for the line.
       await input.touch([await stableCenter(frame.getByRole('button', { name: 'Close properties', exact: true }))]);
       await expect(panel).toHaveCount(0);
-      await input.longPress(await strokePoint(page, line, .5));
+      await input.longPress(await strokePointClearOf(page, line, frame.locator('[data-diagram-tools]')));
       await input.touch([await stableCenter(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Repeat...', exact: true }))]);
       const repeat = frame.getByTestId('repeat-modal');
       await expect(repeat).toBeVisible();
@@ -1377,7 +1377,7 @@ describe("standalone workbench host boundary", function () {
         return stableCenter(locator);
       };
       await input.touch([await tapCenter(frame.getByRole('button', { name: 'Select', exact: true }))]);
-      await input.longPress(await strokePoint(page, frame.locator('circle[data-source-id]').first(), .5));
+      await input.longPress(await strokePointClearOf(page, frame.locator('circle[data-source-id]').first(), frame.locator('[data-diagram-tools]')));
       const menu = frame.getByRole('menu').first();
       await expect(menu).toBeVisible();
       const items = (await menu.locator('button').allInnerTexts()).map(text => text.trim().replace(/\s+/g, ' '));
@@ -1464,7 +1464,7 @@ describe("standalone workbench host boundary", function () {
       // The inserted line stays selected and its control may cover the circle; tap empty canvas to dismiss it.
       await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
-      await input.longPress(await strokePoint(page, frame.locator('circle[data-source-id]').first(), .5));
+      await input.longPress(await strokePointClearOf(page, frame.locator('circle[data-source-id]').first(), frame.locator('[data-diagram-tools]')));
       await input.touch([await center(frame.getByRole('menu').first().getByRole('menuitem', { name: 'Delete', exact: true }))]);
       await expect(frame.locator('circle[data-source-id]')).toHaveCount(0);
       assert.doesNotMatch((await editorDebug(page)).source, /circle/);
