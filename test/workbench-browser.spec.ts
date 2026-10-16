@@ -1368,7 +1368,7 @@ describe("standalone workbench host boundary", function () {
       await tap(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Settings', exact: true }));
       const dialog = frame.getByTestId('settings-modal');
       await expect(dialog).toBeVisible();
-      assert.deepEqual(await dialog.locator('nav button').allInnerTexts(), ['Canvas', 'Colors']);
+      assert.deepEqual(await dialog.locator('nav button').allInnerTexts(), ['Canvas', 'Colors', 'Keyboard shortcuts']);
       const labels = (await dialog.locator('label[for^="setting-"]').evaluateAll(nodes =>
         nodes.map(node => node.childNodes[0].textContent!.trim())));
       assert.deepEqual(labels, ['Grid Size', 'Grid Opacity', 'Edit Handle Size', 'Zoom Speed', 'Toolbar Position', 'Generated Source Indent']);
@@ -1421,6 +1421,7 @@ describe("standalone workbench host boundary", function () {
       await tap(row.getByRole('button', { name: 'Set shortcut for Line', exact: true }));
       await page.keyboard.press('Control+Alt+l');
       await expect(row).toContainText('Ctrl+Alt+L');
+      await storyScreenshot(page, `keyboard-shortcuts-${tablet.name}`);
       await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
       await tap(rail.getByRole('button', { name: 'Select', exact: true }));
       await page.keyboard.press('l');
@@ -1451,6 +1452,47 @@ describe("standalone workbench host boundary", function () {
       await tap(rail.getByRole('button', { name: 'Select', exact: true }));
       await page.keyboard.press('l');
       await expect.poll(async () => (await editorDebug(page)).tool).toBe('addLine');
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `uses configured Undo, Delete and previously unassigned Layers shortcuts in ${tablet.name}`, async function () {
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const source = String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`;
+      await page.locator('.cm-content').fill(source);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      const rail = frame.locator('[data-diagram-tools]');
+      await fitDiagram(frame, input);
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await input.touch([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), .5)]);
+      await page.keyboard.press('Delete');
+      await expect.poll(async () => (await editorDebug(page)).source).not.toContain('\\draw');
+      await page.keyboard.press('Control+z');
+      await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
+      await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
+      const settings = frame.getByTestId('settings-modal');
+      await tap(settings.getByRole('button', { name: 'Keyboard shortcuts', exact: true }));
+      for (const [name, shortcut] of [['Delete', 'Control+Alt+d'], ['Undo', 'Control+Alt+u'], ['Layers', 'Control+Alt+j']]) {
+        await settings.getByRole('searchbox', { name: 'Find command', exact: true }).fill(name);
+        await tap(settings.getByRole('group', { name: `${name} shortcut`, exact: true }).getByRole('button', { name: `Set shortcut for ${name}`, exact: true }));
+        await page.keyboard.press(shortcut);
+      }
+      await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
+      await fitDiagram(frame, input);
+      await input.touch([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), .5)]);
+      await page.keyboard.press('Delete');
+      assert.equal((await editorDebug(page)).source, source, 'The old canvas Delete binding remained active');
+      await page.keyboard.press('Control+Alt+d');
+      await expect.poll(async () => (await editorDebug(page)).source).not.toContain('\\draw');
+      await page.keyboard.press('Control+z');
+      assert.doesNotMatch((await editorDebug(page)).source, /\\draw/, 'The old canvas Undo binding remained active');
+      await page.keyboard.press('Control+Alt+u');
+      await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
+      await page.keyboard.press('Control+Alt+j');
+      await expect(frame.getByRole('tab', { name: 'Layers', exact: true, selected: true })).toBeVisible();
     });
   }
 
