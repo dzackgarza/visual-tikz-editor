@@ -1493,6 +1493,19 @@ describe("standalone workbench host boundary", function () {
       await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
       await page.keyboard.press('Control+Alt+j');
       await expect(frame.getByRole('tab', { name: 'Layers', exact: true, selected: true })).toBeVisible();
+      await tap(frame.getByRole('button', { name: 'Close properties', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
+      await settings.getByRole('searchbox', { name: 'Find command', exact: true }).fill('Layers');
+      await tap(settings.getByRole('button', { name: 'Set shortcut for Layers', exact: true }));
+      await page.keyboard.press('ArrowLeft');
+      await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
+      await fitDiagram(frame, input);
+      await input.touch([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), .5)]);
+      await page.keyboard.press('Control+Alt+j');
+      await expect(frame.getByRole('tab', { name: 'Layers', exact: true })).toHaveCount(0);
+      await page.keyboard.press('ArrowLeft');
+      await expect(frame.getByRole('tab', { name: 'Layers', exact: true, selected: true })).toBeVisible();
+      assert.equal((await editorDebug(page)).source, source, 'The assigned arrow key still nudged the selected line');
     });
   }
 
