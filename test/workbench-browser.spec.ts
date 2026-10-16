@@ -2403,20 +2403,13 @@ describe("standalone workbench host boundary", function () {
     assert.equal(await page.locator('.cm-content .cm-line').evaluateAll(lines => lines.map(line => line.textContent).join('\n')), authored);
   });
 
-  it('starts cold and edits math-labelled geometry without external assets', async function () {
-    await context.tracing.stop();
-    await context.close();
-    const setup = storySetups.get(this.currentTest!.title);
-    const viewport = setup?.viewport;
-    context = await browser.newContext(viewport ? { viewport } : {});
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+  story({ initialPage: "blank" }, 'starts cold and edits math-labelled geometry without external assets', async function () {
     const external: string[] = [];
     await context.route('**/*', route => {
       if (new URL(route.request().url()).origin === new URL(url).origin) return route.continue();
       external.push(route.request().url());
       return route.abort();
     });
-    page = await context.newPage();
     await page.goto(url);
     await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
     await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
