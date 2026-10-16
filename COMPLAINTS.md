@@ -80,3 +80,41 @@ For the visual tikz editor, there are some problems:
 - Missing standard shape controls: circle by center + drag to see preview and place, arcs by various types, etc (see IPE)
 
 - Layers interface obfuscated and hard to use compared to IPE, inkscape, photoshop, etc
+
+**The failure spans the entire drawing/editing loop, including document state and undo.** The app does not consistently communicate what tool is active, what a gesture will do, what a control affects, or whether the result on the canvas will survive the next action.
+
+I checked revision `07f072a`, the original complaints and remediation roadmap, implementation and tests, retained screenshots, and a running instance. There are substantive failures beyond the examples in the quoted conversation.
+
+1. **“Automatic” correction still requires confirmation.**  
+   I enabled automatic fitting, drew a circle, and continued drawing. The committed TikZ `circle` reverted to its original sampled polyline. This happens because automatic fitting retains a cancellable offer, and beginning another stroke invokes cancellation—including reversing the committed fit. Switching tools also invokes that cancellation path. The setting therefore does not establish the behavior it promises. [Recorded reproduction](/tmp/vte-design-audit/verified-observations.json), [browser trace](/tmp/vte-design-audit/continued-drawing.zip).
+
+2. **Choosing a tool can erase the visible indication of what you chose.**  
+   Choosing “Arc through three points” closes Insert without giving that tool an active representation on the rail. Its construction requires three separate taps; an initial drag produces a line preview without explaining the remaining stages. Opening Properties makes matters worse: it says **“Click center, start point, then end point”**, which describes a different construction. The underlying arc algorithm can produce an arc, while the interface actively misinstructs the person using it. [Live capture](/tmp/vte-design-audit/arc-properties.png).
+
+3. **Controls have unstable scope: this object, the next object, or all future objects.**  
+   Adjusting the simplification slider on one stroke immediately changes global drawing defaults. I changed it to `0.85`, chose **Keep original**, and confirmed the next stroke inherited `0.85`. Cancelling the apparent edit does not cancel that preference change. Properties also prioritizes the active creation tool over selected objects, so its contents can describe future drawing while existing geometry remains highlighted. These are fundamental questions of what an edit means. [Slider implementation](/home/dzack/gitclones/visual-tikz-editor/.cache/tikz-editor/packages/app/src/ui/canvas-panel/CanvasPanel.tsx:2615), [Properties dispatch](/home/dzack/gitclones/visual-tikz-editor/.cache/tikz-editor/packages/app/src/ui/inspector-panel/InspectorPanel.tsx:1969).
+
+4. **Selection exposes several unrelated command systems.**  
+   Shapes get an Actions launcher. Curves get a persistent lock/count panel, an expandable action section, and another menu launcher. Selected points introduce commands outside the disclosure’s control. The button labelled “1 point selected” still toggles that disclosure; its label describes selection state rather than its action. Recoverable strokes add another pair of restore/refit buttons. Consequently, learning how to edit one object does not teach you how to edit another—or even the same curve after selecting a point. [Selection controls](/home/dzack/gitclones/visual-tikz-editor/.cache/tikz-editor/packages/app/src/ui/canvas-panel/CanvasPanel.tsx:5062).
+
+5. **The geometry controls do not express one understandable policy.**  
+   Lattice lock, object snapping, geometric constraints, ruler guides, and grid appearance are spread across different surfaces. Their interactions matter: lattice locking returns before ordinary object snapping; geometric constraints can bypass lattice rounding while the lock remains visibly enabled. “Grid Size” claims to control the snap grid, but its value feeds the rendered grid spacing. Freehand has another snapping path. This is enough to establish inconsistent, poorly communicated rules; the earlier blanket explanation that insertion tools simply lack snapping was unsupported. [Snapping precedence](/home/dzack/gitclones/visual-tikz-editor/.cache/tikz-editor/packages/core/src/edit/snapping/index.ts:165), [Grid Size setting](/home/dzack/gitclones/visual-tikz-editor/.cache/tikz-editor/packages/app/src/ui/SettingsModal.tsx:135).
+
+6. **The layout has no effective hierarchy or space budget.**  
+   Application controls precede drawing tools inside the drawing rail. The rail adds columns as available height shrinks, moving controls between orientations. Saved colors receive a separate full-size lane. Properties covers the geometry being edited, while selection controls and fitting forms occupy additional canvas regions. Avoiding overlap with the rail does not preserve a usable drawing area. The resulting screen is dominated by independently accommodated controls. [Rail layout rules](/home/dzack/gitclones/visual-tikz-editor/.cache/tikz-editor/packages/app/src/ui/Toolbar.module.css:270), [Properties capture](/home/dzack/gitclones/visual-tikz-editor/test-results/workbench/floating-properties-portrait.png).
+
+7. **The visual vocabulary and color workflow conceal distinctions the user must understand.**  
+   Lasso literally reuses the path icon. Properties uses a gear; Settings uses a hamburger. Host navigation adds another set of abstract glyphs. Meanwhile, saved color swatches always change the *creation stroke color*; Bucket maintains a separate fill color behind its own options. The conspicuous selected palette color therefore does not describe the color every drawing operation will use. These controls advertise less information than their behavior requires. [Tool definitions](/home/dzack/gitclones/visual-tikz-editor/.cache/tikz-editor/packages/app/src/ui/tool-config.tsx:193), [Color routing](/home/dzack/gitclones/visual-tikz-editor/.cache/tikz-editor/packages/app/src/ui/Toolbar.tsx:425).
+
+The qualification process accepted precisely these kinds of outcomes:
+
+- The [rail test](/home/dzack/gitclones/visual-tikz-editor/test/workbench-browser.spec.ts:1309) requires every listed control to remain onscreen without scrolling. The sprawling rail satisfies it.
+- The [Properties test](/home/dzack/gitclones/visual-tikz-editor/test/workbench-browser.spec.ts:1689) checks target dimensions, overflow, tabs, and unchanged source. It never establishes that editing through the panel makes sense.
+- The [automatic-fit test](/home/dzack/gitclones/visual-tikz-editor/test/workbench-browser.spec.ts:902) verifies fitting followed by explicitly restoring the original. It never continues drawing and checks that the correction survives.
+- The arc test supplies the correct three taps from its own knowledge. It proves geometry generation while bypassing the user’s need to discover the gesture.
+
+The requirements themselves called for a unified contextual surface and redesigned tablet menus. They also contained suggestions such as an Insert control and a zoom popup. Those suggestions were implemented literally without resolving the larger interaction model. The completion ledger then treated successful command execution as resolution of the design requirement.
+
+**The repair scope is the shared interaction design and its state semantics:** tool identity and construction stages; selection and command presentation; current-object versus future-tool settings; correction, cancellation, and undo; snapping precedence; and allocation of canvas space. Existing geometry operations can support that work, but their successful execution cannot establish that the editor is coherent.
+
+The recurring failure is that each local feature can demonstrate an action, while composing those actions into ordinary drawing produces contradictions. That is why the defects keep appearing everywhere you touch the app.
