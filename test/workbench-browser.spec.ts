@@ -1531,8 +1531,7 @@ describe("standalone workbench host boundary", function () {
       await tap(frame.getByRole('button', { name: 'Curve actions', exact: true }));
       await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
       await expect.poll(async () => (await editorDebug(page)).source).toBe(before);
-      await selectCurve();
-      await expect.poll(async () => (await editorDebug(page)).source).toBe(before);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual([ids[ids.length - 1]]);
       if (!(await frame.getByRole('button', { name: 'Simplify curve', exact: true }).isVisible()))
         await tap(frame.getByRole('button', { name: 'Curve actions', exact: true }));
       await expect(frame.getByRole('button', { name: 'Simplify curve', exact: true })).toBeVisible();

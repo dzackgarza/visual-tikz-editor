@@ -21,7 +21,7 @@ The drawing rail holds Select, Lasso, Eraser, Freehand, Insert, drawing color, B
 
 Hold a finger on an element to open its actions; hold on empty canvas for selection, paste, and canvas aids. Double-tap a curve to add a point. The curve's own control selects and edits its points, simplifies it repeatedly, or locks its selection. The eraser removes every stroke a sweep crosses. A finger pans and two fingers zoom; palm contact during pen drawing does not make a second stroke.
 
-**Lock to lattice** is on by default. **Constrain geometry** (∠) gives drawing and moving a touch equivalent of geometric modifier keys: lines use 15-degree angle steps, rectangles become squares, and moves stay on their dominant canvas axis. Angle and shape constraints take precedence over lattice rounding. Coordinates and geometry fields, including figure bounds and Repeat, use lattice units. With `x=2cm`, one horizontal lattice step is two centimetres in the exported picture.
+**Lock to lattice** is on by default. **Constrain geometry** (∠) gives drawing and moving a touch equivalent of geometric modifier keys: lines use 15-degree angle steps, rectangles become squares, and moves stay on their dominant canvas axis. Geometry constraints take precedence over lattice rounding. Coordinates and geometry fields, including figure bounds and Repeat, use lattice units. With `x=2cm`, one horizontal lattice step is two centimetres in the exported picture.
 
 Freehand drawing offers a fit with its recorded-sample and fitted-point counts. Keep the original stroke to restore it later, including after reopening. Simplify can be repeated until no simpler fit remains. Clear **Interpret geometry** in Freehand Properties for handwriting that should stay as ink.
 
