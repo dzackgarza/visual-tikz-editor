@@ -112,16 +112,15 @@ export async function emptyCanvasGesture(frame: FrameLocator): Promise<Point[]> 
   const box = (await viewport.boundingBox())!;
   const offsets = await viewport.evaluate(element => {
     const bounds = element.getBoundingClientRect();
-    const isCanvas = (point: { x: number; y: number }) => {
-      const target = document.elementFromPoint(point.x, point.y);
-      return target !== null && element.contains(target) &&
-        target.closest('[data-source-id], button, input, aside, [role="dialog"], [data-testid="canvas-selection-hint"], [data-testid="canvas-drag-tooltip"]') === null;
-    };
     for (const y of [.2, .35, .5, .65, .8]) {
       for (const x of [.85, .7, .55, .4, .25]) {
         const start = { x: bounds.left + bounds.width * x, y: bounds.top + bounds.height * y };
         const points = [start, { x: start.x - 25, y: start.y + 20 }, { x: start.x - 50, y: start.y + 40 }];
-        if (points.every(isCanvas)) return points.map(point => ({ x: point.x - bounds.left, y: point.y - bounds.top }));
+        if (points.every(point => {
+          const target = document.elementFromPoint(point.x, point.y);
+          return target !== null && element.contains(target) &&
+            target.closest('[data-source-id], button, input, aside, [role="dialog"], [data-testid="canvas-selection-hint"], [data-testid="canvas-drag-tooltip"]') === null;
+        })) return points.map(point => ({ x: point.x - bounds.left, y: point.y - bounds.top }));
       }
     }
     throw new Error('No clear canvas area for a finger gesture');

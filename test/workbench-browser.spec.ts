@@ -1482,6 +1482,9 @@ describe("standalone workbench host boundary", function () {
       await tap(panel.getByRole('button', { name: 'Move selection to Ground', exact: true }));
       await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Ground\]\s*\\draw \(-14,-18\) -- \(-2,-12\);\s*\\end\{scope\}/);
       assert.equal((await source()).match(/\\draw/g)!.length, 1);
+      const layerName = (await panel.getByRole('button', { name: 'Ground Layer', exact: true }).boundingBox())!;
+      const childName = (await panel.getByRole('button', { name: 'Line', exact: true }).boundingBox())!;
+      assert.ok(childName.x > layerName.x, 'The layer child is drawn to the left of its parent');
       // Hiding writes transparent; showing removes it.
       await tap(panel.getByRole('button', { name: 'Hide Ground', exact: true }));
       await expect.poll(source).toMatch(/\[name=Ground, transparent\]/);
@@ -3008,6 +3011,7 @@ describe("standalone workbench host boundary", function () {
       await expect(frame.getByRole('dialog', { name: 'Freehand result' })).toHaveCount(0);
       await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
       await expect(page.getByLabel('Authored source')).toHaveValue(/workbench-ink:/);
+      await fitDiagram(frame, input);
       const drawn = await embeddingSnapshot();
       assert.equal(drawn.originalInk.length, 1);
       assert.ok(drawn.originalInk[0].stroke.samples.length >= 22, 'Palm contact must not replace the pen drag');
@@ -3016,10 +3020,12 @@ describe("standalone workbench host boundary", function () {
       const panned = await embeddingSnapshot();
       assert.equal(panned.source, drawn.source);
       assert.notDeepEqual(panned.state.viewport, drawn.state.viewport);
+      await fitDiagram(frame, input);
+      const beforePinch = await embeddingSnapshot();
       await input.pinch({ x: x + 40, y }, 80, 140);
       const pinched = await embeddingSnapshot();
       assert.equal(pinched.source, drawn.source);
-      assert.ok(pinched.state.viewport.scale > panned.state.viewport.scale);
+      assert.ok(pinched.state.viewport.scale > beforePinch.state.viewport.scale);
       await expect(freehandTool(frame)).toHaveAttribute('aria-pressed', 'true');
       await storyScreenshot(page, `palm-pan-pinch-${tablet.name}`);
     });
