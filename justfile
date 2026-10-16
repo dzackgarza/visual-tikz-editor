@@ -31,11 +31,11 @@ test-commit:
     bun run typecheck
 
 # Run the workbench tests.
-test-push:
+test-push: test-logic
     bun run test
 
 # Run the workbench tests.
-test:
+test: test-logic
     bun run test
 
 # Rebuild the pinned TikZ Editor assets.
