@@ -1125,6 +1125,36 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`picks a drawing colour from saved swatches, one spectrum, and opacity only in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator('[data-diagram-tools]');
+      const saved = await rail.getByRole('button', { name: /^Use / }).evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')!.slice(4)));
+      await input.touch([await stableCenter(rail.getByRole('button', { name: /^Drawing color/ }))]);
+      const popup = frame.getByRole('dialog', { name: 'Tool options' });
+      await expect(popup).toBeVisible();
+      // The swatches are the saved colours, nothing hard-coded beside them, laid out in rows.
+      const swatches = popup.getByRole('button', { name: /^Choose / });
+      const names = await swatches.evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')!.slice(7)));
+      assert.deepEqual(names, saved, `The popup offers colours that are not saved: ${names.filter(name => !saved.includes(name))}`);
+      const [first, second] = [(await swatches.nth(0).boundingBox())!, (await swatches.nth(1).boundingBox())!];
+      assert.ok(Math.abs(first.y - second.y) < 2 && second.x > first.x, 'The swatches are stacked instead of laid out in a row');
+      // One spectrum control and one opacity slider; no channel or hex fields, no collection management.
+      await expect(popup.getByLabel('Choose color')).toHaveCount(1);
+      await expect(popup.getByRole('slider', { name: 'Opacity' })).toBeVisible();
+      for (const gone of ['Hex color', 'R', 'G', 'B']) await expect(popup.getByLabel(gone, { exact: true })).toHaveCount(0);
+      for (const gone of ['Create collection', 'Save collection', 'Delete collection']) await expect(popup.getByRole('button', { name: gone })).toHaveCount(0);
+      await expect(popup.getByRole('combobox')).toHaveCount(0);
+      // Picking a swatch by finger sets the drawing colour.
+      await input.touch([await stableCenter(swatches.nth(2))]);
+      await expect(rail.getByRole('button', { name: `Drawing color: ${saved[2]}` })).toBeVisible();
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
