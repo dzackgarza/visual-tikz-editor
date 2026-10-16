@@ -3,7 +3,7 @@ import { copyFile } from "node:fs/promises";
 import { chromium, expect, type Browser, type BrowserContext, type FrameLocator, type Locator, type Page } from "@playwright/test";
 
 import { geometryTraces } from "./geometry-traces";
-import { buildWorkbench, editorDebug, editorFrame, startWorkbench, settledCenter, stableCenter, storyScreenshot, fitDiagram, strokePoint, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
+import { buildWorkbench, editorDebug, editorFrame, startWorkbench, settledCenter, stableCenter, storyScreenshot, fitDiagram, emptyCanvasGesture, strokePoint, TABLET_VIEWPORTS, TabletInput, waveAcross, type Workbench } from "./tablet";
 import type { EditorSnapshot } from '../src/host';
 
 const freehandTool = (frame: FrameLocator) => frame.getByRole('button', { name: 'Freehand', exact: true });
@@ -417,6 +417,7 @@ describe("standalone workbench host boundary", function () {
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
+\path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const frame = editorFrame(page);
@@ -464,6 +465,7 @@ describe("standalone workbench host boundary", function () {
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
+\path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const frame = editorFrame(page);
@@ -513,6 +515,7 @@ describe("standalone workbench host boundary", function () {
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
+\path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const frame = editorFrame(page);
@@ -599,6 +602,7 @@ describe("standalone workbench host boundary", function () {
 \draw (0,0) -- (0,10);
 \draw (2,2) circle (1);
 \draw (6,2) circle (1);
+\path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const frame = editorFrame(page);
@@ -815,6 +819,7 @@ describe("standalone workbench host boundary", function () {
 \draw (0,0) -- (0,10);
 \draw (2,2) circle (1);
 \draw (6,2) circle (1);
+\path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const frame = editorFrame(page);
@@ -1887,8 +1892,7 @@ describe("standalone workbench host boundary", function () {
         await input.touch([await centerOf(lock)]);
         await expect(lock).toHaveAttribute('aria-pressed', 'true');
         await storyScreenshot(page, `curve-locked-${contact}-${tablet.name}`);
-        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        await tap({ x: viewport.x + viewport.width - 20, y: viewport.y + viewport.height - 20 });
+        await tap((await emptyCanvasGesture(frame))[0]);
         await tap(await settledCenter(frame.locator('svg [data-source-id="path:1"]').first()));
         assert.deepEqual((await editorDebug(page)).selection, ['path:0'], 'A locked curve stays selected');
         const anchor = frame.locator('[data-handle-kind="move-handle"][data-source-id="path:0"]').first();
@@ -1896,12 +1900,12 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).handle).not.toBeNull();
         assert.deepEqual((await editorDebug(page)).selection, ['path:0']);
         const before = (await editorDebug(page)).viewport;
-        await input.touch([{ x: viewport.x + viewport.width - 40, y: viewport.y + viewport.height - 60 }, { x: viewport.x + viewport.width - 90, y: viewport.y + viewport.height - 100 }]);
+        await input.touch(await emptyCanvasGesture(frame));
         assert.notDeepEqual((await editorDebug(page)).viewport, before, 'Finger pan still works on a locked curve');
         assert.deepEqual((await editorDebug(page)).selection, ['path:0']);
         await input.touch([await centerOf(lock)]);
         await expect(lock).toHaveAttribute('aria-pressed', 'false');
-        await tap({ x: viewport.x + viewport.width - 20, y: viewport.y + viewport.height - 20 });
+        await tap((await emptyCanvasGesture(frame))[0]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
       });
     }
