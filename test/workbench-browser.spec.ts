@@ -1478,6 +1478,22 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`names the layers panel Layers on the rail, its tab, and its header in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await input.touch([await stableCenter(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Layers', exact: true }))]);
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      await expect(panel.getByRole('tab', { name: 'Layers', exact: true, selected: true })).toBeVisible();
+      await expect(panel.getByRole('tab', { name: 'Objects', exact: true })).toHaveCount(0);
+      await expect(panel.getByRole('tabpanel').getByText('Layers', { exact: true }).first()).toBeVisible();
+      await input.touch([await stableCenter(panel.getByRole('button', { name: 'Close properties', exact: true }))]);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`keeps panels and the freehand result clear of the drawing rail in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
