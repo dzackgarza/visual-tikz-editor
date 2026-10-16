@@ -1204,6 +1204,48 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`scrolls 24 saved colours in their own strip, marks the active one, and keeps the tools in view in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => { await input.touch([await stableCenter(locator)]); };
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
+      const dialog = frame.getByTestId('settings-modal');
+      await tap(dialog.getByTestId('settings-category-colors'));
+      await tap(dialog.getByRole('button', { name: 'New collection' }));
+      while (await rail.getByRole('button', { name: /^Use / }).count() < 24) await tap(dialog.getByRole('button', { name: 'Add color' }));
+      await tap(dialog.getByRole('button', { name: 'Close settings' }));
+      await expect(dialog).toHaveCount(0);
+      const swatches = rail.getByRole('button', { name: /^Use / });
+      // The saved colours scroll inside their own strip; the rail does not grow past the tools.
+      const strip = rail.getByLabel('Color palette');
+      const overflow = await strip.evaluate(element => Math.max(element.scrollHeight - element.clientHeight, element.scrollWidth - element.clientWidth));
+      assert.ok(overflow > 0, `The palette strip does not scroll (overflow ${overflow}px); the rail grows instead`);
+      for (const name of ['Select', 'Lasso', 'Eraser', 'Freehand', 'Insert', 'Undo', 'Redo'])
+        await expect(rail.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
+      // The active colour is marked, and only it.
+      await tap(rail.getByRole('button', { name: 'Use red', exact: true }));
+      await expect(rail.getByRole('button', { name: 'Drawing color: red' })).toBeVisible();
+      assert.deepEqual(await swatches.evaluateAll(buttons => buttons.flatMap((button, index) => button.getAttribute('aria-pressed') === 'true' ? [index] : [])), [2]);
+      // The last saved colour is reached by scrolling the strip, and picking it moves the mark.
+      await tap(swatches.last());
+      await expect(rail.getByRole('button', { name: 'Drawing color: black' })).toBeVisible();
+      assert.deepEqual(await swatches.evaluateAll(buttons => buttons.flatMap((button, index) => button.getAttribute('aria-pressed') === 'true' ? [index] : [])), [0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
+      for (const name of ['Select', 'Lasso', 'Eraser', 'Freehand', 'Insert'])
+        await expect(rail.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
+      await storyScreenshot(page, `palette-strip-${tablet.name}`);
+      // Leave the default collection active for the stories after this one.
+      await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
+      await tap(dialog.getByRole('button', { name: 'Delete collection' }));
+      await tap(dialog.getByRole('button', { name: /^Delete Collection / }));
+      await expect(dialog.getByLabel('Collection', { exact: true }).locator('option')).toHaveCount(1);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`repeats an element from its long press in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
