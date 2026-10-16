@@ -162,11 +162,20 @@ describe("standalone workbench host boundary", function () {
       await input.touch([await stableCenter(lock)]);
       await expect(lock).toHaveAttribute('aria-pressed', 'false');
       // Zoomed out, a lattice cell is a few pixels wide: points still move freely.
-      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Zoom and display', exact: true }))]);
-      await input.touch([await stableCenter(frame.getByRole('button', { name: '5%', exact: true }))]);
-      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Zoom and display', exact: true }))]);
+      const zoom = rail.getByRole('button', { name: 'Zoom and display', exact: true });
+      const startZoom = await zoom.innerText();
+      const zoomTo = async (level: string) => {
+        await input.touch([await stableCenter(zoom)]);
+        await input.touch([await stableCenter(frame.getByRole('button', { name: level, exact: true }))]);
+        await input.touch([await stableCenter(zoom)]);
+        await expect(zoom).toHaveText(level);
+      };
+      await zoomTo('5%');
       const free = await drawLine();
       assert.ok(free.some(value => !Number.isInteger(value)), `With the lock off the line still lands on the lattice: ${free}`);
+      // The zoom persists in the shared workbench; later stories start where this one did.
+      await zoomTo(startZoom);
+      await input.touch([await stableCenter(lock)]);
     });
   }
 
