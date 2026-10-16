@@ -135,14 +135,14 @@ describe("standalone workbench host boundary", function () {
           return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
         });
       });
-      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
-      // Screen position of lattice coordinates (x, y), from the two reference segments of length 10.
-      const at = (x: number, y: number) => ({
-        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
-        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
-      });
       const rail = frame.locator('[data-diagram-tools]');
       const drawLine = async () => {
+        const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+        // Screen position of lattice coordinates (x, y), from the two reference segments of length 10.
+        const at = (x: number, y: number) => ({
+          x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+          y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+        });
         await input.touch([await stableCenter(rail.getByRole('button', { name: 'Insert', exact: true }))]);
         await input.touch([await stableCenter(frame.getByRole('button', { name: 'Line', exact: true }))]);
         const [from, to] = [at(3.5, 2.5), at(6.5, 4.5)];
@@ -161,6 +161,10 @@ describe("standalone workbench host boundary", function () {
       await expect(lock).toHaveAttribute('aria-pressed', 'true');
       await input.touch([await stableCenter(lock)]);
       await expect(lock).toHaveAttribute('aria-pressed', 'false');
+      // Zoomed out, a lattice cell is a few pixels wide: points still move freely.
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Zoom and display', exact: true }))]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: '5%', exact: true }))]);
+      await input.touch([await stableCenter(rail.getByRole('button', { name: 'Zoom and display', exact: true }))]);
       const free = await drawLine();
       assert.ok(free.some(value => !Number.isInteger(value)), `With the lock off the line still lands on the lattice: ${free}`);
     });
