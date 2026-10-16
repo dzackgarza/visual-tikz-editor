@@ -1524,6 +1524,47 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    atViewport(tablet, `keeps selection actions usable beside Layers when the selection fills the canvas in ${tablet.name}`, async function () {
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\begin{scope}[name=Long foreground layer]
+\draw (-100,-100) rectangle (100,100);
+\end{scope}
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await fitDiagram(frame, input);
+      await input.touch([await stableCenter(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Layers', exact: true }))]);
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      const title = panel.getByRole('button', { name: 'Long foreground layer Layer', exact: true });
+      // A long name may ellipsize; the type badge must remain legible.
+      const badge = title.getByText('Layer', { exact: true });
+      await expect(badge).toBeVisible();
+      assert.ok(await badge.evaluate(node => {
+        const box = node.getBoundingClientRect();
+        const parent = node.parentElement!.getBoundingClientRect();
+        return box.left >= parent.left && box.right <= parent.right;
+      }), 'The Layer badge is clipped by the title');
+      const zoom = frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Zoom and display', exact: true });
+      await input.touch([await stableCenter(zoom)]);
+      await input.touch([await stableCenter(frame.getByRole('button', { name: '200%', exact: true }))]);
+      await input.touch([await stableCenter(zoom)]);
+      await input.touch([await stableCenter(panel.getByRole('button', { name: 'Rectangle', exact: true }))]);
+      const actions = frame.getByRole('button', { name: 'Selection actions', exact: true });
+      await expect(actions).toBeInViewport({ ratio: 1 });
+      const control = (await actions.boundingBox())!;
+      const aside = (await panel.boundingBox())!;
+      assert.ok(control.width >= 44 && control.height >= 44);
+      assert.ok(control.x + control.width <= aside.x || control.x >= aside.x + aside.width ||
+        control.y + control.height <= aside.y || control.y >= aside.y + aside.height, 'Selection actions overlap Layers');
+      await input.touch([await stableCenter(actions)]);
+      await expect(frame.getByRole('menuitem', { name: 'Delete', exact: true })).toBeVisible();
+      await page.screenshot({ path: `test-results/workbench/layers-cramped-${tablet.name}.png` });
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     atViewport(tablet, `refuses to move a coordinate into a layer drawn after the line that uses it in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
