@@ -1637,7 +1637,7 @@ index 0e491d69..0911076d 100644
    useEffect(() => {
      if (!open) {
 diff --git a/packages/app/src/ui/ColorPicker.module.css b/packages/app/src/ui/ColorPicker.module.css
-index dd74530a..fef142b6 100644
+index dd74530a..69f9361a 100644
 --- a/packages/app/src/ui/ColorPicker.module.css
 +++ b/packages/app/src/ui/ColorPicker.module.css
 @@ -200,6 +200,13 @@
@@ -1654,7 +1654,7 @@ index dd74530a..fef142b6 100644
  .customHueTrack {
    position: relative;
    width: 100%;
-@@ -521,3 +528,12 @@
+@@ -521,3 +528,17 @@
    flex: 1;
    text-align: center;
  }
@@ -1667,8 +1667,13 @@ index dd74530a..fef142b6 100644
 +.rgbaChannels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 +.rgbaChannels input { width: 100%; box-sizing: border-box; }
 +.collectionActions { display: flex; gap: 8px; flex-wrap: wrap; }
++.customRow { display: flex; gap: 8px; align-items: center; }
++.customRow input[type="color"] { width: 44px; height: 44px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; }
++.customRow button { flex: 1; }
++.opacity { display: grid; gap: 4px; }
++.opacity input[type="range"] { width: 100%; }
 diff --git a/packages/app/src/ui/ColorPicker.tsx b/packages/app/src/ui/ColorPicker.tsx
-index 49a2d341..7d8f40d3 100644
+index 49a2d341..7ea9f766 100644
 --- a/packages/app/src/ui/ColorPicker.tsx
 +++ b/packages/app/src/ui/ColorPicker.tsx
 @@ -1,43 +1,25 @@
@@ -1760,7 +1765,7 @@ index 49a2d341..7d8f40d3 100644
              namedColorSwatches={normalizedNamedColorSwatches}
              mixed={mixed}
              disabled={disabled}
-@@ -227,776 +209,33 @@ export function ColorPickerField({
+@@ -227,776 +209,35 @@ export function ColorPickerField({
    );
  }
  
@@ -2550,20 +2555,22 @@ index 49a2d341..7d8f40d3 100644
 -  }
 -
 -  return false;
-+    <input type="color" aria-label="Choose color" value={rgbToHex(rgb)} disabled={disabled} onChange={(event) => {
-+      const next = hexToRgb(event.currentTarget.value);
-+      onChange(alpha === 1 ? event.currentTarget.value : `rgba(${next.r},${next.g},${next.b},${alpha})`);
-+    }} />
-+    <label>Opacity: {Math.round(alpha * 100)}%
++    <div className={css.customRow}>
++      <input type="color" aria-label="Choose color" value={rgbToHex(rgb)} disabled={disabled} onChange={(event) => {
++        const next = hexToRgb(event.currentTarget.value);
++        onChange(alpha === 1 ? event.currentTarget.value : `rgba(${next.r},${next.g},${next.b},${alpha})`);
++      }} />
++      <button type="button" disabled={disabled || palette.includes(token)} onClick={() => setActivePalette([...palette, token])}>Save color</button>
++    </div>
++    <label className={css.opacity}>Opacity: {Math.round(alpha * 100)}%
 +      <input type="range" aria-label="Opacity" min={0} max={1} step={0.01} value={alpha} disabled={disabled}
 +        onChange={(event) => onChange(`rgba(${rgb.r},${rgb.g},${rgb.b},${event.currentTarget.valueAsNumber})`)} />
 +    </label>
-+    <button type="button" disabled={disabled || palette.includes(token)} onClick={() => setActivePalette([...palette, token])}>Save color</button>
 +  </div>;
  }
  
  function resolveCustomRgbFromDriver(
-@@ -1041,20 +280,6 @@ function normalizeColorToken(value: string | null): string | null {
+@@ -1041,20 +282,6 @@ function normalizeColorToken(value: string | null): string | null {
    return normalized.length === 0 ? null : normalized;
  }
  
@@ -2584,7 +2591,7 @@ index 49a2d341..7d8f40d3 100644
  function normalizeNamedColorSwatches(swatches: readonly NamedColorSwatch[]): NamedColorSwatch[] {
    const normalized: NamedColorSwatch[] = [];
    const seen = new Set<string>();
-@@ -1083,190 +308,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
+@@ -1083,190 +310,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
    return lookup;
  }
  
@@ -2775,7 +2782,7 @@ index 49a2d341..7d8f40d3 100644
  export function cssColorForToken(token: string, namedColorLookup: ReadonlyMap<string, string> | null = null): string | null {
    const normalizedToken = normalizeColorToken(token);
    if (!normalizedToken || normalizedToken === "none") {
-@@ -1392,134 +433,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
+@@ -1392,134 +435,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
    );
  }
  
@@ -4852,7 +4859,7 @@ index b12fedb2..0bb553c9 100644
 +
 +.matrixPickerCell { flex: 0 0 44px; min-width: 44px; }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
-index 8aeb4133..20dc3ad9 100644
+index 8aeb4133..5bcb1222 100644
 --- a/packages/app/src/ui/ToolbarToolPopup.tsx
 +++ b/packages/app/src/ui/ToolbarToolPopup.tsx
 @@ -1,4 +1,5 @@
@@ -4862,7 +4869,7 @@ index 8aeb4133..20dc3ad9 100644
  import css from "./ToolbarToolPopup.module.css";
  
  export function ToolbarToolPopup({
-@@ -17,6 +18,49 @@ export function ToolbarToolPopup({
+@@ -17,6 +18,51 @@ export function ToolbarToolPopup({
    popupClassName?: string;
  }) {
    const rootRef = useRef<HTMLDivElement | null>(null);
@@ -4876,6 +4883,8 @@ index 8aeb4133..20dc3ad9 100644
 +      const popup = popupRef.current;
 +      if (!anchor || !popup) return;
 +      const rail = rootRef.current?.closest("[data-diagram-tools]");
++      // A rail popup sits beside the whole rail, never over its other columns or saved colours.
++      const side = rail?.getBoundingClientRect() ?? anchor;
 +      const dock = rail?.getAttribute("data-dock");
 +      // A rail popup stays inside the canvas cell, which excludes the rulers; other popups stay inside the window.
 +      const canvas = rail ? document.querySelector("[data-canvas-viewport]")?.getBoundingClientRect() : undefined;
@@ -4884,21 +4893,21 @@ index 8aeb4133..20dc3ad9 100644
 +      const height = popup.scrollHeight;
 +      if (dock === "left" || dock === "right") {
 +        // Beside a vertical rail the popup cannot cover its button; it scrolls if the canvas is shorter.
-+        const left = dock === "left" ? anchor.right + 8 : anchor.left - width - 8;
++        const left = dock === "left" ? side.right + 8 : side.left - width - 8;
 +        const top = Math.max(bounds.top + 8, Math.min(anchor.top - 8, bounds.bottom - height - 8));
 +        setPopupPosition({ left: Math.max(bounds.left + 8, Math.min(left, bounds.right - width - 8)), top, maxHeight: bounds.bottom - 8 - top });
 +        return;
 +      }
 +      // Above or below the button, never over it: the side that holds it, else the roomier side, scrolling there.
-+      const below = { top: anchor.bottom + 4, bottom: bounds.bottom - 8 };
-+      const above = { top: bounds.top + 8, bottom: anchor.top - 4 };
-+      const room = (side: typeof below) => side.bottom - side.top;
-+      const side = room(below) >= height ? below : room(above) >= height ? above : room(below) >= room(above) ? below : above;
-+      const top = side === below ? below.top : Math.max(above.top, above.bottom - height);
++      const below = { top: side.bottom + 4, bottom: bounds.bottom - 8 };
++      const above = { top: bounds.top + 8, bottom: side.top - 4 };
++      const room = (range: typeof below) => range.bottom - range.top;
++      const range = room(below) >= height ? below : room(above) >= height ? above : room(below) >= room(above) ? below : above;
++      const top = range === below ? below.top : Math.max(above.top, above.bottom - height);
 +      setPopupPosition({
 +        left: Math.max(bounds.left + 8, Math.min(anchor.left, bounds.right - width - 8)),
 +        top,
-+        maxHeight: side.bottom - top
++        maxHeight: range.bottom - top
 +      });
 +    }
 +    positionPopup();
@@ -4912,7 +4921,7 @@ index 8aeb4133..20dc3ad9 100644
  
    useEffect(() => {
      if (!open) {
-@@ -28,7 +72,7 @@ export function ToolbarToolPopup({
+@@ -28,7 +74,7 @@ export function ToolbarToolPopup({
        if (!target) {
          return;
        }
@@ -4921,7 +4930,7 @@ index 8aeb4133..20dc3ad9 100644
          onClose();
        }
      }
-@@ -55,15 +99,18 @@ export function ToolbarToolPopup({
+@@ -55,15 +101,18 @@ export function ToolbarToolPopup({
    return (
      <div className={css.root} ref={rootRef}>
        {children}
