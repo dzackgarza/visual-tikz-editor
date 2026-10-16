@@ -15,9 +15,10 @@ describe("standalone workbench host boundary", function () {
   let page: Page;
   let url: string;
 
-  const storyViewports = new Map<string, { width: number; height: number }>();
-  function atViewport(viewport: { width: number; height: number }, title: string, run: Mocha.AsyncFunc): void {
-    storyViewports.set(title, viewport);
+  type StorySetup = { viewport?: { width: number; height: number }; initialPage?: "blank" };
+  const storySetups = new Map<string, StorySetup>();
+  function story(setup: StorySetup, title: string, run: Mocha.AsyncFunc): void {
+    storySetups.set(title, setup);
     it(title, run);
   }
 
@@ -48,11 +49,13 @@ describe("standalone workbench host boundary", function () {
   beforeEach(async function () {
     workbench = await startWorkbench(process.env);
     url = workbench.url;
-    const viewport = storyViewports.get(this.currentTest!.title);
+    const setup = storySetups.get(this.currentTest!.title);
+    const viewport = setup?.viewport;
     context = await browser.newContext(viewport ? { viewport } : {});
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
     await page.request.post(`${url}api/new`, { data: 'tikzpicture' });
+    if (setup?.initialPage === 'blank') return;
     await page.goto(url);
     if (!viewport) {
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
@@ -75,7 +78,7 @@ describe("standalone workbench host boundary", function () {
     await browser?.close();
   });
 
-  atViewport({ width: 768, height: 1024 }, 'keeps authored source through a render error and recovers in the dark tablet workspace', async function () {
+  story({ viewport: { width: 768, height: 1024 } }, 'keeps authored source through a render error and recovers in the dark tablet workspace', async function () {
     await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
     await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
     await page.getByRole('button', { name: 'Dark theme', exact: true }).click();
@@ -97,7 +100,7 @@ describe("standalone workbench host boundary", function () {
   });
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `reaches zoom and canvas aids by touch in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `reaches zoom and canvas aids by touch in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
@@ -119,7 +122,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `lands drawn points on the lattice by default, under a lock toggle on the rail, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `lands drawn points on the lattice by default, under a lock toggle on the rail, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -177,7 +180,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `commits the locked curve its preview shows, with lattice control points, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `commits the locked curve its preview shows, with lattice control points, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -227,7 +230,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `shows an alignment guide when a dragged square meets a circle's top, locked and free, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `shows an alignment guide when a dragged square meets a circle's top, locked and free, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -283,7 +286,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `labels the rulers in lattice steps when the figure scales its lattice in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `labels the rulers in lattice steps when the figure scales its lattice in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
@@ -308,7 +311,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `draws the axes distinct from major grid lines, undimmed, in both themes in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `draws the axes distinct from major grid lines, undimmed, in both themes in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const axis = frame.locator('line[class*="gridAxis"]').first();
@@ -335,7 +338,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `starts on at least (-20,20) on both axes at a preset zoom in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `starts on at least (-20,20) on both axes at a preset zoom in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const zoom = frame.getByRole('button', { name: 'Zoom and display', exact: true });
@@ -368,7 +371,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `keeps the rail and its popups off the rulers, and the popups off the rail, docked left, docked bottom, and floating in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `keeps the rail and its popups off the rulers, and the popups off the rail, docked left, docked bottom, and floating in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -411,7 +414,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `snaps a free arc's end to the nearby common angle by pen in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `snaps a free arc's end to the nearby common angle by pen in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -459,7 +462,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `sweeps an arc the way the pen went round, past a half circle, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `sweeps an arc the way the pen went round, past a half circle, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -509,7 +512,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `builds circles on a diameter and through three points, and an arc through three points, by pen in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `builds circles on a diameter and through three points, and an arc through three points, by pen in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -562,7 +565,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `rotates a square 45 degrees by its handle with the pen in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `rotates a square 45 degrees by its handle with the pen in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,6);\end{tikzpicture}`);
@@ -594,7 +597,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `scales a lasso-selected pair by 2 from a corner of their frame in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `scales a lasso-selected pair by 2 from a corner of their frame in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -657,7 +660,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `shears a square from its right edge after a second tap with the pen in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `shears a square from its right edge after a second tap with the pen in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -715,7 +718,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `creates, hides, and deletes a ruler guide by finger from one Ruler guides control in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `creates, hides, and deletes a ruler guide by finger from one Ruler guides control in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -767,7 +770,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `reads a drawn line's end in lattice units when the figure scales its lattice in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `reads a drawn line's end in lattice units when the figure scales its lattice in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
@@ -811,7 +814,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `rotates a lasso-selected pair a quarter turn about their centre in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `rotates a lasso-selected pair a quarter turn about their centre in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -873,7 +876,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `states the freehand tool's properties without pixels in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `states the freehand tool's properties without pixels in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -890,7 +893,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `keeps the original stroke after an automatic fit in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `keeps the original stroke after an automatic fit in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -916,7 +919,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -952,7 +955,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `shows every recorded sample and every fitted anchor the freehand result counts in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `shows every recorded sample and every fitted anchor the freehand result counts in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -982,7 +985,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `smooths only the neighbours of a deleted curve point in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `smooths only the neighbours of a deleted curve point in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -1015,7 +1018,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `selects a fitted stroke itself, not the envelope that keeps its original, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `selects a fitted stroke itself, not the envelope that keeps its original, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1039,7 +1042,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `simplifies a fitted stroke again and again until it converges in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `simplifies a fitted stroke again and again until it converges in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1086,7 +1089,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `writes a colour picked at full opacity as an xcolor value in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `writes a colour picked at full opacity as an xcolor value in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1110,7 +1113,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `picks a drawing colour from saved swatches, one spectrum, and opacity only in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `picks a drawing colour from saved swatches, one spectrum, and opacity only in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1139,7 +1142,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `creates, renames, switches and deletes colour collections in Settings in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `creates, renames, switches and deletes colour collections in Settings in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1186,7 +1189,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `scrolls 24 saved colours in their own strip, marks the active one, and keeps the tools in view in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `scrolls 24 saved colours in their own strip, marks the active one, and keeps the tools in view in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1226,7 +1229,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `repeats an element from its long press in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `repeats an element from its long press in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (2,1) -- (8,3);\end{tikzpicture}`);
@@ -1248,7 +1251,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `states geometry in lattice units, never cm or px, in the inspector and Repeat in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `states geometry in lattice units, never cm or px, in the inspector and Repeat in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -1296,7 +1299,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `shows every drawing-rail control without scrolling in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `shows every drawing-rail control without scrolling in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const rail = frame.locator('[data-diagram-tools]');
@@ -1322,7 +1325,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `names no key in the context menu a long press opens in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `names no key in the context menu a long press opens in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (2cm);\end{tikzpicture}`);
@@ -1348,7 +1351,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `offers only settings that act in the embedded editor in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `offers only settings that act in the embedded editor in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1368,7 +1371,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `selects every element from the empty-canvas long press in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `selects every element from the empty-canvas long press in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\draw (3,0) -- (5,1);\end{tikzpicture}`);
@@ -1391,7 +1394,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `inserts, deletes, and opens layers through touch routes in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `inserts, deletes, and opens layers through touch routes in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
@@ -1431,7 +1434,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `names the layers panel Layers on the rail, its tab, and its header in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `names the layers panel Layers on the rail, its tab, and its header in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1445,7 +1448,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `creates, renames, fills, hides, locks, orders and deletes TikZ scope layers by touch in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `creates, renames, fills, hides, locks, orders and deletes TikZ scope layers by touch in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (-14,-18) -- (-2,-12);\end{tikzpicture}`);
@@ -1529,7 +1532,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `keeps selection actions usable beside Layers when the selection fills the canvas in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `keeps selection actions usable beside Layers when the selection fills the canvas in ${tablet.name}`, async function () {
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
 \begin{scope}[name=Long foreground layer]
@@ -1571,7 +1574,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `refuses to move a coordinate into a layer drawn after the line that uses it in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `refuses to move a coordinate into a layer drawn after the line that uses it in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -1604,7 +1607,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `keeps panels and the freehand result clear of the drawing rail in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `keeps panels and the freehand result clear of the drawing rail in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1632,7 +1635,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `moves the drawing rail by its grip only and never over the rulers in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `moves the drawing rail by its grip only and never over the rulers in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1666,7 +1669,7 @@ describe("standalone workbench host boundary", function () {
       await clearOfRulers();
     });
 
-    atViewport(tablet, `copies and pastes an element through long presses in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `copies and pastes an element through long presses in ${tablet.name}`, async function () {
       await context.grantPermissions(['clipboard-read', 'clipboard-write']);
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
@@ -1687,7 +1690,7 @@ describe("standalone workbench host boundary", function () {
       await expect.poll(async () => ((await editorDebug(page)).source.match(/circle/g) ?? []).length).toBe(2);
     });
 
-    atViewport(tablet, `starts a new tikzpicture or tikzcd by touch in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `starts a new tikzpicture or tikzcd by touch in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const input = await TabletInput.attach(page);
       const tap = async (locator: ReturnType<typeof page.locator>) => {
@@ -1706,7 +1709,7 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
-  atViewport({ width: 768, height: 1024 }, 'names no key in the tooltips a hovering pen shows on the drawing rail', async function () {
+  story({ viewport: { width: 768, height: 1024 } }, 'names no key in the tooltips a hovering pen shows on the drawing rail', async function () {
     await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
     const frame = editorFrame(page);
     const input = await TabletInput.attach(page);
@@ -1722,7 +1725,7 @@ describe("standalone workbench host boundary", function () {
   });
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `reverses a path from its long-press menu in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `reverses a path from its long-press menu in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
@@ -1744,7 +1747,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `erases every stroke a pen sweep crosses and nothing else in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `erases every stroke a pen sweep crosses and nothing else in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -1776,7 +1779,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `shows a tapped element's source in the code pane, even one opened afterward, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `shows a tapped element's source in the code pane, even one opened afterward, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const code = page.getByRole('button', { name: 'Code: left sidebar', exact: true });
       await code.click();
@@ -1818,7 +1821,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `places a selected curve's control outside the curve and clear of the rail in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `places a selected curve's control outside the curve and clear of the rail in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (-6,-3) .. controls (-2,4) and (2,-4) .. (6,3);\end{tikzpicture}`);
@@ -1853,7 +1856,7 @@ describe("standalone workbench host boundary", function () {
 
   for (const tablet of TABLET_VIEWPORTS) {
     for (const contact of ['touch', 'pen'] as const) {
-      atViewport(tablet, `highlights, locks, and keeps a curve selected by ${contact} in ${tablet.name}`, async function () {
+      story({ viewport: tablet }, `highlights, locks, and keeps a curve selected by ${contact} in ${tablet.name}`, async function () {
         await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
         await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
         await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -1912,7 +1915,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `edits a point on a styled curve from its control in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `edits a point on a styled curve from its control in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -1941,7 +1944,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `gives a selected rectangle the shape control, not the curve control, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `gives a selected rectangle the shape control, not the curve control, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (2,-2) rectangle (8,2);\end{tikzpicture}`);
@@ -1962,7 +1965,7 @@ describe("standalone workbench host boundary", function () {
 
   for (const tablet of TABLET_VIEWPORTS) {
     for (const contact of ['touch', 'pen'] as const) {
-      atViewport(tablet, `deletes a chosen subset of a curve's points by ${contact} in ${tablet.name}`, async function () {
+      story({ viewport: tablet }, `deletes a chosen subset of a curve's points by ${contact} in ${tablet.name}`, async function () {
         await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
         await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
         await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -2008,7 +2011,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `starts with the origin visible and clear of the rail, before and after the code pane opens, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `starts with the origin visible and clear of the rail, before and after the code pane opens, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const origin = frame.locator('text', { hasText: '(0,0)' }).first();
@@ -2028,7 +2031,7 @@ describe("standalone workbench host boundary", function () {
 
   for (const tablet of TABLET_VIEWPORTS) {
     for (const contact of ['touch', 'pen'] as const) {
-      atViewport(tablet, `edits a curve point from the curve's own control by ${contact} in ${tablet.name}`, async function () {
+      story({ viewport: tablet }, `edits a curve point from the curve's own control by ${contact} in ${tablet.name}`, async function () {
         await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
         await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
         await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -2078,7 +2081,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `adds a curve point with a finger double tap, as its hint says, in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `adds a curve point with a finger double tap, as its hint says, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -2102,7 +2105,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `keeps an original stroke as an editable curve whose points are counted in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `keeps an original stroke as an editable curve whose points are counted in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -2122,7 +2125,7 @@ describe("standalone workbench host boundary", function () {
       assert.equal(count, ((await editorDebug(page)).source.match(/--|\.\. controls/g) ?? []).length + 1);
     });
 
-    atViewport(tablet, `reaches edit commands by pen from the selection control in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `reaches edit commands by pen from the selection control in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
@@ -2187,7 +2190,7 @@ describe("standalone workbench host boundary", function () {
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(newer);
   });
 
-  it('persists the completed Quiver edit through the embedding owner before delayed change delivery', async function () {
+  story({ initialPage: "blank" }, 'persists the completed Quiver edit through the embedding owner before delayed change delivery', async function () {
     await page.goto(`${url}quiver-embedding.html`);
     const frame = page.frameLocator('iframe');
     await expect(frame.locator('.vertex')).toHaveCount(2, { timeout: 30_000 });
@@ -2233,7 +2236,7 @@ describe("standalone workbench host boundary", function () {
       await page.getByLabel('Host document').inputValue());
   });
 
-  it('matches compiled geometry for filled primitives and transformed curves', async function () {
+  story({ initialPage: "blank" }, 'matches compiled geometry for filled primitives and transformed curves', async function () {
     const examples = [
       String.raw`\begin{tikzpicture}\fill[blue] (0,0) rectangle (3,2);\fill[red] (4,1) circle (.5cm);\end{tikzpicture}`,
       String.raw`\begin{tikzpicture}\begin{scope}[rotate=25]\fill[blue] (0,0) ellipse (2cm and 1cm);\end{scope}\fill[red] (3,1) rectangle (4,2);\end{tikzpicture}`,
@@ -2299,7 +2302,7 @@ describe("standalone workbench host boundary", function () {
     }
   });
 
-  it("preserves representative trace geometry through fitting and original restoration", async function () {
+  story({ initialPage: "blank" }, "preserves representative trace geometry through fitting and original restoration", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     for (const trace of geometryTraces) {
@@ -2385,7 +2388,8 @@ describe("standalone workbench host boundary", function () {
   it('starts cold and edits math-labelled geometry without external assets', async function () {
     await context.tracing.stop();
     await context.close();
-    const viewport = storyViewports.get(this.currentTest!.title);
+    const setup = storySetups.get(this.currentTest!.title);
+    const viewport = setup?.viewport;
     context = await browser.newContext(viewport ? { viewport } : {});
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     const external: string[] = [];
@@ -2447,7 +2451,7 @@ describe("standalone workbench host boundary", function () {
     assert.equal(await sourcePane.innerText(), authored);
   });
 
-  it("keeps the drawing when another frame sends an explicit load command", async function () {
+  story({ initialPage: "blank" }, "keeps the drawing when another frame sends an explicit load command", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
     await page.getByRole("button", { name: "Snapshot", exact: true }).click();
@@ -2476,7 +2480,7 @@ describe("standalone workbench host boundary", function () {
     assert.equal(retained.svg, accepted.svg);
   });
 
-  atViewport({ width: 768, height: 1024 }, "opens a tablet canvas and independently toggles source and properties before copying", async function () {
+  story({ viewport: { width: 768, height: 1024 } }, "opens a tablet canvas and independently toggles source and properties before copying", async function () {
     await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
     const sourcePane = page.locator(".cm-content");
     await expect(sourcePane).toBeHidden();
@@ -2507,7 +2511,7 @@ describe("standalone workbench host boundary", function () {
     await expect(sourcePane).not.toHaveText(source);
   });
 
-  it("returns a revision-matched drawing through the mounted embedding surface", async function () {
+  story({ initialPage: "blank" }, "returns a revision-matched drawing through the mounted embedding surface", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
     const source = String.raw`\begin{tikzpicture}
@@ -2535,7 +2539,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.locator("iframe")).toHaveCount(0);
   });
 
-  it('replies consistently when a completed snapshot request is repeated', async function () {
+  story({ initialPage: "blank" }, 'replies consistently when a completed snapshot request is repeated', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     await page.getByRole('button', { name: 'Snapshot', exact: true }).click();
@@ -2560,7 +2564,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByLabel('Authored source')).toHaveValue(accepted.source);
   });
 
-  it("retains the current drawing when an older load arrives from its host", async function () {
+  story({ initialPage: "blank" }, "retains the current drawing when an older load arrives from its host", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
     await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
@@ -2584,7 +2588,7 @@ describe("standalone workbench host boundary", function () {
     assert.equal(retained.svg, accepted.svg);
   });
 
-  it("keeps exported clipping local to each independently edited diagram", async function () {
+  story({ initialPage: "blank" }, "keeps exported clipping local to each independently edited diagram", async function () {
     const exports: string[] = [];
     for (const source of [
       String.raw`\begin{tikzpicture}\clip (0,0) circle (.5);\fill[red] (-1,-1) rectangle (1,1);\end{tikzpicture}`,
@@ -2613,7 +2617,7 @@ describe("standalone workbench host boundary", function () {
     assert.deepEqual(owners, [true, true]);
   });
 
-  it('imports and restores ink in the selected earlier inline figure and reopens the selected snapshot', async function () {
+  story({ initialPage: "blank" }, 'imports and restores ink in the selected earlier inline figure and reopens the selected snapshot', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const first = String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (1cm);\end{tikzpicture}`;
@@ -2679,7 +2683,7 @@ describe("standalone workbench host boundary", function () {
     assert.deepEqual(await paintedGeometry(afterRejectedLoad.svg), await paintedGeometry(reopened.svg));
   });
 
-  it('interprets the newly drawn stroke instead of identical drawing text in a later figure', async function () {
+  story({ initialPage: "blank" }, 'interprets the newly drawn stroke instead of identical drawing text in a later figure', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const first = String.raw`\begin{tikzpicture}
@@ -2747,7 +2751,7 @@ describe("standalone workbench host boundary", function () {
     assert.deepEqual(await paintedGeometry(other.svg), await paintedGeometry(laterBeforeDraw.svg));
   });
 
-  it("preserves imported stroke channels and outlines after saving and reopening its source", async function () {
+  story({ initialPage: "blank" }, "preserves imported stroke channels and outlines after saving and reopening its source", async function () {
     const strokes = [{
       key: "lecture-stroke-1", intent: "geometry", color: "#112233",
       samples: Array.from({ length: 20 }, (_, i) => ({
@@ -2827,7 +2831,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByLabel('Authored source')).toHaveValue(fitted);
   });
 
-  it("refits translucent ink the same way from the host and from the canvas", async function () {
+  story({ initialPage: "blank" }, "refits translucent ink the same way from the host and from the canvas", async function () {
     const strokes = [{
       key: "translucent-stroke", intent: "geometry", color: "#11223380",
       samples: Array.from({ length: 20 }, (_, i) => ({
@@ -2858,7 +2862,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByLabel('Authored source'), 'The canvas refit differs from the host refit').toHaveValue(hostFit);
   });
 
-  it("exports an image resource that renders outside its document while offline", async function () {
+  story({ initialPage: "blank" }, "exports an image resource that renders outside its document while offline", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
     await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
@@ -2881,7 +2885,7 @@ describe("standalone workbench host boundary", function () {
     assert.deepEqual(loaded, [120, 60]);
   });
 
-  it("retains pen samples when the drawing rail fits a stroke", async function () {
+  story({ initialPage: "blank" }, "retains pen samples when the drawing rail fits a stroke", async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator("#status")).toHaveText("Loaded");
     const frame = page.frameLocator('#editor');
@@ -2953,7 +2957,7 @@ describe("standalone workbench host boundary", function () {
     await expect(frame.getByRole('checkbox', { name: 'Interpret geometry', exact: true })).not.toBeChecked();
   });
 
-  it('preserves a short pen stroke even when interpretation has no fit', async function () {
+  story({ initialPage: "blank" }, 'preserves a short pen stroke even when interpretation has no fit', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const frame = page.frameLocator('#editor');
@@ -2982,7 +2986,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `keeps palm contact out of pen drawing and supports finger pan and pinch afterward in ${tablet.name}`, async function () {
+    story({ viewport: tablet, initialPage: "blank" }, `keeps palm contact out of pen drawing and supports finger pan and pinch afterward in ${tablet.name}`, async function () {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator('#status')).toHaveText('Loaded');
       const frame = page.frameLocator('#editor');
@@ -3021,7 +3025,7 @@ describe("standalone workbench host boundary", function () {
     });
   }
 
-  it("cancels a resource-pending snapshot and continues with a newer drawing", async function () {
+  story({ initialPage: "blank" }, "cancels a resource-pending snapshot and continues with a newer drawing", async function () {
     let release!: () => void;
     const delayed = new Promise<void>(resolve => { release = resolve; });
     let exporting = false;
@@ -3057,7 +3061,7 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByRole('group', { name: 'File' })).toBeVisible();
   });
 
-  it('restores its accepted tool and viewport in a fresh editor session', async function () {
+  story({ initialPage: "blank" }, 'restores its accepted tool and viewport in a fresh editor session', async function () {
     await page.goto(`${url}embedding.html`);
     await expect(page.locator('#status')).toHaveText('Loaded');
     const frame = page.frameLocator('#editor');
@@ -3116,7 +3120,7 @@ describe("standalone workbench host boundary", function () {
   });
 
   for (const width of [1280, 768]) {
-    atViewport({ width, height: 1024 }, `edits a Quiver diagram and retains source and selection across views at ${width}px`, async function () {
+    story({ viewport: { width, height: 1024 } }, `edits a Quiver diagram and retains source and selection across views at ${width}px`, async function () {
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
       await page.locator('.cm-content').fill(authored);
@@ -3160,7 +3164,7 @@ describe("standalone workbench host boundary", function () {
     await page.getByRole('button', { name: 'Canvas: right sidebar', exact: true }).click();
   }
 
-  atViewport({ width: 1280, height: 1024 }, 'retains authored source and its drawing tool through rendered-view switches with a desktop mouse', async function () {
+  story({ viewport: { width: 1280, height: 1024 } }, 'retains authored source and its drawing tool through rendered-view switches with a desktop mouse', async function () {
     await authorAndRender(1280, 1024);
     const viewport = editorFrame(page).locator('[data-canvas-viewport="true"]');
     const bounds = (await viewport.boundingBox())!;
@@ -3175,7 +3179,7 @@ describe("standalone workbench host boundary", function () {
   });
 
   for (const tablet of TABLET_VIEWPORTS) {
-    atViewport(tablet, `retains authored source and its drawing tool through rendered-view switches by pen in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `retains authored source and its drawing tool through rendered-view switches by pen in ${tablet.name}`, async function () {
       await authorAndRender(tablet.width, tablet.height);
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
