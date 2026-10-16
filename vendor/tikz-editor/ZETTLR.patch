@@ -390,10 +390,10 @@ index 20b8b673..faf832b4 100644
    readCustomText?: (
 diff --git a/packages/app/src/settings/keybindings.ts b/packages/app/src/settings/keybindings.ts
 new file mode 100644
-index 00000000..44a7af14
+index 00000000..54910ca1
 --- /dev/null
 +++ b/packages/app/src/settings/keybindings.ts
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,116 @@
 +import { z } from "zod";
 +import { APP_MENU_COMMAND_IDS as ID, APP_MENU_DEFINITION, type AppMenuCommandId, type AppMenuItem } from "../app-menu";
 +
@@ -502,7 +502,13 @@ index 00000000..44a7af14
 +  if (!parts) return undefined;
 +  const event = { key: parts.key, ctrlKey: parts.modifiers.has("CmdOrCtrl") || parts.modifiers.has("Ctrl"),
 +    metaKey: parts.modifiers.has("Meta"), altKey: parts.modifiers.has("Alt"), shiftKey: parts.modifiers.has("Shift") };
-+  return SHORTCUT_COMMANDS.find(command => command.id !== id && (!embedded || command.embedded) && matchesCommand(command.id, event, overrides));
++  return SHORTCUT_COMMANDS.find(command => {
++    if (command.id === id || embedded && !command.embedded || !matchesCommand(command.id, event, overrides)) return false;
++    // Edit and Insert Equation intentionally share a shipped contextual shortcut.
++    const sharedDefault = commands.get(id)?.defaults.some(binding => matchesShortcut(binding, event)) &&
++      overrides[command.id] === undefined && command.defaults.some(binding => matchesShortcut(binding, event));
++    return !sharedDefault;
++  });
 +}
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
 index 4850a87e..23e98f0b 100644
@@ -10852,12 +10858,12 @@ index 183cdde1..c079de57 100644
          preserveAspectDuringResize: isCircleResizeSource,
          historyMergeKey: makeMergeKey("drag-resize", `${sourceId}:${normalizedRole}`, event.pointerId)
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasKeyboardClipboard.ts b/packages/app/src/ui/canvas-panel/useCanvasKeyboardClipboard.ts
-index f100fe15..104bfd7e 100644
+index f100fe15..04c0446a 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasKeyboardClipboard.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasKeyboardClipboard.ts
 @@ -1,3 +1,6 @@
 +import { APP_MENU_COMMAND_IDS } from "../../app-menu";
-+import { matchesCommand } from "../../settings/keybindings";
++import { SHORTCUT_COMMANDS, matchesCommand } from "../../settings/keybindings";
 +import { useSettingsStore } from "../../settings/useSettingsStore";
  import {
    useCallback,
@@ -10878,7 +10884,26 @@ index f100fe15..104bfd7e 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -237,10 +242,7 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+@@ -174,6 +179,9 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+         return;
+       }
+ 
++      const overrides = useSettingsStore.getState().settings.keybindings;
++      const hasAssignedCommand = SHORTCUT_COMMANDS.some(command => matchesCommand(command.id, event, overrides));
++
+       if (event.key === "Escape" && contextMenuState) {
+         setContextMenuState(null);
+         event.preventDefault();
+@@ -229,7 +237,7 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+         return;
+       }
+ 
+-      if (event.key === "Enter" && toolMode === "addPath") {
++      if (event.key === "Enter" && toolMode === "addPath" && !hasAssignedCommand) {
+         finalizePathDraft(false);
+         setWarning(null);
+         event.preventDefault();
+@@ -237,10 +245,7 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
        }
  
        if (
@@ -10890,7 +10915,7 @@ index f100fe15..104bfd7e 100644
          undoTransientCanvasStep()
        ) {
          setWarning(null);
-@@ -249,7 +251,18 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+@@ -249,7 +254,18 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
          return;
        }
  
@@ -10910,7 +10935,17 @@ index f100fe15..104bfd7e 100644
          const didDelete = deleteSelection({
            source,
            snapshotSource: snapshot.source,
-@@ -351,6 +364,7 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+@@ -264,6 +280,9 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
+         return;
+       }
+ 
++      // Assigned commands reach App's dispatcher before unassigned arrow keys nudge.
++      if (hasAssignedCommand) return;
++
+       let axis: "x" | "y" | null = null;
+       let direction: -1 | 1 = 1;
+       const step = event.shiftKey ? NUDGE_STEP_SHIFT_PT : NUDGE_STEP_PT;
+@@ -351,6 +370,7 @@ export function useCanvasKeyboardClipboard(args: UseCanvasKeyboardClipboardArgs)
      [
        NUDGE_STEP_PT,
        NUDGE_STEP_SHIFT_PT,
@@ -13407,20 +13442,17 @@ index 4e8f0b66..f93430fd 100644
  function clamp(v: number, lo: number, hi: number) {
    return Math.min(hi, Math.max(lo, v));
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870b..f66b9e69 100644
+index 0101870b..315ba68b 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
-@@ -1,7 +1,8 @@
+@@ -1,5 +1,5 @@
  import React from "react";
 -import { BASIC_PICKER_COLORS } from "../colors/color-palette";
 +import { RiEraserLine } from "@remixicon/react";
  import type { SnapToolPointerKind } from "tikz-editor/edit/snapping";
  import type { ToolMode } from "../store/types";
-+import { getActiveEditorPlatform } from "../platform/current";
  
- // ── Custom Tool Icons ─────────────────────────────────────────────────────────
- // All icons use a consistent 20x20 viewBox with 1.5px stroke width
-@@ -14,6 +15,10 @@ function SelectIcon({ size = 20 }: { size?: number }) {
+@@ -14,6 +14,10 @@ function SelectIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -13431,7 +13463,7 @@ index 0101870b..f66b9e69 100644
  function MagnifyIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-@@ -32,6 +37,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
+@@ -32,6 +36,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -13446,7 +13478,7 @@ index 0101870b..f66b9e69 100644
  function MatrixIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" strokeLinecap="round" strokeLinejoin="round">
-@@ -135,6 +148,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
+@@ -135,6 +147,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -13462,7 +13494,14 @@ index 0101870b..f66b9e69 100644
  function BucketIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-@@ -166,26 +188,30 @@ export type ToolButtonDef = {
+@@ -159,33 +180,36 @@ export type ToolButtonDef = {
+   mode: ToolMode;
+   label: string;
+   title: string;
+-  shortcut?: string;
+   icon: ToolIconType;
+   popupKind?: ToolPopupKind;
+   autoOpenPopup?: boolean;
    separatorBefore?: true;
  };
  
@@ -13477,40 +13516,50 @@ index 0101870b..f66b9e69 100644
 -  { mode: "magnify",    label: "Magnify",  title: "Magnify (M)",  shortcut: "m", icon: MagnifyIcon },
 -  { mode: "addNode",    label: "Node",     title: "Node (N)",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
 -  { mode: "addShape",   label: "Shape",    title: "Shape (S)",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
-+  { mode: "select",     label: "Select",   title: "Select",   shortcut: "v", icon: SelectIcon },
++  { mode: "select",     label: "Select",   title: "Select", icon: SelectIcon },
 +  { mode: "lasso",      label: "Lasso",    title: "Lasso selection",       icon: PathIcon },
 +  { mode: "erase",      label: "Eraser",   title: "Erase every stroke you sweep across",      icon: EraserIcon },
-+  { mode: "magnify",    label: "Magnify",  title: "Magnify",  shortcut: "m", icon: MagnifyIcon },
-+  { mode: "addNode",    label: "Node",     title: "Node",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
++  { mode: "magnify",    label: "Magnify",  title: "Magnify", icon: MagnifyIcon },
++  { mode: "addNode",    label: "Node",     title: "Node", icon: NodeIcon,     separatorBefore: true },
 +  { mode: "addPoint",   label: "Point",    title: "Point",                    icon: PointIcon },
 +  { mode: "addImage",   label: "Image",    title: "Image",                    icon: ImageIcon },
-+  { mode: "addShape",   label: "Shape",    title: "Shape",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
++  { mode: "addShape",   label: "Shape",    title: "Shape", icon: ShapeIcon,    popupKind: "shape-picker" },
    { mode: "addMatrix",  label: "Matrix",   title: "Matrix",                      icon: MatrixIcon,   popupKind: "matrix-picker" },
 -  { mode: "addLine",    label: "Line",     title: "Line (L)",     shortcut: "l", icon: LineIcon,     separatorBefore: true },
 -  { mode: "addArrow",   label: "Arrow",    title: "Arrow (A)",    shortcut: "a", icon: ArrowIcon },
 -  { mode: "addBezier",  label: "Bezier",   title: "Bezier (B)",   shortcut: "b", icon: BezierIcon },
 -  { mode: "addPath",    label: "Path",     title: "Path (P)",     shortcut: "p", icon: PathIcon },
 -  { mode: "addFreehand", label: "Freehand", title: "Freehand (F)", shortcut: "f", icon: FreehandIcon },
-+  { mode: "addLine",    label: "Line",     title: "Line",     shortcut: "l", icon: LineIcon,     separatorBefore: true },
-+  { mode: "addArrow",   label: "Arrow",    title: "Arrow",    shortcut: "a", icon: ArrowIcon },
-+  { mode: "addBezier",  label: "Bezier",   title: "Bezier",   shortcut: "b", icon: BezierIcon },
-+  { mode: "addPath",    label: "Path",     title: "Path",     shortcut: "p", icon: PathIcon },
-+  { mode: "addFreehand", label: "Freehand", title: "Freehand", shortcut: "f", icon: FreehandIcon },
++  { mode: "addLine",    label: "Line",     title: "Line", icon: LineIcon,     separatorBefore: true },
++  { mode: "addArrow",   label: "Arrow",    title: "Arrow", icon: ArrowIcon },
++  { mode: "addBezier",  label: "Bezier",   title: "Bezier", icon: BezierIcon },
++  { mode: "addPath",    label: "Path",     title: "Path", icon: PathIcon },
++  { mode: "addFreehand", label: "Freehand", title: "Freehand", icon: FreehandIcon },
    { mode: "addGrid",    label: "Grid",     title: "Grid",                        icon: GridIcon,     separatorBefore: true },
 -  { mode: "addRect",    label: "Rect",     title: "Rectangle (R)", shortcut: "r", icon: RectIcon },
 -  { mode: "addEllipse", label: "Ellipse",  title: "Ellipse (E)",  shortcut: "e", icon: EllipseIcon },
 -  { mode: "addCircle",  label: "Circle",   title: "Circle (C)",   shortcut: "c", icon: CircleIcon },
-+  { mode: "addRect",    label: "Rect",     title: "Rectangle", shortcut: "r", icon: RectIcon },
-+  { mode: "addEllipse", label: "Ellipse",  title: "Ellipse",  shortcut: "e", icon: EllipseIcon },
-+  { mode: "addCircle",  label: "Circle",   title: "Circle",   shortcut: "c", icon: CircleIcon },
++  { mode: "addRect",    label: "Rect",     title: "Rectangle", icon: RectIcon },
++  { mode: "addEllipse", label: "Ellipse",  title: "Ellipse", icon: EllipseIcon },
++  { mode: "addCircle",  label: "Circle",   title: "Circle", icon: CircleIcon },
 +  { mode: "addArc",     label: "Arc",      title: "Arc",                       icon: ArcIcon },
    { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
  ];
  
-@@ -214,14 +240,8 @@ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
+@@ -204,26 +228,12 @@ export const TOOL_CREATE_MODES = [
+ 
+ export type ToolCreateMode = (typeof TOOL_CREATE_MODES)[number];
+ 
+-const TOOL_SHORTCUT_MAP = new Map<string, ToolMode>(
+-  TOOL_BUTTONS.flatMap((tool) => (tool.shortcut ? [[tool.shortcut, tool.mode] as const] : []))
+-);
+ const TOOL_POPUP_KIND_MAP = new Map<ToolMode, ToolPopupKind>(
+   TOOL_BUTTONS.flatMap((tool) => (tool.popupKind ? [[tool.mode, tool.popupKind] as const] : []))
+ );
+ 
  const TOOL_CREATE_MODE_SET = new Set<ToolCreateMode>(TOOL_CREATE_MODES);
  
- export function toolModeFromShortcut(key: string): ToolMode | null {
+-export function toolModeFromShortcut(key: string): ToolMode | null {
 -  return TOOL_SHORTCUT_MAP.get(key.toLowerCase()) ?? null;
 -}
 -
@@ -13519,12 +13568,12 @@ index 0101870b..f66b9e69 100644
 -    return "select";
 -  }
 -  return clickedMode;
-+  const mode = TOOL_SHORTCUT_MAP.get(key.toLowerCase()) ?? null;
-+  return mode === "magnify" && getActiveEditorPlatform().id === "zettlr-embed" ? null : mode;
- }
- 
+-}
+-
  export function toolModePopupKind(mode: ToolMode): ToolPopupKind | null {
-@@ -262,6 +282,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+   return TOOL_POPUP_KIND_MAP.get(mode) ?? null;
+ }
+@@ -262,6 +272,7 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addEllipse: "Hold Shift to constrain to a circle",
    addGrid: "Hold Shift to constrain to a square",
    addCircle: "Drag from center to edge",
@@ -13532,7 +13581,7 @@ index 0101870b..f66b9e69 100644
    addPath: "Click to add points, drag to bend. Click start to close, or double-click/press Enter/Esc to finish.",
    addFreehand: "Press and drag to draw",
    addBezier: "Two drags: endpoints then curve",
-@@ -270,14 +291,16 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
+@@ -270,14 +281,16 @@ export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    addShape: "Drag to set size",
    addMatrix: "Pick rows/columns, then click to place",
    addNode: "Click to place text",
@@ -15692,10 +15741,10 @@ index 130bf203..976aab11 100644
        sceneElements: [],
 diff --git a/test/tablet-logic.spec.ts b/test/tablet-logic.spec.ts
 new file mode 100644
-index 00000000..5f197700
+index 00000000..08f8585d
 --- /dev/null
 +++ b/test/tablet-logic.spec.ts
-@@ -0,0 +1,121 @@
+@@ -0,0 +1,128 @@
 +import { APP_MENU_COMMAND_IDS as ID } from '../packages/app/src/app-menu/types';
 +import { SHORTCUT_COMMANDS, matchesCommand, parseShortcutOverrides, recordShortcut, shortcutConflict } from '../packages/app/src/settings/keybindings';
 +import { describe, expect, it } from 'vitest';
@@ -15809,6 +15858,13 @@ index 00000000..5f197700
 +    expect(matchesCommand(ID.TOOL_SELECT, key(' '), { [ID.TOOL_SELECT]: [space] })).toBe(true);
 +    const plus = recordShortcut(key('+', { ctrlKey: true, shiftKey: true }))!;
 +    expect(matchesCommand(ID.ZOOM_IN, key('+', { ctrlKey: true, shiftKey: true }), { [ID.ZOOM_IN]: [plus] })).toBe(true);
++  });
++
++  it('permits restoring the shipped contextual equation binding without allowing a new conflict', () => {
++    expect(matchesCommand(ID.EDIT_EQUATION, key('e', { ctrlKey: true, shiftKey: true }), {})).toBe(true);
++    expect(matchesCommand(ID.INSERT_EQUATION, key('e', { ctrlKey: true, shiftKey: true }), {})).toBe(true);
++    expect(shortcutConflict(ID.INSERT_EQUATION, 'CmdOrCtrl+Shift+E', {}, true)).toBeUndefined();
++    expect(shortcutConflict(ID.INSERT_LINE, 'CmdOrCtrl+Shift+E', {}, true)).toBeDefined();
 +  });
 +
 +  it('covers every runtime command including contextual commands and tools without defaults', () => {
