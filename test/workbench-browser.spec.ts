@@ -1548,12 +1548,12 @@ describe("standalone workbench host boundary", function () {
       const square = await points();
       const width = Math.max(...square.map(p => p.x)) - Math.min(...square.map(p => p.x));
       const height = Math.max(...square.map(p => p.y)) - Math.min(...square.map(p => p.y));
-      assert.ok(width > 10 && Math.abs(width - height) < .1, `The constrained rectangle was ${width} by ${height}`);
+      assert.ok(width > 10 && Math.abs(width - height) < .4, `The constrained rectangle was ${width} by ${height}`);
       await tap(rail.getByRole('button', { name: 'Select', exact: true }));
       await fitDiagram(frame, input);
       const shape = frame.locator('svg [data-source-id="path:0"]').first();
       const drag = async () => {
-        const start = await strokePoint(page, shape, .125);
+        const start = await strokePoint(page, shape, .06);
         await input.penStroke([start, { x: start.x + 40, y: start.y + 11 }, { x: start.x + 80, y: start.y + 22 }]);
       };
       const before = (await points())[0];

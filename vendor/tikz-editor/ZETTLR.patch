@@ -195,7 +195,7 @@ index 59fab7a8..1b5f797f 100644
        {
          kind: "command",
 diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
-index af9d6c30..20793788 100644
+index af9d6c30..518b004c 100644
 --- a/packages/app/src/app-menu/types.ts
 +++ b/packages/app/src/app-menu/types.ts
 @@ -1,4 +1,12 @@
@@ -227,7 +227,7 @@ index af9d6c30..20793788 100644
    PATH_JOIN: "path.join",
    PATH_REVERSE: "path.reverse",
    PATH_CLOSE: "path.close",
-@@ -87,9 +97,8 @@ export const APP_MENU_COMMAND_IDS = {
+@@ -87,9 +97,9 @@ export const APP_MENU_COMMAND_IDS = {
    ZOOM_OUT: "view.zoom-out",
    TOGGLE_GRID: "view.toggle-grid",
    TOGGLE_TRANSPARENCY_GRID: "view.toggle-transparency-grid",
@@ -235,6 +235,7 @@ index af9d6c30..20793788 100644
 -  TOGGLE_SNAP_GRID: "view.toggle-snap-grid",
 -  TOGGLE_SNAP_GUIDES: "view.toggle-snap-guides",
 +  TOGGLE_OUTPUT_BOUNDS: "view.toggle-output-bounds",
++  TOGGLE_GEOMETRY_CONSTRAINT: "view.toggle-geometry-constraint",
 +  TOGGLE_LATTICE_LOCK: "view.toggle-lattice-lock",
    TOGGLE_SNAP_OBJECT_POINTS: "view.toggle-snap-object-points",
    TOGGLE_SNAP_OBJECT_GAPS: "view.toggle-snap-object-gaps",
@@ -390,10 +391,10 @@ index 20b8b673..faf832b4 100644
    readCustomText?: (
 diff --git a/packages/app/src/settings/keybindings.ts b/packages/app/src/settings/keybindings.ts
 new file mode 100644
-index 00000000..54910ca1
+index 00000000..eac06ebf
 --- /dev/null
 +++ b/packages/app/src/settings/keybindings.ts
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,117 @@
 +import { z } from "zod";
 +import { APP_MENU_COMMAND_IDS as ID, APP_MENU_DEFINITION, type AppMenuCommandId, type AppMenuItem } from "../app-menu";
 +
@@ -436,6 +437,7 @@ index 00000000..54910ca1
 +  [ID.MATRIX_REMOVE_ROW, "Remove Matrix Row", []], [ID.MATRIX_REMOVE_COLUMN, "Remove Matrix Column", []],
 +  [ID.MATRIX_TRANSPOSE, "Transpose Matrix", []],
 +  [ID.NODE_POSITION_RELATIVE_TO, "Position Node Relative To", []], [ID.NODE_CONVERT_TO_ABSOLUTE, "Convert Node to Absolute Position", []],
++  [ID.TOGGLE_GEOMETRY_CONSTRAINT, "Constrain geometry", []],
 +  [ID.TOOL_SELECT, "Select", ["V"]], [ID.TOOL_LASSO, "Lasso", []], [ID.TOOL_ERASER, "Eraser", []],
 +  [ID.TOOL_MAGNIFY, "Magnify", ["M"]], [ID.TOOL_BUCKET, "Bucket", []],
 +  [ID.INSERT_ARC, "Arc", []], [ID.INSERT_POINT, "Point", []], [ID.INSERT_IMAGE, "Image", []]
@@ -511,7 +513,7 @@ index 00000000..54910ca1
 +  });
 +}
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
-index 4850a87e..23e98f0b 100644
+index 4850a87e..a54bc54d 100644
 --- a/packages/app/src/settings/storage.ts
 +++ b/packages/app/src/settings/storage.ts
 @@ -1,5 +1,6 @@
@@ -530,7 +532,7 @@ index 4850a87e..23e98f0b 100644
        general: {
          ...DEFAULT_SETTINGS.general,
          ...parsed.general
-@@ -36,11 +38,32 @@ export function loadSettings(): AppSettings {
+@@ -36,11 +38,33 @@ export function loadSettings(): AppSettings {
        },
        canvas: {
          ...DEFAULT_SETTINGS.canvas,
@@ -539,6 +541,7 @@ index 4850a87e..23e98f0b 100644
 +        freehandSimplificationUnits: typeof parsed.canvas?.freehandSimplificationUnits === "number" && Number.isFinite(parsed.canvas.freehandSimplificationUnits) ? Math.max(0.01, Math.min(2, parsed.canvas.freehandSimplificationUnits)) : 0.25,
 +        freehandSmoothingUnits: typeof parsed.canvas?.freehandSmoothingUnits === "number" && Number.isFinite(parsed.canvas.freehandSmoothingUnits) ? Math.max(0, Math.min(1, parsed.canvas.freehandSmoothingUnits)) : 0,
 +        latticeLock: typeof parsed.canvas?.latticeLock === "boolean" ? parsed.canvas.latticeLock : DEFAULT_SETTINGS.canvas.latticeLock,
++        constrainGeometry: typeof parsed.canvas?.constrainGeometry === "boolean" ? parsed.canvas.constrainGeometry : DEFAULT_SETTINGS.canvas.constrainGeometry,
 +        freehandAutoApply: typeof parsed.canvas?.freehandAutoApply === "boolean" ? parsed.canvas.freehandAutoApply : false,
 +        freehandPreserveOriginal: typeof parsed.canvas?.freehandPreserveOriginal === "boolean" ? parsed.canvas.freehandPreserveOriginal : true,
 +        freehandAutoSmoothNodes: typeof parsed.canvas?.freehandAutoSmoothNodes === "boolean" ? parsed.canvas.freehandAutoSmoothNodes : true,
@@ -565,7 +568,7 @@ index 4850a87e..23e98f0b 100644
        },
        rendering: {
          ...DEFAULT_SETTINGS.rendering,
-@@ -52,6 +75,27 @@ export function loadSettings(): AppSettings {
+@@ -52,6 +76,27 @@ export function loadSettings(): AppSettings {
    }
  }
  
@@ -594,7 +597,7 @@ index 4850a87e..23e98f0b 100644
    if (!Number.isFinite(value)) {
      return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
 diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
-index af0a7abe..b11e2412 100644
+index af0a7abe..895801a8 100644
 --- a/packages/app/src/settings/types.ts
 +++ b/packages/app/src/settings/types.ts
 @@ -1,3 +1,4 @@
@@ -625,7 +628,7 @@ index af0a7abe..b11e2412 100644
  export type GridSize = "fine" | "standard" | "coarse";
  
  export type ColorScheme = "system" | "light" | "dark";
-@@ -20,7 +37,14 @@ export type GeneralSettings = {
+@@ -20,7 +37,15 @@ export type GeneralSettings = {
  };
  
  export type CanvasSettings = {
@@ -635,12 +638,13 @@ index af0a7abe..b11e2412 100644
 +  freehandPreserveOriginal: boolean;
 +  freehandAutoSmoothNodes: boolean;
 +  latticeLock: boolean;
++  constrainGeometry: boolean;
    gridSize: GridSize;
 +  gridOpacity: number;
    handleSizePx: number;
    zoomSpeed: number;
    snapHapticsEnabled: boolean;
-@@ -44,12 +68,17 @@ export type RenderingSettings = {
+@@ -44,12 +69,17 @@ export type RenderingSettings = {
  };
  
  export type AppSettings = {
@@ -658,7 +662,7 @@ index af0a7abe..b11e2412 100644
    rendering: RenderingSettings;
  };
  
-@@ -67,6 +96,7 @@ export const EDITOR_FONT_SIZE_OPTIONS = Array.from(
+@@ -67,6 +97,7 @@ export const EDITOR_FONT_SIZE_OPTIONS = Array.from(
  );
  
  export const DEFAULT_SETTINGS: AppSettings = {
@@ -666,7 +670,7 @@ index af0a7abe..b11e2412 100644
    general: {
      uiFontSizePx: 11,
      colorScheme: "system",
-@@ -81,15 +111,55 @@ export const DEFAULT_SETTINGS: AppSettings = {
+@@ -81,15 +112,56 @@ export const DEFAULT_SETTINGS: AppSettings = {
      formatterMaxLineLength: 100
    },
    canvas: {
@@ -675,6 +679,7 @@ index af0a7abe..b11e2412 100644
 +    freehandPreserveOriginal: true,
 +    freehandAutoSmoothNodes: true,
 +    latticeLock: true,
++    constrainGeometry: false,
      gridSize: "standard",
 +    gridOpacity: 70,
      handleSizePx: 9,
@@ -4719,7 +4724,7 @@ index 0ddde08e..ec3364a7 100644
 +.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
 +.insertChoice:disabled { opacity: .5; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..ea2acb20 100644
+index a3293df2..0c19c54e 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -5261,7 +5266,7 @@ index a3293df2..ea2acb20 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +724,76 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +724,81 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -5313,6 +5318,11 @@ index a3293df2..ea2acb20 100644
 +      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("erase")}
 +      {renderEmbeddedTool("addFreehand")}{renderInsertButton()}
 +      {(["color", "addBucket", "undo", "redo"] as const).map((id) => <Fragment key={id}>{renderEmbeddedTool(id)}</Fragment>)}
++      <RenderedTooltip content="Constrain drawing angles, shapes and movement axes">
++        <button type="button" className={[css.btn, settings.canvas.constrainGeometry ? css.btnActive : ""].filter(Boolean).join(" ")}
++          aria-label="Constrain geometry" aria-pressed={settings.canvas.constrainGeometry}
++          onClick={() => updateCanvasSettings({ constrainGeometry: !settings.canvas.constrainGeometry })}>∠</button>
++      </RenderedTooltip>
 +      <RenderedTooltip content={settings.canvas.latticeLock ? "Points land on the lattice" : "Points move freely"}>
 +        <button type="button" className={[css.btn, settings.canvas.latticeLock ? css.btnActive : ""].filter(Boolean).join(" ")}
 +          aria-label="Lock to lattice" aria-pressed={settings.canvas.latticeLock}
@@ -5340,7 +5350,7 @@ index a3293df2..ea2acb20 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +804,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +809,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -5354,7 +5364,7 @@ index a3293df2..ea2acb20 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +820,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +825,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -5363,7 +5373,7 @@ index a3293df2..ea2acb20 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +845,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +850,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -8945,7 +8955,7 @@ index 5660d6d8..8cfbb61d 100644
 +  return { startAngle, sweep: turn(angleOf(via) - startAngle) < counterclockwise ? counterclockwise : counterclockwise - 360 };
 +}
 diff --git a/packages/app/src/ui/canvas-panel/interaction-helpers.ts b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
-index f22aaafd..e1fdeccb 100644
+index f22aaafd..fc56bde6 100644
 --- a/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 +++ b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 @@ -1,5 +1,8 @@
@@ -9045,7 +9055,7 @@ index f22aaafd..e1fdeccb 100644
    };
  }
  
-@@ -199,27 +208,66 @@ export function createBezierTemplateFromBend(
+@@ -199,27 +208,72 @@ export function createBezierTemplateFromBend(
    startWorld: WorldPoint,
    endWorld: WorldPoint,
    bendWorld: WorldPoint,
@@ -9116,10 +9126,16 @@ index f22aaafd..e1fdeccb 100644
 +  const angle = Math.round(Math.atan2(dy, dx) / (Math.PI / 12)) * (Math.PI / 12);
 +  const radius = Math.hypot(dx, dy);
 +  return worldPoint(pt(startWorld.x + radius * Math.cos(angle)), pt(startWorld.y + radius * Math.sin(angle)));
++}
++
++/** Keep a translation on its dominant canvas axis, including after positional snapping. */
++export function constrainTranslationToAxis(raw: WorldVector, candidate: WorldVector): WorldVector {
++  if (Math.abs(raw.x) < 1e-9 && Math.abs(raw.y) < 1e-9) return worldVector(pt(0), pt(0));
++  return Math.abs(raw.x) >= Math.abs(raw.y) ? worldVector(pt(candidate.x), pt(0)) : worldVector(pt(0), pt(candidate.y));
  }
  
  export function snapPointDeltaToAxisStepMultiples(
-@@ -333,14 +381,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
+@@ -333,14 +387,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
    return worldPoint(pt(sumX / count), pt(sumY / count));
  }
  
@@ -9144,7 +9160,7 @@ index f22aaafd..e1fdeccb 100644
    return [
      { label: "X", value: formatTooltipLengthCm(point.x) },
      { label: "Y", value: formatTooltipLengthCm(point.y) }
-@@ -481,8 +537,13 @@ export function projectResizeDimensionsFromOppositeCorner(
+@@ -481,8 +543,13 @@ export function projectResizeDimensionsFromOppositeCorner(
  export function resolveToolCreateSize(
    mode: ToolCreateMode,
    startWorld: WorldPoint,
@@ -9159,7 +9175,7 @@ index f22aaafd..e1fdeccb 100644
    if (mode === "addCircle") {
      const radius = Math.hypot(currentWorld.x - startWorld.x, currentWorld.y - startWorld.y);
      const diameter = clampTooltipScalar(radius * 2);
-@@ -506,11 +567,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
+@@ -506,11 +573,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
  
  function formatTooltipLength(valuePt: number): string {
    const clamped = clampTooltipScalar(valuePt);
@@ -10137,10 +10153,15 @@ index de0ccae2..50244477 100644
 +  }).join(" ");
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
-index 0c9bdf4f..01d585cd 100644
+index 0c9bdf4f..8a379c3f 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
-@@ -8,6 +8,7 @@ import {
+@@ -1,3 +1,4 @@
++import { useSettingsStore } from "../../settings/useSettingsStore";
+ import { useEffect, useRef } from "react";
+ import type { AdornmentOwnerGeometry } from "tikz-editor/ast/types";
+ import {
+@@ -8,6 +9,7 @@ import {
    worldBounds,
    worldTransform,
    clientPoint,
@@ -10148,7 +10169,7 @@ index 0c9bdf4f..01d585cd 100644
    pt,
    px
  } from "tikz-editor/coords/index";
-@@ -18,7 +19,9 @@ import { resolvePropertyTarget } from "tikz-editor/edit/property-target";
+@@ -18,7 +20,9 @@ import { resolvePropertyTarget } from "tikz-editor/edit/property-target";
  import { parseLength } from "tikz-editor/semantic/coords/parse-length";
  import { intersectRayWithPolygon } from "tikz-editor/semantic/nodes/shape-geometry";
  import {
@@ -10158,7 +10179,17 @@ index 0c9bdf4f..01d585cd 100644
    snapSelectionTranslation,
    snapToolPointer,
    type SnapLine
-@@ -156,14 +159,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -53,7 +57,8 @@ import {
+   resolveGridTooltipCounts,
+   resolveToolCreateSize,
+   snapPointDeltaToAxisStepMultiples,
+-  resolveToolCreateCurrentWorld
++  resolveToolCreateCurrentWorld,
++  constrainTranslationToAxis
+ } from "./interaction-helpers";
+ import { resolveHandleDragAction, shouldCommitHandleAnchorOnPointerUp } from "./handle-drag-actions";
+ import { resolveEndpointAnchorSnap } from "./endpoint-anchor-snap";
+@@ -156,14 +161,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        world: WorldPoint,
        currentSvg: { viewBox: SvgViewBox }
      ) {
@@ -10186,7 +10217,15 @@ index 0c9bdf4f..01d585cd 100644
        });
        const nextIds = drag.additive
          ? [...new Set([...drag.baseSelectedIds, ...hitIds])]
-@@ -326,7 +337,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -272,6 +285,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+       const drag = dragRef.current;
+       if (event.pointerId !== drag?.pointerId) return;
+       const ctrlOrMeta = event.ctrlKey || event.metaKey;
++      const constrained = event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry;
+       const formatPrecision = event.altKey ? "fine" : undefined;
+ 
+       if (drag.kind === "pan") {
+@@ -326,7 +340,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            : { snappedPoint: world, offset: undefined, lines: [] as SnapLine[] };
          let nextRawWorld = snapped.snappedPoint ?? world;
          let endpointAnchorOverlay: NodeAnchorOverlayState | null = null;
@@ -10195,21 +10234,21 @@ index 0c9bdf4f..01d585cd 100644
            endpointAnchorOverlay = resolveEndpointAnchorSnap({
              pointerWorld: world,
              zoom: drag.snapContext?.zoom ?? 1,
-@@ -345,8 +356,12 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -345,8 +359,12 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            drag.startWorld,
            drag.rawCurrentWorld,
            drag.toolMode,
 -          event.shiftKey
-+          event.shiftKey,
++          constrained,
 +          drag.snapContext?.settings.latticeTransform
          );
-+        if (drag.snapContext?.settings.latticeLock && !ctrlOrMeta) {
++        if (drag.snapContext?.settings.latticeLock && !ctrlOrMeta && !constrained) {
 +          drag.currentWorld = snapToUnitLattice(drag.currentWorld, drag.snapContext.settings.latticeTransform);
 +        }
          if (drag.toolMode === "addGrid" && !ctrlOrMeta) {
            drag.currentWorld = snapPointDeltaToAxisStepMultiples(
              drag.startWorld,
-@@ -361,7 +376,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -361,7 +379,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              : null
          );
          setToolDraft({ ...drag });
@@ -10218,7 +10257,7 @@ index 0c9bdf4f..01d585cd 100644
          const rows = formatToolCreateLengthRows(drag.toolMode, size);
          if (drag.toolMode === "addGrid") {
            const counts = resolveGridTooltipCounts(drag.startWorld, drag.currentWorld);
-@@ -455,19 +470,33 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -455,19 +473,33 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        if (drag.kind === "tool-freehand") {
          setNodeAnchorOverlay(null);
          setDragTooltip(null);
@@ -10257,7 +10296,7 @@ index 0c9bdf4f..01d585cd 100644
          });
          return;
        }
-@@ -476,8 +505,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -476,8 +508,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setNodeAnchorOverlay(null);
          setDragTooltip(null);
          drag.currentWorld = world;
@@ -10268,7 +10307,7 @@ index 0c9bdf4f..01d585cd 100644
            commitMarqueeSelection(drag, world, currentSvg);
          }
          setSnapLines([]);
-@@ -508,6 +538,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -508,6 +541,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        }
  
        if (drag.kind === "resize") {
@@ -10276,7 +10315,7 @@ index 0c9bdf4f..01d585cd 100644
          setNodeAnchorOverlay(null);
          setSnapLines([]);
          maybeTriggerSnapFeedback(false);
-@@ -517,14 +548,14 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -517,28 +551,29 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            ? { width: liveDimensions.width, height: liveDimensions.height }
            : drag.measurementMode === "opposite-corner"
              ? projectResizeDimensionsFromOppositeCorner(
@@ -10285,15 +10324,17 @@ index 0c9bdf4f..01d585cd 100644
                drag.initialFrame,
                drag.role,
                drag.preserveAspectRatio,
-               drag.preserveAspectDuringResize || event.shiftKey
+-              drag.preserveAspectDuringResize || event.shiftKey
++              drag.preserveAspectDuringResize || constrained
              )
              : projectResizeDimensionsFromCenter(
 -              world,
 +              resizeWorld,
                drag.initialFrame,
                drag.preserveAspectRatio,
-               drag.preserveAspectDuringResize || event.shiftKey
-@@ -532,13 +563,14 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+-              drag.preserveAspectDuringResize || event.shiftKey
++              drag.preserveAspectDuringResize || constrained
+             );
          setDragTooltip({
            kind: "resize",
            anchor: clientPointFromEvent(event),
@@ -10309,21 +10350,33 @@ index 0c9bdf4f..01d585cd 100644
            lines: []
          });
  
-@@ -547,8 +579,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -547,8 +582,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              kind: "resizeElement",
              elementId: drag.elementId,
              role: drag.role,
 -            newWorld: world,
 -            preserveAspect: event.shiftKey,
 +            newWorld: resizeWorld,
-+            preserveAspect: event.shiftKey && !(drag.latticeLock && !ctrlOrMeta),
++            preserveAspect: constrained && !(drag.latticeLock && !ctrlOrMeta),
              preserveAspectRatio: drag.preserveAspectRatio ?? undefined,
              formatPrecision,
              referenceBounds: resizeFrameWorldBounds(drag.initialFrame),
-@@ -803,11 +835,15 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -567,7 +602,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+         drag.lastPointerWorld = world;
+         applyRotateDragUpdate(drag, {
+           phase: "drag-rotate-move",
+-          shiftKey: event.shiftKey,
++          shiftKey: constrained,
+           ctrlOrMetaKey: ctrlOrMeta,
+           altKey: event.altKey,
+           tooltipAnchor: pointerClient,
+@@ -802,12 +837,17 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+             return;
            }
          }
-         const rawTotalDelta = makeWorldVector(world.x - drag.startWorld.x, world.y - drag.startWorld.y);
+-        const rawTotalDelta = makeWorldVector(world.x - drag.startWorld.x, world.y - drag.startWorld.y);
++        const pointerDelta = makeWorldVector(world.x - drag.startWorld.x, world.y - drag.startWorld.y);
++        const rawTotalDelta = constrained ? constrainTranslationToAxis(pointerDelta, pointerDelta) : pointerDelta;
 +        const latticeHandle = snapshotEditHandles.find((handle) => drag.elementIds.includes(handle.sourceRef.sourceId));
 +        const latticeAnchor = latticeHandle ? makeWorldPoint(latticeHandle.world.x - drag.lastAppliedTotalDelta.x, latticeHandle.world.y - drag.lastAppliedTotalDelta.y) : undefined;
          const snapped = drag.snapContext && drag.initialSelection
@@ -10336,7 +10389,19 @@ index 0c9bdf4f..01d585cd 100644
                modifiers: { ctrlOrMeta }
              })
            : {
-@@ -866,13 +902,14 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -815,9 +855,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+               offset: undefined,
+               lines: [] as SnapLine[]
+             };
+-        const totalDelta = snapped.snappedDelta
++        const snappedDelta = snapped.snappedDelta
+           ? makeWorldVector(snapped.snappedDelta.x, snapped.snappedDelta.y)
+           : rawTotalDelta;
++        const totalDelta = constrained ? constrainTranslationToAxis(pointerDelta, snappedDelta) : snappedDelta;
+         const actualTotalDelta = drag.lastAppliedTotalDelta;
+         const incremental = makeWorldVector(totalDelta.x - actualTotalDelta.x, totalDelta.y - actualTotalDelta.y);
+         setSnapLines(snapped.lines);
+@@ -866,13 +907,14 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          ? snapHandlePosition({
              context: drag.snapContext,
              point: world,
@@ -10352,7 +10417,15 @@ index 0c9bdf4f..01d585cd 100644
          endpointAnchorOverlay = resolveEndpointAnchorSnap({
            pointerWorld: world,
            zoom: drag.snapContext?.zoom ?? 1,
-@@ -940,7 +977,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -928,6 +970,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+       resetSnapFeedbackState();
+       suppressNextBackgroundClickRef.current = true;
+       const ctrlOrMeta = event.ctrlKey || event.metaKey;
++      const constrained = event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry;
+ 
+       const currentSvg = svgResultRef.current;
+       const world =
+@@ -940,7 +983,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setDragTooltip(null);
          const finalWorld = world ?? drag.currentWorld;
          const deltaSq = distanceSquared(finalWorld, drag.startWorld);
@@ -10361,28 +10434,28 @@ index 0c9bdf4f..01d585cd 100644
  
          if (isClickOnly) {
            if (!drag.additive) {
-@@ -988,8 +1025,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -988,8 +1031,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            drag.startWorld,
            snappedWorld,
            drag.toolMode,
 -          event.shiftKey
-+          event.shiftKey,
++          constrained,
 +          drag.snapContext?.settings.latticeTransform
          );
-+        if (drag.snapContext?.settings.latticeLock && !ctrlOrMeta) finalWorld = snapToUnitLattice(finalWorld, drag.snapContext.settings.latticeTransform);
++        if (drag.snapContext?.settings.latticeLock && !ctrlOrMeta && !constrained) finalWorld = snapToUnitLattice(finalWorld, drag.snapContext.settings.latticeTransform);
          if (drag.toolMode === "addGrid" && !ctrlOrMeta) {
            finalWorld = snapPointDeltaToAxisStepMultiples(
              drag.startWorld,
-@@ -998,7 +1037,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -998,7 +1043,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              DEFAULT_GRID_TOOL_STEP_PT
            );
          }
 -        if (finalEndpointAnchor && (drag.toolMode === "addLine" || drag.toolMode === "addArrow")) {
-+        if (finalEndpointAnchor && !drag.snapContext?.settings.latticeLock && !ctrlOrMeta && (drag.toolMode === "addLine" || drag.toolMode === "addArrow")) {
++        if (finalEndpointAnchor && !constrained && !drag.snapContext?.settings.latticeLock && !ctrlOrMeta && (drag.toolMode === "addLine" || drag.toolMode === "addArrow")) {
            finalWorld = finalEndpointAnchor.world;
          }
          setSnapLines(snapped.lines);
-@@ -1020,7 +1059,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1020,7 +1065,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          const rawTemplate = createTemplateForToolDrag(drag.toolMode, drag.startWorld, finalWorld, {
            selectedAddShape,
            strokeColor: creationStrokeColor,
@@ -10392,7 +10465,7 @@ index 0c9bdf4f..01d585cd 100644
          });
          const template =
            rawTemplate.kind === "line"
-@@ -1064,7 +1104,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1064,7 +1110,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          }
  
          if (ok.sourceChanged) {
@@ -10400,7 +10473,7 @@ index 0c9bdf4f..01d585cd 100644
            setToolCursorWorld(null);
          }
          setToolDraft(null);
-@@ -1093,7 +1132,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1093,7 +1138,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
  
          queueSelectionForAddedElement(makeWorldPoint((drag.startWorld.x + drag.endWorld.x) / 2, (drag.startWorld.y + drag.endWorld.y) / 2));
          const template = createBezierTemplateFromBend(drag.startWorld, drag.endWorld, finalBend, {
@@ -10410,7 +10483,7 @@ index 0c9bdf4f..01d585cd 100644
          });
          const ok = applyActionWithFeedback({
            kind: "addElement",
-@@ -1105,7 +1145,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1105,7 +1151,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          }
  
          if (ok.sourceChanged) {
@@ -10418,7 +10491,7 @@ index 0c9bdf4f..01d585cd 100644
            setToolCursorWorld(null);
          }
          setPendingBezier(null);
-@@ -1143,7 +1182,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1143,7 +1188,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
                }
              : undefined,
            bendWorld: finalBend,
@@ -10429,7 +10502,7 @@ index 0c9bdf4f..01d585cd 100644
          });
          setPathSegmentDraft(null);
          setToolCursorWorld(drag.endWorld);
-@@ -1157,13 +1198,20 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1157,13 +1204,20 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setDragTooltip(null);
          let nextWorldPoints: WorldPoint[] | null = null;
          if (world) {
@@ -10456,6 +10529,15 @@ index 0c9bdf4f..01d585cd 100644
          finalizeFreehandDraft(nextWorldPoints ?? undefined);
          return;
        }
+@@ -1225,7 +1279,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+       event.preventDefault();
+       applyRotateDragUpdate(drag, {
+         phase: "drag-rotate-modifier",
+-        shiftKey: event.shiftKey,
++        shiftKey: event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry,
+         ctrlOrMetaKey: event.ctrlKey || event.metaKey,
+         altKey,
+         tooltipAnchor: drag.lastPointerClient,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDragController.types.ts b/packages/app/src/ui/canvas-panel/useCanvasDragController.types.ts
 index fbf3023a..c4b1c4fb 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDragController.types.ts
@@ -11212,7 +11294,7 @@ index 8078a5d4..e9865d22 100644
 +  return ids;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..7b579548 100644
+index 709cc1b9..a52be185 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 @@ -1,18 +1,23 @@
@@ -11448,8 +11530,8 @@ index 709cc1b9..7b579548 100644
 +            setArcDraft({ center: resolvedStart });
 +            return;
 +          }
-+          const locked = snapSettingsPatch.latticeLock && !event.ctrlKey && !event.metaKey;
-+          let arcPoint = resolveToolCreateCurrentWorld(draft.center, resolvedStart, "addCircle", event.shiftKey, snapSettingsPatch.latticeTransform);
++          const locked = snapSettingsPatch.latticeLock && !event.ctrlKey && !event.metaKey && !(event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry);
++          let arcPoint = resolveToolCreateCurrentWorld(draft.center, resolvedStart, "addCircle", event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry, snapSettingsPatch.latticeTransform);
 +          if (locked) arcPoint = snapToUnitLattice(arcPoint, snapSettingsPatch.latticeTransform);
 +          if (draft.start === undefined) {
 +            if (distanceSquared(draft.center, arcPoint) > 1e-8) {
@@ -11458,7 +11540,7 @@ index 709cc1b9..7b579548 100644
 +            return;
 +          }
 +          if (distanceSquared(draft.center, resolvedStart) <= 1e-8) return;
-+          if (!locked && !event.shiftKey) arcPoint = magneticArcAngle(draft.center, world, snapSettingsPatch.latticeTransform) ?? arcPoint;
++          if (!locked && !(event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry)) arcPoint = magneticArcAngle(draft.center, world, snapSettingsPatch.latticeTransform) ?? arcPoint;
 +          if (locked) {
 +            const latticeEndpoint = snapArcEndpointToLattice(draft.center, draft.start, arcPoint, snapSettingsPatch.latticeTransform);
 +            if (latticeEndpoint.kind === "unavailable") { setWarning(latticeEndpoint.reason); return; }
@@ -11628,11 +11710,11 @@ index 709cc1b9..7b579548 100644
 +      let cursorWorld = closeCandidateWorld ?? hoverPathEndpoint?.world ?? hoverEndpointAnchor?.world ?? snapped.snappedPoint ?? world;
 +      if (toolMode === "addArc" && arcDraft) {
 +        const bypassLattice = event.ctrlKey || event.metaKey;
-+        cursorWorld = resolveToolCreateCurrentWorld(arcDraft.center, cursorWorld, "addCircle", event.shiftKey, snapSettingsPatch.latticeTransform);
-+        if (arcDraft.start && !snapSettingsPatch.latticeLock && !event.shiftKey) {
++        cursorWorld = resolveToolCreateCurrentWorld(arcDraft.center, cursorWorld, "addCircle", event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry, snapSettingsPatch.latticeTransform);
++        if (arcDraft.start && !snapSettingsPatch.latticeLock && !(event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry)) {
 +          cursorWorld = magneticArcAngle(arcDraft.center, world, snapSettingsPatch.latticeTransform) ?? cursorWorld;
 +        }
-+        if (snapSettingsPatch.latticeLock && !event.ctrlKey && !event.metaKey) {
++        if (snapSettingsPatch.latticeLock && !event.ctrlKey && !event.metaKey && !(event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry)) {
 +          if (arcDraft.start) {
 +            const endpoint = snapArcEndpointToLattice(arcDraft.center, arcDraft.start, cursorWorld, snapSettingsPatch.latticeTransform);
 +            if (endpoint.kind === "point") cursorWorld = endpoint.point;
@@ -11678,11 +11760,11 @@ index 709cc1b9..7b579548 100644
 +      let cursorWorld = closeCandidateWorld ?? hoverPathEndpointEnter?.world ?? hoverEndpointAnchor?.world ?? snapped.snappedPoint ?? world;
 +      if (toolMode === "addArc" && arcDraft) {
 +        const bypassLattice = event.ctrlKey || event.metaKey;
-+        cursorWorld = resolveToolCreateCurrentWorld(arcDraft.center, cursorWorld, "addCircle", event.shiftKey, snapSettingsPatch.latticeTransform);
-+        if (arcDraft.start && !snapSettingsPatch.latticeLock && !event.shiftKey) {
++        cursorWorld = resolveToolCreateCurrentWorld(arcDraft.center, cursorWorld, "addCircle", event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry, snapSettingsPatch.latticeTransform);
++        if (arcDraft.start && !snapSettingsPatch.latticeLock && !(event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry)) {
 +          cursorWorld = magneticArcAngle(arcDraft.center, world, snapSettingsPatch.latticeTransform) ?? cursorWorld;
 +        }
-+        if (snapSettingsPatch.latticeLock && !event.ctrlKey && !event.metaKey) {
++        if (snapSettingsPatch.latticeLock && !event.ctrlKey && !event.metaKey && !(event.shiftKey || useSettingsStore.getState().settings.canvas.constrainGeometry)) {
 +          if (arcDraft.start) {
 +            const endpoint = snapArcEndpointToLattice(arcDraft.center, arcDraft.start, cursorWorld, snapSettingsPatch.latticeTransform);
 +            if (endpoint.kind === "point") cursorWorld = endpoint.point;
@@ -12313,10 +12395,10 @@ index 44b105be..f1cfbce3 100644
      logClipboardDebug("Clipboard write unavailable: navigator.clipboard missing.");
      return false;
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
-index 3ab44838..0c804939 100644
+index 3ab44838..53a63906 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts
 +++ b/packages/app/src/ui/editor-command-runtime.ts
-@@ -98,11 +98,11 @@ type RuntimeInput = {
+@@ -98,11 +98,12 @@ type RuntimeInput = {
    tabCount: number;
    dirty: boolean;
    fileRef: DocumentFileRef | null;
@@ -12326,10 +12408,11 @@ index 3ab44838..0c804939 100644
    snapModes: SnapModes;
    snapHapticsEnabled: boolean;
 +  latticeLock: boolean;
++  constrainGeometry: boolean;
    showRulers: boolean;
    showGuides: boolean;
    showDocumentBounds: boolean;
-@@ -129,6 +129,7 @@ type RuntimeInput = {
+@@ -129,6 +130,7 @@ type RuntimeInput = {
    onAddNodeAdornment?: (kind: "label" | "pin") => void;
    onPositionNodeRelativeTo?: () => void;
    onConvertNodePositionToAbsolute?: () => void;
@@ -12337,7 +12420,7 @@ index 3ab44838..0c804939 100644
    onShowCompiledPicture?: () => void;
    onOpenSettings?: () => void;
    onFocusAssistant?: () => void;
-@@ -167,11 +168,11 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -167,11 +169,12 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      tabCount,
      dirty,
      fileRef,
@@ -12347,10 +12430,11 @@ index 3ab44838..0c804939 100644
      snapModes,
      snapHapticsEnabled,
 +    latticeLock,
++    constrainGeometry,
      showRulers,
      showGuides,
      showDocumentBounds,
-@@ -198,6 +199,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -198,6 +201,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      onAddNodeAdornment,
      onPositionNodeRelativeTo,
      onConvertNodePositionToAbsolute,
@@ -12358,7 +12442,7 @@ index 3ab44838..0c804939 100644
      onShowCompiledPicture,
      onOpenSettings,
      onFocusAssistant,
-@@ -799,6 +801,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -799,6 +803,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
          splitSelectedPath(commandContext);
        }
      },
@@ -12369,7 +12453,7 @@ index 3ab44838..0c804939 100644
      [APP_MENU_COMMAND_IDS.PATH_JOIN]: {
        enabled: availability["path-join"].enabled,
        run: () => {
-@@ -841,6 +847,14 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -841,6 +849,14 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
          setSelectedPathPointKind(commandContext, "smooth");
        }
      },
@@ -12384,7 +12468,7 @@ index 3ab44838..0c804939 100644
      [APP_MENU_COMMAND_IDS.INSERT_NODE]: insertBinding("addNode"),
      [APP_MENU_COMMAND_IDS.INSERT_MATRIX]: insertBinding("addMatrix"),
      [APP_MENU_COMMAND_IDS.INSERT_SHAPE]: insertBinding("addShape"),
-@@ -882,14 +896,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -882,14 +898,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        enabled: nodePositioningAction === "convert-absolute" && onConvertNodePositionToAbsolute != null,
        run: () => onConvertNodePositionToAbsolute?.()
      },
@@ -12405,7 +12489,7 @@ index 3ab44838..0c804939 100644
          dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
        }
      },
-@@ -911,20 +926,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -911,20 +928,20 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        checked: showTransparencyGrid,
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" }); }
      },
@@ -12417,10 +12501,13 @@ index 3ab44838..0c804939 100644
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "documentBounds" }); }
      },
 -    [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID]: {
--      enabled: true,
++    [APP_MENU_COMMAND_IDS.TOGGLE_GEOMETRY_CONSTRAINT]: {
+       enabled: true,
 -      checked: snapModes.grid,
 -      run: () => { dispatch({ type: "TOGGLE_SNAP_MODE", mode: "grid" }); }
--    },
++      checked: constrainGeometry,
++      run: () => { updateCanvasSettings({ constrainGeometry: !constrainGeometry }); }
+     },
 -    [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES]: {
 +    [APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK]: {
        enabled: true,
@@ -12431,7 +12518,7 @@ index 3ab44838..0c804939 100644
      },
      [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_POINTS]: {
        enabled: true,
-@@ -1098,6 +1108,7 @@ export function useEditorCommandRuntime(
+@@ -1098,6 +1115,7 @@ export function useEditorCommandRuntime(
      onAddNodeAdornment?: (kind: "label" | "pin") => void;
      onPositionNodeRelativeTo?: () => void;
      onConvertNodePositionToAbsolute?: () => void;
@@ -12439,7 +12526,7 @@ index 3ab44838..0c804939 100644
      onShowCompiledPicture?: () => void;
      onOpenSettings?: () => void;
      onFocusAssistant?: () => void;
-@@ -1126,11 +1137,11 @@ export function useEditorCommandRuntime(
+@@ -1126,11 +1144,12 @@ export function useEditorCommandRuntime(
    const tabCount = useEditorStore((s) => s.tabOrder.length);
    const dirty = useEditorStore((s) => s.documents[s.activeDocumentId]?.dirty ?? false);
    const fileRef = useEditorStore((s) => s.documents[s.activeDocumentId]?.fileRef ?? null);
@@ -12449,10 +12536,11 @@ index 3ab44838..0c804939 100644
    const snapModes = useEditorStore((s) => s.snapModes);
    const snapHapticsEnabled = useSettingsStore((s) => s.settings.canvas.snapHapticsEnabled);
 +  const latticeLock = useSettingsStore((s) => s.settings.canvas.latticeLock);
++  const constrainGeometry = useSettingsStore((s) => s.settings.canvas.constrainGeometry);
    const showRulers = useEditorStore((s) => s.showRulers);
    const showGuides = useEditorStore((s) => s.showGuides);
    const showDocumentBounds = useEditorStore((s) => s.showDocumentBounds);
-@@ -1203,11 +1214,11 @@ export function useEditorCommandRuntime(
+@@ -1203,11 +1222,12 @@ export function useEditorCommandRuntime(
          tabCount,
          dirty,
          fileRef,
@@ -12462,10 +12550,11 @@ index 3ab44838..0c804939 100644
          snapModes,
          snapHapticsEnabled,
 +        latticeLock,
++        constrainGeometry,
          showRulers,
          showGuides,
          showDocumentBounds,
-@@ -1234,6 +1245,7 @@ export function useEditorCommandRuntime(
+@@ -1234,6 +1254,7 @@ export function useEditorCommandRuntime(
          onAddNodeAdornment: options.onAddNodeAdornment,
          onPositionNodeRelativeTo: options.onPositionNodeRelativeTo,
          onConvertNodePositionToAbsolute: options.onConvertNodePositionToAbsolute,
@@ -12473,7 +12562,7 @@ index 3ab44838..0c804939 100644
          onShowCompiledPicture: options.onShowCompiledPicture,
          onOpenSettings: options.onOpenSettings,
          onCheckForUpdates: options.onCheckForUpdates,
-@@ -1256,11 +1268,11 @@ export function useEditorCommandRuntime(
+@@ -1256,11 +1277,12 @@ export function useEditorCommandRuntime(
        tabCount,
        dirty,
        fileRef,
@@ -12483,10 +12572,11 @@ index 3ab44838..0c804939 100644
        snapModes,
        snapHapticsEnabled,
 +      latticeLock,
++      constrainGeometry,
        showRulers,
        showGuides,
        showDocumentBounds,
-@@ -1287,6 +1299,7 @@ export function useEditorCommandRuntime(
+@@ -1287,6 +1309,7 @@ export function useEditorCommandRuntime(
        options.onAddNodeAdornment,
        options.onPositionNodeRelativeTo,
        options.onConvertNodePositionToAbsolute,
@@ -12630,19 +12720,26 @@ index 00000000..d7b28102
 +  </SidePanel.Section>;
 +}
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..c299dba0 100644
+index d5c65582..5beb8563 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-@@ -11,6 +11,8 @@ RiItalic
+@@ -1,3 +1,4 @@
++import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
+ import {
+ RiAlignCenter,
+ RiAlignJustify,
+@@ -10,7 +11,9 @@ RiFontSerif,
+ RiItalic
  } from "@remixicon/react";
  import { useCallback,useEffect,useMemo,useState,type FocusEvent,type JSX } from "react";
- import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
+-import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
++import { formatNumber } from "tikz-editor/edit/format";
 +import { useShallow } from "zustand/react/shallow";
-+import { LATTICE_UNIT } from "tikz-editor/edit/lattice-units";
++import { boundsInLatticeUnits, LATTICE_UNIT, type LatticeBounds } from "tikz-editor/edit/lattice-units";
  import {
  getInspectorDescriptor,
  NODE_INNER_SEP_DEFAULT,
-@@ -31,9 +33,9 @@ type NodeMinimumDimensionKey,
+@@ -31,9 +34,9 @@ type NodeMinimumDimensionKey,
  type ShadowMutationContext
  } from "tikz-editor/edit/property-write-builders";
  import { propertyIdForWriteKey } from "tikz-editor/edit/property-registry";
@@ -12653,7 +12750,7 @@ index d5c65582..c299dba0 100644
  import { getInspectorPropertyCapabilityStatus } from "../capabilities";
  import { ColorPickerField } from "../ColorPicker";
  import { MULTI_ARRANGE_ACTIONS,type MultiArrangeAction } from "./arrange-actions";
-@@ -58,6 +60,7 @@ import { useInspectorMutations } from "./useInspectorMutations";
+@@ -58,6 +61,7 @@ import { useInspectorMutations } from "./useInspectorMutations";
  import { useInspectorPreviewScrub } from "./useInspectorPreviewScrub";
  import css from "./InspectorPanel.module.css";
  import { RenderedTooltip } from "../RenderedTooltip";
@@ -12661,7 +12758,7 @@ index d5c65582..c299dba0 100644
  import { SidePanel } from "../SidePanel";
  import {
  getToolLabel,
-@@ -91,7 +94,13 @@ export function InspectorPanel() {
+@@ -91,7 +95,13 @@ export function InspectorPanel() {
    const toolMode = useEditorStore((s) => s.toolMode);
    const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
    const creationFillColor = useEditorStore((s) => s.creationFillColor);
@@ -12676,7 +12773,7 @@ index d5c65582..c299dba0 100644
    const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
  
    const {
-@@ -208,7 +217,7 @@ export function InspectorPanel() {
+@@ -208,7 +218,7 @@ export function InspectorPanel() {
      const mutations = buildTransformSetPropertyMutations(
        write.transformContext,
        write.transformContext.key,
@@ -12685,7 +12782,7 @@ index d5c65582..c299dba0 100644
      );
      if (mutations.length === 0) {
        return;
-@@ -295,7 +304,7 @@ export function InspectorPanel() {
+@@ -295,7 +305,7 @@ export function InspectorPanel() {
        const mutations = buildTransformSetPropertyMutations(
          write.transformContext,
          write.transformContext.key,
@@ -12694,7 +12791,7 @@ index d5c65582..c299dba0 100644
        );
        for (const mutation of mutations) {
          dispatch({
-@@ -321,7 +330,7 @@ export function InspectorPanel() {
+@@ -321,7 +331,7 @@ export function InspectorPanel() {
      value: number
    ): string {
      const formatted = formatNumber(value);
@@ -12703,7 +12800,58 @@ index d5c65582..c299dba0 100644
        return `${formatted}${property.unit}`;
      }
      return formatted;
-@@ -1852,7 +1861,7 @@ export function InspectorPanel() {
+@@ -1689,21 +1699,11 @@ export function InspectorPanel() {
+     };
+   }
+ 
+-  function currentAutoFigureBoundsCm(): { x: number; y: number; width: number; height: number } {
++  function currentFigureBoundsControlsValue(): LatticeBounds | null {
++    if (figureBoundsState.mode === "fixed") return figureBoundsState;
+     const bounds = snapshot.scene?.bounds;
+-    if (!bounds) {
+-      return { x: 0, y: 0, width: 1, height: 1 };
+-    }
+-    return {
+-      x: bounds.minX * CM_PER_PT,
+-      y: bounds.minY * CM_PER_PT,
+-      width: Math.max(0, (bounds.maxX - bounds.minX) * CM_PER_PT),
+-      height: Math.max(0, (bounds.maxY - bounds.minY) * CM_PER_PT)
+-    };
+-  }
+-
+-  function currentFigureBoundsControlsValue(): { x: number; y: number; width: number; height: number } {
+-    return figureBoundsState.mode === "fixed" ? figureBoundsState : currentAutoFigureBoundsCm();
++    if (!bounds) return { x: 0, y: 0, width: 1, height: 1 };
++    return boundsInLatticeUnits(bounds, resolveFigureCoordinateFrame(commandContext.source, commandContext.parseOptions));
+   }
+ 
+   function applyFigureBoundsValue(next: { x: number; y: number; width: number; height: number }): void {
+@@ -1742,13 +1742,11 @@ export function InspectorPanel() {
+               if (!Number.isFinite(parsed)) {
+                 return;
+               }
+-              applyFigureBoundsValue({
+-                ...currentFigureBoundsControlsValue(),
+-                [key]: parsed
+-              });
++              const current = currentFigureBoundsControlsValue();
++              if (current) applyFigureBoundsValue({ ...current, [key]: parsed });
+             }}
+           />
+-          <span className={css.unitLabel}>cm</span>
++          <span className={css.unitLabel}>{LATTICE_UNIT}</span>
+         </div>
+       </div>
+     );
+@@ -1756,6 +1754,7 @@ export function InspectorPanel() {
+ 
+   function renderFigureBoundsControls(): JSX.Element {
+     const values = currentFigureBoundsControlsValue();
++    if (!values) return <div role="alert">Figure bounds need two independent lattice axes.</div>;
+     const fixed = figureBoundsState.mode === "fixed";
+     return (
+       <>
+@@ -1852,7 +1851,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation stroke color"
                          value={creationStrokeColor}
                          syntaxValue={creationStrokeColor}
@@ -12712,7 +12860,7 @@ index d5c65582..c299dba0 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
-@@ -1867,7 +1876,7 @@ export function InspectorPanel() {
+@@ -1867,7 +1866,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation fill color"
                          value={creationFillColor === "none" ? "" : creationFillColor}
                          syntaxValue={creationFillColor}
@@ -12721,7 +12869,7 @@ index d5c65582..c299dba0 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
-@@ -1879,6 +1888,7 @@ export function InspectorPanel() {
+@@ -1879,6 +1878,7 @@ export function InspectorPanel() {
                </SidePanel.Section>
              ) : null}
  
@@ -12729,7 +12877,7 @@ index d5c65582..c299dba0 100644
              {isFreehand ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
-@@ -1886,25 +1896,21 @@ export function InspectorPanel() {
+@@ -1886,25 +1886,21 @@ export function InspectorPanel() {
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
@@ -14799,10 +14947,12 @@ index bc59eb6c..fd0fd1c6 100644
        write?: SetPropertyWriteTarget;
 diff --git a/packages/core/src/edit/lattice-units.ts b/packages/core/src/edit/lattice-units.ts
 new file mode 100644
-index 00000000..73851152
+index 00000000..198924cc
 --- /dev/null
 +++ b/packages/core/src/edit/lattice-units.ts
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,51 @@
++import { pt, worldPoint, type WorldBounds } from "../coords/index.js";
++import { applyMatrix, inverseMatrix } from "../semantic/transform.js";
 +import type { WorldTransform } from "../coords/transforms.js";
 +import { LATTICE_UNIT_PT } from "./snapping/grid-snaps.js";
 +import type { InspectorProperty } from "./inspector/types.js";
@@ -14837,6 +14987,20 @@ index 00000000..73851152
 +    return { ...rest, value: valuePt, defaultValue: defaultPt, step: 0.1, unit: "pt", readOnlyReason: "This figure's lattice is skewed on this axis; move the element on the canvas instead." };
 +  }
 +  return { ...rest, value: valuePt / ptPerUnit, defaultValue: defaultPt / ptPerUnit, step: 0.25, unit: LATTICE_UNIT, ptPerUnit };
++}
++
++export type LatticeBounds = { x: number; y: number; width: number; height: number };
++
++/** Enclose world-space bounds in the figure's source lattice; singular frames have no inverse. */
++export function boundsInLatticeUnits(bounds: WorldBounds, frame: WorldTransform): LatticeBounds | null {
++  const inverse = inverseMatrix(frame);
++  if (!inverse) return null;
++  const corners = [[bounds.minX, bounds.minY], [bounds.minX, bounds.maxY],
++    [bounds.maxX, bounds.minY], [bounds.maxX, bounds.maxY]].map(([x, y]) => applyMatrix(inverse, worldPoint(pt(x), pt(y))));
++  const x = Math.min(...corners.map(point => point.x)) / LATTICE_UNIT_PT;
++  const y = Math.min(...corners.map(point => point.y)) / LATTICE_UNIT_PT;
++  return { x, y, width: Math.max(...corners.map(point => point.x)) / LATTICE_UNIT_PT - x,
++    height: Math.max(...corners.map(point => point.y)) / LATTICE_UNIT_PT - y };
 +}
 diff --git a/packages/core/src/edit/path-editing.ts b/packages/core/src/edit/path-editing.ts
 index feb259fd..dd7bc00d 100644
@@ -15741,10 +15905,13 @@ index 130bf203..976aab11 100644
        sceneElements: [],
 diff --git a/test/tablet-logic.spec.ts b/test/tablet-logic.spec.ts
 new file mode 100644
-index 00000000..08f8585d
+index 00000000..ede628f8
 --- /dev/null
 +++ b/test/tablet-logic.spec.ts
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,167 @@
++import { boundsInLatticeUnits } from '../packages/core/src/edit/lattice-units';
++import { worldBounds, worldTransform, worldVector, pt } from '../packages/core/src/coords/index';
++import { constrainTranslationToAxis, resolveToolCreateCurrentWorld } from '../packages/app/src/ui/canvas-panel/interaction-helpers';
 +import { APP_MENU_COMMAND_IDS as ID } from '../packages/app/src/app-menu/types';
 +import { SHORTCUT_COMMANDS, matchesCommand, parseShortcutOverrides, recordShortcut, shortcutConflict } from '../packages/app/src/settings/keybindings';
 +import { describe, expect, it } from 'vitest';
@@ -15871,6 +16038,42 @@ index 00000000..08f8585d
 +    expect(SHORTCUT_COMMANDS.map(command => command.id).sort()).toEqual(Object.values(ID).sort());
 +    expect(SHORTCUT_COMMANDS.find(command => command.id === ID.TOOL_LASSO)?.embedded).toBe(true);
 +    expect(SHORTCUT_COMMANDS.find(command => command.id === ID.TOOL_LASSO)?.defaults).toEqual([]);
++  });
++});
++
++describe('tablet geometry constraints and bounds', () => {
++  it('keeps snapped translations on the dominant canvas axis and leaves a stationary pointer stationary', () => {
++    expect(constrainTranslationToAxis(worldVector(pt(100), pt(30)), worldVector(pt(99), pt(5)))).toEqual(worldVector(pt(99), pt(0)));
++    expect(constrainTranslationToAxis(worldVector(pt(10), pt(-100)), worldVector(pt(5), pt(-99)))).toEqual(worldVector(pt(0), pt(-99)));
++    expect(constrainTranslationToAxis(worldVector(pt(0), pt(0)), worldVector(pt(5), pt(5)))).toEqual(worldVector(pt(0), pt(0)));
++  });
++
++  it('constrains a free line to fifteen degrees and a rectangle to a square', () => {
++    const start = wp(0, 0);
++    const pointer = wp(100, 30);
++    expect(resolveToolCreateCurrentWorld(start, pointer, 'addLine', false)).toEqual(pointer);
++    const line = resolveToolCreateCurrentWorld(start, pointer, 'addLine', true);
++    expect(Math.atan2(line.y, line.x) * 180 / Math.PI).toBeCloseTo(15, 8);
++    const rectangle = resolveToolCreateCurrentWorld(start, pointer, 'addRect', true);
++    expect(Math.abs(rectangle.x)).toBeCloseTo(Math.abs(rectangle.y), 8);
++  });
++
++  it('converts scaled and shifted world bounds back into source lattice steps', () => {
++    const unit = LATTICE_UNIT_PT;
++    const frame = worldTransform(2, 0, 0, .5, 13, -7);
++    const bounds = worldBounds(pt(-4 * unit + 13), pt(-1.5 * unit - 7), pt(8 * unit + 13), pt(3 * unit - 7));
++    const result = boundsInLatticeUnits(bounds, frame)!;
++    expect(result.x).toBeCloseTo(-2, 8);
++    expect(result.y).toBeCloseTo(-3, 8);
++    expect(result.width).toBeCloseTo(6, 8);
++    expect(result.height).toBeCloseTo(9, 8);
++  });
++
++  it('handles a rotated lattice and reports a collapsed lattice as unavailable', () => {
++    const unit = LATTICE_UNIT_PT;
++    const bounds = worldBounds(pt(-6 * unit), pt(unit), pt(-2 * unit), pt(4 * unit));
++    expect(boundsInLatticeUnits(bounds, worldTransform(0, 1, -1, 0, 0, 0))).toEqual({ x: 1, y: 2, width: 3, height: 4 });
++    expect(boundsInLatticeUnits(bounds, worldTransform(0, 0, 0, 1, 0, 0))).toBeNull();
 +  });
 +});
 diff --git a/vitest.config.ts b/vitest.config.ts
