@@ -1401,6 +1401,60 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `sets, persists, clears and resets command shortcuts in Settings in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator('[data-diagram-tools]');
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      const settings = frame.getByTestId('settings-modal');
+      const openShortcuts = async () => {
+        await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
+        await tap(settings.getByRole('button', { name: 'Keyboard shortcuts', exact: true }));
+        await settings.getByRole('searchbox', { name: 'Find command', exact: true }).fill('Line');
+      };
+      // The shipped default acts before we replace it.
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await page.keyboard.press('l');
+      await expect.poll(async () => (await editorDebug(page)).tool).toBe('addLine');
+      await openShortcuts();
+      const row = settings.getByRole('group', { name: 'Line shortcut', exact: true });
+      await tap(row.getByRole('button', { name: 'Set shortcut for Line', exact: true }));
+      await page.keyboard.press('Control+Alt+l');
+      await expect(row).toContainText('Ctrl+Alt+L');
+      await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await page.keyboard.press('l');
+      assert.equal((await editorDebug(page)).tool, 'select', 'The replaced shortcut still ran');
+      await page.keyboard.press('Control+Alt+l');
+      await expect.poll(async () => (await editorDebug(page)).tool).toBe('addLine');
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await page.keyboard.press('Control+Alt+l');
+      await expect.poll(async () => (await editorDebug(page)).tool).toBe('addLine');
+      await openShortcuts();
+      await tap(row.getByRole('button', { name: 'Set shortcut for Line', exact: true }));
+      await page.keyboard.press('Control+z');
+      await expect(settings.getByRole('alert')).toContainText('Undo');
+      await page.keyboard.press('Escape');
+      await expect(row).toContainText('Ctrl+Alt+L');
+      await tap(row.getByRole('button', { name: 'Clear shortcut for Line', exact: true }));
+      await expect(row).toContainText('Unassigned');
+      await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await page.keyboard.press('Control+Alt+l');
+      await page.keyboard.press('l');
+      assert.equal((await editorDebug(page)).tool, 'select', 'A cleared shortcut still ran');
+      await openShortcuts();
+      await tap(row.getByRole('button', { name: 'Reset shortcut for Line', exact: true }));
+      await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await page.keyboard.press('l');
+      await expect.poll(async () => (await editorDebug(page)).tool).toBe('addLine');
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `inserts, deletes, and opens layers through touch routes in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
