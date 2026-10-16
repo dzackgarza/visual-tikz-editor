@@ -343,6 +343,25 @@ index 1672d1d6..48a1138b 100644
  export type { LinkedTextReadResult, LinkedTextWriteResult } from "./linked-file-sync.js";
 +
 +export { getEditorSettings, reloadEditorSettings, updateEditorGeneralSettings } from "./settings/useSettingsStore.js";
+diff --git a/packages/app/src/layers.ts b/packages/app/src/layers.ts
+new file mode 100644
+index 00000000..b1cb7629
+--- /dev/null
++++ b/packages/app/src/layers.ts
+@@ -0,0 +1,13 @@
++import type { ScopeStatement, Statement } from "tikz-editor/ast/types";
++
++/** A layer is a top-level scope with a name; an unnamed top-level scope is a group. */
++export function layerName(statement: Statement, topLevel: boolean): string | null {
++  if (!topLevel || statement.kind !== "Scope") return null;
++  const entry = statement.options?.entries.find((candidate) => candidate.kind === "kv" && candidate.key.trim().toLowerCase() === "name");
++  return entry?.kind === "kv" && entry.valueRaw.trim().length > 0 ? entry.valueRaw.trim() : null;
++}
++
++/** The figure's layers, back to front. */
++export function layerScopes(statements: readonly Statement[] | undefined): ScopeStatement[] {
++  return (statements ?? []).filter((statement): statement is ScopeStatement => layerName(statement, true) !== null);
++}
 diff --git a/packages/app/src/platform/types.ts b/packages/app/src/platform/types.ts
 index 20b8b673..faf832b4 100644
 --- a/packages/app/src/platform/types.ts
@@ -768,7 +787,7 @@ index 00000000..85ec8212
 +    lastEditWarningToken: next.lastEditWarningToken + (released ? 1 : 0) };
 +}
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6e..bb9a9cf0 100644
+index e0845d6e..45022c47 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
 @@ -1,3 +1,5 @@
@@ -926,6 +945,18 @@ index e0845d6e..bb9a9cf0 100644
        let result: EditActionResult;
        if (
          action.precomputedResult != null &&
+@@ -849,9 +791,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+         action.action.kind === "positionNodeRelativeTo" || action.action.kind === "convertNodePositionToAbsolute" ? "set-property" :
+         action.action.kind === "alignElements" ? "align" :
+         action.action.kind === "distributeElements" ? "distribute" :
+-        action.action.kind === "reorderElements" ? "reorder" :
++        action.action.kind === "reorderElements" || action.action.kind === "moveIntoScope" ? "reorder" :
+         action.action.kind === "flattenForeach" ? "flatten-foreach" :
+-        action.action.kind === "groupElements" ? "add-element" :
++        action.action.kind === "groupElements" || action.action.kind === "addLayer" ? "add-element" :
+         action.action.kind === "ungroupElements" ? "delete" :
+         action.action.kind === "addElement" || action.action.kind === "addNodeAdornment" ? "add-element" :
+         action.action.kind === "duplicateElements" || action.action.kind === "pasteStatements" || action.action.kind === "duplicateAdornment" ? "add-element" :
 @@ -934,6 +876,48 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
@@ -5245,7 +5276,7 @@ index cf4cf2cf..4a0d0a4e 100644
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..466467cd 100644
+index 4e22ccfa..3ff77d20 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,3 +1,4 @@
@@ -6912,7 +6943,7 @@ index 4e22ccfa..466467cd 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4751,110 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4751,112 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -6976,7 +7007,9 @@ index 4e22ccfa..466467cd 100644
 +    const rootStyle = getComputedStyle(document.documentElement);
 +    const inset = (edge: string) => Number.parseFloat(rootStyle.getPropertyValue(`--rail-inset-${edge}`));
 +    const leftEdge = Math.max((viewport?.left ?? 0), inset("left")) + 8;
-+    const rightEdge = Math.min((viewport?.right ?? window.innerWidth), window.innerWidth - inset("right")) - 8;
++    // An open properties panel floats over the canvas's right side; the control stays left of it.
++    const panel = document.querySelector(".embed-inspector")?.getBoundingClientRect();
++    const rightEdge = Math.min((viewport?.right ?? window.innerWidth), window.innerWidth - inset("right"), panel?.left ?? Number.POSITIVE_INFINITY) - 8;
 +    const topEdge = Math.max((viewport?.top ?? 0), inset("top")) + 8;
 +    const bottomEdge = Math.min((viewport?.bottom ?? window.innerHeight), window.innerHeight - inset("bottom")) - 8;
 +    const width = Math.max(0, Math.min(300, rightEdge - leftEdge));
@@ -7023,7 +7056,7 @@ index 4e22ccfa..466467cd 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4877,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4879,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -7046,7 +7079,7 @@ index 4e22ccfa..466467cd 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4908,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4910,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -7061,7 +7094,7 @@ index 4e22ccfa..466467cd 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4934,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4936,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -7095,7 +7128,7 @@ index 4e22ccfa..466467cd 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4966,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4968,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -7105,7 +7138,7 @@ index 4e22ccfa..466467cd 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4979,29 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +4981,29 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -7139,7 +7172,7 @@ index 4e22ccfa..466467cd 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5032,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5034,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -7147,7 +7180,7 @@ index 4e22ccfa..466467cd 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5041,74 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5043,74 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -8956,7 +8989,7 @@ index 48b963b4..260a5c99 100644
    if (nextDraft === draft || !segment.endAnchor) {
      return nextDraft;
 diff --git a/packages/app/src/ui/canvas-panel/scope-overlay.ts b/packages/app/src/ui/canvas-panel/scope-overlay.ts
-index 0766ca92..4972000f 100644
+index 0766ca92..e319bfa7 100644
 --- a/packages/app/src/ui/canvas-panel/scope-overlay.ts
 +++ b/packages/app/src/ui/canvas-panel/scope-overlay.ts
 @@ -24,9 +24,14 @@ export type ResolveScopeAwareSelectionTargetInput = {
@@ -8964,8 +8997,8 @@ index 0766ca92..4972000f 100644
  };
  
 +/**
-+ * transparentScopeIds are scopes the editor writes for itself (a freehand stroke's envelope that keeps its
-+ * recorded original); they group nothing for the author, so their children select as their parent's children.
++ * transparentScopeIds are scopes that group nothing for a tap: layers, and the scopes the editor writes for itself
++ * (a freehand stroke's envelope that keeps its recorded original); their children select as their parent's children.
 + */
  export function buildScopeOverlayIndex(
    statements: readonly Statement[] | undefined,
@@ -10323,16 +10356,17 @@ index f100fe15..20ea0a68 100644
        contextMenuState,
        dispatch,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
-index 8078a5d4..9db74cc5 100644
+index 8078a5d4..e9865d22 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasSelectionDerivedState.ts
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,6 @@
  import { useMemo } from "react";
++import { layerScopes } from "../../layers";
 +import { originalStrokes } from "../../original-ink";
  import { svgBounds, svgPoint, worldBounds, worldPoint, worldVector, pt } from "tikz-editor/coords/index";
  import type { NodeItem, PathItem, PathStatement, Statement } from "tikz-editor/ast/types";
  import type { ResizeRole } from "tikz-editor/edit/actions";
-@@ -32,7 +33,9 @@ import type {
+@@ -32,7 +34,9 @@ import type {
    AdornmentHighlightBox,
    CanvasSnapshot,
    DragState,
@@ -10342,7 +10376,7 @@ index 8078a5d4..9db74cc5 100644
    ScopeHitBounds,
    SelectionBounds,
    SelectionBoxDisplay,
-@@ -54,11 +57,11 @@ import {
+@@ -54,11 +58,11 @@ import {
  export type UseCanvasSelectionDerivedStateArgs = {
    snapshot: Pick<CanvasSnapshot, "source" | "editHandles" | "scene" | "parseResult" | "semanticResult">;
    selectedElementIds: ReadonlySet<string>;
@@ -10355,7 +10389,7 @@ index 8078a5d4..9db74cc5 100644
    viewportSize: { width: number; height: number };
    ROTATE_HANDLE_OFFSET_PX: number;
  };
-@@ -69,11 +72,11 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -69,11 +73,11 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
    const {
      snapshot,
      selectedElementIds,
@@ -10368,16 +10402,16 @@ index 8078a5d4..9db74cc5 100644
      viewportSize,
      ROTATE_HANDLE_OFFSET_PX
    } = args;
-@@ -244,7 +247,7 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -244,7 +248,7 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
    const scopeOverlay = useMemo(
      () =>
        augmentScopeOverlayWithMatrices(
 -        buildScopeOverlayIndex(snapshot.parseResult?.figure.body, sourceBoundsSvg),
-+        buildScopeOverlayIndex(snapshot.parseResult?.figure.body, sourceBoundsSvg, envelopeScopeIds(snapshot.parseResult?.figure.body, snapshot.source)),
++        buildScopeOverlayIndex(snapshot.parseResult?.figure.body, sourceBoundsSvg, selectionTransparentScopeIds(snapshot.parseResult?.figure.body, snapshot.source)),
          snapshot.scene?.elements,
          sourceBoundsSvg
        ),
-@@ -627,50 +630,23 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -627,50 +631,23 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
    const curveControlLines = useMemo(
      () =>
        snapshot.scene
@@ -10437,7 +10471,7 @@ index 8078a5d4..9db74cc5 100644
    const handleDisplays = useMemo<HandleDisplay[]>(() => {
      if (!svgResult) return [];
  
-@@ -696,30 +672,6 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -696,30 +673,6 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
          continue;
        }
  
@@ -10468,7 +10502,7 @@ index 8078a5d4..9db74cc5 100644
        if (handle.kind === "path-point" && treeChildSourceIds.has(handle.sourceRef.sourceId)) {
          continue;
        }
-@@ -739,7 +691,77 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -739,7 +692,77 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
        });
      }
  
@@ -10547,7 +10581,7 @@ index 8078a5d4..9db74cc5 100644
        const resizeFrame = resizeFramesBySource.get(sourceId) ?? null;
        if (resizeFrame) {
          const resizeDisabled =
-@@ -827,7 +849,7 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
+@@ -827,7 +850,7 @@ export function useCanvasSelectionDerivedState(args: UseCanvasSelectionDerivedSt
      }
  
      return displays;
@@ -10556,15 +10590,19 @@ index 8078a5d4..9db74cc5 100644
  
    const hitRegions = useMemo(() => {
      if (!snapshot.scene || !svgResult) return [];
-@@ -1416,3 +1438,18 @@ function buildMatrixEdgeHitRegions(
+@@ -1416,3 +1439,22 @@ function buildMatrixEdgeHitRegions(
  
    return regions;
  }
 +
 +/** The scopes that wrap a recorded freehand stroke with its original: Scope statements inside an envelope. */
-+function envelopeScopeIds(statements: readonly Statement[] | undefined, source: string): ReadonlySet<string> {
++/**
++ * Scopes a tap selects through, to the object inside: layers, and the scopes inside an envelope
++ * that keeps a freehand stroke's original.
++ */
++function selectionTransparentScopeIds(statements: readonly Statement[] | undefined, source: string): ReadonlySet<string> {
 +  const envelopes = originalStrokes(source);
-+  const ids = new Set<string>();
++  const ids = new Set<string>(layerScopes(statements).map((scope) => scope.id));
 +  const visit = (items: readonly Statement[]) => {
 +    for (const statement of items) {
 +      if (statement.kind !== "Scope") continue;
@@ -12195,7 +12233,7 @@ index 1ca2e7ee..a3297a22 100644
            kind: "number",
            id: "xscale",
 diff --git a/packages/app/src/ui/objects-panel/ObjectsPanel.module.css b/packages/app/src/ui/objects-panel/ObjectsPanel.module.css
-index 3e120bf3..89f15b27 100644
+index 3e120bf3..6b2292b9 100644
 --- a/packages/app/src/ui/objects-panel/ObjectsPanel.module.css
 +++ b/packages/app/src/ui/objects-panel/ObjectsPanel.module.css
 @@ -69,9 +69,11 @@
@@ -12217,12 +12255,24 @@ index 3e120bf3..89f15b27 100644
  }
  
 +.row > * { flex: 0 0 44px; }
-+.row > .rowMain { flex: 1 1 96px; }
++.row > .rowMain { flex: 1 1 60px; }
 +
  .rowMain {
    display: flex;
    align-items: center;
-@@ -174,4 +179,7 @@
+@@ -118,11 +123,6 @@
+   background: color-mix(in srgb, var(--btn-hover-bg) 45%, transparent);
+ }
+ 
+-.iconButtonDisabled {
+-  cursor: default;
+-  color: transparent;
+-  background: transparent;
+-}
+ 
+ .title {
+   min-width: 0;
+@@ -174,4 +174,9 @@
  
  .dropAfter {
    box-shadow: inset 0 -2px 0 var(--accent), inset 2px 0 0 color-mix(in srgb, var(--accent) 25%, transparent);
@@ -12232,13 +12282,21 @@ index 3e120bf3..89f15b27 100644
 +.row { min-height: 48px; }
 +.iconButton, .multiArrangeIconButton { min-width: 44px; min-height: 44px; }
 +.titleButton { min-height: 44px; font-size: 14px; }
++.newLayer, .textButton { min-height: 44px; min-width: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font-size: 14px; }
++.layerActions { display: flex; flex: 1 0 100%; flex-wrap: wrap; gap: 3px; }
 diff --git a/packages/app/src/ui/objects-panel/ObjectsPanel.tsx b/packages/app/src/ui/objects-panel/ObjectsPanel.tsx
-index 0118d46c..2549a019 100644
+index 0118d46c..027c9c2a 100644
 --- a/packages/app/src/ui/objects-panel/ObjectsPanel.tsx
 +++ b/packages/app/src/ui/objects-panel/ObjectsPanel.tsx
-@@ -4,6 +4,9 @@ import {
+@@ -1,9 +1,15 @@
+ import {
++  RiArrowDownLine,
+   RiArrowDownSLine,
++  RiArrowUpLine,
+   RiArrowRightSLine,
    RiBringForward,
    RiBringToFront,
++  RiDeleteBinLine,
    RiEyeLine,
 +  RiLockLine,
 +  RiLockUnlockLine,
@@ -12246,7 +12304,7 @@ index 0118d46c..2549a019 100644
    RiEyeOffLine,
    RiSendBackward,
    RiSendToBack
-@@ -19,6 +22,7 @@ import {
+@@ -19,6 +25,7 @@ import {
    type MouseEvent as ReactMouseEvent
  } from "react";
  import { getSharedEditAnalysisView } from "../../edit-analysis-manager";
@@ -12254,7 +12312,7 @@ index 0118d46c..2549a019 100644
  import { useEditorStore } from "../../store/store";
  import { SidePanel } from "../SidePanel";
  import {
-@@ -59,6 +63,8 @@ export function ObjectsPanel() {
+@@ -59,6 +66,8 @@ export function ObjectsPanel() {
    const sourceRevision = useEditorStore((s) => s.sourceRevision);
    const source = useEditorStore((s) => s.source);
    const snapshot = useEditorStore((s) => s.snapshot);
@@ -12263,7 +12321,7 @@ index 0118d46c..2549a019 100644
    const selectedIds = useEditorStore((s) => s.selectedElementIds);
    const dispatch = useEditorStore((s) => s.dispatch);
  
-@@ -77,6 +83,11 @@ export function ObjectsPanel() {
+@@ -77,12 +86,18 @@ export function ObjectsPanel() {
      [analysisView, selectedIds, snapshot.scene]
    );
  
@@ -12275,16 +12333,43 @@ index 0118d46c..2549a019 100644
    const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
    const [editingId, setEditingId] = useState<string | null>(null);
    const [editingValue, setEditingValue] = useState("");
-@@ -261,7 +272,7 @@ export function ObjectsPanel() {
+   const [draggedIds, setDraggedIds] = useState<string[]>([]);
+   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
++  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+   const inputRef = useRef<HTMLInputElement | null>(null);
+ 
+   useEffect(() => {
+@@ -237,6 +252,17 @@ export function ObjectsPanel() {
+     });
+   };
+ 
++  const applyAction = (action: Extract<Parameters<typeof dispatch>[0], { type: "APPLY_EDIT_ACTION" }>["action"]) => {
++    dispatch({ type: "APPLY_EDIT_ACTION", action });
++  };
++
++  const createLayer = () => {
++    const names = new Set(model.nodes.filter((node) => node.isLayer).map((node) => node.title));
++    let number = names.size + 1;
++    while (names.has(`Layer ${number}`)) number += 1;
++    applyAction({ kind: "addLayer", name: `Layer ${number}` });
++  };
++
+   const handleDrop = (targetNode: ObjectsPanelNode, placement: DropPlacement) => {
+     const movePlan = resolveMovePlan(siblingOrder, draggedIds, targetNode, placement);
+     if (!movePlan) {
+@@ -261,8 +287,9 @@ export function ObjectsPanel() {
    if (rows.length === 0) {
      return (
        <SidePanel className={css.panel}>
 -        <SidePanel.Header>Objects</SidePanel.Header>
 +        <SidePanel.Header>Layers</SidePanel.Header>
          <SidePanel.Content className={css.content}>
++          <div className={css.toolbar}><button type="button" className={css.newLayer} onClick={createLayer}>New layer</button></div>
            <div className={css.empty}>No scene objects in the current figure.</div>
          </SidePanel.Content>
-@@ -271,7 +282,7 @@ export function ObjectsPanel() {
+       </SidePanel>
+@@ -271,9 +298,10 @@ export function ObjectsPanel() {
  
    return (
      <SidePanel className={css.panel} data-testid="objects-panel">
@@ -12292,27 +12377,99 @@ index 0118d46c..2549a019 100644
 +      <SidePanel.Header>Layers</SidePanel.Header>
        <SidePanel.Content className={css.content}>
          <div className={css.toolbar}>
++          <button type="button" className={css.newLayer} onClick={createLayer}>New layer</button>
            <div className={css.multiArrangeGroup} role="group" aria-label="Group selection actions">
-@@ -347,7 +358,7 @@ export function ObjectsPanel() {
+             {groupActions.map((action) => renderActionButton(action))}
+           </div>
+@@ -294,6 +322,8 @@ export function ObjectsPanel() {
+               <div
+                 key={node.id}
+                 className={rowClasses}
++                role={node.isLayer ? "group" : undefined}
++                aria-label={node.isLayer ? `${node.title} layer` : undefined}
+                 draggable={node.canDragReorder}
+                 onClick={(event) => {
+                   if (event.shiftKey) {
+@@ -342,21 +372,19 @@ export function ObjectsPanel() {
+                 onDrop={(event) => {
+                   event.preventDefault();
+                   const placement = dropTarget?.id === node.id ? dropTarget.placement : resolvePlacement(event);
+-                  handleDrop(node, placement);
++                  // The list runs front first: above a row is later in the source.
++                  handleDrop(node, placement === "before" ? "after" : "before");
+                   setDraggedIds([]);
                    setDropTarget(null);
                  }}
                >
 -                <div className={css.treeCell} style={{ paddingLeft: depth * 16 }}>
-+                <div className={css.treeCell}>
++                {node.childCount > 0 ? <div className={css.treeCell}>
                    <RenderedTooltip content={collapsedIds.has(node.id) ? `Expand ${node.title}` : `Collapse ${node.title}`}>
                      <button
                        type="button"
-@@ -384,12 +395,22 @@ export function ObjectsPanel() {
-                       event.stopPropagation();
-                       toggleVisibility(node);
-                     }}
-+                    disabled={!node.canToggleVisibility || lockedIds.has(node.id)}
-                     aria-label={node.hidden ? `Show ${node.title}` : `Hide ${node.title}`}
-                   >
-                     {node.hidden ? <RiEyeOffLine size={16} /> : <RiEyeLine size={16} />}
-                   </button>
-                 </RenderedTooltip>
+-                      className={node.childCount > 0 ? css.iconButton : [css.iconButton, css.iconButtonDisabled].join(" ")}
++                      className={css.iconButton}
+                       onClick={(event) => {
+                         event.stopPropagation();
+-                        if (node.childCount === 0) {
+-                          return;
+-                        }
+                         setCollapsedIds((current) => {
+                           const next = new Set(current);
+                           if (next.has(node.id)) {
+@@ -369,30 +397,15 @@ export function ObjectsPanel() {
+                       }}
+                       aria-label={collapsedIds.has(node.id) ? `Expand ${node.title}` : `Collapse ${node.title}`}
+                     >
+-                      {node.childCount > 0 ? (
+-                        collapsedIds.has(node.id) ? <RiArrowRightSLine size={16} /> : <RiArrowDownSLine size={16} />
+-                      ) : null}
++                      {collapsedIds.has(node.id) ? <RiArrowRightSLine size={16} /> : <RiArrowDownSLine size={16} />}
+                     </button>
+                   </RenderedTooltip>
+-                </div>
+-                <RenderedTooltip content={node.hidden ? `Show ${node.title}` : `Hide ${node.title}`}>
+-                  <button
+-                    type="button"
+-                    className={css.iconButton}
+-                    onPointerDown={(event) => {
+-                      event.preventDefault();
+-                      event.stopPropagation();
+-                      toggleVisibility(node);
+-                    }}
+-                    aria-label={node.hidden ? `Show ${node.title}` : `Hide ${node.title}`}
+-                  >
+-                    {node.hidden ? <RiEyeOffLine size={16} /> : <RiEyeLine size={16} />}
+-                  </button>
+-                </RenderedTooltip>
 -                <div className={css.rowMain}>
++                </div> : null}
++                <div className={css.rowMain} style={{ paddingLeft: depth * 12 }}>
+                   {isEditing ? (
+                     <input
+                       ref={inputRef}
++                      aria-label={node.isLayer ? "Layer name" : "Name"}
+                       className={css.titleInput}
+                       value={editingValue}
+                       onChange={(event) => { setEditingValue(event.target.value); }}
+@@ -420,6 +433,44 @@ export function ObjectsPanel() {
+                     </button>
+                   )}
+                 </div>
++                <RenderedTooltip content={node.hidden ? `Show ${node.title}` : `Hide ${node.title}`}>
++                  <button
++                    type="button"
++                    className={css.iconButton}
++                    onPointerDown={(event) => {
++                      event.preventDefault();
++                      event.stopPropagation();
++                      toggleVisibility(node);
++                    }}
++                    disabled={!node.canToggleVisibility || lockedIds.has(node.id)}
++                    aria-label={node.hidden ? `Show ${node.title}` : `Hide ${node.title}`}
++                  >
++                    {node.hidden ? <RiEyeOffLine size={16} /> : <RiEyeLine size={16} />}
++                  </button>
++                </RenderedTooltip>
 +                <button type="button" className={css.iconButton} aria-label={`${lockedIds.has(node.id) && !ownLockedIds.has(node.id) ? "Locked by parent layer:" : lockedIds.has(node.id) ? "Unlock" : "Lock"} ${node.title}`}
 +                  title={lockedIds.has(node.id) && !ownLockedIds.has(node.id) ? "Unlock the parent layer to edit this object" : undefined}
 +                  disabled={lockedIds.has(node.id) && !ownLockedIds.has(node.id)}
@@ -12322,10 +12479,79 @@ index 0118d46c..2549a019 100644
 +                <button type="button" className={css.iconButton} aria-label={`Rename ${node.title}`} disabled={!node.canRename || lockedIds.has(node.id)} onClick={(event) => {
 +                  event.stopPropagation(); startRename(node);
 +                }}><RiEditLine size={18} /></button>
-+                <div className={css.rowMain} style={{ paddingLeft: depth * 12 }}>
-                   {isEditing ? (
-                     <input
-                       ref={inputRef}
++                {node.isLayer ? <div className={css.layerActions}>
++                  <button type="button" className={css.iconButton} aria-label={`Raise ${node.title}`} disabled={node.index === (siblingOrder.get(node.parentKey)?.length ?? 1) - 1}
++                    onClick={(event) => { event.stopPropagation(); applyAction({ kind: "reorderElements", elementIds: [node.id], direction: "bringForward" }); }}><RiArrowUpLine size={18} /></button>
++                  <button type="button" className={css.iconButton} aria-label={`Lower ${node.title}`} disabled={node.index === 0}
++                    onClick={(event) => { event.stopPropagation(); applyAction({ kind: "reorderElements", elementIds: [node.id], direction: "sendBackward" }); }}><RiArrowDownLine size={18} /></button>
++                  <button type="button" className={css.textButton} aria-label={`Move selection to ${node.title}`} disabled={selectedIds.size === 0 || lockedIds.has(node.id)}
++                    onClick={(event) => { event.stopPropagation(); applyAction({ kind: "moveIntoScope", elementIds: [...selectedIds], scopeId: node.id }); }}>Move here</button>
++                  {confirmingDeleteId === node.id
++                    ? <><button type="button" className={css.textButton} aria-label={`Delete ${node.title} and its objects`}
++                        onClick={(event) => { event.stopPropagation(); setConfirmingDeleteId(null); applyAction({ kind: "deleteElements", elementIds: [node.id] }); }}>Delete with objects</button>
++                      <button type="button" className={css.textButton} onClick={(event) => { event.stopPropagation(); setConfirmingDeleteId(null); }}>Keep</button></>
++                    : <button type="button" className={css.iconButton} aria-label={`Delete ${node.title}`} disabled={lockedIds.has(node.id)}
++                        onClick={(event) => { event.stopPropagation(); setConfirmingDeleteId(node.id); }}><RiDeleteBinLine size={18} /></button>}
++                </div> : null}
+               </div>
+             );
+           })}
+@@ -468,13 +519,14 @@ function ObjectsUngroupIcon() {
+   );
+ }
+ 
++/** Rows front first, like Inkscape and Photoshop: the statement drawn last is listed first. */
+ function flattenNodes(
+   nodes: readonly ObjectsPanelNode[],
+   collapsedIds: ReadonlySet<string>,
+   depth = 0
+ ): FlatRow[] {
+   const rows: FlatRow[] = [];
+-  for (const node of nodes) {
++  for (const node of [...nodes].reverse()) {
+     rows.push({ node, depth });
+     if (!collapsedIds.has(node.id)) {
+       rows.push(...flattenNodes(node.children, collapsedIds, depth + 1));
+diff --git a/packages/app/src/ui/objects-panel/model.ts b/packages/app/src/ui/objects-panel/model.ts
+index da0f8756..0d9236b6 100644
+--- a/packages/app/src/ui/objects-panel/model.ts
++++ b/packages/app/src/ui/objects-panel/model.ts
+@@ -3,6 +3,7 @@ import type { EditAnalysisView } from "tikz-editor/edit/analysis";
+ import { resolveFigureBoundsState } from "tikz-editor/edit/figure-bounds";
+ import type { OptionEntry, OptionListAst } from "tikz-editor/options/types";
+ import type { SceneElement, SceneFigure } from "tikz-editor/semantic/types";
++import { layerName } from "../../layers";
+ 
+ export type ObjectsPanelNode = {
+   id: string;
+@@ -13,6 +14,8 @@ export type ObjectsPanelNode = {
+   parentKey: string;
+   index: number;
+   hidden: boolean;
++  /** A top-level scope with a name: one layer of the figure. */
++  isLayer: boolean;
+   selected: boolean;
+   canRename: boolean;
+   canToggleVisibility: boolean;
+@@ -87,7 +90,9 @@ function buildNode(
+   const explicitName = explicitNodeName === undefined || explicitNodeName.length === 0 ? readOptionValue(displayOptions, "name") : explicitNodeName;
+   const label = statement.id === boundingBoxSourceId
+     ? "Bounding Box"
+-    : deriveStatementLabel(statement, sceneElementsBySourceId.get(statement.id) ?? []);
++    : layerName(statement, ref.parentKey === "root") !== null
++      ? "Layer"
++      : deriveStatementLabel(statement, sceneElementsBySourceId.get(statement.id) ?? []);
+   const targetResolution = analysisView.resolvePropertyTarget(writeTargetId);
+   const siblingCount = analysisView.statementSnapshot.byParentKey.get(ref.parentKey)?.length ?? 0;
+   const node: ObjectsPanelNode = {
+@@ -99,6 +104,7 @@ function buildNode(
+     parentKey: ref.parentKey,
+     index: ref.index,
+     hidden: hasOptionFlag(displayOptions, "transparent"),
++    isLayer: layerName(statement, ref.parentKey === "root") !== null,
+     selected: selectedIds.has(statement.id),
+     canRename: targetResolution.kind === "found",
+     canToggleVisibility: targetResolution.kind === "found",
 diff --git a/packages/app/src/ui/source-panel/SourcePanel.module.css b/packages/app/src/ui/source-panel/SourcePanel.module.css
 index f7e5e9b6..7503251d 100644
 --- a/packages/app/src/ui/source-panel/SourcePanel.module.css
@@ -12804,7 +13030,7 @@ index ee4f9c27..1af5f913 100644
    "path_patterns",
    "path_operators_basic",
 diff --git a/packages/core/src/edit/actions.ts b/packages/core/src/edit/actions.ts
-index 29413180..1b10f673 100644
+index 29413180..713c42f0 100644
 --- a/packages/core/src/edit/actions.ts
 +++ b/packages/core/src/edit/actions.ts
 @@ -1,3 +1,5 @@
@@ -12813,7 +13039,35 @@ index 29413180..1b10f673 100644
  import type {
    EditHandle,
    EvaluateOptions
-@@ -1100,7 +1102,11 @@ function applyAddElement(
+@@ -63,6 +65,7 @@ import {
+   PROPERTY_WRITE_CLEANUP_NOOP_REASON
+ } from "./property-write-planner.js";
+ import { applyGroupElementsAction, applyUngroupElementsAction } from "./actions/group-ungroup-actions.js";
++import { applyAddLayerAction, applyMoveIntoScopeAction } from "./actions/layer-actions.js";
+ import { applyRepeatElementsAction } from "./actions/repeat.js";
+ import {
+   applyAddTreeChildAction,
+@@ -159,6 +162,8 @@ export type EditAction =
+   | ConvertNodePositionToAbsoluteAction
+   | { kind: "reorderElements"; elementIds: string[]; direction: ReorderDirection }
+   | { kind: "groupElements"; elementIds: string[] }
++  | { kind: "moveIntoScope"; elementIds: string[]; scopeId: string }
++  | { kind: "addLayer"; name: string }
+   | { kind: "ungroupElements"; elementIds: string[] }
+   | {
+       kind: "repeatElements";
+@@ -316,6 +321,10 @@ export function applyEditAction(
+         return applyReorderElementsAction(source, action.elementIds, action.direction, parseOptions);
+       case "groupElements":
+         return applyGroupElements(source, action, parseOptions);
++      case "moveIntoScope":
++        return applyMoveIntoScopeAction(source, action.elementIds, action.scopeId, parseOptions);
++      case "addLayer":
++        return applyAddLayerAction(source, action.name);
+       case "ungroupElements":
+         return applyUngroupElements(source, action, parseOptions);
+       case "repeatElements":
+@@ -1100,7 +1109,11 @@ function applyAddElement(
  ): EditActionResult {
    const beforeStatements = parseStatementSnapshot(source, parseOptions);
    const resolved = resolveElementTemplateAnchorNames(source, template, parseOptions);
@@ -12826,7 +13080,7 @@ index 29413180..1b10f673 100644
    const parsedForInsertion = parseTikzForEdit(resolved.source, parseOptions);
  
    const newSource = insertElementIntoSource(resolved.source, snippet, parsedForInsertion.figure.span);
-@@ -1150,3 +1156,22 @@ function computeReplacementPatch(oldSource: string, newSource: string): SourcePa
+@@ -1150,3 +1163,22 @@ function computeReplacementPatch(oldSource: string, newSource: string): SourcePa
      replacement: newSource.slice(prefix, newSuffix)
    };
  }
@@ -12848,6 +13102,153 @@ index 29413180..1b10f673 100644
 +    }
 +    case "node": case "matrix": case "image": return template;
 +  }
++}
+diff --git a/packages/core/src/edit/actions/group-ungroup-actions.ts b/packages/core/src/edit/actions/group-ungroup-actions.ts
+index 57b3d876..3acc4bb9 100644
+--- a/packages/core/src/edit/actions/group-ungroup-actions.ts
++++ b/packages/core/src/edit/actions/group-ungroup-actions.ts
+@@ -174,7 +174,7 @@ type GroupReplacement = {
+   scopeLocalSpan: Span;
+ };
+ 
+-type DependencyConstraint = {
++export type DependencyConstraint = {
+   before: string;
+   after: string;
+ };
+@@ -238,7 +238,7 @@ function totalSiblingMovement(
+   return movement;
+ }
+ 
+-function preservesDependencyOrder(
++export function preservesDependencyOrder(
+   expandedOrder: readonly string[],
+   constraints: readonly DependencyConstraint[]
+ ): boolean {
+@@ -259,7 +259,7 @@ function preservesDependencyOrder(
+   return true;
+ }
+ 
+-function collectSiblingDependencyConstraints(
++export function collectSiblingDependencyConstraints(
+   source: string,
+   siblingIds: readonly string[],
+   parseOptions: EditParseOptions
+diff --git a/packages/core/src/edit/actions/layer-actions.ts b/packages/core/src/edit/actions/layer-actions.ts
+new file mode 100644
+index 00000000..8b3e1132
+--- /dev/null
++++ b/packages/core/src/edit/actions/layer-actions.ts
+@@ -0,0 +1,110 @@
++import type { EditActionResultLike } from "../result-types.js";
++import type { Span } from "../../ast/types.js";
++import type { EditParseOptions } from "../parse-options.js";
++import {
++  applyTextReplacements,
++  formatSnippetsForInsertion,
++  lineIndentAtOffset,
++  mapSpansToStatementIds,
++  parseStatementSnapshot,
++  resolveRootInsertionPoint,
++  resolveStatementRefs,
++  statementSnippet,
++  type StatementRef
++} from "../statement-ops.js";
++import { normalizeElementIds } from "../statement-find.js";
++import { collectSiblingDependencyConstraints, preservesDependencyOrder } from "./group-ungroup-actions.js";
++
++const END_SCOPE = "\\end{scope}";
++
++/** Add an empty layer, a top-level scope named `name`, in front of everything else. */
++export function applyAddLayerAction(source: string, name: string): EditActionResultLike {
++  if (name.trim().length === 0) throw new Error("A layer needs a name.");
++  const at = resolveRootInsertionPoint(source);
++  const indent = at.indent.slice(0, -2);
++  const text = `${at.indent}\\begin{scope}[name=${name}]\n${at.indent}\\end{scope}\n${indent}`;
++  // On its own line, \end{tikzpicture} keeps its indentation after the new scope; after content, it moves to a new line.
++  const lineStart = source.lastIndexOf("\n", at.offset - 1) + 1;
++  const ownLine = source.slice(lineStart, at.offset).trim().length === 0;
++  const applied = applyTextReplacements(source, [ownLine
++    ? { span: { from: lineStart, to: at.offset }, text }
++    : { span: { from: at.offset, to: at.offset }, text: `\n${text}` }]);
++  return {
++    kind: "success",
++    newSource: applied.source,
++    patches: applied.patches,
++    selectedSourceIds: []
++  };
++}
++
++/**
++ * Move statements to the end of a scope's body (a layer, when the scope is top level).
++ * Refused when the move would put a statement after one that uses what it defines, or before one it uses.
++ */
++export function applyMoveIntoScopeAction(
++  source: string,
++  elementIds: readonly string[],
++  scopeId: string,
++  parseOptions: EditParseOptions = {}
++): EditActionResultLike {
++  const snapshot = parseStatementSnapshot(source, parseOptions);
++  const scope = snapshot.byId.get(scopeId);
++  if (!scope || scope.statement.kind !== "Scope") {
++    return { kind: "unsupported", reason: `${scopeId} is not a scope.` };
++  }
++  const within = (inner: Span, outer: Span) => inner.from >= outer.from && inner.to <= outer.to;
++  const selected = resolveStatementRefs(snapshot, normalizeElementIds(elementIds));
++  if (selected.some((ref) => within(scope.span, ref.span))) {
++    return { kind: "unsupported", reason: "A layer cannot be moved into itself." };
++  }
++  // Outermost selected statements not already in the scope; their children move with them.
++  const moved = selected
++    .filter((ref) => !within(ref.span, scope.span))
++    .filter((ref) => !selected.some((other) => other !== ref && within(ref.span, other.span)))
++    .sort((left, right) => left.span.from - right.span.from);
++  if (moved.length === 0) {
++    return { kind: "unsupported", reason: "The selection is already in this layer." };
++  }
++
++  const isMoved = (ref: StatementRef) => moved.some((block) => within(ref.span, block.span));
++  const ordered = [...snapshot.all].sort((left, right) => left.span.from - right.span.from);
++  const staying = ordered.filter((ref) => !isMoved(ref));
++  const lastInScope = staying.reduce((index, ref, position) => within(ref.span, scope.span) ? position : index, -1);
++  const nextOrder = [...staying.slice(0, lastInScope + 1), ...ordered.filter(isMoved), ...staying.slice(lastInScope + 1)].map((ref) => ref.id);
++  const constraints = collectSiblingDependencyConstraints(source, ordered.map((ref) => ref.id), parseOptions);
++  if (!preservesDependencyOrder(nextOrder, constraints)) {
++    return { kind: "unsupported", reason: "Moving this into the layer would draw it out of order with a node or coordinate it defines or uses." };
++  }
++
++  const endIndex = source.lastIndexOf(END_SCOPE, scope.span.to - END_SCOPE.length);
++  const scopeIndent = lineIndentAtOffset(source, scope.span.from);
++  const endLineStart = source.lastIndexOf("\n", endIndex - 1) + 1;
++  const endOnOwnLine = endLineStart > scope.span.from && source.slice(endLineStart, endIndex).trim().length === 0;
++  const insertion = formatSnippetsForInsertion(moved.map((ref) => statementSnippet(source, ref)), `${scopeIndent}  `, endOnOwnLine
++    ? undefined
++    : { trailingNewline: true, newline: `\n${scopeIndent}` });
++  const insertAt = endOnOwnLine ? endLineStart - 1 : endIndex;
++  const applied = applyTextReplacements(source, [
++    ...moved.map((ref) => ({ span: removalSpan(source, ref.span), text: "" })),
++    { span: { from: insertAt, to: insertAt }, text: insertion.text }
++  ]);
++  const inserted = applied.applied.find((entry) => entry.oldSpan.from === insertAt && entry.oldSpan.to === insertAt)!;
++  return {
++    kind: "success",
++    newSource: applied.source,
++    patches: applied.patches,
++    selectedSourceIds: mapSpansToStatementIds(applied.source, insertion.snippetSpans.map((span) => ({
++      from: inserted.newSpan.from + span.from,
++      to: inserted.newSpan.from + span.to
++    })))
++  };
++}
++
++/** A statement's span widened to its whole line when nothing else shares the line. */
++function removalSpan(source: string, span: Span): Span {
++  const lineStart = source.lastIndexOf("\n", span.from - 1) + 1;
++  const lineEnd = source.indexOf("\n", span.to);
++  const end = lineEnd < 0 ? source.length : lineEnd;
++  const alone = source.slice(lineStart, span.from).trim().length === 0 && source.slice(span.to, end).trim().length === 0;
++  return alone && lineStart > 0 ? { from: lineStart - 1, to: end } : span;
 +}
 diff --git a/packages/core/src/edit/actions/path-editing-actions.ts b/packages/core/src/edit/actions/path-editing-actions.ts
 index 23a8fe28..808c9745 100644
