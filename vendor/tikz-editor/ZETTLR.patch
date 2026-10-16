@@ -12815,12 +12815,20 @@ index 56e1001d..20282e27 100644
    if (!rewritten) {
 diff --git a/packages/core/src/edit/color-value.ts b/packages/core/src/edit/color-value.ts
 new file mode 100644
-index 00000000..67802795
+index 00000000..1e817909
 --- /dev/null
 +++ b/packages/core/src/edit/color-value.ts
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,21 @@
 +/** Convert picker RGBA values into TikZ color and opacity options. */
 +export function tikzColorValue(value: string): { color: string; opacity: number | null } {
++  // HTML hex from a colour control is not an xcolor expression: write it as an rgb value, its alpha as opacity.
++  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})?$/iu.exec(value.trim());
++  if (hex) {
++    const [red, green, blue] = hex.slice(1, 4).map((part) => parseInt(part, 16));
++    const alpha = hex[4] === undefined ? 255 : parseInt(hex[4], 16);
++    return { color: `{rgb,255:red,${red};green,${green};blue,${blue}}`, opacity: alpha === 255 ? null : alpha / 255 };
++  }
++  if (value.trim().startsWith("#")) throw new Error(`Colour ${value} is neither #rrggbb nor #rrggbbaa.`);
 +  const rgba = /^rgba\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d*(?:\.\d+)?)\s*\)$/iu.exec(value.trim());
 +  if (!rgba) return { color: value, opacity: null };
 +  const channels = rgba.slice(1, 4).map((part) => Math.round(Math.max(0, Math.min(255, Number(part)))));
