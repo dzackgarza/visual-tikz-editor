@@ -1548,6 +1548,13 @@ describe("standalone workbench host boundary", function () {
       // A press on an object in a layer takes the object, not the whole layer.
       await expect.poll(source, 'The pen did not drag an unlocked line').not.toMatch(/\\draw \(-14,-18\) -- \(-2,-12\);/);
       assert.match(await source(), /\\begin\{scope\}\[name=Ground\]\s*\\draw/, 'The drag moved the layer instead of its line');
+      // The selected line's control stays off the open panel.
+      const aside = (await frame.getByRole('complementary', { name: 'Diagram properties', exact: true }).boundingBox())!;
+      for (const control of [frame.getByRole('button', { name: /Lock curve/ }), frame.getByRole('button', { name: /curve actions/i }).first()]) {
+        const box = (await control.boundingBox())!;
+        assert.ok(box.x + box.width <= aside.x || box.x >= aside.x + aside.width || box.y + box.height <= aside.y || box.y >= aside.y + aside.height,
+          `${control} covers the Layers panel`);
+      }
       await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
       await expect.poll(source).toMatch(/\\draw \(-14,-18\) -- \(-2,-12\);/);
       await tap(panel.getByRole('button', { name: 'Lock Ground', exact: true }));
