@@ -1481,6 +1481,58 @@ describe("standalone workbench host boundary", function () {
       await expect(mode).toBeVisible();
       await mode.press('q');
       await expect(settings).toHaveCount(0);
+      await mode.press('ArrowDown');
+      await expect(mode).toHaveValue('fixed');
+      assert.equal((await editorDebug(page)).tool, 'select', 'Native select typing switched drawing tools');
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `runs a configured canvas-owned simplification command in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
+      const settings = frame.getByTestId('settings-modal');
+      await tap(settings.getByRole('button', { name: 'Keyboard shortcuts', exact: true }));
+      await settings.getByRole('searchbox', { name: 'Find command', exact: true }).fill('Simplify Path');
+      await tap(settings.getByRole('button', { name: 'Set shortcut for Simplify Path', exact: true }));
+      await page.keyboard.press('Control+Alt+p');
+      await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Freehand', exact: true }));
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await input.penStroke(Array.from({ length: 60 }, (_, i) => ({ x: viewport.x + viewport.width * .35 + i * 6, y: viewport.y + viewport.height * .45 + Math.sin(i / 4) * 30 })));
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      await tap(result.getByRole('button', { name: 'Apply simplification', exact: true }));
+      await expect(result).toHaveCount(0);
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      const ids = await frame.locator('svg [data-source-id^="path:"]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')!))]);
+      const curve = frame.locator(`svg [data-source-id="${ids[ids.length - 1]}"]`).first();
+      const selectCurve = async () => {
+        await fitDiagram(frame, input);
+        await input.touch([await strokePoint(page, curve, .3)]);
+        const whole = frame.getByRole('button', { name: 'Select entire curve', exact: true });
+        if (await whole.isVisible()) await tap(whole);
+      };
+      await selectCurve();
+      const before = (await editorDebug(page)).source;
+      const anchors = async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length;
+      const count = await anchors();
+      await tap(frame.getByRole('button', { name: 'Curve actions', exact: true }));
+      await tap(frame.getByRole('button', { name: 'Simplify curve', exact: true }));
+      await expect.poll(anchors, { timeout: 30_000 }).toBeLessThan(count);
+      await tap(frame.getByRole('button', { name: 'Curve actions', exact: true }));
+      await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
+      await expect.poll(async () => (await editorDebug(page)).source).toBe(before);
+      await selectCurve();
+      await expect.poll(async () => (await editorDebug(page)).source).toBe(before);
+      if (!(await frame.getByRole('button', { name: 'Simplify curve', exact: true }).isVisible()))
+        await tap(frame.getByRole('button', { name: 'Curve actions', exact: true }));
+      await expect(frame.getByRole('button', { name: 'Simplify curve', exact: true })).toBeVisible();
+      assert.equal(await anchors(), count, 'Reaching the keyboard baseline changed the curve');
+      await page.keyboard.press('Control+Alt+p');
+      await expect.poll(anchors, { timeout: 30_000, message: 'The configured command did not reach the canvas simplifier' }).toBeLessThan(count);
     });
   }
 
