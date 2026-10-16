@@ -1494,6 +1494,72 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    it(`creates, renames, fills, hides, locks, orders and deletes TikZ scope layers by touch in ${tablet.name}`, async function () {
+      await page.setViewportSize({ width: tablet.width, height: tablet.height });
+      await page.reload();
+      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (0,0) -- (4,2);\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id]')).toHaveCount(1);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => { await input.touch([await stableCenter(locator)]); };
+      const source = async () => (await editorDebug(page)).source;
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Layers', exact: true }));
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true }).getByRole('tabpanel');
+      const layers = () => panel.getByRole('group', { name: / layer$/ }).evaluateAll(groups => groups.map(group => group.getAttribute('aria-label')!.replace(/ layer$/, '')));
+      // A new layer is a named scope; layers are listed front first.
+      await tap(panel.getByRole('button', { name: 'New layer', exact: true }));
+      await tap(panel.getByRole('button', { name: 'New layer', exact: true }));
+      await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Layer 1\][^]*\\end\{scope\}[^]*\\begin\{scope\}\[name=Layer 2\]/);
+      await expect.poll(layers).toEqual(['Layer 2', 'Layer 1']);
+      for (const button of await panel.getByRole('group', { name: / layer$/ }).getByRole('button').all()) {
+        const box = (await button.boundingBox())!;
+        assert.ok(box.width >= 44 && box.height >= 44, `${await button.getAttribute('aria-label')} is ${box.width}x${box.height} px, under a fingertip`);
+      }
+      // Renaming writes the scope's name.
+      await tap(panel.getByRole('button', { name: 'Rename Layer 1', exact: true }));
+      await panel.getByRole('textbox', { name: 'Layer name' }).fill('Ground');
+      await page.keyboard.press('Enter');
+      await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Ground\]/);
+      // The selected line moves into the layer's scope.
+      await tap(panel.getByRole('button', { name: 'Line', exact: true }));
+      await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+      await tap(panel.getByRole('button', { name: 'Move selection to Ground', exact: true }));
+      await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Ground\]\s*\\draw \(0,0\) -- \(4,2\);\s*\\end\{scope\}/);
+      assert.equal((await source()).match(/\\draw/g)!.length, 1);
+      // Hiding writes transparent; showing removes it.
+      await tap(panel.getByRole('button', { name: 'Hide Ground', exact: true }));
+      await expect.poll(source).toMatch(/\[name=Ground, transparent\]/);
+      await tap(panel.getByRole('button', { name: 'Show Ground', exact: true }));
+      await expect.poll(source).toMatch(/\[name=Ground\]/);
+      // A locked layer's objects do not move under the pen.
+      await tap(panel.getByRole('button', { name: 'Lock Ground', exact: true }));
+      await expect(panel.getByRole('button', { name: 'Unlock Ground', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      const line = frame.locator('svg [data-source-id]').first();
+      const from = await strokePointClearOf(page, line, rail);
+      await input.penStroke([from, { x: from.x + 30, y: from.y + 20 }, { x: from.x + 60, y: from.y + 40 }]);
+      assert.match(await source(), /\\draw \(0,0\) -- \(4,2\);/, 'A locked layer\'s line moved');
+      await tap(panel.getByRole('button', { name: 'Unlock Ground', exact: true }));
+      // Raising puts the layer in front: later in the source, first in the list.
+      await tap(panel.getByRole('button', { name: 'Raise Ground', exact: true }));
+      await expect.poll(layers).toEqual(['Ground', 'Layer 2']);
+      assert.match(await source(), /\[name=Layer 2\][^]*\[name=Ground\]/);
+      // Deleting asks first, then removes the scope.
+      await tap(panel.getByRole('button', { name: 'Delete Layer 2', exact: true }));
+      assert.match(await source(), /name=Layer 2/, 'Deleted without confirmation');
+      await tap(panel.getByRole('button', { name: 'Delete Layer 2 and its objects', exact: true }));
+      await expect.poll(source).not.toMatch(/Layer 2/);
+      await expect.poll(layers).toEqual(['Ground']);
+      await storyScreenshot(page, `layers-${tablet.name}`);
+      await tap(frame.getByRole('complementary', { name: 'Diagram properties', exact: true }).getByRole('button', { name: 'Close properties', exact: true }));
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     it(`keeps panels and the freehand result clear of the drawing rail in ${tablet.name}`, async function () {
       await page.setViewportSize({ width: tablet.width, height: tablet.height });
       await page.reload();
