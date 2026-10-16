@@ -339,7 +339,7 @@ index 20b8b673..faf832b4 100644
    writeText?: (text: string) => Promise<void>;
    readCustomText?: (
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
-index 4850a87e..755ae417 100644
+index 4850a87e..2dd257e3 100644
 --- a/packages/app/src/settings/storage.ts
 +++ b/packages/app/src/settings/storage.ts
 @@ -1,5 +1,5 @@
@@ -349,7 +349,7 @@ index 4850a87e..755ae417 100644
  import { getActiveEditorPlatform } from "../platform/current";
  
  const STORAGE_KEY = "tikz-editor:settings";
-@@ -36,11 +36,38 @@ export function loadSettings(): AppSettings {
+@@ -36,11 +36,32 @@ export function loadSettings(): AppSettings {
        },
        canvas: {
          ...DEFAULT_SETTINGS.canvas,
@@ -369,13 +369,7 @@ index 4850a87e..755ae417 100644
          ...DEFAULT_SETTINGS.colorPicker,
 -        ...parsed.colorPicker
 +        ...parsed.colorPicker,
-+        collections: Array.isArray(parsed.colorPicker?.collections)
-+          ? parsed.colorPicker.collections.filter((entry) => entry && typeof entry.id === "string" && typeof entry.name === "string" && Array.isArray(entry.colors)).map((entry) => ({ ...entry, colors: entry.colors.filter((color): color is string => typeof color === "string") }))
-+          : [],
-+        activeCollectionId: typeof parsed.colorPicker?.activeCollectionId === "string" ? parsed.colorPicker.activeCollectionId : "",
-+        palette: Array.isArray(parsed.colorPicker?.palette)
-+          ? parsed.colorPicker.palette.filter((color): color is string => typeof color === "string")
-+          : DEFAULT_SETTINGS.colorPicker.palette
++        ...loadColorCollections(parsed.colorPicker)
 +      },
 +      toolbar: {
 +        dock: isToolbarDock(parsed.toolbar?.dock) ? parsed.toolbar.dock : DEFAULT_SETTINGS.toolbar.dock,
@@ -390,10 +384,21 @@ index 4850a87e..755ae417 100644
        },
        rendering: {
          ...DEFAULT_SETTINGS.rendering,
-@@ -52,6 +79,16 @@ export function loadSettings(): AppSettings {
+@@ -52,6 +73,27 @@ export function loadSettings(): AppSettings {
    }
  }
  
++/** Saved collections when they are well formed and name their active one; otherwise the default collection. */
++function loadColorCollections(colorPicker: Partial<AppSettings["colorPicker"]> | undefined): Pick<AppSettings["colorPicker"], "collections" | "activeCollectionId"> {
++  const collections = colorPicker?.collections;
++  const valid = Array.isArray(collections) && collections.length > 0 && collections.every((entry) =>
++    typeof entry?.id === "string" && typeof entry.name === "string" && Array.isArray(entry.colors) && entry.colors.every((color) => typeof color === "string"));
++  if (!valid || !collections.some((entry) => entry.id === colorPicker?.activeCollectionId)) {
++    return { collections: DEFAULT_SETTINGS.colorPicker.collections, activeCollectionId: DEFAULT_SETTINGS.colorPicker.activeCollectionId };
++  }
++  return { collections, activeCollectionId: colorPicker!.activeCollectionId! };
++}
++
 +function isToolbarDock(value: string | undefined): value is ToolbarDock {
 +  return value === "left" || value === "right" || value === "top" || value === "bottom" || value === "floating";
 +}
@@ -408,7 +413,7 @@ index 4850a87e..755ae417 100644
    if (!Number.isFinite(value)) {
      return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
 diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
-index af0a7abe..a3119e39 100644
+index af0a7abe..8d23eafc 100644
 --- a/packages/app/src/settings/types.ts
 +++ b/packages/app/src/settings/types.ts
 @@ -9,6 +9,22 @@ export type EditorSettings = {
@@ -453,15 +458,15 @@ index af0a7abe..a3119e39 100644
    canvas: CanvasSettings;
    colorPicker: {
      accuracy: ColorPickerAccuracy;
-+    palette: string[];
-+    collections: { id: string; name: string; colors: string[] }[];
++    /** Named palettes; the active one is the rail's palette and the popup's swatches. Never empty. */
++    collections: ColorCollection[];
 +    activeCollectionId: string;
    };
 +  toolbar: ToolbarSettings;
    rendering: RenderingSettings;
  };
  
-@@ -81,13 +108,45 @@ export const DEFAULT_SETTINGS: AppSettings = {
+@@ -81,15 +108,55 @@ export const DEFAULT_SETTINGS: AppSettings = {
      formatterMaxLineLength: 100
    },
    canvas: {
@@ -479,9 +484,8 @@ index af0a7abe..a3119e39 100644
    colorPicker: {
 -    accuracy: "approximate"
 +    accuracy: "approximate",
-+    collections: [],
-+    activeCollectionId: "",
-+    palette: ["black", "white", "red", "orange", "yellow", "green", "blue", "violet"]
++    collections: [{ id: "default", name: "Default", colors: ["black", "white", "red", "orange", "yellow", "green", "blue", "violet"] }],
++    activeCollectionId: "default"
 +  },
 +  toolbar: {
 +    dock: "left",
@@ -508,36 +512,104 @@ index af0a7abe..a3119e39 100644
    },
    rendering: {
      mathJaxFont: "mathjax-newcm"
+   }
+ };
++
++export type ColorCollection = { id: string; name: string; colors: string[] };
++
++/** The active collection's colours: the saved colours the rail and the colour popup offer. */
++export function activePalette(colorPicker: AppSettings["colorPicker"]): string[] {
++  const collection = colorPicker.collections.find((entry) => entry.id === colorPicker.activeCollectionId);
++  if (!collection) throw new Error(`Active colour collection ${colorPicker.activeCollectionId} is not among the saved collections.`);
++  return collection.colors;
++}
 diff --git a/packages/app/src/settings/useSettingsStore.ts b/packages/app/src/settings/useSettingsStore.ts
-index 6d5ddef2..eb1f0637 100644
+index 6d5ddef2..51509bfc 100644
 --- a/packages/app/src/settings/useSettingsStore.ts
 +++ b/packages/app/src/settings/useSettingsStore.ts
-@@ -9,9 +9,7 @@ type SettingsStore = {
+@@ -1,6 +1,6 @@
+ import { create } from "zustand";
+ import type { AppSettings } from "./types";
+-import { DEFAULT_SETTINGS } from "./types";
++import { DEFAULT_SETTINGS, activePalette } from "./types";
+ import { loadSettings, saveSettings } from "./storage";
+ 
+ type SettingsStore = {
+@@ -8,13 +8,25 @@ type SettingsStore = {
+   updateGeneralSettings: (patch: Partial<AppSettings["general"]>) => void;
    updateEditorSettings: (patch: Partial<AppSettings["editor"]>) => void;
    updateCanvasSettings: (patch: Partial<AppSettings["canvas"]>) => void;
-   updateColorPickerSettings: (patch: Partial<AppSettings["colorPicker"]>) => void;
+-  updateColorPickerSettings: (patch: Partial<AppSettings["colorPicker"]>) => void;
 -  updateRenderingSettings: (patch: Partial<AppSettings["rendering"]>) => void;
 -  resetGeneralSettings: () => void;
 -  resetEditorSettings: () => void;
++  setActivePalette: (colors: string[]) => void;
++  createColorCollection: () => void;
++  renameColorCollection: (id: string, name: string) => void;
++  selectColorCollection: (id: string) => void;
++  deleteColorCollection: (id: string) => void;
 +  updateToolbarSettings: (patch: Partial<AppSettings["toolbar"]>) => void;
    resetCanvasSettings: () => void;
  };
  
-@@ -57,32 +55,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
++type SetSettings = (update: (state: SettingsStore) => Partial<SettingsStore>) => void;
++
++function updateColorPicker(set: SetSettings, change: (colorPicker: AppSettings["colorPicker"]) => AppSettings["colorPicker"]): void {
++  set((state) => {
++    const next: AppSettings = { ...state.settings, colorPicker: change(state.settings.colorPicker) };
++    saveSettings(next);
++    return { settings: next };
++  });
++}
++
+ export const useSettingsStore = create<SettingsStore>((set) => ({
+   settings: loadSettings(),
+   updateGeneralSettings: (patch) => {
+@@ -47,42 +59,43 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
        return { settings: next };
      });
    },
+-  updateColorPickerSettings: (patch) => {
+-    set((state) => {
+-      const next: AppSettings = {
+-        ...state.settings,
+-        colorPicker: { ...state.settings.colorPicker, ...patch }
+-      };
+-      saveSettings(next);
+-      return { settings: next };
++  setActivePalette: (colors) => {
++    updateColorPicker(set, (colorPicker) => ({
++      ...colorPicker,
++      collections: colorPicker.collections.map((entry) => entry.id === colorPicker.activeCollectionId ? { ...entry, colors } : entry)
++    }));
++  },
++  createColorCollection: () => {
++    updateColorPicker(set, (colorPicker) => {
++      const id = `collection-${Date.now()}`;
++      const collection = { id, name: `Collection ${colorPicker.collections.length + 1}`, colors: [...activePalette(colorPicker)] };
++      return { ...colorPicker, collections: [...colorPicker.collections, collection], activeCollectionId: id };
+     });
+   },
 -  updateRenderingSettings: (patch) => {
-+  updateToolbarSettings: (patch) => {
-     set((state) => {
-       const next: AppSettings = {
-         ...state.settings,
+-    set((state) => {
+-      const next: AppSettings = {
+-        ...state.settings,
 -        rendering: { ...state.settings.rendering, ...patch }
 -      };
 -      saveSettings(next);
 -      return { settings: next };
--    });
--  },
++  renameColorCollection: (id, name) => {
++    updateColorPicker(set, (colorPicker) => ({
++      ...colorPicker,
++      collections: colorPicker.collections.map((entry) => entry.id === id ? { ...entry, name } : entry)
++    }));
++  },
++  selectColorCollection: (id) => {
++    updateColorPicker(set, (colorPicker) => {
++      if (!colorPicker.collections.some((entry) => entry.id === id)) throw new Error(`No colour collection ${id}.`);
++      return { ...colorPicker, activeCollectionId: id };
+     });
+   },
 -  resetGeneralSettings: () => {
 -    set((state) => {
 -      const next: AppSettings = {
@@ -547,18 +619,24 @@ index 6d5ddef2..eb1f0637 100644
 -      };
 -      saveSettings(next);
 -      return { settings: next };
--    });
--  },
++  deleteColorCollection: (id) => {
++    updateColorPicker(set, (colorPicker) => {
++      if (colorPicker.collections.length === 1) throw new Error("The last colour collection cannot be deleted.");
++      const collections = colorPicker.collections.filter((entry) => entry.id !== id);
++      return { ...colorPicker, collections, activeCollectionId: colorPicker.activeCollectionId === id ? collections[0].id : colorPicker.activeCollectionId };
+     });
+   },
 -  resetEditorSettings: () => {
--    set((state) => {
--      const next: AppSettings = {
--        ...state.settings,
++  updateToolbarSettings: (patch) => {
+     set((state) => {
+       const next: AppSettings = {
+         ...state.settings,
 -        editor: { ...DEFAULT_SETTINGS.editor }
 +        toolbar: { ...state.settings.toolbar, ...patch }
        };
        saveSettings(next);
        return { settings: next };
-@@ -99,3 +76,18 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
+@@ -99,3 +112,18 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
      });
    }
  }));
@@ -1590,10 +1668,10 @@ index dd74530a..fef142b6 100644
 +.rgbaChannels input { width: 100%; box-sizing: border-box; }
 +.collectionActions { display: flex; gap: 8px; flex-wrap: wrap; }
 diff --git a/packages/app/src/ui/ColorPicker.tsx b/packages/app/src/ui/ColorPicker.tsx
-index 49a2d341..323e0c21 100644
+index 49a2d341..7d8f40d3 100644
 --- a/packages/app/src/ui/ColorPicker.tsx
 +++ b/packages/app/src/ui/ColorPicker.tsx
-@@ -1,43 +1,24 @@
+@@ -1,43 +1,25 @@
 -import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 -import { rgbToXcolorExpression, type RgbColor, type RgbToXcolorMode } from "xcolor-rgb-convert";
 +import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1602,6 +1680,7 @@ index 49a2d341..323e0c21 100644
 -import { BASIC_PICKER_COLORS, BASIC_PICKER_COLOR_SET } from "../colors/color-palette";
 +import { BASIC_PICKER_COLOR_SET } from "../colors/color-palette";
  import type { NamedColorSwatch } from "../colors/project-named-colors";
++import { activePalette } from "../settings/types";
  import { useSettingsStore } from "../settings/useSettingsStore";
 -import type { ColorPickerAccuracy } from "../settings/types";
 -import { expandGrayAliasToBlackMix, serializeBlackMixToGrayAlias } from "./color-picker-grayscale";
@@ -1645,7 +1724,7 @@ index 49a2d341..323e0c21 100644
    namedColorSwatches?: readonly NamedColorSwatch[];
    value: string | null;
    syntaxValue?: string | null;
-@@ -49,7 +30,7 @@ export type ColorPickerProps = {
+@@ -49,7 +31,7 @@ export type ColorPickerProps = {
  
  export function ColorPickerField({
    ariaLabel,
@@ -1654,7 +1733,7 @@ index 49a2d341..323e0c21 100644
    namedColorSwatches = [],
    value,
    syntaxValue = null,
-@@ -75,7 +56,7 @@ export function ColorPickerField({
+@@ -75,7 +57,7 @@ export function ColorPickerField({
    const normalizedValue = normalizeColorToken(value);
    const normalizedSyntaxValue = normalizeColorToken(syntaxValue);
    const displayLabel = mixed ? "mixed" : (normalizedSyntaxValue ?? normalizedValue ?? "none");
@@ -1663,7 +1742,7 @@ index 49a2d341..323e0c21 100644
    const displaySwatchColor = displaySwatchToken
      ? cssColorForToken(displaySwatchToken, namedColorLookup)
      : null;
-@@ -193,7 +174,7 @@ export function ColorPickerField({
+@@ -193,7 +175,7 @@ export function ColorPickerField({
              style={displaySwatchColor != null ? { background: displaySwatchColor } : undefined}
              aria-hidden="true"
            />
@@ -1672,7 +1751,7 @@ index 49a2d341..323e0c21 100644
          </span>
          <span className={css.triggerCaret} aria-hidden="true">
            <svg className={css.triggerCaretIcon} viewBox="0 0 12 8" focusable="false">
-@@ -215,7 +196,7 @@ export function ColorPickerField({
+@@ -215,7 +197,7 @@ export function ColorPickerField({
              ariaLabel={ariaLabel}
              value={value}
              syntaxValue={syntaxValue}
@@ -1681,7 +1760,7 @@ index 49a2d341..323e0c21 100644
              namedColorSwatches={normalizedNamedColorSwatches}
              mixed={mixed}
              disabled={disabled}
-@@ -227,776 +208,32 @@ export function ColorPickerField({
+@@ -227,776 +209,33 @@ export function ColorPickerField({
    );
  }
  
@@ -2409,14 +2488,15 @@ index 49a2d341..323e0c21 100644
 +/** Noteful's picker: saved colours as swatches, one spectrum control, and opacity. Collections live in Settings. */
 +export function ColorPicker({ ariaLabel, allowNone, namedColorSwatches = [], value, syntaxValue = null, disabled = false, onChange }: ColorPickerProps) {
 +  const settings = useSettingsStore((state) => state.settings.colorPicker);
-+  const update = useSettingsStore((state) => state.updateColorPickerSettings);
++  const setActivePalette = useSettingsStore((state) => state.setActivePalette);
++  const palette = activePalette(settings);
 +  const lookup = useMemo(() => buildNamedColorLookup(normalizeNamedColorSwatches(namedColorSwatches)), [namedColorSwatches]);
 +  const token = value && /^rgba?\(/i.test(value) ? value : syntaxValue ?? value ?? "black";
 +  const resolved = cssColorForToken(token, lookup) ?? "#000000";
 +  const rgba = resolved.match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/i);
 +  const rgb = rgba ? { r: Number(rgba[1]), g: Number(rgba[2]), b: Number(rgba[3]) } : resolveCustomRgbFromDriver(token, lookup);
 +  const alpha = rgba ? Number(rgba[4] ?? 1) : 1;
-+  const colors = [...new Set([...settings.palette, ...namedColorSwatches.map((swatch) => swatch.token), ...(allowNone ? ["none"] : [])])];
++  const colors = [...new Set([...palette, ...namedColorSwatches.map((swatch) => swatch.token), ...(allowNone ? ["none"] : [])])];
 +  return <div className={css.coherentPicker} role="group" aria-label={ariaLabel}>
 +    <div className={css.savedSwatches} aria-label="Saved colors">
 +      {colors.map((color) => <button key={color} type="button" disabled={disabled} aria-label={`Choose ${color}`} title={color}
@@ -2478,12 +2558,12 @@ index 49a2d341..323e0c21 100644
 +      <input type="range" aria-label="Opacity" min={0} max={1} step={0.01} value={alpha} disabled={disabled}
 +        onChange={(event) => onChange(`rgba(${rgb.r},${rgb.g},${rgb.b},${event.currentTarget.valueAsNumber})`)} />
 +    </label>
-+    <button type="button" disabled={disabled || settings.palette.includes(token)} onClick={() => update({ palette: [...settings.palette, token] })}>Save color</button>
++    <button type="button" disabled={disabled || palette.includes(token)} onClick={() => setActivePalette([...palette, token])}>Save color</button>
 +  </div>;
  }
  
  function resolveCustomRgbFromDriver(
-@@ -1041,20 +278,6 @@ function normalizeColorToken(value: string | null): string | null {
+@@ -1041,20 +280,6 @@ function normalizeColorToken(value: string | null): string | null {
    return normalized.length === 0 ? null : normalized;
  }
  
@@ -2504,7 +2584,7 @@ index 49a2d341..323e0c21 100644
  function normalizeNamedColorSwatches(swatches: readonly NamedColorSwatch[]): NamedColorSwatch[] {
    const normalized: NamedColorSwatch[] = [];
    const seen = new Set<string>();
-@@ -1083,190 +306,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
+@@ -1083,190 +308,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
    return lookup;
  }
  
@@ -2695,7 +2775,7 @@ index 49a2d341..323e0c21 100644
  export function cssColorForToken(token: string, namedColorLookup: ReadonlyMap<string, string> | null = null): string | null {
    const normalizedToken = normalizeColorToken(token);
    if (!normalizedToken || normalizedToken === "none") {
-@@ -1392,134 +431,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
+@@ -1392,134 +433,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
    );
  }
  
@@ -3370,14 +3450,14 @@ index dd056fad..1da24da9 100644
 +  .navItem { width: 100%; }
 +}
 diff --git a/packages/app/src/ui/SettingsModal.tsx b/packages/app/src/ui/SettingsModal.tsx
-index e849b257..9291412b 100644
+index e849b257..4acfe3c7 100644
 --- a/packages/app/src/ui/SettingsModal.tsx
 +++ b/packages/app/src/ui/SettingsModal.tsx
 @@ -1,34 +1,18 @@
  import { useState } from "react";
  import { useSettingsStore } from "../settings/useSettingsStore";
 -import { EDITOR_FONT_SIZE_OPTIONS, type ColorPickerAccuracy, type ColorScheme, type GridSize, type MathJaxFont } from "../settings/types";
-+import { DEFAULT_SETTINGS, type GridSize, type ToolbarDock } from "../settings/types";
++import { DEFAULT_SETTINGS, activePalette, type GridSize, type ToolbarDock } from "../settings/types";
  import { Modal } from "./Modal";
 +import { ColorPicker, cssColorForToken } from "./ColorPicker";
  import css from "./SettingsModal.module.css";
@@ -3414,12 +3494,13 @@ index e849b257..9291412b 100644
  
  type SettingsModalProps = {
    onClose: () => void;
-@@ -36,44 +20,33 @@ type SettingsModalProps = {
+@@ -36,44 +20,38 @@ type SettingsModalProps = {
  
  export function SettingsModal({ onClose }: SettingsModalProps) {
    const [activeCategory, setActiveCategory] = useState<CategoryId>(rememberedCategory);
 -  const [formatterMaxLineLengthInput, setFormatterMaxLineLengthInput] = useState<string | null>(null);
 +  const [selectedPaletteIndex, setSelectedPaletteIndex] = useState<number | null>(null);
++  const [confirmingDelete, setConfirmingDelete] = useState(false);
  
    const selectCategory = (id: CategoryId) => {
      rememberedCategory = id;
@@ -3429,10 +3510,17 @@ index e849b257..9291412b 100644
 -  const updateGeneralSettings = useSettingsStore((s) => s.updateGeneralSettings);
    const updateEditorSettings = useSettingsStore((s) => s.updateEditorSettings);
    const updateCanvasSettings = useSettingsStore((s) => s.updateCanvasSettings);
-   const updateColorPickerSettings = useSettingsStore((s) => s.updateColorPickerSettings);
+-  const updateColorPickerSettings = useSettingsStore((s) => s.updateColorPickerSettings);
 -  const updateRenderingSettings = useSettingsStore((s) => s.updateRenderingSettings);
 -  const resetGeneralSettings = useSettingsStore((s) => s.resetGeneralSettings);
 -  const resetEditorSettings = useSettingsStore((s) => s.resetEditorSettings);
++  const setActivePalette = useSettingsStore((s) => s.setActivePalette);
++  const createColorCollection = useSettingsStore((s) => s.createColorCollection);
++  const renameColorCollection = useSettingsStore((s) => s.renameColorCollection);
++  const selectColorCollection = useSettingsStore((s) => s.selectColorCollection);
++  const deleteColorCollection = useSettingsStore((s) => s.deleteColorCollection);
++  const palette = activePalette(settings.colorPicker);
++  const activeCollection = settings.colorPicker.collections.find((entry) => entry.id === settings.colorPicker.activeCollectionId)!;
 +  const updateToolbarSettings = useSettingsStore((s) => s.updateToolbarSettings);
    const resetCanvasSettings = useSettingsStore((s) => s.resetCanvasSettings);
 -  const formatterMaxLineLengthValue = formatterMaxLineLengthInput ?? String(settings.editor.formatterMaxLineLength);
@@ -3456,7 +3544,7 @@ index e849b257..9291412b 100644
 -      resetEditorSettings();
 -      setFormatterMaxLineLengthInput(null);
 +    if (activeCategory === "colors") {
-+      updateColorPickerSettings({ palette: DEFAULT_SETTINGS.colorPicker.palette });
++      setActivePalette(activePalette(DEFAULT_SETTINGS.colorPicker));
        return;
      }
      resetCanvasSettings();
@@ -3465,13 +3553,11 @@ index e849b257..9291412b 100644
 +  };
 +
 +  const updatePaletteColor = (index: number, color: string) => {
-+    const palette = [...settings.colorPicker.palette];
-+    palette[index] = color;
-+    updateColorPickerSettings({ palette });
++    setActivePalette(palette.map((entry, entryIndex) => entryIndex === index ? color : entry));
    };
  
    return (
-@@ -109,208 +82,23 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -109,208 +87,43 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
            </nav>
  
            <div className={css.content}>
@@ -3624,7 +3710,16 @@ index e849b257..9291412b 100644
 -                      <option value={4}>4 spaces</option>
 -                    </select>
 -                  </div>
--                </div>
++            {activeCategory === "colors" && <div className={css.panel}>
++              <div className={css.panelTitle}>Color Settings</div>
++              <div className={css.settingsGroup}>
++                <div className={css.settingRow}>
++                  <label className={css.settingLabel} htmlFor="color-collection">Collection</label>
++                  <select id="color-collection" className={css.select} value={activeCollection.id}
++                    onChange={(event) => { setConfirmingDelete(false); setSelectedPaletteIndex(null); selectColorCollection(event.currentTarget.value); }}>
++                    {settings.colorPicker.collections.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
++                  </select>
+                 </div>
 -
 -                <div className={css.panelTitle}>Formatter</div>
 -                <div className={css.settingsGroup}>
@@ -3663,7 +3758,10 @@ index e849b257..9291412b 100644
 -                      }}
 -                    />
 -                  </div>
--                </div>
++                <div className={css.settingRow}>
++                  <label className={css.settingLabel} htmlFor="color-collection-name">Collection name</label>
++                  <input id="color-collection-name" value={activeCollection.name} onChange={(event) => renameColorCollection(activeCollection.id, event.currentTarget.value)} />
+                 </div>
 -                <div className={css.resetRow}>
 -                  <button
 -                    type="button"
@@ -3673,30 +3771,35 @@ index e849b257..9291412b 100644
 -                  >
 -                    Reset to Defaults
 -                  </button>
--                </div>
-+            {activeCategory === "colors" && <div className={css.panel}>
-+              <div className={css.panelTitle}>Color Settings</div>
-+              <div className={css.settingsGroup}>
-+                {settings.colorPicker.palette.map((color, index) => <div className={css.settingRow} key={index}>
-+                  <label className={css.settingLabel} htmlFor={`palette-${index}`}>Color {index + 1}</label>
-+                  <button type="button" id={`palette-${index}`} className={css.palettePreview} aria-label={`Choose saved color ${index + 1}`}
-+                    style={{ background: cssColorForToken(color) ?? "transparent" }} onClick={() => setSelectedPaletteIndex(index)} />
-+                  <button type="button" onClick={() => updateColorPickerSettings({ palette: settings.colorPicker.palette.filter((_, colorIndex) => colorIndex !== index) })}>Remove</button>
-+                </div>)}
++                <div className={css.settingRow}>
++                  <button type="button" onClick={() => { setConfirmingDelete(false); setSelectedPaletteIndex(null); createColorCollection(); }}>New collection</button>
++                  {confirmingDelete
++                    ? <><button type="button" onClick={() => { setConfirmingDelete(false); setSelectedPaletteIndex(null); deleteColorCollection(activeCollection.id); }}>Delete {activeCollection.name}</button>
++                      <button type="button" onClick={() => setConfirmingDelete(false)}>Keep collection</button></>
++                    : <button type="button" disabled={settings.colorPicker.collections.length === 1} onClick={() => setConfirmingDelete(true)}>Delete collection</button>}
+                 </div>
                </div>
 -            )}
 -
-+              {selectedPaletteIndex !== null && settings.colorPicker.palette[selectedPaletteIndex] !== undefined && <ColorPicker
-+                ariaLabel={`Palette color ${selectedPaletteIndex + 1}`} value={settings.colorPicker.palette[selectedPaletteIndex]}
-+                syntaxValue={settings.colorPicker.palette[selectedPaletteIndex]} allowNone={false}
++              <div className={css.settingsGroup}>
++                {palette.map((color, index) => <div className={css.settingRow} key={index}>
++                  <label className={css.settingLabel} htmlFor={`palette-${index}`}>Color {index + 1}</label>
++                  <button type="button" id={`palette-${index}`} className={css.palettePreview} aria-label={`Choose saved color ${index + 1}`}
++                    style={{ background: cssColorForToken(color) ?? "transparent" }} onClick={() => setSelectedPaletteIndex(index)} />
++                  <button type="button" onClick={() => { setSelectedPaletteIndex(null); setActivePalette(palette.filter((_, colorIndex) => colorIndex !== index)); }}>Remove</button>
++                </div>)}
++              </div>
++              {selectedPaletteIndex !== null && <ColorPicker
++                ariaLabel={`Palette color ${selectedPaletteIndex + 1}`} value={palette[selectedPaletteIndex]}
++                syntaxValue={palette[selectedPaletteIndex]} allowNone={false}
 +                onChange={(color) => updatePaletteColor(selectedPaletteIndex, color)} />}
-+              <button type="button" onClick={() => updateColorPickerSettings({ palette: [...settings.colorPicker.palette, "black"] })}>Add color</button>
++              <button type="button" onClick={() => setActivePalette([...palette, "black"])}>Add color</button>
 +              <div className={css.resetRow}><button type="button" className={css.resetButton} onClick={resetActiveCategoryToDefaults}>Reset to Defaults</button></div>
 +            </div>}
              {activeCategory === "canvas" && (
                <div className={css.panel}>
                  <div className={css.panelTitle}>Canvas</div>
-@@ -332,6 +120,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -332,6 +145,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                      </select>
                    </div>
  
@@ -3713,7 +3816,7 @@ index e849b257..9291412b 100644
                    <div className={css.settingRow}>
                      <label className={css.settingLabel} htmlFor="setting-handle-size">
                        Edit Handle Size
-@@ -373,31 +171,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -373,31 +196,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                    </div>
                  </div>
  
@@ -4020,7 +4123,7 @@ index 0ddde08e..dcd5a6c1 100644
 +.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
 +.insertChoice:disabled { opacity: .5; }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..b674249c 100644
+index a3293df2..0b94e19b 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -4047,7 +4150,7 @@ index a3293df2..b674249c 100644
  import popupCss from "./ToolbarToolPopup.module.css";
  import type { ToolMode } from "../store/types";
 +import { useSettingsStore } from "../settings/useSettingsStore";
-+import type { ToolbarSettings, ToolbarToolId } from "../settings/types";
++import { activePalette, type ToolbarSettings, type ToolbarToolId } from "../settings/types";
  import css from "./Toolbar.module.css";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
@@ -4389,7 +4492,7 @@ index a3293df2..b674249c 100644
 +      </button>
 +    </ToolbarToolPopup>;
 +    if (id === "palette") return <div key={id} className={css.palette} aria-label="Color palette">
-+      {settings.colorPicker.palette.map((color, index) => <button key={index} type="button" className={css.paletteSwatch}
++      {activePalette(settings.colorPicker).map((color, index) => <button key={index} type="button" className={css.paletteSwatch}
 +        aria-label={`Use ${color}`} title={color} style={{ background: cssColorForToken(color, namedColorLookup) ?? color }}
 +        onClick={() => dispatch({ type: "SET_CREATION_STROKE_COLOR", value: color })} />)}
 +    </div>;
