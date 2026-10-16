@@ -66,12 +66,18 @@ describe("standalone workbench host boundary", function () {
 
   afterEach(async function () {
     const name = this.currentTest!.title.replace(/[^a-z0-9]+/gi, "-");
-    await storyScreenshot(page, name);
-    await context.tracing.stop({ path: `test-results/workbench/${name}.zip` });
-    // A rerun overwrites the trace above, so a failure also keeps its own copy for intermittent failures.
-    if (this.currentTest!.state === 'failed') await copyFile(`test-results/workbench/${name}.zip`, `test-results/workbench/failed-${Date.now()}-${name}.zip`);
-    await context.close();
-    await workbench.stop();
+    try {
+      await storyScreenshot(page, name);
+      await context.tracing.stop({ path: `test-results/workbench/${name}.zip` });
+      // A rerun overwrites the trace above, so a failure also keeps its own copy for intermittent failures.
+      if (this.currentTest!.state === 'failed') await copyFile(`test-results/workbench/${name}.zip`, `test-results/workbench/failed-${Date.now()}-${name}.zip`);
+    } finally {
+      try {
+        await context.close();
+      } finally {
+        await workbench.stop();
+      }
+    }
   });
 
   after(async function () {
