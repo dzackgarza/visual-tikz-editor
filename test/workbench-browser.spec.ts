@@ -151,6 +151,8 @@ describe("standalone workbench host boundary", function () {
         const lines = (await editorDebug(page)).source.split('\n').map(line => line.trim()).filter(line => line.startsWith('\\draw'));
         const added = lines[lines.length - 1];
         await input.touch([await stableCenter(rail.getByRole('button', { name: 'Undo', exact: true }))]);
+        // The next line must not be read back from this one: wait for the undo to land.
+        await expect.poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length).toBe(2);
         return [...added.matchAll(/-?\d+(?:\.\d+)?/g)].map(match => Number(match[0]));
       };
       const locked = await drawLine();
