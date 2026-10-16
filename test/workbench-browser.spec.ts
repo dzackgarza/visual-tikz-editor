@@ -1439,6 +1439,12 @@ describe("standalone workbench host boundary", function () {
       await expect(settings.getByRole('alert')).toContainText('Undo');
       await page.keyboard.press('Escape');
       await expect(row).toContainText('Ctrl+Alt+L');
+      await tap(row.getByRole('button', { name: 'Set shortcut for Line', exact: true }));
+      await page.keyboard.press('Control+s');
+      await expect(settings.getByRole('alert')).toContainText('Save');
+      await expect(settings.getByRole('alert')).toContainText('reserved');
+      await page.keyboard.press('Escape');
+      await expect(row).toContainText('Ctrl+Alt+L');
       await tap(row.getByRole('button', { name: 'Clear shortcut for Line', exact: true }));
       await expect(row).toContainText('Unassigned');
       await tap(settings.getByRole('button', { name: 'Close settings', exact: true }));
