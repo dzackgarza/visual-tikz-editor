@@ -1499,7 +1499,7 @@ describe("standalone workbench host boundary", function () {
       await page.reload();
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
-      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (0,0) -- (4,2);\end{tikzpicture}`);
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (-14,-18) -- (-2,-12);\end{tikzpicture}`);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const frame = editorFrame(page);
       await expect(frame.locator('svg [data-source-id]')).toHaveCount(1);
@@ -1528,21 +1528,32 @@ describe("standalone workbench host boundary", function () {
       await tap(panel.getByRole('button', { name: 'Line', exact: true }));
       await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
       await tap(panel.getByRole('button', { name: 'Move selection to Ground', exact: true }));
-      await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Ground\]\s*\\draw \(0,0\) -- \(4,2\);\s*\\end\{scope\}/);
+      await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Ground\]\s*\\draw \(-14,-18\) -- \(-2,-12\);\s*\\end\{scope\}/);
       assert.equal((await source()).match(/\\draw/g)!.length, 1);
       // Hiding writes transparent; showing removes it.
       await tap(panel.getByRole('button', { name: 'Hide Ground', exact: true }));
       await expect.poll(source).toMatch(/\[name=Ground, transparent\]/);
       await tap(panel.getByRole('button', { name: 'Show Ground', exact: true }));
       await expect.poll(source).toMatch(/\[name=Ground\]/);
-      // A locked layer's objects do not move under the pen.
-      await tap(panel.getByRole('button', { name: 'Lock Ground', exact: true }));
-      await expect(panel.getByRole('button', { name: 'Unlock Ground', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      // The pen drags the line of an unlocked layer, and not of a locked one.
       await tap(rail.getByRole('button', { name: 'Select', exact: true }));
       const line = frame.locator('svg [data-source-id]').first();
-      const from = await strokePointClearOf(page, line, rail);
-      await input.penStroke([from, { x: from.x + 30, y: from.y + 20 }, { x: from.x + 60, y: from.y + 40 }]);
-      assert.match(await source(), /\\draw \(0,0\) -- \(4,2\);/, 'A locked layer\'s line moved');
+      const drag = async () => {
+        const from = await strokePointClearOf(page, line, rail, frame.getByRole('complementary', { name: 'Diagram properties', exact: true }));
+        await input.penDown(from);
+        for (let step = 1; step <= 12; step++) await input.penMove({ x: from.x + step * 5, y: from.y - step * 3 });
+        await input.penUp({ x: from.x + 60, y: from.y - 36 });
+      };
+      await drag();
+      // A press on an object in a layer takes the object, not the whole layer.
+      await expect.poll(source, 'The pen did not drag an unlocked line').not.toMatch(/\\draw \(-14,-18\) -- \(-2,-12\);/);
+      assert.match(await source(), /\\begin\{scope\}\[name=Ground\]\s*\\draw/, 'The drag moved the layer instead of its line');
+      await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
+      await expect.poll(source).toMatch(/\\draw \(-14,-18\) -- \(-2,-12\);/);
+      await tap(panel.getByRole('button', { name: 'Lock Ground', exact: true }));
+      await expect(panel.getByRole('button', { name: 'Unlock Ground', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await drag();
+      assert.match(await source(), /\\draw \(-14,-18\) -- \(-2,-12\);/, 'A locked layer\'s line moved');
       await tap(panel.getByRole('button', { name: 'Unlock Ground', exact: true }));
       // Raising puts the layer in front: later in the source, first in the list.
       await tap(panel.getByRole('button', { name: 'Raise Ground', exact: true }));
