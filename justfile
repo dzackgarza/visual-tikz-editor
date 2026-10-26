@@ -10,8 +10,13 @@ default:
 run file="": build
     bun run "{{justfile_directory()}}/standalone/server.ts" "{{file}}"
 
+# Sync node_modules from the lockfile.
+[private]
+install:
+    bun install
+
 # Build the standalone browser page.
-build:
+build: install
     bun run build
 
 # Build a Linux desktop package with an application entry and icon.
