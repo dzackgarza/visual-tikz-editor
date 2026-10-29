@@ -49,9 +49,7 @@ Slices 2 and 3 are independent after slice 1; their listed order is a workable d
 
 ### Current source evidence
 
-At baseline `17d6892`, the maintained fork patch still retains an `appliedEdit` after automatic fitting. `cancelFreehandOffer` applies its inverse, and both another drawing gesture and a tool change call that cancellation path. The same patch writes persistent canvas defaults inside `updateFreehandPreview`. Reproduce these transitions first; they belong to slice 2's state-and-surface change.
-
-`standalone/StandaloneApp.vue` hides `.tikz-standalone-status` below 900 px. Its template also appends editor status to file status. Resolve visible, storage-based status in slice 1's document layout.
+At `998283e`, the state defects reproduced at `cc5c5f2` are repaired and covered by stories in both tablet orientations: strokes and eraser sweeps started during recompute are kept, automatic fits survive further drawing, tool changes and Undo, per-stroke sliders leave defaults unchanged until "Use for new strokes", and the document bar shows storage status at every width with editor state separate. Slice 2 still owns the final correction surface around these transitions; slice 1 still owns the shared space policy.
 
 Existing production paths include the typed request client in `src/editor-request.ts`, snapshot/source clients, and original-ink commands in `vendor/tikz-editor/embed/src/ink-commands.ts`. Existing stories cover native save/reopen, immediate view-switch saves, snapshot cancellation/restoration, source copying, and Quiver/view retention. These are preservation and verification surfaces under A/H, not instructions to build those features again.
 
@@ -79,6 +77,8 @@ The guidance proposes attached graph/arrow/label relationships, reusable styles/
 
 - Freehand fits can place anchors close together near stroke ends: reproduce and assess geometry/editability under E.
 - Floating panels do not automatically fit/recenter: resolve subject visibility under B; automatic Fit is only one possible mechanism.
+- A freehand stroke started near the endpoint of an existing raw stroke replaced that stroke's first points instead of creating a new stroke (observed at `998283e`, portrait story geometry). Decide under E/F whether endpoint continuation is intended and how it is shown.
+- The native file workflow stories in `test/workbench-files.spec.ts` fail at `cc5c5f2` and `998283e` under Xvfb (clipboard read and chooser timing). Repair before the slice 5 gate.
 
 ## Qualification and release
 
@@ -92,4 +92,4 @@ The guidance proposes attached graph/arrow/label relationships, reusable styles/
 
 Preserve user work and authored source. Keep the existing editors as semantic owners. Use the maintained source patch/vendor refresh workflow for fork changes; batch refreshes and exclude incidental fork dependency-lock rewrites. Reproduced regressions need committed failing stories before repairs. Negative gesture assertions need a positive baseline; Fit existing geometry before its first gesture.
 
-Current runtime acceptance has not been rerun for this inventory. Source inspection identifies the initial state and status defects above; live GitHub inspection establishes PR #11's resolved thread state. Add criterion-specific runtime evidence during execution. Resume at ranked step 1.
+Step 1 runtime evidence: the stories added in `cc5c5f2` failed for the reasons above and pass at `998283e`; the earlier freehand-result stories pass again. Full acceptance has not been rerun. Resume at ranked step 2.
