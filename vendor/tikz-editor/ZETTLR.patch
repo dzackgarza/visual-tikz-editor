@@ -4876,12 +4876,12 @@ index 0ddde08e..461cae78 100644
 +[data-dock="bottom"] .stepLane { bottom: calc(100% + 8px); left: 0; }
 +.stepText { padding: 4px 8px; font-size: 13px; line-height: 1.3; color: var(--text); }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..e6fec1ac 100644
+index a3293df2..d7614fde 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
 -import { useEffect, useMemo, useState } from "react";
-+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 +import { ZoomDisplayControl } from "./ZoomDisplayControl";
 +import { createPortal } from "react-dom";
  import { RiDownloadCloudLine } from "@remixicon/react";
@@ -4975,7 +4975,7 @@ index a3293df2..e6fec1ac 100644
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +96,140 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +96,143 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -5089,26 +5089,29 @@ index a3293df2..e6fec1ac 100644
 +    return () => { observer.disconnect(); window.removeEventListener("resize", keepToolbarVisible); };
 +  }, [embedded, dragPoint, safeRect, settings.toolbar, updateToolbarSettings]);
 +
++  const publishInsets = useCallback(() => {
++    const toolbar = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
++    if (!embedded || !toolbar) return;
++    const dock = toolbar.getAttribute("data-dock");
++    const bounds = toolbar.getBoundingClientRect();
++    publishOccupiedInsets({
++      "--rail-inset-left": dock === "left" ? bounds.right : 0,
++      "--rail-inset-right": dock === "right" ? window.innerWidth - bounds.left : 0,
++      "--rail-inset-top": dock === "top" ? bounds.bottom : 0,
++      "--rail-inset-bottom": dock === "bottom" ? window.innerHeight - bounds.top : 0
++    });
++  }, [embedded]);
++  // The rail places itself from its size in the previous render, so a dock change
++  // can move it again a render later without resizing it: every render republishes.
++  useLayoutEffect(publishInsets);
 +  useLayoutEffect(() => {
-+    if (!embedded) return;
 +    const toolbar = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
 +    if (!toolbar) return;
-+    const dock = settings.toolbar.dock;
-+    function publishInsets() {
-+      const bounds = toolbar!.getBoundingClientRect();
-+      publishOccupiedInsets({
-+        "--rail-inset-left": dock === "left" ? bounds.right : 0,
-+        "--rail-inset-right": dock === "right" ? window.innerWidth - bounds.left : 0,
-+        "--rail-inset-top": dock === "top" ? bounds.bottom : 0,
-+        "--rail-inset-bottom": dock === "bottom" ? window.innerHeight - bounds.top : 0
-+      });
-+    }
-+    publishInsets();
 +    const observer = new ResizeObserver(publishInsets);
 +    observer.observe(toolbar);
 +    window.addEventListener("resize", publishInsets);
 +    return () => { observer.disconnect(); window.removeEventListener("resize", publishInsets); };
-+  }, [embedded, settings.toolbar.dock, safeRect]);
++  }, [publishInsets]);
  
    // Close popup when tool mode changes (unless it's a popup that can be used independently)
    useEffect(() => {
@@ -5117,7 +5120,7 @@ index a3293df2..e6fec1ac 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -92,12 +262,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -92,12 +265,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
    const renderPopup = (popupKind: ToolPopupKind) => {
      if (popupKind === "bucket-color") {
        return (
@@ -5132,7 +5135,7 @@ index a3293df2..e6fec1ac 100644
              namedColorSwatches={projectNamedColorSwatches}
              onChange={(nextValue) => {
                dispatch({ type: "SET_BUCKET_FILL_COLOR", value: nextValue });
-@@ -111,7 +281,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +284,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -5150,7 +5153,7 @@ index a3293df2..e6fec1ac 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +305,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +308,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -5169,7 +5172,7 @@ index a3293df2..e6fec1ac 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +361,179 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +364,179 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -5349,7 +5352,7 @@ index a3293df2..e6fec1ac 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +562,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +565,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -5361,7 +5364,7 @@ index a3293df2..e6fec1ac 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +622,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +625,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -5369,7 +5372,7 @@ index a3293df2..e6fec1ac 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +665,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +668,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -5377,7 +5380,7 @@ index a3293df2..e6fec1ac 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +681,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +684,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -5399,7 +5402,7 @@ index a3293df2..e6fec1ac 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +703,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +706,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -5407,7 +5410,7 @@ index a3293df2..e6fec1ac 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +711,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +714,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -5419,7 +5422,7 @@ index a3293df2..e6fec1ac 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +724,86 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +727,86 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -5508,7 +5511,7 @@ index a3293df2..e6fec1ac 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +814,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +817,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -5522,7 +5525,7 @@ index a3293df2..e6fec1ac 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +830,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +833,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -5531,7 +5534,7 @@ index a3293df2..e6fec1ac 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +855,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +858,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -5945,7 +5948,7 @@ index cf4cf2cf..4a0d0a4e 100644
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..30220e74 100644
+index 4e22ccfa..79d73132 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,12 @@
@@ -7741,35 +7744,35 @@ index 4e22ccfa..30220e74 100644
 +  </> : null;
 +  // Selection controls belong to the selection tools; under a drawing tool they would sit where the next stroke goes.
 +  const selectionControlsShown = toolMode === "select" || toolMode === "lasso";
-+  // The freehand result sits in a fixed canvas corner: the first, from the bottom leading one, whose box clears the stroke.
++  // The freehand result sits in a corner of the canvas that the rail, the properties
++  // panel, and the keyboard leave: the first, from the bottom leading one, whose box
++  // clears the stroke.
 +  const [freehandPopupSize, setFreehandPopupSize] = useState({ width: 268, height: 240 });
 +  const measureFreehandPopup = useCallback((element: HTMLDivElement | null) => {
-+    if (element) setFreehandPopupSize({ width: element.offsetWidth, height: element.offsetHeight });
++    if (element) setFreehandPopupSize({ width: element.offsetWidth, height: element.scrollHeight });
 +  }, []);
-+  const freehandPopupCorner = (() => {
-+    const fallback = { horizontal: "leading" as const, top: null };
++  const freehandPopupPosition = (() => {
 +    const viewport = viewportRef.current?.getBoundingClientRect();
-+    if (!freehandResultOffer || !svgResult || !viewport) return fallback;
++    if (!freehandResultOffer || !svgResult || !viewport) return undefined;
 +    const screen = freehandResultOffer.rawWorldPoints.map((point) => worldToSvgPoint(point, svgResult.viewBox)).map((point) => ({
 +      x: viewport.left + canvasTransform.translateX + (point.x - svgResult.viewBox.x) * canvasTransform.scale,
 +      y: viewport.top + canvasTransform.translateY + (point.y - svgResult.viewBox.y) * canvasTransform.scale
 +    }));
 +    const stroke = { left: Math.min(...screen.map((p) => p.x)), right: Math.max(...screen.map((p) => p.x)), top: Math.min(...screen.map((p) => p.y)), bottom: Math.max(...screen.map((p) => p.y)) };
-+    const rootStyle = getComputedStyle(document.documentElement);
-+    const inset = (edge: string) => Number.parseFloat(rootStyle.getPropertyValue(`--rail-inset-${edge}`));
-+    const { width, height } = freehandPopupSize;
-+    const corners = [
-+      { vertical: "bottom", horizontal: "leading" }, { vertical: "bottom", horizontal: "trailing" },
-+      { vertical: "top", horizontal: "trailing" }, { vertical: "top", horizontal: "leading" }
-+    ] as const;
-+    // A top corner sits below the canvas's own top edge, so it never covers the header or the rulers.
-+    const topOf = (vertical: "top" | "bottom") => vertical === "top" ? Math.max(inset("top"), viewport.top) + 12 : window.innerHeight - inset("bottom") - 12 - height;
-+    const corner = corners.find(({ vertical, horizontal }) => {
-+      const left = horizontal === "leading" ? inset("left") + 12 : window.innerWidth - inset("right") - 12 - width;
-+      const top = topOf(vertical);
-+      return left + width <= stroke.left || left >= stroke.right || top + height <= stroke.top || top >= stroke.bottom;
-+    });
-+    return corner ? { horizontal: corner.horizontal, top: corner.vertical === "top" ? topOf("top") : null } : fallback;
++    const insets = occupiedInsets();
++    // The canvas's own edges bound the corners too, so a top corner never covers the header or the rulers.
++    const top = Math.max(viewport.top, insets.top) + 12;
++    const maxHeight = Math.max(0, Math.min(viewport.bottom, window.innerHeight - insets.bottom) - 12 - top);
++    // Taller than the space left, the result scrolls inside it.
++    const { width } = freehandPopupSize;
++    const height = Math.min(freehandPopupSize.height, maxHeight);
++    const leading = Math.max(viewport.left, insets.left) + 12;
++    const trailing = Math.min(viewport.right, window.innerWidth - insets.right) - 12 - width;
++    const bottom = top + maxHeight - height;
++    const corners = [{ left: leading, top: bottom }, { left: trailing, top: bottom }, { left: trailing, top }, { left: leading, top }];
++    const corner = corners.find((candidate) =>
++      candidate.left + width <= stroke.left || candidate.left >= stroke.right || candidate.top + height <= stroke.top || candidate.top >= stroke.bottom) ?? corners[0];
++    return { ...corner, maxHeight };
 +  })();
 +  // The selection control's own content height, measured, so placement can keep all of it on screen.
 +  const [selectionControlHeight, setSelectionControlHeight] = useState(112);
@@ -8008,7 +8011,7 @@ index 4e22ccfa..30220e74 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5075,76 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5075,75 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -8059,8 +8062,7 @@ index 4e22ccfa..30220e74 100644
 +        </div>
 +      ) : null}
 +      {freehandResultOffer ? (
-+        <div ref={measureFreehandPopup} style={freehandPopupCorner.top === null ? undefined : { top: freehandPopupCorner.top }}
-+          className={`${freehandPopupCss.popup} ${freehandPopupCorner.top === null ? freehandPopupCss.bottom : ""} ${freehandPopupCss[freehandPopupCorner.horizontal]}`}
++        <div ref={measureFreehandPopup} style={freehandPopupPosition} className={freehandPopupCss.popup}
 +          role="dialog" aria-label="Freehand result" onPointerDown={(event) => event.stopPropagation()}>
 +          <strong>Freehand result</strong>
 +          <span>{freehandResultOffer.rawWorldPoints.length} raw samples · {freehandResultOffer.interpretation.kind === "line" ? 2 : freehandResultOffer.interpretation.kind === "rectangle" ? 4 : freehandResultOffer.interpretation.kind === "circle" || freehandResultOffer.interpretation.kind === "ellipse" ? 4 : (freehandResultOffer.interpretation.source.match(/\.\. controls/g)?.length ?? 0) + 1} fitted anchors</span>
@@ -8402,10 +8404,10 @@ index f0ff59f8..8c75e6be 100644
            ) : null}
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
-index 00000000..60766dad
+index 00000000..46b32fab
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,111 @@
 +.popup {
 +  position: fixed;
 +  z-index: 200;
@@ -8413,6 +8415,7 @@ index 00000000..60766dad
 +  gap: 10px;
 +  width: 268px;
 +  max-width: min(300px, calc(100vw - 24px - var(--rail-inset-left) - var(--rail-inset-right)));
++  overflow-y: auto;
 +  padding: 12px;
 +  border: 1px solid var(--border);
 +  border-radius: 12px;
@@ -8421,10 +8424,6 @@ index 00000000..60766dad
 +  box-shadow: 0 8px 24px color-mix(in srgb, black 25%, transparent);
 +  font-size: 14px;
 +}
-+
-+.bottom { bottom: calc(var(--rail-inset-bottom) + 12px); }
-+.leading { left: calc(var(--rail-inset-left) + 12px); }
-+.trailing { right: calc(var(--rail-inset-right) + 12px); }
 +
 +.popup strong {
 +  text-transform: capitalize;
@@ -9780,10 +9779,10 @@ index f22aaafd..fc56bde6 100644
  function clampTooltipScalar(value: number): number {
 diff --git a/packages/app/src/ui/canvas-panel/occupied-insets.ts b/packages/app/src/ui/canvas-panel/occupied-insets.ts
 new file mode 100644
-index 00000000..59934176
+index 00000000..6948104e
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/occupied-insets.ts
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,44 @@
 +/** Window-coordinate depth that the docked rail, the open properties panel, and the on-screen keyboard take from each canvas edge. */
 +export type OccupiedInsets = { left: number; right: number; top: number; bottom: number };
 +
@@ -9794,18 +9793,30 @@ index 00000000..59934176
 +  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
 +}
 +
-+/** The depth the docked rail alone takes: the frame that zoom-to-fit and the startup view use, since the panel and the keyboard come and go. */
-+export function railInsets(): OccupiedInsets {
++function railInsets(): OccupiedInsets {
 +  return { left: inset("--rail-inset-left"), right: inset("--rail-inset-right"), top: inset("--rail-inset-top"), bottom: inset("--rail-inset-bottom") };
 +}
 +
-+export function occupiedInsets(): OccupiedInsets {
++/**
++ * The depth the rail and the panel take as laid out with the keyboard closed: the
++ * frame that zoom-to-fit and the startup view use, so the keyboard never changes the zoom.
++ * The bottom sheet rides on the higher of the rail and the keyboard (DockLayout.css),
++ * so the keyboard's lift above the rail comes off the sheet's inset.
++ */
++export function restingInsets(): OccupiedInsets {
 +  const rail = railInsets();
++  const sheet = inset("--panel-inset-bottom");
++  const lift = Math.max(0, inset("--keyboard-inset-bottom") - rail.bottom);
 +  return {
 +    ...rail,
 +    right: Math.max(rail.right, inset("--panel-inset-right")),
-+    bottom: Math.max(rail.bottom, inset("--panel-inset-bottom"), inset("--keyboard-inset-bottom"))
++    bottom: Math.max(rail.bottom, sheet > 0 ? sheet - lift : 0)
 +  };
++}
++
++export function occupiedInsets(): OccupiedInsets {
++  const resting = restingInsets();
++  return { ...resting, bottom: Math.max(inset("--panel-inset-bottom"), inset("--keyboard-inset-bottom"), resting.bottom) };
 +}
 +
 +/** Writes the named inset properties and announces the change; unchanged values announce nothing. */
@@ -12845,14 +12856,14 @@ index 43f01253..1f14d077 100644
 +    Math.abs(left.scale - right.scale) < 1e-6;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af8..e3a0d4e1 100644
+index de737af8..7528fb3b 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 @@ -7,10 +7,16 @@ import {
    type MutableRefObject,
    type RefObject
  } from "react";
-+import { OCCUPIED_INSETS_EVENT, occupiedInsets, railInsets } from "./occupied-insets";
++import { OCCUPIED_INSETS_EVENT, occupiedInsets, restingInsets } from "./occupied-insets";
 +import type { LatticeTransform } from "tikz-editor/edit/snapping";
 +import { PT_PER_CM } from "tikz-editor/edit/format";
  import { px, viewportPoint } from "tikz-editor/coords/index";
@@ -12937,7 +12948,7 @@ index de737af8..e3a0d4e1 100644
      const translateX = fitLeft - (fitViewBox.x - renderViewBox.x) * scale;
      const translateY = fitTop - (fitViewBox.y - renderViewBox.y) * scale;
  
-@@ -119,6 +135,50 @@ export function useCanvasViewportPersistence({
+@@ -119,6 +135,65 @@ export function useCanvasViewportPersistence({
      return true;
    }, [baseSvgResult, dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, svgResult, viewportRef]);
  
@@ -12985,10 +12996,25 @@ index de737af8..e3a0d4e1 100644
 +    return () => window.removeEventListener(OCCUPIED_INSETS_EVENT, recentre);
 +  }, [autoViewRef, canvasTransformRef, dispatchCanvasTransform]);
 +
++  // A fitted view follows the frame it fits: the rail moving or the panel opening
++  // refits it at once, before the selected subject is kept clear a frame later.
++  const fitFrameRef = useRef<string | null>(null);
++  useEffect(() => {
++    fitFrameRef.current ??= JSON.stringify(restingInsets());
++    const refit = () => {
++      const next = JSON.stringify(restingInsets());
++      if (next === fitFrameRef.current) return;
++      fitFrameRef.current = next;
++      if (fitToContentModeActiveRef.current) fitToContent();
++    };
++    window.addEventListener(OCCUPIED_INSETS_EVENT, refit);
++    return () => window.removeEventListener(OCCUPIED_INSETS_EVENT, refit);
++  }, [fitToContent, fitToContentModeActiveRef]);
++
    const activeFigureViewportKey = useMemo(
      () => makeFigureViewportKey(activeDocumentId, activeFigureId),
      [activeDocumentId, activeFigureId]
-@@ -154,6 +214,25 @@ export function useCanvasViewportPersistence({
+@@ -154,6 +229,25 @@ export function useCanvasViewportPersistence({
    }, [tabOrder]);
  
    useLayoutEffect(() => {
@@ -13014,7 +13040,7 @@ index de737af8..e3a0d4e1 100644
      const pendingAutoFit = pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey;
      if (previousFigureViewportKeyRef.current === activeFigureViewportKey && !pendingAutoFit) {
        return;
-@@ -179,10 +258,10 @@ export function useCanvasViewportPersistence({
+@@ -179,10 +273,10 @@ export function useCanvasViewportPersistence({
      const hasVisited = visitedFigureKeysRef.current.has(activeFigureViewportKey);
      if (!hasVisited || pendingAutoFit) {
        visitedFigureKeysRef.current.add(activeFigureViewportKey);
@@ -13028,7 +13054,7 @@ index de737af8..e3a0d4e1 100644
        previousFigureViewportKeyRef.current = activeFigureViewportKey;
        if (didFit) {
          pendingFirstVisitAutoFitKeyRef.current = null;
-@@ -196,9 +275,11 @@ export function useCanvasViewportPersistence({
+@@ -196,9 +290,11 @@ export function useCanvasViewportPersistence({
      previousFigureViewportKeyRef.current = activeFigureViewportKey;
    }, [
      activeFigureViewportKey,
@@ -13041,7 +13067,7 @@ index de737af8..e3a0d4e1 100644
      fitToContentModeActiveRef,
      saveFigureViewportState,
      setFitToContentModeActive
-@@ -214,8 +295,10 @@ export function useCanvasViewportPersistence({
+@@ -214,8 +310,10 @@ export function useCanvasViewportPersistence({
      if (pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey) {
        return;
      }
@@ -13054,15 +13080,15 @@ index de737af8..e3a0d4e1 100644
  
    const handledFitRequestRef = useRef(0);
    useEffect(() => {
-@@ -390,3 +473,14 @@ function computeFitToContentScale(
+@@ -390,3 +488,14 @@ function computeFitToContentScale(
  function makeFigureViewportKey(documentId: string, figureId: string | null): string {
    return `${documentId}::${figureId ?? "__all__"}`;
  }
 +
-+/** The part of the canvas viewport, in viewport coordinates, that the docked rail leaves visible. */
++/** The part of the canvas viewport, in viewport coordinates, that the docked rail and the panel leave with the keyboard closed. */
 +function railFreeArea(viewport: HTMLElement): { left: number; top: number; width: number; height: number } {
 +  const rect = viewport.getBoundingClientRect();
-+  const insets = railInsets();
++  const insets = restingInsets();
 +  const left = Math.max(0, insets.left - rect.left);
 +  const right = Math.max(0, insets.right - (window.innerWidth - rect.right));
 +  const top = Math.max(0, insets.top - rect.top);
