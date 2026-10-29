@@ -2202,6 +2202,56 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `keeps the selected object and Properties above the on-screen keyboard in ${tablet.name}`, async function () {
+      await editorReady(page);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (-1,-1) rectangle (1,1);
+\draw (6,-8) rectangle (9,-5);
+\path[use as bounding box] (-10,-10) rectangle (10,10);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const corner = frame.locator('svg [data-source-id="path:1"]').first();
+      await expect(corner).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => { await input.touch([await stableCenter(locator)]); };
+      await fitDiagram(frame, input);
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await input.penStroke([await strokePoint(page, corner, .1)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:1']);
+      await tap(rail.getByRole('button', { name: 'Properties', exact: true }));
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      await tap(panel.getByRole('spinbutton', { name: 'X shift', exact: true }));
+      const scale = (await editorDebug(page)).viewport.scale;
+      // iPadOS reports the keyboard as a shorter visual viewport over an unchanged layout.
+      const keyboardTop = Math.round(tablet.height * .58);
+      const reportVisibleHeight = (height: number) => page.evaluate((visible) => {
+        Object.defineProperty(window.visualViewport!, 'height', { configurable: true, value: visible });
+        window.visualViewport!.dispatchEvent(new Event('resize'));
+      }, height);
+      await reportVisibleHeight(keyboardTop);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await expect.poll(async () => { const box = (await corner.boundingBox())!; return box.y + box.height; }, 'The keyboard covers the selected rectangle').toBeLessThanOrEqual(keyboardTop);
+      assert.ok((await corner.boundingBox())!.y >= viewport.y, 'The selected rectangle left the top of the canvas');
+      const panelBottom = async () => { const box = (await panel.boundingBox())!; return box.y + box.height; };
+      if (tablet.name === 'portrait') await expect.poll(panelBottom, 'The keyboard covers the bottom sheet').toBeLessThanOrEqual(keyboardTop);
+      const field = (await panel.getByRole('spinbutton', { name: 'X shift', exact: true }).boundingBox())!;
+      assert.ok(field.y + field.height <= keyboardTop, 'The keyboard covers the focused Properties field');
+      const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+        Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+      await expect.poll(async () => overlap((await panel.boundingBox())!, (await corner.boundingBox())!), 'The raised panel covers the selected rectangle').toBe(0);
+      const control = frame.getByRole('button', { name: 'Selection actions', exact: true }).locator('..');
+      assert.equal(overlap((await control.boundingBox())!, (await panel.boundingBox())!), 0, 'The selection control covers the raised panel');
+      assert.equal((await editorDebug(page)).viewport.scale, scale, 'The keyboard changed the zoom');
+      await storyScreenshot(page, `properties-keyboard-${tablet.name}`);
+      await reportVisibleHeight(tablet.height);
+      if (tablet.name === 'portrait') await expect.poll(panelBottom, 'The bottom sheet stays raised after the keyboard closes').toBeGreaterThan(keyboardTop);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `moves the drawing rail by its grip only and never over the rulers in ${tablet.name}`, async function () {
       await editorReady(page);
       const frame = editorFrame(page);

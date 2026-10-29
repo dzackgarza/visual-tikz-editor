@@ -342,16 +342,17 @@ index bc368718..af8bddf6 100644
        {
          kind: "submenu",
 diff --git a/packages/app/src/index.ts b/packages/app/src/index.ts
-index 1672d1d6..48a1138b 100644
+index 1672d1d6..76d0fb91 100644
 --- a/packages/app/src/index.ts
 +++ b/packages/app/src/index.ts
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,6 @@
  export { App } from "./ui/App";
 +export { CANVAS_ZOOM_BASE_SCALE } from "./store/workspace-state.js";
++export { publishOccupiedInsets } from "./ui/canvas-panel/occupied-insets.js";
  export { APP_MENU_COMMAND_IDS, APP_MENU_DEFINITION } from "./app-menu/index.js";
  export { CANVAS_CONTEXT_MENU_DEFINITION } from "./context-menu/index.js";
  export { setActiveEditorPlatform, getActiveEditorPlatform } from "./platform/current.js";
-@@ -53,3 +54,5 @@ export type {
+@@ -53,3 +55,5 @@ export type {
  } from "./platform/types.js";
  export type { DocumentFileRef, ExternalChangeStatus, FileRevision } from "./store/types.js";
  export type { LinkedTextReadResult, LinkedTextWriteResult } from "./linked-file-sync.js";
@@ -3539,10 +3540,10 @@ index 4d4cfa95..b5595dc3 100644
    const replacer = (_key: string, current: unknown): unknown => {
      if (current instanceof Map) {
 diff --git a/packages/app/src/ui/DockLayout.css b/packages/app/src/ui/DockLayout.css
-index 67578882..dc04f710 100644
+index 67578882..51b779d9 100644
 --- a/packages/app/src/ui/DockLayout.css
 +++ b/packages/app/src/ui/DockLayout.css
-@@ -1,6 +1,95 @@
+@@ -1,6 +1,96 @@
  /* ── FlexLayout theme overrides ─────────────────────────────────────────────── */
  /* Built on top of flexlayout-react/style/gray.css imported in DockLayout.tsx  */
  
@@ -3574,14 +3575,15 @@ index 67578882..dc04f710 100644
 +
 +/* A portrait sheet spans the canvas above the dock and stays in its lower half,
 +   which starts below the canvas header and ruler band; expanded, it takes the
-+   canvas height the rail leaves. */
++   canvas height the rail leaves. An open keyboard raises it and caps its height. */
 +.embed-inspector[data-placement="sheet"] {
 +  top: auto;
 +  left: calc(var(--rail-inset-left) + 8px);
 +  right: calc(var(--rail-inset-right) + 8px);
-+  bottom: calc(var(--rail-inset-bottom) + 8px);
++  bottom: calc(max(var(--rail-inset-bottom), var(--keyboard-inset-bottom)) + 8px);
 +  width: auto;
 +  height: calc(50% - var(--rail-inset-bottom) - 48px);
++  max-height: calc(100% - var(--rail-inset-top) - max(var(--rail-inset-bottom), var(--keyboard-inset-bottom)) - 56px);
 +}
 +
 +.embed-inspector[data-placement="sheet"][data-expanded="true"] {
@@ -3639,7 +3641,7 @@ index 67578882..dc04f710 100644
    /* Map to app design tokens */
    --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb9..15b3a193 100644
+index ba28ddb9..73bb88cf 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
 @@ -1,4 +1,5 @@
@@ -3653,7 +3655,7 @@ index ba28ddb9..15b3a193 100644
  import type { SvgRenderModel } from "tikz-editor/svg";
  import "flexlayout-react/style/gray.css";
  import "./DockLayout.css";
-+import { publishOccupiedInsets } from "./canvas-panel/occupied-insets";
++import { OCCUPIED_INSETS_EVENT, publishOccupiedInsets } from "./canvas-panel/occupied-insets";
  
  // ── Panel IDs ─────────────────────────────────────────────────────────────────
  
@@ -3746,7 +3748,7 @@ index ba28ddb9..15b3a193 100644
    try {
      return Model.fromJson(json);
    } catch {
-@@ -404,9 +418,63 @@ function createInitialModel(): Model {
+@@ -404,9 +418,68 @@ function createInitialModel(): Model {
    }
  }
  
@@ -3793,7 +3795,12 @@ index ba28ddb9..15b3a193 100644
 +    publish();
 +    const observer = new ResizeObserver(publish);
 +    observer.observe(panel);
-+    return () => observer.disconnect();
++    // The rail or the keyboard can move the panel without resizing it.
++    window.addEventListener(OCCUPIED_INSETS_EVENT, publish);
++    return () => {
++      observer.disconnect();
++      window.removeEventListener(OCCUPIED_INSETS_EVENT, publish);
++    };
 +  }, [inspectorOpen, portrait, sheetExpanded]);
 +
 +  useEffect(() => {
@@ -3811,7 +3818,7 @@ index ba28ddb9..15b3a193 100644
  
    // Factory — renders panel content for each tab
    const factory = useCallback(
-@@ -422,7 +490,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -422,7 +495,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
          case "canvas":
            return (
              <Suspense fallback={<div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading canvas…</div>}>
@@ -3820,7 +3827,7 @@ index ba28ddb9..15b3a193 100644
              </Suspense>
            );
          case "figure-navigator":
-@@ -445,7 +513,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -445,7 +518,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
            return <div>Unknown panel: {component}</div>;
        }
      },
@@ -3829,7 +3836,7 @@ index ba28ddb9..15b3a193 100644
    );
  
    // On model change: persist + sync to Zustand
-@@ -471,7 +539,16 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -471,7 +544,16 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    const handle = useMemo<DockLayoutHandle>(() => ({
      getModel: () => modelRef.current,
      getCurrentJson: () => modelRef.current.toJson(),
@@ -3846,7 +3853,7 @@ index ba28ddb9..15b3a193 100644
        const m = modelRef.current;
        const existing = m.getNodeById(panelId);
        if (existing) {
-@@ -483,7 +560,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -483,7 +565,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
            canvas: "Canvas",
            "figure-navigator": "Figures",
            inspector: "Inspector",
@@ -3855,7 +3862,7 @@ index ba28ddb9..15b3a193 100644
            styles: "Styles",
            assistant: "Assistant",
          };
-@@ -523,10 +600,12 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -523,10 +605,12 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
        syncLayoutStateToStore(m, dispatchRef.current);
      },
      applyPreset(preset: keyof typeof LAYOUT_PRESETS) {
@@ -3868,7 +3875,7 @@ index ba28ddb9..15b3a193 100644
        const sanitized = sanitizeLayout(json);
        const newModel = Model.fromJson(sanitized);
        saveDockLayout(sanitized);
-@@ -536,7 +615,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -536,7 +620,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
      resetLayout() {
        this.applyPreset("default");
      },
@@ -3877,7 +3884,7 @@ index ba28ddb9..15b3a193 100644
  
    useEffect(() => {
      activeDockHandle = handle;
-@@ -590,11 +669,38 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -590,11 +674,38 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    }, [figureCount]);
  
    return (
@@ -5938,7 +5945,7 @@ index cf4cf2cf..4a0d0a4e 100644
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..a675bc5d 100644
+index 4e22ccfa..30220e74 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,12 @@
@@ -7721,7 +7728,7 @@ index 4e22ccfa..a675bc5d 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4740,154 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4740,155 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -7834,9 +7841,10 @@ index 4e22ccfa..a675bc5d 100644
 +      : { left: alongX, top: topEdge + Math.max(0, roomAbove - height), width, maxHeight: Math.max(0, roomAbove) };
 +  })();
 +
-+  // When the rail or the properties panel takes more of the canvas, the selected
-+  // subject moves just far enough to stay in the space left, centred there if
-+  // it is larger than that space.
++  // When the rail, the properties panel, or the keyboard takes more of the canvas,
++  // the selected subject moves just far enough to stay in the space left, centred
++  // there if it is larger than that space. The zoom never changes, and the moved
++  // view is the author's from then on, so zoom-to-fit does not pull it back.
 +  const scopeBoundsRef = useRef(scopeOverlay.boundsByScopeId);
 +  scopeBoundsRef.current = scopeOverlay.boundsByScopeId;
 +  useEffect(() => {
@@ -7863,7 +7871,7 @@ index 4e22ccfa..a675bc5d 100644
 +        const dy = shift(toClientY(Math.min(...bounds.map((box) => box.minY))), toClientY(Math.max(...bounds.map((box) => box.maxY))),
 +          Math.max(viewport.top, insets.top) + 8, Math.min(viewport.bottom, window.innerHeight - insets.bottom) - 8);
 +        if (dx === 0 && dy === 0) return;
-+        dispatch({ type: "SET_CANVAS_TRANSFORM", transform: { ...transform, translateX: transform.translateX + dx, translateY: transform.translateY + dy } });
++        navigateCanvas({ ...transform, translateX: transform.translateX + dx, translateY: transform.translateY + dy });
 +      });
 +    };
 +    window.addEventListener(OCCUPIED_INSETS_EVENT, keepSubjectClear);
@@ -7871,12 +7879,12 @@ index 4e22ccfa..a675bc5d 100644
 +      cancelAnimationFrame(frame);
 +      window.removeEventListener(OCCUPIED_INSETS_EVENT, keepSubjectClear);
 +    };
-+  }, [dispatch]);
++  }, [navigateCanvas]);
 +
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4910,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4911,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -7899,7 +7907,7 @@ index 4e22ccfa..a675bc5d 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4941,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4942,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -7914,7 +7922,7 @@ index 4e22ccfa..a675bc5d 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4967,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4968,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -7948,7 +7956,7 @@ index 4e22ccfa..a675bc5d 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4999,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5000,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -7958,7 +7966,7 @@ index 4e22ccfa..a675bc5d 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5012,29 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5013,29 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -7992,7 +8000,7 @@ index 4e22ccfa..a675bc5d 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5065,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5066,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -8000,7 +8008,7 @@ index 4e22ccfa..a675bc5d 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5074,76 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5075,76 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -9772,24 +9780,31 @@ index f22aaafd..fc56bde6 100644
  function clampTooltipScalar(value: number): number {
 diff --git a/packages/app/src/ui/canvas-panel/occupied-insets.ts b/packages/app/src/ui/canvas-panel/occupied-insets.ts
 new file mode 100644
-index 00000000..c4c0b225
+index 00000000..59934176
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/occupied-insets.ts
-@@ -0,0 +1,25 @@
-+/** Window-coordinate depth that the docked rail and the open properties panel take from each canvas edge. */
+@@ -0,0 +1,32 @@
++/** Window-coordinate depth that the docked rail, the open properties panel, and the on-screen keyboard take from each canvas edge. */
 +export type OccupiedInsets = { left: number; right: number; top: number; bottom: number };
 +
-+/** Dispatched on `window` when the rail or the properties panel changes the space it takes. */
++/** Dispatched on `window` when the rail, the properties panel, or the keyboard changes the space it takes. */
 +export const OCCUPIED_INSETS_EVENT = "tikz-occupied-insets";
 +
++function inset(name: string): number {
++  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
++}
++
++/** The depth the docked rail alone takes: the frame that zoom-to-fit and the startup view use, since the panel and the keyboard come and go. */
++export function railInsets(): OccupiedInsets {
++  return { left: inset("--rail-inset-left"), right: inset("--rail-inset-right"), top: inset("--rail-inset-top"), bottom: inset("--rail-inset-bottom") };
++}
++
 +export function occupiedInsets(): OccupiedInsets {
-+  const style = getComputedStyle(document.documentElement);
-+  const inset = (name: string) => Number.parseFloat(style.getPropertyValue(name));
++  const rail = railInsets();
 +  return {
-+    left: inset("--rail-inset-left"),
-+    right: Math.max(inset("--rail-inset-right"), inset("--panel-inset-right")),
-+    top: inset("--rail-inset-top"),
-+    bottom: Math.max(inset("--rail-inset-bottom"), inset("--panel-inset-bottom"))
++    ...rail,
++    right: Math.max(rail.right, inset("--panel-inset-right")),
++    bottom: Math.max(rail.bottom, inset("--panel-inset-bottom"), inset("--keyboard-inset-bottom"))
 +  };
 +}
 +
@@ -12830,14 +12845,14 @@ index 43f01253..1f14d077 100644
 +    Math.abs(left.scale - right.scale) < 1e-6;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af8..06f29027 100644
+index de737af8..e3a0d4e1 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 @@ -7,10 +7,16 @@ import {
    type MutableRefObject,
    type RefObject
  } from "react";
-+import { OCCUPIED_INSETS_EVENT, occupiedInsets } from "./occupied-insets";
++import { OCCUPIED_INSETS_EVENT, occupiedInsets, railInsets } from "./occupied-insets";
 +import type { LatticeTransform } from "tikz-editor/edit/snapping";
 +import { PT_PER_CM } from "tikz-editor/edit/format";
  import { px, viewportPoint } from "tikz-editor/coords/index";
@@ -13044,10 +13059,10 @@ index de737af8..06f29027 100644
    return `${documentId}::${figureId ?? "__all__"}`;
  }
 +
-+/** The part of the canvas viewport, in viewport coordinates, that the docked rail and the properties panel leave visible. */
++/** The part of the canvas viewport, in viewport coordinates, that the docked rail leaves visible. */
 +function railFreeArea(viewport: HTMLElement): { left: number; top: number; width: number; height: number } {
 +  const rect = viewport.getBoundingClientRect();
-+  const insets = occupiedInsets();
++  const insets = railInsets();
 +  const left = Math.max(0, insets.left - rect.left);
 +  const right = Math.max(0, insets.right - (window.innerWidth - rect.right));
 +  const top = Math.max(0, insets.top - rect.top);
@@ -13484,7 +13499,7 @@ index 00000000..d7b28102
 +  </SidePanel.Section>;
 +}
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..b09a0069 100644
+index d5c65582..f2de7d85 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 @@ -1,3 +1,4 @@
@@ -13575,7 +13590,55 @@ index d5c65582..b09a0069 100644
        return `${formatted}${property.unit}`;
      }
      return formatted;
-@@ -1689,21 +1702,11 @@ export function InspectorPanel() {
+@@ -886,6 +899,7 @@ export function InspectorPanel() {
+     const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
+     const input = (
+       <input
++        aria-label={property.label}
+         className={withValueProvenanceClass(css.numberInput, valueProvenance)}
+         type="number"
+         step={property.step}
+@@ -958,6 +972,7 @@ export function InspectorPanel() {
+     const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
+     const input = (
+       <input
++        aria-label={property.label}
+         className={withValueProvenanceClass(css.numberInput, valueProvenance)}
+         type="number"
+         step={property.step}
+@@ -1034,6 +1049,7 @@ export function InspectorPanel() {
+     const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
+     const input = (
+       <input
++        aria-label={property.label}
+         className={withValueProvenanceClass(css.numberInput, valueProvenance)}
+         type="number"
+         step={property.step}
+@@ -1107,6 +1123,7 @@ export function InspectorPanel() {
+     const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
+     const input = (
+       <input
++        aria-label={property.label}
+         className={withValueProvenanceClass(css.numberInput, valueProvenance)}
+         type="number"
+         step={property.step}
+@@ -1183,6 +1200,7 @@ export function InspectorPanel() {
+     const inputValue = draftValue ?? (property.value == null ? "" : formatNumber(property.value));
+     const input = (
+       <input
++        aria-label={property.label}
+         className={withValueProvenanceClass(css.numberInput, provenance)}
+         type="number"
+         step={property.step}
+@@ -1249,6 +1267,7 @@ export function InspectorPanel() {
+     const inputValue = draftValue ?? (property.mixed || property.value == null ? "" : formatNumber(property.value));
+     const input = (
+       <input
++        aria-label={property.label}
+         className={withValueProvenanceClass(css.numberInput, provenance)}
+         type="number"
+         step={property.step}
+@@ -1689,21 +1708,11 @@ export function InspectorPanel() {
      };
    }
  
@@ -13601,7 +13664,15 @@ index d5c65582..b09a0069 100644
    }
  
    function applyFigureBoundsValue(next: { x: number; y: number; width: number; height: number }): void {
-@@ -1742,13 +1745,11 @@ export function InspectorPanel() {
+@@ -1731,6 +1740,7 @@ export function InspectorPanel() {
+         <div className={css.propertyLabel}>{label}</div>
+         <div className={css.controlRow}>
+           <input
++            aria-label={label}
+             className={css.numberInput}
+             type="number"
+             step={0.1}
+@@ -1742,13 +1752,11 @@ export function InspectorPanel() {
                if (!Number.isFinite(parsed)) {
                  return;
                }
@@ -13618,7 +13689,7 @@ index d5c65582..b09a0069 100644
          </div>
        </div>
      );
-@@ -1756,6 +1757,7 @@ export function InspectorPanel() {
+@@ -1756,6 +1764,7 @@ export function InspectorPanel() {
  
    function renderFigureBoundsControls(): JSX.Element {
      const values = currentFigureBoundsControlsValue();
@@ -13626,7 +13697,7 @@ index d5c65582..b09a0069 100644
      const fixed = figureBoundsState.mode === "fixed";
      return (
        <>
-@@ -1825,7 +1827,7 @@ export function InspectorPanel() {
+@@ -1825,7 +1834,7 @@ export function InspectorPanel() {
  
    function renderToolOptionsPanel() {
      const toolLabel = getToolLabel(toolMode);
@@ -13635,7 +13706,7 @@ index d5c65582..b09a0069 100644
      const showStroke = toolSupportsStroke(toolMode);
      const showFill = toolSupportsFill(toolMode);
      const isFreehand = toolMode === "addFreehand";
-@@ -1852,7 +1854,7 @@ export function InspectorPanel() {
+@@ -1852,7 +1861,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation stroke color"
                          value={creationStrokeColor}
                          syntaxValue={creationStrokeColor}
@@ -13644,7 +13715,7 @@ index d5c65582..b09a0069 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
-@@ -1867,7 +1869,7 @@ export function InspectorPanel() {
+@@ -1867,7 +1876,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation fill color"
                          value={creationFillColor === "none" ? "" : creationFillColor}
                          syntaxValue={creationFillColor}
@@ -13653,7 +13724,7 @@ index d5c65582..b09a0069 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
-@@ -1879,6 +1881,7 @@ export function InspectorPanel() {
+@@ -1879,6 +1888,7 @@ export function InspectorPanel() {
                </SidePanel.Section>
              ) : null}
  
@@ -13661,7 +13732,7 @@ index d5c65582..b09a0069 100644
              {isFreehand ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
-@@ -1886,25 +1889,21 @@ export function InspectorPanel() {
+@@ -1886,25 +1896,21 @@ export function InspectorPanel() {
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
@@ -14538,10 +14609,10 @@ index 0101870b..588c1245 100644
  
  export function toolSupportsFill(mode: ToolMode): boolean {
 diff --git a/packages/app/src/ui/variables.css b/packages/app/src/ui/variables.css
-index 6f610623..e43c9795 100644
+index 6f610623..3954f107 100644
 --- a/packages/app/src/ui/variables.css
 +++ b/packages/app/src/ui/variables.css
-@@ -73,6 +73,16 @@
+@@ -73,6 +73,18 @@
  /* ── Design tokens ──────────────────────────────────────────────────────────── */
  
  :root {
@@ -14555,6 +14626,8 @@ index 6f610623..e43c9795 100644
 +     its bottom edge as a bottom sheet. */
 +  --panel-inset-right: 0px;
 +  --panel-inset-bottom: 0px;
++  /* Space the on-screen keyboard takes from the bottom edge, as the host reports it. */
++  --keyboard-inset-bottom: 0px;
    /* Fonts */
    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
    --font-mono: ui-monospace, "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;

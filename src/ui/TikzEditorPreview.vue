@@ -111,6 +111,19 @@ function postToEditor(message: Record<string, unknown>): void {
   }, new URL(props.host.editorUrl, location.href).origin);
 }
 
+// iPadOS reports the on-screen keyboard only to the top-level visual viewport,
+// so the editor frame learns how far the keyboard reaches up from its bottom edge.
+let keyboardBottom = 0;
+function reportKeyboard(always = false): void {
+  const visual = window.visualViewport;
+  const target = frame.value;
+  if (!loaded.value || visual === null || target === null) return;
+  const bottom = Math.max(0, Math.round(target.getBoundingClientRect().bottom - (visual.offsetTop + visual.height)));
+  if (bottom === keyboardBottom && !always) return;
+  keyboardBottom = bottom;
+  postToEditor({ action: "keyboard", bottom });
+}
+
 function zoom(direction: "in" | "out" | "reset"): void {
   if (loaded.value) postToEditor({ action: "zoom", direction });
 }
@@ -279,6 +292,7 @@ function onMessage(event: MessageEvent): void {
       }
       loaded.value = true;
       errorMessage.value = "";
+      reportKeyboard(true);
       break;
     case "change": {
       applyEditorSource(message.source, message.revision);
@@ -338,13 +352,19 @@ watch(
 );
 emit("busy", false);
 
+const reportKeyboardChange = () => reportKeyboard();
+
 onMounted(() => {
   window.addEventListener("message", onMessage);
+  window.visualViewport?.addEventListener("resize", reportKeyboardChange);
+  window.visualViewport?.addEventListener("scroll", reportKeyboardChange);
 });
 
 onBeforeUnmount(() => {
   lifetime.abort("disposed");
   window.removeEventListener("message", onMessage);
+  window.visualViewport?.removeEventListener("resize", reportKeyboardChange);
+  window.visualViewport?.removeEventListener("scroll", reportKeyboardChange);
 });
 </script>
 

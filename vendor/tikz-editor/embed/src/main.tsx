@@ -2,7 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setActiveEditorPlatform } from '@tikz-editor/app/platform/current';
 import { useEditorStore } from '@tikz-editor/app/store';
-import { CANVAS_ZOOM_BASE_SCALE, getEditorSettings, reloadEditorSettings, updateEditorGeneralSettings } from '@tikz-editor/app';
+import { CANVAS_ZOOM_BASE_SCALE, getEditorSettings, publishOccupiedInsets, reloadEditorSettings, updateEditorGeneralSettings } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
@@ -457,6 +457,9 @@ function HostBridge() {
 					else request.resolve(command.text ?? '');
 					reply(command); return;
 				}
+				case 'keyboard':
+					publishOccupiedInsets({ '--keyboard-inset-bottom': command.bottom });
+					reply(command); return;
 				case 'zoom':
 					if (command.direction === 'reset') useEditorStore.getState().dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: CANVAS_ZOOM_BASE_SCALE });
 					else useEditorStore.getState().dispatch({ type: 'REQUEST_ZOOM', direction: command.direction });

@@ -10,7 +10,7 @@ export const commandFailureSchema = z.enum([
 export type CommandFailure = z.infer<typeof commandFailureSchema>;
 
 const action = z.enum(['load', 'settings', 'display', 'inspector', 'source',
-  'zoom', 'clipboard-result', 'import-ink', 'interpret-ink', 'restore-ink', 'cancel']);
+  'zoom', 'keyboard', 'clipboard-result', 'import-ink', 'interpret-ink', 'restore-ink', 'cancel']);
 const identity = commandIdentitySchema.shape;
 export const commandReplySchema = z.discriminatedUnion('status', [
   z.object({ ...identity, event: z.literal('reply'), status: z.literal('ok'), action,
