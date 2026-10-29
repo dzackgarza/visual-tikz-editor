@@ -10,7 +10,9 @@
     "update-tikz-editor-vendor": "bun run scripts/update-tikz-editor-vendor.mjs",
     "update-quiver-vendor": "bun run scripts/update-quiver-vendor.mjs",
     "build": "vite build",
-    "test": "mocha --no-config --no-package --require tsx --timeout 240000 test/*.spec.ts"
+    "test:logic": "bun run scripts/tikz-editor-dev.mjs test",
+    "test:browser": "mocha --no-config --no-package --require tsx --timeout 240000 test/*.spec.ts",
+    "test": "bun run test:logic && bun run test:browser"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",

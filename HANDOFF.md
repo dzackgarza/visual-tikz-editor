@@ -25,7 +25,7 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 | Project cards, including archived | Workspace plan and its feature | Use the current card and this inventory |
 | GitHub #14 | Open; two browser stories fail under full-suite load and pass alone | Make the stories wait on the condition they measure before the slice 5 gate; three consecutive full-suite runs close it |
 | GitHub #15 | Open; the eraser erases circles, ellipses, and multi-operation paths whole | The physical-tablet session decides; see the decisions table below |
-| GitHub #16 | Open; no gate runs the workbench suite | Install the QC scaffold and branch protection before the slice 6 software gate |
+| GitHub #16 | The Development diagnostics workflow runs `just test-ci`, logic tests and browser suite included, on every push to any branch | Closes on the first green run at the current revision; branch protection and PR review belong to the stabilized phase, which the user chooses after the baseline freezes |
 
 ## Next work, ranked
 
@@ -93,7 +93,7 @@ The guidance also proposes reusable constructions and mixed handwritten annotati
 ## Qualification and release
 
 1. Verify the original complaints item by item, then exercise combined sessions and fresh sequences. Observe source and picture outcomes, continued editing, and undo. Command execution and dimensions alone do not prove coherent use.
-2. Run affected stories during implementation. Full qualification is `just test-push` (the logic tests, then the Mocha browser suite) in a fresh isolated checkout with `bun install --frozen-lockfile`, with the SHA and artifact paths recorded. At `0cd3aa7` no gate runs it: the pre-push hook checks syntax only, and the repository has no CI workflow and no branch protection (issue #16). Until #16 closes, a session runs the suite itself before claiming a slice complete, and the slice 6 software gate cannot pass.
+2. Run affected stories during implementation with `bun run test:browser --grep '<story>'`. Full qualification is the Development diagnostics workflow (`.github/workflows/development.yml`): on every push it provisions a fresh runner through the `_ci-environment` recipe (locked Playwright chromium, Xvfb, dbus, zenity, xdotool, ImageMagick, pdflatex, pdf2svg), then runs `just test-ci`, whose correctness tier runs `bun run test` (the logic tests, then the Mocha browser suite). The run URL and SHA are the qualification record. The local pre-push hook checks syntax only. Branch protection and PR-gated review are the ai-review-ci stabilized phase, a user decision after the baseline freezes (issue #16 records the state). The slice 6 software gate is a green Development diagnostics run at the release revision.
 3. The user runs the physical-tablet session: device/browser, pen/fingers, palm contact, drawing/erasing, constrained geometry, curve/point editing, properties/Repeat, colors/settings, Layers, save/reopen, both orientations, and panel placement. Keep the gate open until actual results arrive.
 4. After software and physical acceptance at the same revision, publish an immutable pin with standalone and qualification archives. Record release evidence. Consumer pins follow this artifact; notebook transactions/storage remain host-owned.
 5. Reconcile public #1/#2 status with proven requirements and release evidence.

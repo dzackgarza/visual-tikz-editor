@@ -1,5 +1,17 @@
 # Visual TikZ Editor — standalone workbench commands.
 # Bun owns the package build; the pinned vendor scripts rebuild editor assets.
+# QC delegates to ~/ai-review-ci/justfiles/bun.just: `test-commit` and `test-push`
+# run from the git hooks, `test-ci` runs in the Development diagnostics workflow
+# on every push, and `ambient` runs on the daily schedule. The workbench suite
+# (`bun run test`) runs inside `test-ci`; `_ci-environment` provisions its runner.
+
+ai_review_ci_schema_version := "1"
+ai_review_ci_profile := "bun"
+ai_review_ci_ref := "main"
+ai_review_ci_release_channel := "main"
+ai_review_ci_workflow_template_version := "1"
+ai_review_ci_local_delegation := "global-justfile"
+ai_review_ci_default_branch := "main"
 
 # Show available commands.
 default:
@@ -31,25 +43,38 @@ install-desktop: package
 build-desktop-assets: build
     bun build --compile standalone/server.ts --outfile "src-tauri/binaries/workbench-host-${TAURI_ENV_TARGET_TRIPLE}"
 
-# Check the TypeScript and Vue source.
+# Commit gate: syntax and type checks through the global QC justfile.
 test-commit:
-    bun run typecheck
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
 
-# Run the workbench tests.
-test-push: test-logic
-    bun run test
+# Push gate: the commit checks plus the logic tests and the workbench browser suite.
+test-push:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
-# Run the workbench tests.
-test: test-logic
-    bun run test
+# CI gate: the push checks under coverage plus the policy-sensitive gates.
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
+
+# Scheduled whole-tree audit.
+ambient:
+    @just -f ~/ai-review-ci/justfiles/bun.just -d . ambient
+
+# Provision a bare Ubuntu CI runner for the workbench suite: the locked Playwright
+# chromium, a display and dialog stack for the file stories, and the TeX render toolchain.
+[private]
+_ci-environment:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bun install --frozen-lockfile
+    bunx playwright install --with-deps chromium
+    sudo apt-get update
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        xvfb dbus-x11 zenity xdotool imagemagick \
+        pdf2svg texlive-latex-base texlive-pictures texlive-latex-extra
 
 # Rebuild the pinned TikZ Editor assets.
 update-tikz-editor-vendor:
     bun run scripts/update-tikz-editor-vendor.mjs
-
-# Run curated layer, snapping, colour, shortcut and geometry tests against fork sources.
-test-logic:
-    bun run scripts/tikz-editor-dev.mjs test
 
 # Materialize the tikz-editor fork for editing in .cache/tikz-editor.
 tikz-editor-checkout:
