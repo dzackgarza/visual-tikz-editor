@@ -8,11 +8,11 @@ At any moment the editor is in exactly one session state. Each state names what 
 
 | State | Entered by | Next pen contact | Leaves by |
 | --- | --- | --- | --- |
-| Drawing | Choosing Pen, Eraser, or Label | Makes a mark at once. A stroke that starts on an existing point attaches to it ([pen policy](research/pen-input-on-existing-points.md)). | Choosing another tool |
-| Constructing | Choosing a geometry variant | Places the next construction point. The picker closes; the dock shows the variant name and the instruction for the current stage, for example "Arc through three points — place the second point". | Finish, Cancel, the last point, or another tool. Cancel removes only the provisional construction. |
+| Drawing | Choosing Pen, Eraser, Bucket, or Magnifier | Makes a mark at once. A stroke that starts on an existing point attaches to it ([pen policy](research/pen-input-on-existing-points.md)). | Choosing another tool |
+| Constructing | Choosing a geometry variant or Node or text | Places the next construction point. The picker closes; the dock and Properties show the variant name and the instruction for the current stage, for example "Arc through three points: place the second point". | Another tool. Cancel removes only the provisional construction; Cancel and the last point keep the tool at its first stage. Finish ends an open path. |
 | Selecting | Choosing Select | Selects, lassoes, or moves the selection | Choosing a drawing or construction tool |
 | Editing points | Edit points on a selected curve | Moves the touched node or handle. "N points selected" shows the scope. | Done, Escape, or selecting another object |
-| Refining | Refine after a stroke, or Simplify on a selected curve | Ignored on the canvas outside the refinement surface | Accept, Cancel, or Restore original |
+| Refining | Refine after a stroke, or Simplify on a selected curve | Closes the refinement and acts in the earlier state. An applied fit stays; an unapplied preview is dropped. | Accept, Cancel, Restore original, the next pen contact, or another tool |
 
 A finger held by the other hand is the move modifier in every state: while it is down, a pen drag on a point moves that point. A pen held still on a point past a configurable delay does the same. Fingers otherwise pan and zoom.
 

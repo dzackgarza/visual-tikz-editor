@@ -100,4 +100,6 @@ The guidance also proposes reusable constructions and mixed handwritten annotati
 
 Preserve user work and authored source. Keep the existing editors as semantic owners. Use the maintained source patch/vendor refresh workflow for fork changes; batch refreshes and exclude incidental fork dependency-lock rewrites. Reproduced regressions need committed failing stories before repairs. Negative gesture assertions need a positive baseline; Fit existing geometry before its first gesture.
 
-Step 1 runtime evidence: the stories added in `cc5c5f2` failed for the reasons above and pass at `998283e`; the earlier freehand-result stories pass again. Full acceptance has not been rerun. Resume at ranked step 2.
+Steps 1 and 2 are complete; the decisions are recorded above and in [the interaction model](docs/interaction-model.md). Resume at ranked step 3, slice 1.
+
+Slice 1 state: the session statechart (`packages/app/src/ui/canvas-panel/canvas-session.ts` in the fork) owns construction stages, the curve session, and the refinement offer. The dock and Properties show the construction step with Cancel and Finish. Slice 1 still requires the space rules of the interaction model, each with a failing story first: the dock at the lower edge by default, the landscape side panel and portrait bottom sheet, a refinement area that does not cover its curve, and subject visibility when a panel, sheet, or keyboard opens.
