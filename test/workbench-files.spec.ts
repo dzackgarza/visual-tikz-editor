@@ -117,8 +117,8 @@ describe('standalone native file workflow', function () {
     await expect.poll(() => readFile(diagramPath, 'utf8')).toContain('workbench-ink:');
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.getByRole('button', { name: 'Copy source', exact: true }).click();
-    const edited = await page.evaluate(() => navigator.clipboard.readText());
-    assert.equal(await readFile(diagramPath, 'utf8'), edited);
+    const edited = await readFile(diagramPath, 'utf8');
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(edited);
     await expect(page.locator('.tikz-standalone-status')).toContainText('Saved');
     await fileMenu().click();
     await page.getByRole('button', { name: 'Open…', exact: true }).click();
