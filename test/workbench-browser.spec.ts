@@ -377,7 +377,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    story({ viewport: tablet }, `keeps the rail and its popups off the rulers, and the popups off the rail, docked left, docked bottom, and floating in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `keeps the rail and its popups off the rulers, and the popups off the rail, docked bottom by default, docked left, and floating in ${tablet.name}`, async function () {
       await editorReady(page);
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -397,8 +397,8 @@ describe("standalone workbench host boundary", function () {
         await input.touch(Array.from({ length: 13 }, (_, i) => ({ x: from.x + (to.x - from.x) * i / 12, y: from.y + (to.y - from.y) * i / 12 })));
       };
       const placements = [
-        { dock: 'left', to: null },
-        { dock: 'bottom', to: { x: frameBox.x + frameBox.width / 2, y: frameBox.y + frameBox.height - 20 } },
+        { dock: 'bottom', to: null },
+        { dock: 'left', to: { x: frameBox.x + 20, y: frameBox.y + frameBox.height / 2 } },
         { dock: 'floating', to: { x: frameBox.x + 130, y: frameBox.y + 150 } }
       ] as const;
       for (const placement of placements) {
@@ -2168,17 +2168,21 @@ describe("standalone workbench host boundary", function () {
           assert.ok(overlapX <= 0 || overlapY <= 0, `The rail covers ${ruler}`);
         }
       };
-      await expect(rail).toHaveAttribute('data-dock', 'left');
+      // The dock sits at the lower edge by default (docs/interaction-model.md, Space).
+      await expect(rail).toHaveAttribute('data-dock', 'bottom');
       await clearOfRulers();
       const names = await rail.getByRole('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
       assert.ok(names.indexOf('Lasso') < 8 && names.indexOf('Eraser') < 8, names.join(', '));
       await drag(await center(rail.getByRole('button', { name: 'Select', exact: true })), { x: viewport.x + viewport.width - 10, y: viewport.y + viewport.height / 2 });
-      await expect(rail).toHaveAttribute('data-dock', 'left');
+      await expect(rail).toHaveAttribute('data-dock', 'bottom');
       await drag(await center(rail.getByRole('button', { name: 'Move toolbar', exact: true })), { x: viewport.x + viewport.width - 10, y: viewport.y + viewport.height / 2 });
       await expect(rail).toHaveAttribute('data-dock', 'right');
       await clearOfRulers();
       await drag(await center(rail.getByRole('button', { name: 'Move toolbar', exact: true })), { x: viewport.x + viewport.width / 2, y: viewport.y + 10 });
       await expect(rail).toHaveAttribute('data-dock', 'top');
+      await clearOfRulers();
+      await drag(await center(rail.getByRole('button', { name: 'Move toolbar', exact: true })), { x: viewport.x + 10, y: viewport.y + viewport.height / 2 });
+      await expect(rail).toHaveAttribute('data-dock', 'left');
       await clearOfRulers();
     });
 
