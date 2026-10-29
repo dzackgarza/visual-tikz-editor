@@ -1003,7 +1003,8 @@ describe("standalone workbench host boundary", function () {
       await expect.poll(draws, { message: 'A stroke drawn while the canvas redrew was lost' }).toBe(3);
       await input.touch([await stableCenter(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Eraser', exact: true }))]);
       await input.penStroke(Array.from({ length: 12 }, (_, i) => ({ x: viewport.x + viewport.width * .52, y: viewport.y + viewport.height * (.15 + i * .05) })));
-      await expect.poll(draws, { message: 'An eraser sweep right after a stroke did not erase' }).toBe(0);
+      // The sweep crosses each wave once and cuts it in two.
+      await expect.poll(draws, { message: 'An eraser sweep right after a stroke did not erase' }).toBe(6);
     });
   }
 
@@ -2576,34 +2577,54 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    story({ viewport: tablet }, `erases every stroke a pen sweep crosses and nothing else in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `erases only the swept part of each stroke a pen sweep crosses, as one undo step, in ${tablet.name}`, async function () {
       await editorReady(page);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
-      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+      const authored = String.raw`\begin{tikzpicture}
 \draw (-6,-4) -- (-6,4);
 \draw (-2,-4) -- (-2,4);
+\draw (2,-4) .. controls (4,-4) and (0,4) .. (2,4);
 \draw (6,-4) -- (6,4);
-\end{tikzpicture}`);
+\end{tikzpicture}`;
+      await page.locator('.cm-content').fill(authored);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
       const frame = editorFrame(page);
-      await expect(frame.locator('[data-source-id]')).toHaveCount(3);
+      await expect(frame.locator('[data-source-id]')).toHaveCount(4);
       const input = await TabletInput.attach(page);
       await fitDiagram(frame, input);
-      const center = async (locator: ReturnType<typeof frame.locator>) => {
-        return stableCenter(locator);
-      };
-      await input.touch([await center(frame.getByRole('button', { name: 'Eraser', exact: true }))]);
-      const lines = await frame.locator('[data-source-id]').evaluateAll(nodes => nodes.map(node => {
+      await input.touch([await stableCenter(frame.getByRole('button', { name: 'Eraser', exact: true }))]);
+      const strokes = await frame.locator('[data-source-id]').evaluateAll(nodes => nodes.map(node => {
         const box = node.getBoundingClientRect();
-        return { id: node.getAttribute('data-source-id'), x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
       }));
-      const [left, middle] = [...lines].sort((a, b) => a.x - b.x);
+      const [left, , curve, right] = [...strokes].sort((a, b) => a.x - b.x);
       const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      // One sweep along y = 0 crosses both left lines and the curve, and stops short of the right line.
       const y = frameBox.y + left.y;
-      await input.penStroke(Array.from({ length: 12 }, (_, i) => ({ x: frameBox.x + left.x - 20 + i * (middle.x - left.x + 40) / 11, y })));
-      await expect.poll(async () => (await editorDebug(page)).source).toBe(String.raw`\begin{tikzpicture}
-\draw (6,-4) -- (6,4);
-\end{tikzpicture}`);
+      const from = frameBox.x + left.x - 20, to = frameBox.x + (curve.x + right.x) / 2;
+      await input.penStroke(Array.from({ length: 16 }, (_, i) => ({ x: from + i * (to - from) / 15, y })));
+      const statements = async () => (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ?? [];
+      await expect.poll(async () => (await statements()).length, { message: 'The sweep did not leave two pieces of each stroke it crossed' }).toBe(7);
+      const points = (statement: string) => [...statement.matchAll(/\((-?[\d.]+),\s*(-?[\d.]+)\)/g)].map(match => ({ x: Number(match[1]), y: Number(match[2]) }));
+      const near = (a: number, b: number) => Math.abs(a - b) < .01;
+      const drawn = await statements();
+      for (const x of [-6, -2]) {
+        const pieces = drawn.filter(text => !text.includes('controls') && points(text).every(point => near(point.x, x)))
+          .map(text => points(text).map(point => point.y).sort((a, b) => a - b));
+        assert.equal(pieces.length, 2, `The line at x = ${x} is not two pieces: ${drawn.join(' ')}`);
+        const [lower, upper] = pieces.sort((a, b) => a[0] - b[0]);
+        assert.ok(near(lower[0], -4) && lower[1] < 0 && lower[1] > -1, `The lower piece of x = ${x} is ${lower}`);
+        assert.ok(near(upper[1], 4) && upper[0] > 0 && upper[0] < 1, `The upper piece of x = ${x} is ${upper}`);
+      }
+      const curvePieces = drawn.filter(text => text.includes('controls')).map(points);
+      assert.equal(curvePieces.length, 2, `The curve is not two pieces: ${drawn.join(' ')}`);
+      const [first, second] = curvePieces.sort((a, b) => a[0].y - b[0].y);
+      assert.ok(near(first[0].x, 2) && near(first[0].y, -4) && first.at(-1)!.y < 0 && first.at(-1)!.y > -1, `The first curve piece is ${JSON.stringify(first)}`);
+      assert.ok(near(second.at(-1)!.x, 2) && near(second.at(-1)!.y, 4) && second[0].y > 0 && second[0].y < 1, `The second curve piece is ${JSON.stringify(second)}`);
+      assert.ok(drawn.includes(String.raw`\draw (6,-4) -- (6,4);`), 'The sweep changed the stroke it did not cross');
+      // The whole sweep is one undo step.
+      await input.touch([await stableCenter(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Undo', exact: true }))]);
+      await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
     });
   }
 
