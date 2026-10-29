@@ -1306,7 +1306,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    story({ viewport: tablet }, `simplifies a fitted stroke again and again until it converges in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `refines a selected curve with Simplify, Simplify again, Cancel, Accept, and Restore original in ${tablet.name}`, async function () {
       await editorReady(page);
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1328,27 +1328,52 @@ describe("standalone workbench host boundary", function () {
       const whole = frame.getByRole('button', { name: 'Select entire curve', exact: true });
       if (await whole.isVisible()) await input.touch([await stableCenter(whole)]);
       const anchors = async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length + 1;
+      const accepted = (await editorDebug(page)).source;
       const counts = [await anchors()];
-      for (let step = 0; step < 8; step++) {
-        await expect(frame.getByRole('button', { name: 'Curve actions', exact: true }),
-          `No Curve actions before simplify step ${step + 1} (anchors ${counts.join(' → ')}, selection ${JSON.stringify((await editorDebug(page)).selection)})`).toBeVisible();
+      const refinement = frame.getByRole('dialog', { name: 'Curve refinement' });
+      const openRefinement = async () => {
         const simplify = frame.getByRole('button', { name: 'Simplify curve', exact: true });
-        // The curve's actions stay open between steps; open them only when they are closed.
         if (!(await simplify.isVisible())) await input.touch([await stableCenter(frame.getByRole('button', { name: 'Curve actions', exact: true }))]);
-        await expect(simplify, `No Simplify curve at step ${step + 1} (anchors ${counts.join(' → ')})`).toBeVisible();
         await input.touch([await stableCenter(simplify)]);
-        // A step either sheds anchors or says the curve is final.
-        const final = frame.getByText(/already as simple/i);
+        await expect(refinement).toBeVisible();
+      };
+      // Simplify opens the same refinement on the curve, with its first pass previewed.
+      await openRefinement();
+      await expect(refinement.getByRole('slider', { name: 'Simplification', exact: true })).toBeVisible();
+      await expect.poll(anchors, { timeout: 30_000, message: 'Simplify previewed no simpler curve' }).toBeLessThan(counts[0]);
+      counts.push(await anchors());
+      // Simplify again runs another pass on the preview, until the curve is final.
+      const final = refinement.getByText(/already as simple/i);
+      for (let step = 0; step < 8 && !(await final.isVisible()); step++) {
+        await input.touch([await stableCenter(refinement.getByRole('button', { name: 'Simplify again', exact: true }))]);
         await expect.poll(async () => (await anchors()) !== counts[counts.length - 1] || await final.isVisible(),
-          { timeout: 30_000, message: `Simplify step ${step + 1} neither changed the curve nor said it was final (alerts: ${JSON.stringify(await frame.getByRole('alert').allInnerTexts())}, selection ${JSON.stringify((await editorDebug(page)).selection)}, simplify visible ${await simplify.isVisible()})` }).toBe(true);
-        if (await final.isVisible()) break;
-        counts.push(await anchors());
+          { timeout: 30_000, message: `Simplify again step ${step + 1} neither changed the curve nor said it was final (anchors ${counts.join(' → ')})` }).toBe(true);
+        if (!(await final.isVisible())) counts.push(await anchors());
       }
-      // Each step sheds anchors until the fit is final, and the author is told so.
+      await expect(final, `No final message after anchors ${counts.join(' → ')}`).toBeVisible();
       assert.ok(counts.length >= 3, `Simplify could not be repeated: anchors ${counts.join(' → ')}`);
       assert.ok(counts.every((count, index) => index === 0 || count < counts[index - 1]), `anchors ${counts.join(' → ')}`);
       assert.ok(counts[counts.length - 1] >= 2, `Simplification collapsed the curve: ${counts.join(' → ')}`);
-      await expect(frame.getByRole('alert').or(frame.getByText(/simpler fit|already as simple/i)).first(), `No final message after anchors ${counts.join(' → ')}`).toBeVisible();
+      // Cancel returns the curve to the state before Simplify.
+      await input.touch([await stableCenter(refinement.getByRole('button', { name: 'Cancel', exact: true }))]);
+      await expect(refinement).toHaveCount(0);
+      await expect.poll(async () => (await editorDebug(page)).source, { message: 'Cancel left the simplified preview' }).toBe(accepted);
+      // Accept commits the preview as one step that one Undo reverses.
+      await openRefinement();
+      await expect.poll(anchors, { timeout: 30_000 }).toBeLessThan(counts[0]);
+      const previewed = await anchors();
+      await input.touch([await stableCenter(refinement.getByRole('button', { name: 'Accept', exact: true }))]);
+      await expect(refinement).toHaveCount(0);
+      assert.equal(await anchors(), previewed, 'Accept did not commit the previewed curve');
+      await page.keyboard.press('Control+z');
+      await expect.poll(async () => (await editorDebug(page)).source, { message: 'One Undo did not reverse the accepted simplification' }).toBe(accepted);
+      // The stroke kept its recorded original, so the refinement offers it.
+      await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+      await openRefinement();
+      await input.touch([await stableCenter(refinement.getByRole('button', { name: 'Restore original', exact: true }))]);
+      await expect(refinement).toHaveCount(0);
+      await expect.poll(async () => { const source = (await editorDebug(page)).source; return !/\.\. controls/.test(source) && (source.match(/--/g) ?? []).length > 5; },
+        { message: 'Restore original did not bring back the recorded stroke' }).toBe(true);
     });
   }
 
@@ -1786,8 +1811,8 @@ describe("standalone workbench host boundary", function () {
       await tap(frame.getByRole('button', { name: 'Curve actions', exact: true }));
       await tap(frame.getByRole('button', { name: 'Simplify curve', exact: true }));
       await expect.poll(anchors, { timeout: 30_000 }).toBeLessThan(count);
-      await tap(frame.getByRole('button', { name: 'Curve actions', exact: true }));
-      await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
+      const refinement = frame.getByRole('dialog', { name: 'Curve refinement' });
+      await tap(refinement.getByRole('button', { name: 'Cancel', exact: true }));
       await expect.poll(async () => (await editorDebug(page)).source).toBe(before);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual([ids[ids.length - 1]]);
       if (!(await frame.getByRole('button', { name: 'Simplify curve', exact: true }).isVisible()))
@@ -1795,6 +1820,7 @@ describe("standalone workbench host boundary", function () {
       await expect(frame.getByRole('button', { name: 'Simplify curve', exact: true })).toBeVisible();
       assert.equal(await anchors(), count, 'Reaching the keyboard baseline changed the curve');
       await page.keyboard.press('Control+Alt+p');
+      await expect(refinement, 'The configured command did not open the curve refinement').toBeVisible();
       await expect.poll(anchors, { timeout: 30_000, message: 'The configured command did not reach the canvas simplifier' }).toBeLessThan(count);
     });
   }
