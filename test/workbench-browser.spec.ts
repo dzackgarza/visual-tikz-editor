@@ -571,6 +571,69 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `names the chosen construction and its next step until it finishes or is cancelled in ${tablet.name}`, async function () {
+      await editorReady(page);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\path[use as bounding box] (-10,-10) rectangle (15,15);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      await fitDiagram(frame, input);
+      const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+      const ends = async (id: string) => frame.locator(`svg [data-source-id="${id}"]`).first().evaluate((path: SVGGeometryElement) => {
+        const m = path.getScreenCTM()!;
+        return [0, path.getTotalLength()].map(length => {
+          const p = path.getPointAtLength(length);
+          return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+        });
+      });
+      const [[origin, xTen], [, yTen]] = [await ends('path:0'), await ends('path:1')];
+      const at = (x: number, y: number) => ({
+        x: frameBox.x + origin.x + (xTen.x - origin.x) * x / 10 + (yTen.x - origin.x) * y / 10,
+        y: frameBox.y + origin.y + (xTen.y - origin.y) * x / 10 + (yTen.y - origin.y) * y / 10
+      });
+      const rail = frame.locator('[data-diagram-tools]');
+      const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+      const step = rail.getByRole('status', { name: 'Current step', exact: true });
+      await tap(rail.getByRole('button', { name: 'Insert', exact: true }));
+      await tap(frame.getByRole('dialog', { name: 'Tool options' }).getByRole('button', { name: 'Arc through three points', exact: true }));
+      await expect(frame.getByRole('dialog', { name: 'Tool options' })).toHaveCount(0);
+      await expect(step).toHaveText('Arc through three points: place the first point');
+      await input.penStroke([at(6, 0)]);
+      await expect(step).toHaveText('Arc through three points: place the second point');
+      await input.penStroke([at(8, 2)]);
+      await expect(step).toHaveText('Arc through three points: place the last point');
+      // Properties describes the same construction stage as the dock.
+      await tap(rail.getByRole('button', { name: 'Properties', exact: true }));
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      await expect(panel).toContainText('Arc through three points: place the last point');
+      await tap(panel.getByRole('button', { name: 'Close properties', exact: true }));
+      // Cancel removes only the provisional construction; the tool stays chosen.
+      await tap(rail.getByRole('button', { name: 'Cancel construction', exact: true }));
+      await expect(step).toHaveText('Arc through three points: place the first point');
+      assert.equal(await draws(), 2, 'Cancel committed the provisional arc');
+      for (const point of [at(6, 0), at(8, 2), at(10, 0)]) await input.penStroke([point]);
+      await expect.poll(draws).toBe(3);
+      await expect(step).toHaveText('Arc through three points: place the first point');
+      // Another tool discards the provisional construction.
+      await input.penStroke([at(-6, 0)]);
+      await expect(step).toHaveText('Arc through three points: place the second point');
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await expect(step).toHaveCount(0);
+      await tap(rail.getByRole('button', { name: 'Insert', exact: true }));
+      await tap(frame.getByRole('dialog', { name: 'Tool options' }).getByRole('button', { name: 'Arc through three points', exact: true }));
+      await expect(step).toHaveText('Arc through three points: place the first point');
+      await storyScreenshot(page, `construction-step-${tablet.name}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `rotates a square 45 degrees by its handle with the pen in ${tablet.name}`, async function () {
       await editorReady(page);
       await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
