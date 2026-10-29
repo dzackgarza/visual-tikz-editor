@@ -925,6 +925,86 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `keeps every stroke drawn and erased in quick succession in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+      // No stroke waits for the canvas to finish redrawing the one before it.
+      await input.penStroke(waveAcross(viewport, .45, .2, 120));
+      await input.penStroke(waveAcross(viewport, .45, .4, 120));
+      await page.keyboard.press('Escape');
+      await input.penStroke(waveAcross(viewport, .45, .6, 120));
+      await expect.poll(draws, { message: 'A stroke drawn while the canvas redrew was lost' }).toBe(3);
+      await input.touch([await stableCenter(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Eraser', exact: true }))]);
+      await input.penStroke(Array.from({ length: 12 }, (_, i) => ({ x: viewport.x + viewport.width * .52, y: viewport.y + viewport.height * (.15 + i * .05) })));
+      await expect.poll(draws, { message: 'An eraser sweep right after a stroke did not erase' }).toBe(0);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `keeps automatic fits when drawing continues and the tool changes, and one Undo restores the last original, in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      const fittedDraws = async () => (await editorDebug(page)).source.split('\n').filter(line => line.trim().startsWith('\\draw') && /\.\. controls/.test(line)).length;
+      await input.penStroke(waveAcross(viewport, .45, .2, 120));
+      await input.touch([await stableCenter(result.getByRole('checkbox', { name: 'Apply automatically to future strokes' }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      await input.penStroke(waveAcross(viewport, .45, .45, 120));
+      await expect.poll(fittedDraws, { message: 'The automatic fit did not apply' }).toBe(1);
+      // Drawing the next stroke continues the session: the earlier fit stays.
+      await input.penStroke(waveAcross(viewport, .45, .7, 120));
+      await expect.poll(fittedDraws, { message: 'Drawing again reverted the earlier automatic fit' }).toBe(2);
+      const fitted = (await editorDebug(page)).source;
+      await input.touch([await stableCenter(frame.locator('[data-diagram-tools]').getByRole('button', { name: 'Select', exact: true }))]);
+      await expect.poll(async () => (await editorDebug(page)).tool).toBe('select');
+      await expect(result).toHaveCount(0);
+      assert.equal((await editorDebug(page)).source, fitted, 'Changing the tool changed the fitted source');
+      // The fit is its own history step after the recorded stroke.
+      await page.keyboard.press('Control+z');
+      await expect.poll(fittedDraws, { message: 'One Undo did not restore the last original' }).toBe(1);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `adjusts one stroke without changing new-stroke defaults until asked in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      const simplification = result.getByRole('slider', { name: /Simplification/ });
+      const defaults = async () => (await editorDebug(page)).settings.canvas.freehandSimplificationUnits;
+      const initial = await defaults();
+      await input.penStroke(waveAcross(viewport, .45, .25, 140));
+      await simplification.fill('1.2');
+      await expect(result).toContainText('Simplification: 1.2');
+      assert.equal(await defaults(), initial, 'Adjusting one stroke changed the default for new strokes');
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await input.penStroke(waveAcross(viewport, .45, .55, 140));
+      await expect(simplification).toHaveValue(String(initial));
+      await simplification.fill('1.2');
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Use for new strokes', exact: true }))]);
+      await expect.poll(defaults, { message: 'Use for new strokes did not save the default' }).toBe(1.2);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `shows what is stored, without editor sync state, after a stroke in ${tablet.name}`, async function () {
+      const status = page.locator('.tikz-standalone-status');
+      await expect(status).toBeInViewport({ ratio: 1 });
+      await expect(status).toHaveText('New tikzpicture · not saved');
+      const input = await TabletInput.attach(page);
+      const viewport = (await editorFrame(page).locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await input.penStroke(waveAcross(viewport, .45, .4, 120));
+      await expect(status).toHaveText('Unsaved changes');
+      await expect(status).toBeInViewport({ ratio: 1 });
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke, in ${tablet.name}`, async function () {
       await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', { timeout: 30_000 });
       const frame = editorFrame(page);

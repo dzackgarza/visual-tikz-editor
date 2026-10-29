@@ -138,7 +138,7 @@ export type EditorDebug = {
   scene: { elements: { sourceRef: { sourceId: string }; kind?: string; commands?: { kind: string; to?: { x: number; y: number } }[] }[] } | null;
   viewport: { translateX: number; translateY: number; scale: number };
   canvasAids: { grid: boolean; rulers: boolean; documentBounds: boolean };
-  settings: { canvas: { latticeLock: boolean } };
+  settings: { canvas: { latticeLock: boolean; freehandSimplificationUnits: number } };
 };
 
 export async function editorDebug(page: Page): Promise<EditorDebug> {
