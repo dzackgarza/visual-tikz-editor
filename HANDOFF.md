@@ -86,7 +86,6 @@ The guidance also proposes reusable constructions and mixed handwritten annotati
 - Freehand fits can place anchors close together near stroke ends: reproduce and assess geometry/editability under E.
 - Floating panels do not automatically fit/recenter: resolve subject visibility under B; automatic Fit is only one possible mechanism.
 - A freehand stroke started near the endpoint of an existing raw stroke replaced that stroke's first points instead of creating a new stroke (observed at `998283e`, portrait story geometry). Decide under E/F whether endpoint continuation is intended and how it is shown.
-- The native file workflow stories in `test/workbench-files.spec.ts` fail at `cc5c5f2` and `998283e` under Xvfb (clipboard read and chooser timing). Repair before the slice 5 gate.
 
 ## Qualification and release
 
