@@ -1051,8 +1051,8 @@ describe("standalone workbench host boundary", function () {
       await expect(line).toBeVisible();
       await fitDiagram(frame, input);
       const source = async () => (await editorDebug(page)).source;
-      const draws = async () => (await source()).split('\n').flatMap(text => text.split(';')).filter(text => text.trim().startsWith('\\draw'));
-      const original = String.raw`\draw (0.37,0.61) -- (4.23,2.29)`;
+      const draws = async () => (await source()).match(/\\draw[^;]*;/g) ?? [];
+      const original = String.raw`\draw (0.37,0.61) -- (4.23,2.29);`;
       // The delay that turns a held pen into a move is a setting.
       await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
       const settings = frame.getByTestId('settings-modal');
@@ -1061,7 +1061,6 @@ describe("standalone workbench host boundary", function () {
       await tap(settings.getByRole('button', { name: 'Close settings' }));
       await tap(rail.getByRole('button', { name: 'Freehand', exact: true }));
       const start = await strokePoint(page, line, 0);
-      const end = await strokePoint(page, line, 1);
       // Hovering the pen over a point marks it as the stroke's attachment, before any contact.
       await input.penHover(start);
       await expect(frame.locator('[data-point-target="attach"]')).toBeVisible();
@@ -1074,6 +1073,9 @@ describe("standalone workbench host boundary", function () {
       const drawn = await source();
       // With a finger of the other hand held down, a pen drag on a point moves the point.
       const clear = (await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0];
+      // Closing the result and selecting the moved point can pan the view, so each step measures the point again.
+      const endPoint = () => strokePoint(page, line, 1);
+      const end = await endPoint();
       await input.fingerDown(clear);
       await input.penDown(end);
       for (let step = 1; step <= 8; step++) await input.penMove({ x: end.x - step * 5, y: end.y + step * 5 });
@@ -1086,16 +1088,17 @@ describe("standalone workbench host boundary", function () {
       await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
       await expect.poll(source).toBe(drawn);
       // A pen held still on a point past the delay moves it, and the mark says so before the pen moves.
-      await input.penDown(end);
+      const heldEnd = await endPoint();
+      await input.penDown(heldEnd);
       await expect(frame.locator('[data-point-target="move"]')).toBeVisible({ timeout: 2000 });
-      for (let step = 1; step <= 8; step++) await input.penMove({ x: end.x + step * 5, y: end.y - step * 4 });
-      await input.penUp({ x: end.x + 40, y: end.y - 32 });
+      for (let step = 1; step <= 8; step++) await input.penMove({ x: heldEnd.x + step * 5, y: heldEnd.y - step * 4 });
+      await input.penUp({ x: heldEnd.x + 40, y: heldEnd.y - 32 });
       await expect.poll(async () => (await draws())[0], { message: 'The held pen did not move the point' }).not.toContain('(4.23,2.29)');
       assert.equal((await draws()).length, 2, 'The held pen drew a stroke');
       await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
       await expect.poll(source).toBe(drawn);
       // A double tap on a point never moves it.
-      await input.doubleTap(end);
+      await input.doubleTap(await endPoint());
       assert.equal((await draws())[0].trim(), original, 'A double tap moved the point');
     });
   }
