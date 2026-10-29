@@ -4,7 +4,7 @@ This document defines the single interaction model that slices 1–4 of [HANDOFF
 
 ## Session state
 
-At any moment the editor is in exactly one session state. Each state names what the next pen contact does.
+At any moment the editor is in exactly one session state. Each state names what the next pen contact does. One [XState](https://stately.ai/docs/xstate) statechart in the fork owns these states; no component keeps a mode of its own.
 
 | State | Entered by | Next pen contact | Leaves by |
 | --- | --- | --- | --- |

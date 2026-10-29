@@ -61,6 +61,6 @@ export async function syncEmbed (upstream) {
 export async function forkPatch (upstream) {
   const { commit } = await pinnedUpstream()
   run('git', [ '-C', upstream, 'add', '--all' ], root)
-  // bun install rewrites upstream's lockfile; the fork never changes dependencies.
+  // bun install rewrites upstream's lockfile; fork dependencies live in the package manifests.
   return execFileSync('git', [ '-C', upstream, 'diff', '--cached', commit, '--', '.', ':(exclude)bun.lock' ], { encoding: 'utf8', maxBuffer: 1 << 28 })
 }

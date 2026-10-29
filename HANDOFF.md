@@ -77,6 +77,7 @@ User decisions of 2026-10-29:
 | --- | --- |
 | Release scope | Partial erasing, autosave with interruption recovery, PDF/SVG/PNG export, and attached relationships (arrows and labels follow the nodes and objects they attach to, reusable styles, pencil hardware gestures) are release requirements. |
 | Snapping precedence | Object features first (Ipe model): endpoints, intersections, and centers beat alignment guides, which beat the lattice. The guide names the chosen target. Angle snapping constrains direction after the point target. |
+| Session state architecture | One XState statechart in the fork owns the session states of [the interaction model](docs/interaction-model.md) and replaces the independent mode states in `CanvasPanel.tsx`. |
 | Pen input on existing points | Use iPadOS-native interaction patterns established by research, not preference. [Pen input on existing points](docs/research/pen-input-on-existing-points.md) derives the policy: a pen stroke starting on a point draws at once and attaches to it; a held finger modifier or a pen hold past a delay moves the point; double tap never moves points. |
 
 The guidance also proposes reusable constructions and mixed handwritten annotation. Compare remaining proposals with the established contract and implementation. Proposals cannot silently become release requirements or disappear from the inventory. Preserve mixed mathematical figures and handwritten annotations within the agreed source model.
