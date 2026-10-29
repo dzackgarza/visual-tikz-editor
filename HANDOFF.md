@@ -25,6 +25,7 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 | Project cards, including archived | Workspace plan and its feature | Use the current card and this inventory |
 | GitHub #14 | Open; two browser stories fail under full-suite load and pass alone | Make the stories wait on the condition they measure before the slice 5 gate; three consecutive full-suite runs close it |
 | GitHub #15 | Open; the eraser erases circles, ellipses, and multi-operation paths whole | The physical-tablet session decides; see the decisions table below |
+| GitHub #16 | Open; no gate runs the workbench suite | Install the QC scaffold and branch protection before the slice 6 software gate |
 
 ## Next work, ranked
 
@@ -92,7 +93,7 @@ The guidance also proposes reusable constructions and mixed handwritten annotati
 ## Qualification and release
 
 1. Verify the original complaints item by item, then exercise combined sessions and fresh sequences. Observe source and picture outcomes, continued editing, and undo. Command execution and dimensions alone do not prove coherent use.
-2. Run affected stories during implementation. Use repository commit/push gates for full qualification in a fresh isolated checkout with `bun install --frozen-lockfile`. Record SHA and artifact paths. Pre-push `just test-push` shares the logic prerequisite and Mocha command with `just test`.
+2. Run affected stories during implementation. Full qualification is `just test-push` (the logic tests, then the Mocha browser suite) in a fresh isolated checkout with `bun install --frozen-lockfile`, with the SHA and artifact paths recorded. At `0cd3aa7` no gate runs it: the pre-push hook checks syntax only, and the repository has no CI workflow and no branch protection (issue #16). Until #16 closes, a session runs the suite itself before claiming a slice complete, and the slice 6 software gate cannot pass.
 3. The user runs the physical-tablet session: device/browser, pen/fingers, palm contact, drawing/erasing, constrained geometry, curve/point editing, properties/Repeat, colors/settings, Layers, save/reopen, both orientations, and panel placement. Keep the gate open until actual results arrive.
 4. After software and physical acceptance at the same revision, publish an immutable pin with standalone and qualification archives. Record release evidence. Consumer pins follow this artifact; notebook transactions/storage remain host-owned.
 5. Reconcile public #1/#2 status with proven requirements and release evidence.
