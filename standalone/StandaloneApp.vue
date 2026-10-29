@@ -2,6 +2,8 @@
   <div class="tikz-standalone" :class="theme">
     <header class="document-bar">
       <strong>{{ fileName }}</strong>
+      <span class="tikz-standalone-status" role="status">{{ status }}</span>
+      <span v-if="editorStatus !== ''" class="tikz-view-status">{{ editorStatus }}</span>
       <details class="file-menu" aria-label="File" @click="closeFileMenu">
         <summary>File</summary>
         <div class="file-menu-items">
@@ -14,7 +16,6 @@
       </details>
       <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
-      <span class="tikz-standalone-status" role="status">{{ status }}<template v-if="editorStatus !== ''"> · {{ editorStatus }}</template></span>
     </header>
     <div v-if="unsavedPrompt" class="new-kind-backdrop">
       <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" @keydown.esc.stop.prevent="resolveUnsaved('cancel')">
@@ -238,7 +239,7 @@ const status = computed(() => {
   if (document.value === null) return loadError.value === "" ? "Loading…" : "Load failed";
   if (!document.value.saved)
     return source.value === savedSource.value
-      ? `New ${document.value.path.endsWith(".tikzcd") ? "tikzcd" : "tikzpicture"}`
+      ? `New ${document.value.path.endsWith(".tikzcd") ? "tikzcd" : "tikzpicture"} · not saved`
       : "Unsaved changes";
   return dirty.value ? "Unsaved changes" : "Saved";
 });
@@ -557,7 +558,6 @@ body,
 }
 
 .document-bar strong {
-  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -637,9 +637,18 @@ body,
 }
 
 .tikz-standalone-status {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  color: var(--graphite);
+  white-space: nowrap;
+}
+
+.tikz-view-status {
   color: var(--graphite);
   overflow-wrap: anywhere;
+}
+
+.file-menu {
+  margin-left: auto;
 }
 
 .new-kind-backdrop {
@@ -772,10 +781,6 @@ body,
   .file-menu summary {
     padding: 0 8px;
     font-size: 14px;
-  }
-
-  .tikz-standalone-status {
-    display: none;
   }
 
 }

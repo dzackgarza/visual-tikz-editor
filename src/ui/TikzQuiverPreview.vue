@@ -1,5 +1,5 @@
 <template>
-  <div class="tikz-quiver-preview" :class="{ dark: props.theme === 'dark' }">
+  <div class="tikz-quiver-preview" :class="{ dark: props.theme === 'dark' }" :data-editor-state="hostReady && errorMessage === '' ? 'ready' : 'busy'">
     <div
       v-if="errorMessage !== ''"
       class="tikz-quiver-error"
@@ -267,8 +267,8 @@ const statusText = computed(() => {
   if (!hostReady.value) return "Loading Quiver…";
   const compilerOnly = macroProjection.value?.unsupported.length ?? 0;
   return compilerOnly > 0
-    ? `Synced · ${compilerOnly} macro${compilerOnly === 1 ? "" : "s"} unavailable in Quiver`
-    : "Synced";
+    ? `${compilerOnly} macro${compilerOnly === 1 ? "" : "s"} unavailable in Quiver`
+    : "";
 });
 
 watch(

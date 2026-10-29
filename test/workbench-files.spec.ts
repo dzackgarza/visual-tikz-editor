@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { chromium, expect, type Browser, type Page } from '@playwright/test';
-import { buildWorkbench, startWorkbench, type Workbench } from './tablet';
+import { buildWorkbench, editorReady, startWorkbench, type Workbench } from './tablet';
 
 const execute = promisify(execFile);
 
@@ -145,7 +145,7 @@ describe('standalone native file workflow', function () {
         : String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
       await page.locator('.cm-content').fill(authored);
       const frame = page.frameLocator(provider === 'visual' ? 'iframe[title="TikZ visual editor"]' : 'iframe[title="Quiver diagram editor"]');
-      await expect(page.locator('.tikz-standalone-status')).toContainText('Synced', );
+      await editorReady(page);
       diagramPath = join(await mkdtemp(join(tmpdir(), 'workbench-render-save-')), `${provider}.tikz`);
       if (provider === 'visual') {
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;

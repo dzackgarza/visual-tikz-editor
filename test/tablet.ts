@@ -106,16 +106,16 @@ export async function fitDiagram(frame: FrameLocator, input: TabletInput): Promi
   await expect(frame.getByRole('dialog', { name: 'Tool options' })).toHaveCount(0);
 }
 
-/** A short finger gesture whose start, middle and end hit empty canvas, not floating controls. */
-export async function emptyCanvasGesture(frame: FrameLocator): Promise<Point[]> {
+/** A gesture, by default a short finger swipe, whose every point hits empty canvas, not diagram content or floating controls. */
+export async function emptyCanvasGesture(frame: FrameLocator, path: Point[] = [{ x: 0, y: 0 }, { x: -25, y: 20 }, { x: -50, y: 40 }]): Promise<Point[]> {
   const viewport = frame.locator('[data-canvas-viewport="true"]');
   const box = (await viewport.boundingBox())!;
-  const offsets = await viewport.evaluate(element => {
+  const offsets = await viewport.evaluate((element, path) => {
     const bounds = element.getBoundingClientRect();
     for (const y of [.2, .35, .5, .65, .8]) {
       for (const x of [.85, .7, .55, .4, .25]) {
         const start = { x: bounds.left + bounds.width * x, y: bounds.top + bounds.height * y };
-        const points = [start, { x: start.x - 25, y: start.y + 20 }, { x: start.x - 50, y: start.y + 40 }];
+        const points = path.map(offset => ({ x: start.x + offset.x, y: start.y + offset.y }));
         if (points.every(point => {
           const target = document.elementFromPoint(point.x, point.y);
           return target !== null && element.contains(target) &&
@@ -123,8 +123,8 @@ export async function emptyCanvasGesture(frame: FrameLocator): Promise<Point[]> 
         })) return points.map(point => ({ x: point.x - bounds.left, y: point.y - bounds.top }));
       }
     }
-    throw new Error('No clear canvas area for a finger gesture');
-  });
+    throw new Error('No clear canvas area for the gesture');
+  }, path);
   return offsets.map(point => ({ x: box.x + point.x, y: box.y + point.y }));
 }
 
@@ -140,6 +140,12 @@ export type EditorDebug = {
   canvasAids: { grid: boolean; rulers: boolean; documentBounds: boolean };
   settings: { canvas: { latticeLock: boolean; freehandSimplificationUnits: number } };
 };
+
+// Every shown diagram editor has loaded the current source and reports no synchronization issue.
+export async function editorReady(page: Page, timeout = 30_000): Promise<void> {
+  await expect(page.locator('[data-editor-state="ready"]:visible').first()).toBeVisible({ timeout });
+  await expect(page.locator('[data-editor-state="busy"]:visible')).toHaveCount(0, { timeout });
+}
 
 export async function editorDebug(page: Page): Promise<EditorDebug> {
   const frame = page.frames().find(candidate => new URL(candidate.url()).pathname === "/tikz-editor/index.html");

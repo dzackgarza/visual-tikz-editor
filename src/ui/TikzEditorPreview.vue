@@ -1,5 +1,5 @@
 <template>
-  <div class="tikz-editor-preview" :class="{ dark: props.theme === 'dark' }">
+  <div class="tikz-editor-preview" :class="{ dark: props.theme === 'dark' }" :data-editor-state="statusText === '' ? 'ready' : 'busy'">
     <div
       v-if="errorMessage !== ''"
       class="tikz-editor-error"
@@ -326,7 +326,7 @@ const statusText = computed(() => {
   if (!hostReady.value) {
     return "Loading tikz-editor…";
   }
-  return loaded.value ? "Synced" : "Loading source…";
+  return loaded.value ? "" : "Loading source…";
 });
 
 watch(
