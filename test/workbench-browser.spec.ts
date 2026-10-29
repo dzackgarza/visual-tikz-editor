@@ -1009,6 +1009,35 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `fits a stroke with anchors a pen can pick apart, also at its slow, hooked, and snapped ends, in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      const x0 = viewport.x + viewport.width * .2, y0 = viewport.y + viewport.height * .4, width = viewport.width * .5;
+      // The pen eases in and out, so samples crowd at both ends, and it trails a small hook as it lifts.
+      const points = Array.from({ length: 60 }, (_, i) => {
+        const t = (1 - Math.cos(Math.PI * i / 59)) / 2;
+        return { x: x0 + width * t, y: y0 + 60 * Math.sin(2 * Math.PI * t) };
+      });
+      const last = points.at(-1)!;
+      points.push({ x: last.x + 2, y: last.y + 3 }, { x: last.x + 1, y: last.y + 5 });
+      await input.penStroke(points);
+      await expect(result).toBeVisible();
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Accept', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      const draw = (await editorDebug(page)).source.match(/\\draw[^;]*;/g)!.at(-1)!;
+      assert.match(draw, /\.\. controls/, 'Accept did not apply a fit');
+      const anchors = [...draw.matchAll(/\((-?[\d.]+),\s*(-?[\d.]+)\)/g)].filter((_, i) => i % 3 === 0).map(match => ({ x: Number(match[1]), y: Number(match[2]) }));
+      // The figure has no transform: a centimetre is 28.4528 pt of the rendered picture.
+      const pxPerCm = 28.4528 * await frame.locator('svg [data-source-id]').last().evaluate((path: SVGGraphicsElement) => path.getScreenCTM()!.a);
+      const gaps = anchors.slice(1).map((anchor, i) => Math.hypot(anchor.x - anchors[i].x, anchor.y - anchors[i].y) * pxPerCm);
+      // Each anchor stays outside the reach in which a pen contact lands on its neighbour.
+      assert.ok(gaps.every(gap => gap >= 12), `Anchors crowd: gaps ${gaps.map(gap => gap.toFixed(1)).join(', ')} px in ${draw}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `starts a new stroke near a raw stroke's end and leaves that stroke unchanged in ${tablet.name}`, async function () {
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
