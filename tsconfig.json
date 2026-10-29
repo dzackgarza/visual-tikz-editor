@@ -10,12 +10,14 @@
     "jsx": "preserve",
     "resolveJsonModule": true,
     "types": [
-      "bun"
+      "bun",
+      "mocha"
     ]
   },
   "include": [
     "src/**/*",
-    "standalone/**/*"
+    "standalone/**/*",
+    "test/**/*"
   ],
   "exclude": [
     "standalone/dist"

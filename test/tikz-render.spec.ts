@@ -368,7 +368,9 @@ describe("TikZ render service (issue #14)", function () {
 
   it("probes each tool one time for all renders of a session", async function () {
     this.timeout(120000);
-    if (!toolchainPresent) this.skip();
+    if (!toolchainPresent) {
+      this.skip();
+    }
     // A PATH that no other case uses, so the first render here is the first
     // render of its session.
     const sessionBin = await mkdtemp(path.join(tmpdir(), "zettlr-tikz-session-"));
@@ -417,7 +419,9 @@ describe("TikZ render service (issue #14)", function () {
 
   it("finds a tool that the author installs while the session runs", async function () {
     this.timeout(120000);
-    if (!toolchainPresent) this.skip();
+    if (!toolchainPresent) {
+      this.skip();
+    }
     const binDir = await mkdtemp(path.join(tmpdir(), "zettlr-tikz-install-"));
     try {
       for (const tool of ["pandoc", "pdflatex"]) {
@@ -689,7 +693,9 @@ describe("TikZ render service (issue #14)", function () {
 
   it("preserves the compiler error for concurrent renders of the same figure", async function () {
     this.timeout(120000);
-    if (!toolchainPresent) this.skip();
+    if (!toolchainPresent) {
+      this.skip();
+    }
     const source = uncachedTikzcd("\\concurrentUndefinedCommand");
     const request = {
       source,
