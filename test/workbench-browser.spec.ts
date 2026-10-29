@@ -1009,6 +1009,24 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `starts a new stroke near a raw stroke's end and leaves that stroke unchanged in ${tablet.name}`, async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const draws = async () => (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ?? [];
+      await input.penStroke(waveAcross(viewport, .3, .4, 120));
+      await expect.poll(async () => (await draws()).length).toBe(1);
+      await page.keyboard.press('Escape');
+      const [first] = await draws();
+      const end = await strokePoint(page, frame.locator('svg [data-source-id]').first(), 1);
+      // The second stroke goes down a few pixels past the first one's end and continues away from it.
+      await input.penStroke(Array.from({ length: 16 }, (_, i) => ({ x: end.x + 4 + i * 6, y: end.y - 3 - i * 5 + Math.sin(i) * 2 })));
+      await expect.poll(async () => (await draws()).length, { message: 'The stroke near the end did not draw a new stroke' }).toBe(2);
+      assert.equal((await draws())[0], first, 'The stroke near the end changed the stroke it started near');
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `keeps automatic fits when drawing continues and the tool changes, and one Undo restores the last original, in ${tablet.name}`, async function () {
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
@@ -1724,7 +1742,7 @@ describe("standalone workbench host boundary", function () {
       assert.deepEqual(await dialog.locator('nav button').allInnerTexts(), ['Canvas', 'Colors', 'Keyboard shortcuts']);
       const labels = (await dialog.locator('label[for^="setting-"]').evaluateAll(nodes =>
         nodes.map(node => node.childNodes[0].textContent!.trim())));
-      assert.deepEqual(labels, ['Grid Size', 'Grid Opacity', 'Edit Handle Size', 'Zoom Speed', 'Toolbar Position', 'Generated Source Indent']);
+      assert.deepEqual(labels, ['Grid Size', 'Grid Opacity', 'Edit Handle Size', 'Hold to move a point', 'Zoom Speed', 'Toolbar Position', 'Generated Source Indent']);
       await dialog.getByLabel('Toolbar Position').selectOption('right');
       await expect(frame.locator('[data-diagram-tools]')).toHaveAttribute('data-dock', 'right');
     });
