@@ -35,6 +35,10 @@ describe('standalone native file workflow', function () {
     await execute('xdotool', ['key', '--clearmodifiers', 'ctrl+l'], { env: desktopEnv });
     await execute('xdotool', ['key', '--clearmodifiers', 'ctrl+a'], { env: desktopEnv });
     await execute('xdotool', ['type', '--clearmodifiers', '--delay', '1', diagramPath], { env: desktopEnv });
+    // GTK's location entry may insert an asynchronous inline completion after the caret; Shift+End, Delete drops it.
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await execute('xdotool', ['key', '--clearmodifiers', 'shift+End', 'Delete'], { env: desktopEnv });
+    await execute('import', ['-window', 'root', `test-results/workbench/native-${name}-typed.png`], { env: desktopEnv });
     await execute('xdotool', ['key', '--clearmodifiers', 'Return'], { env: desktopEnv });
     if (name === 'open') {
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -49,7 +53,8 @@ describe('standalone native file workflow', function () {
       displayServer.once('exit', code => reject(new Error(`Display exited: ${code}`)));
       displayServer.stdout!.once('data', data => resolve(`:${String(data).trim()}`));
     });
-    desktopEnv = Object.fromEntries(Object.entries({ ...process.env, DISPLAY: display, GDK_BACKEND: "x11", GSK_RENDERER: "cairo", GDK_DEBUG: "no-portals" }).filter((entry): entry is [string, string] => entry[1] !== undefined));
+    // Chromium and zenity share the virtual X display only when no Wayland session is inherited.
+    desktopEnv = Object.fromEntries(Object.entries({ ...process.env, DISPLAY: display, WAYLAND_DISPLAY: undefined, XDG_SESSION_TYPE: "x11", GDK_BACKEND: "x11", GSK_RENDERER: "cairo", GDK_DEBUG: "no-portals" }).filter((entry): entry is [string, string] => entry[1] !== undefined));
     sessionBus = spawn('dbus-daemon', ['--session', '--nofork', '--print-address=1'], { env: desktopEnv, stdio: ['ignore', 'pipe', 'inherit'] });
     desktopEnv.DBUS_SESSION_BUS_ADDRESS = await new Promise<string>((resolve, reject) => {
       sessionBus.once('error', reject);

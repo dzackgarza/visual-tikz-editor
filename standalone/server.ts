@@ -177,6 +177,11 @@ const server = Bun.serve({
   // Bun's documented 10-second default is shorter than renderTikz's 30-second TeX limit.
   // https://bun.com/docs/runtime/http/server#idleTimeout
   idleTimeout: 40,
+  // Handler failures reach the page as their message, not as Bun's development error page.
+  // https://bun.com/docs/runtime/http/error-handling
+  error(error) {
+    return new Response(error.message, { status: 500, headers: { "content-type": "text/plain; charset=utf-8" } });
+  },
   async fetch(request) {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/document") return await handleDocument(request);

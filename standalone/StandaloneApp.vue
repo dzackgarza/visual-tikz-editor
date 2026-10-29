@@ -637,9 +637,9 @@ body,
 }
 
 .tikz-standalone-status {
-  flex: 0 0 auto;
+  min-width: 0;
   color: var(--graphite);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .tikz-view-status {
