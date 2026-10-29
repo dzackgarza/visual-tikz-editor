@@ -308,10 +308,11 @@ describe("standalone workbench host boundary", function () {
         const m = path.getScreenCTM()!;
         return p.x * m.a + p.y * m.c + m.e;
       });
-      const labels = await frame.getByTestId('canvas-top-ruler').locator('text').evaluateAll(texts =>
+      const labels = () => frame.getByTestId('canvas-top-ruler').locator('text').evaluateAll(texts =>
         texts.map(text => ({ label: text.textContent?.trim() ?? '', x: text.getBoundingClientRect().x + text.getBoundingClientRect().width / 2 })));
-      const ten = labels.find(entry => entry.label === '10');
-      assert.ok(ten, `No ruler label 10 among ${labels.map(entry => entry.label).join(' ')}`);
+      // The rulers relabel once the startup view has settled on the new source.
+      await expect.poll(async () => (await labels()).map(entry => entry.label), 'No ruler label 10').toContain('10');
+      const ten = (await labels()).find(entry => entry.label === '10')!;
       assert.ok(Math.abs(ten.x - tenX) < 12, `Ruler label 10 sits at ${ten.x}, lattice x = 10 at ${tenX}`);
     });
   }
@@ -1102,6 +1103,74 @@ describe("standalone workbench host boundary", function () {
         assert.notEqual(source, before, 'Escape removed the stroke');
         const draws = source.split('\n').filter(line => line.trim().startsWith('\\draw'));
         assert.doesNotMatch(draws[draws.length - 1], /\.\. controls/, 'Escape applied the fit');
+      }
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `keeps the freehand result clear of its stroke, the rail, and Properties in every dock in ${tablet.name}`, async function () {
+      await editorReady(page);
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const rail = frame.locator('[data-diagram-tools]');
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      const result = frame.getByRole('dialog', { name: 'Freehand result' });
+      type Box = { x: number; y: number; width: number; height: number };
+      const clear = (a: Box, b: Box) => Math.min(a.x + a.width, b.x + b.width) <= Math.max(a.x, b.x) || Math.min(a.y + a.height, b.y + b.height) <= Math.max(a.y, b.y);
+      // The canvas left after cutting each occupant away from the viewport edge it is nearest.
+      const freeArea = (occupants: Box[]): Box => {
+        let [left, top, right, bottom] = [viewport.x, viewport.y, viewport.x + viewport.width, viewport.y + viewport.height];
+        for (const box of occupants) {
+          const gaps = [box.x - left, right - box.x - box.width, box.y - top, bottom - box.y - box.height];
+          const nearest = gaps.indexOf(Math.min(...gaps));
+          if (nearest === 0) left = box.x + box.width;
+          if (nearest === 1) right = box.x;
+          if (nearest === 2) top = box.y + box.height;
+          if (nearest === 3) bottom = box.y;
+        }
+        return { x: left, y: top, width: right - left, height: bottom - top };
+      };
+      const dockTargets = {
+        bottom: { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height - 10 },
+        right: { x: viewport.x + viewport.width - 10, y: viewport.y + viewport.height / 2 },
+        top: { x: viewport.x + viewport.width / 2, y: viewport.y + 10 },
+        left: { x: viewport.x + 10, y: viewport.y + viewport.height / 2 }
+      };
+      for (const [dock, target] of Object.entries(dockTargets)) {
+        const from = await stableCenter(rail.getByRole('button', { name: 'Move toolbar', exact: true }));
+        await input.touch(Array.from({ length: 13 }, (_, i) => ({ x: from.x + (target.x - from.x) * i / 12, y: from.y + (target.y - from.y) * i / 12 })));
+        await expect(rail).toHaveAttribute('data-dock', dock);
+        for (const withPanel of [false, true]) {
+          if (withPanel) {
+            await input.touch([await stableCenter(rail.getByRole('button', { name: 'Properties', exact: true }))]);
+            await expect(panel).toBeVisible();
+          }
+          const occupants = [(await rail.boundingBox())!, ...(withPanel ? [(await panel.boundingBox())!] : [])];
+          const free = freeArea(occupants);
+          for (const [fx, fy] of [[.06, .08], [.5, .7]] as const) {
+            const label = `${dock} dock${withPanel ? ' with Properties' : ''}, stroke at (${fx}, ${fy})`;
+            const ids = () => frame.locator('svg [data-source-id]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')!))]);
+            const before = (await ids()).length;
+            const points = waveAcross(free, fx, fy, Math.min(110, free.width * .4));
+            await input.penStroke(points);
+            await expect(result, `${label}: no freehand result`).toBeVisible();
+            await expect.poll(async () => (await ids()).length, `${label}: the stroke did not render`).toBe(before + 1);
+            // Where the pen went, in page coordinates like every box here.
+            const xs = points.map(point => point.x), ys = points.map(point => point.y);
+            const stroke = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+            const popup = (await result.boundingBox())!;
+            assert.ok(clear(popup, stroke), `${label}: the freehand result covers its stroke`);
+            assert.ok(clear(popup, (await rail.boundingBox())!), `${label}: the freehand result covers the rail`);
+            if (withPanel) assert.ok(clear(popup, (await panel.boundingBox())!), `${label}: the freehand result covers Properties`);
+            await page.keyboard.press('Escape');
+            await expect(result).toHaveCount(0);
+          }
+          if (withPanel) {
+            await input.touch([await stableCenter(panel.getByRole('button', { name: 'Close properties', exact: true }))]);
+            await expect(panel).toHaveCount(0);
+          }
+        }
       }
     });
   }
