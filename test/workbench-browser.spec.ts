@@ -1333,7 +1333,9 @@ describe("standalone workbench host boundary", function () {
       const refinement = frame.getByRole('dialog', { name: 'Curve refinement' });
       const openRefinement = async () => {
         const simplify = frame.getByRole('button', { name: 'Simplify curve', exact: true });
-        if (!(await simplify.isVisible())) await input.touch([await stableCenter(frame.getByRole('button', { name: 'Curve actions', exact: true }))]);
+        // The disclosure says whether the curve's actions are open; the controls can be between renders.
+        const actions = frame.getByRole('button', { name: 'Curve actions', exact: true });
+        if (await actions.getAttribute('aria-expanded') === 'false') await input.touch([await stableCenter(actions)]);
         await input.touch([await stableCenter(simplify)]);
         await expect(refinement).toBeVisible();
       };
@@ -1815,7 +1817,7 @@ describe("standalone workbench host boundary", function () {
       await tap(refinement.getByRole('button', { name: 'Cancel', exact: true }));
       await expect.poll(async () => (await editorDebug(page)).source).toBe(before);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual([ids[ids.length - 1]]);
-      if (!(await frame.getByRole('button', { name: 'Simplify curve', exact: true }).isVisible()))
+      if (await frame.getByRole('button', { name: 'Curve actions', exact: true }).getAttribute('aria-expanded') === 'false')
         await tap(frame.getByRole('button', { name: 'Curve actions', exact: true }));
       await expect(frame.getByRole('button', { name: 'Simplify curve', exact: true })).toBeVisible();
       assert.equal(await anchors(), count, 'Reaching the keyboard baseline changed the curve');
@@ -2160,7 +2162,7 @@ describe("standalone workbench host boundary", function () {
       for (const control of [frame.getByRole('button', { name: /Lock curve/ }), frame.getByRole('button', { name: /curve actions/i }).first()]) {
         const box = (await control.boundingBox())!;
         assert.ok(box.x + box.width <= aside.x || box.x >= aside.x + aside.width || box.y + box.height <= aside.y || box.y >= aside.y + aside.height,
-          `${control} covers the Layers panel`);
+          `${control} at ${JSON.stringify(box)} covers the Layers panel at ${JSON.stringify(aside)}`);
       }
       await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
       await expect.poll(source).toMatch(/\\draw \(-14,-18\) -- \(-2,-12\);/);

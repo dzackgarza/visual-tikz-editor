@@ -3929,6 +3929,78 @@ index ba28ddb9..73bb88cf 100644
 +    </div>
    );
  }
+diff --git a/packages/app/src/ui/ExactRange.module.css b/packages/app/src/ui/ExactRange.module.css
+new file mode 100644
+index 00000000..6aaa84d7
+--- /dev/null
++++ b/packages/app/src/ui/ExactRange.module.css
+@@ -0,0 +1,29 @@
++.field {
++  display: grid;
++  grid-template-columns: 1fr auto auto;
++  align-items: center;
++  gap: 6px;
++}
++
++.value {
++  box-sizing: border-box;
++  width: 5.5em;
++  min-height: 44px;
++  padding: 2px 6px;
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  background: var(--bg-app);
++  color: var(--text);
++  font: inherit;
++}
++
++.unit {
++  color: var(--text-muted);
++  font-size: 13px;
++}
++
++.range {
++  grid-column: 1 / -1;
++  width: 100%;
++  accent-color: #9e2a2b;
++}
+diff --git a/packages/app/src/ui/ExactRange.tsx b/packages/app/src/ui/ExactRange.tsx
+new file mode 100644
+index 00000000..6fbb3f26
+--- /dev/null
++++ b/packages/app/src/ui/ExactRange.tsx
+@@ -0,0 +1,31 @@
++import { useState } from "react";
++import { formatNumber } from "tikz-editor/edit/format";
++
++import css from "./ExactRange.module.css";
++
++type ExactRangeProps = { label: string; unit: string; min: number; max: number; step: number; value: number; onChange: (value: number) => void };
++
++/**
++ * A slider with an exact-value field beside it, the pairing Apple's Human Interface Guidelines (Sliders)
++ * recommend when a precise value matters.
++ * The field commits on Enter or when it loses focus, clamped to the slider's range.
++ */
++export function ExactRange({ label, unit, min, max, step, value, onChange }: ExactRangeProps) {
++  const [draft, setDraft] = useState<string | null>(null);
++  const commit = () => {
++    const next = Number(draft);
++    if (draft !== null && draft.trim() !== "" && Number.isFinite(next)) onChange(Math.min(max, Math.max(min, next)));
++    setDraft(null);
++  };
++  return (
++    <div className={css.field}>
++      <span>{label}</span>
++      <input className={css.value} type="number" inputMode="decimal" aria-label={`${label} value`} min={min} max={max} step={step}
++        value={draft ?? formatNumber(value)} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={commit}
++        onKeyDown={(event) => { if (event.key === "Enter") commit(); }} />
++      <span className={css.unit}>{unit}</span>
++      <input className={css.range} type="range" aria-label={label} min={min} max={max} step={step} value={value}
++        onChange={(event) => onChange(Number(event.currentTarget.value))} />
++    </div>
++  );
++}
 diff --git a/packages/app/src/ui/KeyboardShortcutsSettings.tsx b/packages/app/src/ui/KeyboardShortcutsSettings.tsx
 new file mode 100644
 index 00000000..2e96fde9
@@ -5948,7 +6020,7 @@ index cf4cf2cf..4a0d0a4e 100644
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..79d73132 100644
+index 4e22ccfa..0e0f4443 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,12 @@
@@ -6004,17 +6076,18 @@ index 4e22ccfa..79d73132 100644
  import { buildCanvasContextMenuDefinition } from "../../context-menu";
  import { getSharedEditAnalysisSession,getSharedEditAnalysisView } from "../../edit-analysis-manager";
  import { getActiveEditorPlatform } from "../../platform/current";
-@@ -54,6 +65,9 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
+@@ -54,6 +65,10 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
  import { useSettingsStore } from "../../settings/useSettingsStore";
  import { buildSnapshotEditSourceFingerprint } from "../../source-identity";
  import { useEditorStore } from "../../store/store";
 +import { useSelector } from "@xstate/react";
-+import { canvasSession, pathDraftRef, setArcDraft, setCurveActionsOpen, setFreehandResultOffer, setLockedCurveId, setPathDraft, setPendingBezier, setSelectedNodeIndices, setTapDraft, setTouchNodeSelection } from "./canvas-session";
++import { canvasSession, newStrokeSettings, offerIsCurrent, pathDraftRef, saveNewStrokeDefaults, setArcDraft, setCurveActionsOpen, setFreehandResultOffer, setLockedCurveId, setNewStrokeSettings, setPathDraft, setPendingBezier, setSelectedNodeIndices, setTapDraft, setTouchNodeSelection } from "./canvas-session";
++import { ExactRange } from "../ExactRange";
 +import { strokeEnvelope, originalStrokeSchema, originalDrawingSource, originalStrokes } from '../../original-ink';
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
  import { resolveBucketFillEdit } from "./bucket-fill";
  import { recordDragPatchModeFullReason } from "./drag-patch-mode-debug";
-@@ -67,11 +81,25 @@ import { CanvasPanelView } from "./CanvasPanelView";
+@@ -67,11 +82,25 @@ import { CanvasPanelView } from "./CanvasPanelView";
  import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
  import {
  appendFreehandToolPoint,
@@ -6041,7 +6114,7 @@ index 4e22ccfa..79d73132 100644
  viewportToSvgPoint,
  viewportToWorldPoint,
  worldToSvgPoint
-@@ -103,7 +131,7 @@ pathToolHasDrawableSegments,
+@@ -103,7 +132,7 @@ pathToolHasDrawableSegments,
  undoLastPathToolSegment,
  type PathToolGestureSegment
  } from "./path-tool";
@@ -6050,7 +6123,7 @@ index 4e22ccfa..79d73132 100644
  import type { resolveResizeFrameForSource } from "./resize-frames";
  import { isSvgPointWithinScopeBounds } from "./scope-overlay";
  import {
-@@ -119,6 +147,7 @@ type SnapDebugPoint
+@@ -119,11 +148,13 @@ type SnapDebugPoint
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -6058,7 +6131,13 @@ index 4e22ccfa..79d73132 100644
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
-@@ -131,9 +160,7 @@ GuidesState,
+ DragTooltipState,
+ EditableTextTarget,
++FreehandResultOffer,
+ FreehandToolDraft,
+ GuideDragState,
+ GuidePreview,
+@@ -131,9 +162,7 @@ GuidesState,
  MagnifierState,
  NodeAnchorOverlayState,
  NodePositionLinkDisplay,
@@ -6068,7 +6147,7 @@ index 4e22ccfa..79d73132 100644
  PendingTouchViewport,
  SnapDebugLogInput,
  SourceBoundsMap,
-@@ -155,7 +182,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
+@@ -155,7 +184,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
  import { useCanvasViewportPersistence } from "./useCanvasViewportPersistence";
  import { useBucketFillPreview,type BucketPreviewSession } from "./useBucketFillPreview";
  import type { ClientPoint,SvgBounds,ViewportPoint,WorldPoint } from "../coords/types";
@@ -6077,11 +6156,11 @@ index 4e22ccfa..79d73132 100644
  import {
  formatEquationText,
  type EquationNodeTarget
-@@ -210,6 +237,29 @@ type SnapDebugOverlayDragState =
+@@ -210,6 +239,29 @@ type SnapDebugOverlayDragState =
  
  const RULER_SIZE = 24;
  const MIN_SCALE = 0.05;
-+// Repeated Simplify doubles its tolerance from the setting up to this many times the setting.
++// Simplify and Simplify again double the tolerance from where they start up to this many times it.
 +const SIMPLIFY_MAX_ESCALATION = 32;
 +// Chromium's double-click interval: two taps closer than this are one double tap.
 +const DOUBLE_TAP_WINDOW_MS = 500;
@@ -6107,7 +6186,7 @@ index 4e22ccfa..79d73132 100644
  const MAX_SCALE = 20;
  const NUDGE_STEP_PT = 0.05 * PT_PER_CM;
  const NUDGE_STEP_SHIFT_PT = 0.25 * PT_PER_CM;
-@@ -668,6 +718,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
+@@ -668,6 +720,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
    return "single-line";
  }
  
@@ -6123,7 +6202,7 @@ index 4e22ccfa..79d73132 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,10 +816,32 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +818,62 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -6137,6 +6216,36 @@ index 4e22ccfa..79d73132 100644
 +    return makeWorldPoint(pt(point.x + dx * amount), pt(point.y + dy * amount));
 +  });
 +}
++
++/** Refit a refinement's points at a simplification and smoothing; a selected curve keeps its draw command. */
++function refitRefinement(offer: FreehandResultOffer, toleranceUnits: number, smoothing: number): FreehandInterpretation | null {
++  const draft = { ...offer.draft, points: smoothFreehandPoints(offer.draft.points, smoothing) };
++  const toleranceWorld = toleranceUnits * PT_PER_CM;
++  if (!offer.curve) return interpretFreehandToolSource(draft, 1, { strokeColor: offer.strokeColor, toleranceWorld });
++  const fit = interpretFreehandToolSource(draft, 1, { preserveCurve: true, toleranceWorld });
++  if (!fit) return null;
++  const source = fit.source.replace(/^\\draw(?:\[[^\]]*\])?/u, offer.curve.prefix);
++  return { ...fit, source: offer.curve.autoSmooth ? smoothAuthoredCurveJoints(source) : source };
++}
++
++function fittedSegments(source: string): number {
++  return (source.match(/\.\.\s+controls\b/gu) ?? []).length;
++}
++
++/**
++ * The first tolerance from `fromUnits`, doubling, whose refit has fewer than `segments` segments, so repeated
++ * passes converge as Inkscape's repeated Simplify does; null when none up to the escalation limit does.
++ */
++function simplerRefit(offer: FreehandResultOffer, fromUnits: number, segments: number): { interpretation: FreehandInterpretation; toleranceUnits: number } | null {
++  for (let toleranceUnits = fromUnits; toleranceUnits <= fromUnits * SIMPLIFY_MAX_ESCALATION; toleranceUnits *= 2) {
++    const interpretation = refitRefinement(offer, toleranceUnits, offer.smoothing);
++    if (!interpretation) continue;
++    const count = fittedSegments(interpretation.source);
++    if (count >= 1 && count < segments) return { interpretation, toleranceUnits };
++  }
++  return null;
++}
++
 +
 +
 +const freehandPointPattern = String.raw`\([+-]?(?:\d+(?:\.\d*)?|\.\d+),[+-]?(?:\d+(?:\.\d*)?|\.\d+)\)`;
@@ -6158,7 +6267,7 @@ index 4e22ccfa..79d73132 100644
  }) {
    const platform = getActiveEditorPlatform();
    const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
-@@ -774,6 +855,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +887,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -6167,7 +6276,7 @@ index 4e22ccfa..79d73132 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -792,7 +875,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -792,7 +907,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid,
      showTransparencyGrid,
      snapModes,
@@ -6175,7 +6284,7 @@ index 4e22ccfa..79d73132 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +896,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +928,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -6184,7 +6293,7 @@ index 4e22ccfa..79d73132 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -832,7 +916,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -832,7 +948,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
      snapModes: s.snapModes,
@@ -6192,7 +6301,7 @@ index 4e22ccfa..79d73132 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +928,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +960,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -6204,7 +6313,7 @@ index 4e22ccfa..79d73132 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,14 +974,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +1006,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -6221,7 +6330,7 @@ index 4e22ccfa..79d73132 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -911,12 +996,127 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -911,12 +1028,124 @@ export const CanvasPanel = memo(function CanvasPanel({
    }, [baseSvgModel, svgResult]);
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
@@ -6236,22 +6345,19 @@ index 4e22ccfa..79d73132 100644
 +  }, []);
 +  const [hoveredHandleId, setHoveredHandleId] = useState<string | null>(null);
 +  const session = useSelector(canvasSession, (snapshot) => snapshot);
-+  const { construction, curve, refinement: freehandResultOffer } = session.context;
++  const { construction, curve, refinement: freehandResultOffer, newStrokes } = session.context;
 +  const pathDraft = construction?.kind === "path" ? construction.draft : null;
 +  const pendingBezier = construction?.kind === "bezier" ? construction.draft : null;
 +  const arcDraft = construction?.kind === "arc" ? construction.draft : null;
 +  const tapDraft = construction?.kind === "taps" ? construction.draft : null;
 +  const { lockedId: lockedCurveId, points: selectedNodeIndices, touchMultiple: touchNodeSelection, actionsOpen: curveActionsOpen } = curve;
-+  const { autoSmoothNodes, autoApplyFit, preserveOriginal, simplificationUnits, smoothingUnits } = useSettingsStore(useShallow((state) => ({
-+    autoSmoothNodes: state.settings.canvas.freehandAutoSmoothNodes,
-+    autoApplyFit: state.settings.canvas.freehandAutoApply,
-+    preserveOriginal: state.settings.canvas.freehandPreserveOriginal,
-+    simplificationUnits: state.settings.canvas.freehandSimplificationUnits,
-+    smoothingUnits: state.settings.canvas.freehandSmoothingUnits
-+  })));
++  const autoSmoothNodes = useSettingsStore((state) => state.settings.canvas.freehandAutoSmoothNodes);
++  const savedCanvasSettings = useSettingsStore((state) => state.settings.canvas);
++  const { freehandAutoApply: autoApplyFit, freehandPreserveOriginal: preserveOriginal, freehandSimplificationUnits: simplificationUnits,
++    freehandSmoothingUnits: smoothingUnits } = newStrokeSettings(savedCanvasSettings, newStrokes);
 +  const setAutoSmoothNodes = (value: boolean) => useSettingsStore.getState().updateCanvasSettings({ freehandAutoSmoothNodes: value });
-+  const setAutoApplyFit = (value: boolean) => useSettingsStore.getState().updateCanvasSettings({ freehandAutoApply: value });
-+  const setPreserveOriginal = (value: boolean) => useSettingsStore.getState().updateCanvasSettings({ freehandPreserveOriginal: value });
++  const [freehandDefaultsOpen, setFreehandDefaultsOpen] = useState(false);
++  useEffect(() => setFreehandDefaultsOpen(false), [freehandResultOffer?.strokeId]);
 +  const [rangeStart, setRangeStart] = useState<{ sourceId: string; index: number; revision: number } | null>(null);
 +
 +  useEffect(() => {
@@ -6352,7 +6458,7 @@ index 4e22ccfa..79d73132 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1133,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1162,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -6361,7 +6467,7 @@ index 4e22ccfa..79d73132 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1144,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1173,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -6375,7 +6481,7 @@ index 4e22ccfa..79d73132 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1237,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1266,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -6398,7 +6504,7 @@ index 4e22ccfa..79d73132 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,9 +1307,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,9 +1336,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -6411,7 +6517,7 @@ index 4e22ccfa..79d73132 100644
  
    const dispatchCanvasTransform = useCallback(
      (transform: CanvasTransform) => {
-@@ -1156,16 +1334,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1156,16 +1363,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const interactionSvgRef = useRef<SVGSVGElement | null>(null);
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
@@ -6442,7 +6548,7 @@ index 4e22ccfa..79d73132 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1265,10 +1455,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1265,10 +1484,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      [setActiveCanvasDragKind]
    );
  
@@ -6453,7 +6559,7 @@ index 4e22ccfa..79d73132 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1300,7 +1486,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1515,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -6461,7 +6567,7 @@ index 4e22ccfa..79d73132 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1506,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1535,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -6472,7 +6578,7 @@ index 4e22ccfa..79d73132 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1690,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1719,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -6496,7 +6602,7 @@ index 4e22ccfa..79d73132 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1705,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1734,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -6510,7 +6616,7 @@ index 4e22ccfa..79d73132 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1761,11 +1923,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1761,11 +1952,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
      const handleKeyDown = (event: KeyboardEvent) => {
@@ -6523,7 +6629,7 @@ index 4e22ccfa..79d73132 100644
        if (event.key !== "Escape" && !isUndo) {
          return;
        }
-@@ -1810,19 +1968,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +1997,37 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -6563,7 +6669,7 @@ index 4e22ccfa..79d73132 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,9 +2014,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,9 +2043,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -6576,7 +6682,7 @@ index 4e22ccfa..79d73132 100644
      snapModes,
      gridMinorTargetPx,
      canvasTransform,
-@@ -1857,44 +2036,50 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2065,50 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -6636,7 +6742,7 @@ index 4e22ccfa..79d73132 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1975,6 +2160,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2189,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -6880,7 +6986,7 @@ index 4e22ccfa..79d73132 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,17 +2477,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2506,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -6905,7 +7011,7 @@ index 4e22ccfa..79d73132 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2501,233 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2530,234 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -6990,7 +7096,7 @@ index 4e22ccfa..79d73132 100644
 +        rawWorldPoints: original.samples.map((sample) => makeWorldPoint(pt(sample.x), pt(sample.y))), originalStroke: original, baselineDrawing: rawSource,
 +        documentId: current.activeDocumentId, baseSource: after, autoApply: autoApplyFit, smoothing: smoothingUnits,
 +        from, toleranceUnits: simplificationUnits, zoom: canvasTransform.scale, strokeColor: creationStrokeColor,
-+        sourceRevision: useEditorStore.getState().sourceRevision, appliedEdit: null });
++        sourceRevision: useEditorStore.getState().sourceRevision, appliedEdit: null, curve: null, final: false });
      }
  
      setFreehandDraft(null);
@@ -6999,37 +7105,45 @@ index 4e22ccfa..79d73132 100644
 -  }, [applyActionWithFeedback, canvasTransform.scale, creationStrokeColor, dispatch, freehandSmoothingPx, queueSelectionForAddedElement, setDragState]);
 +  }, [autoApplyFit, canvasTransform.scale, creationStrokeColor, dispatch, editParseOptions, simplificationUnits, smoothingUnits, queueSelectionForAddedElement, setDragState]);
 +
-+  /**
-+   * Close the result, dropping an unapplied preview. With `restoreOriginal`, an automatic fit already
-+   * committed is reversed too (Keep original); otherwise it stays, so drawing on or switching tools keeps it.
-+   */
-+  const closeFreehandOffer = useCallback((restoreOriginal: boolean) => {
-+    canvasSession.send({ type: restoreOriginal ? "refinement.restore" : "refinement.close" });
-+  }, []);
-+  const dismissFreehandOffer = useCallback(() => closeFreehandOffer(false), [closeFreehandOffer]);
++  // Escape, drawing on, or a tool change closes the result: an unapplied preview drops, a committed fit stays.
++  const dismissFreehandOffer = useCallback(() => canvasSession.send({ type: "refinement.close" }), []);
++  // Cancel returns to the state before the result opened, reversing a committed automatic fit too.
++  const cancelFreehandOffer = useCallback(() => canvasSession.send({ type: "refinement.cancel" }), []);
 +
-+  // The sliders refit this stroke only; "Use for new strokes" is the separate action that changes the defaults.
-+  const updateFreehandPreview = useCallback((toleranceUnits: number, smoothing: number) => {
-+    const offer = freehandResultOffer;
-+    if (!offer || useEditorStore.getState().activeDocumentId !== offer.documentId || useEditorStore.getState().sourceRevision !== offer.sourceRevision) return;
-+    const points = smoothFreehandPoints(offer.draft.points, smoothing);
-+    const interpretation = interpretFreehandToolSource({ ...offer.draft, points }, 1, { strokeColor: offer.strokeColor, toleranceWorld: toleranceUnits * PT_PER_CM });
-+    if (!interpretation) return;
++  // The sliders refit this stroke only; the scope actions behind Defaults change what new strokes take.
++  const showFreehandPreview = useCallback((offer: FreehandResultOffer, interpretation: FreehandInterpretation, toleranceUnits: number, smoothing: number) => {
 +    const nextSource = offer.baseSource.slice(0, offer.from) + interpretation.source + offer.baseSource.slice(offer.from + offer.baselineDrawing.length);
 +    dispatch({ type: "SET_SOURCE_TRANSIENT", source: nextSource });
-+    setFreehandResultOffer({ ...offer, interpretation, toleranceUnits, smoothing, sourceRevision: useEditorStore.getState().sourceRevision });
-+  }, [dispatch, freehandResultOffer]);
++    setFreehandResultOffer({ ...offer, interpretation, toleranceUnits, smoothing, final: false, sourceRevision: useEditorStore.getState().sourceRevision });
++  }, [dispatch]);
++  const updateFreehandPreview = useCallback((toleranceUnits: number, smoothing: number) => {
++    const offer = freehandResultOffer;
++    if (!offer || !offerIsCurrent(offer)) return;
++    const interpretation = refitRefinement(offer, toleranceUnits, smoothing);
++    if (interpretation) showFreehandPreview(offer, interpretation, toleranceUnits, smoothing);
++  }, [freehandResultOffer, showFreehandPreview]);
++  // Simplify again runs another, coarser pass on the preview.
++  const simplifyRefinementAgain = useCallback(() => {
++    const offer = freehandResultOffer;
++    if (!offer || !offerIsCurrent(offer)) return;
++    const simpler = simplerRefit(offer, offer.toleranceUnits * 2, fittedSegments(offer.interpretation.source));
++    if (simpler) showFreehandPreview(offer, simpler.interpretation, simpler.toleranceUnits, offer.smoothing);
++    else setFreehandResultOffer({ ...offer, final: true });
++  }, [freehandResultOffer, showFreehandPreview]);
 +
 +  const applyFreehandSuggestion = useCallback((automatic = false) => {
 +    const offer = freehandResultOffer;
-+    if (!offer || useEditorStore.getState().activeDocumentId !== offer.documentId || useEditorStore.getState().sourceRevision !== offer.sourceRevision) return;
++    if (!offer || !offerIsCurrent(offer)) return;
++    // Accepting an automatic fit as it stands only closes the result.
++    if (offer.appliedEdit && offer.interpretation.source === offer.baselineDrawing) { setFreehandResultOffer(null); return; }
 +    const envelope = originalStrokes(offer.baseSource).find((entry) => entry.stroke.key === offer.strokeId);
 +    let from = offer.from, before = offer.baselineDrawing, after = offer.interpretation.source, drawingFrom = offer.from;
-+    if (!preserveOriginal && envelope) {
++    // A selected curve's refit replaces its drawing only; a new stroke's keeps or drops its recorded original.
++    if (!offer.curve && !preserveOriginal && envelope) {
 +      from = envelope.from;
 +      before = offer.baseSource.slice(envelope.from, envelope.to);
 +      drawingFrom = from;
-+    } else if (preserveOriginal && !envelope) {
++    } else if (!offer.curve && preserveOriginal && !envelope && offer.originalStroke) {
 +      after = strokeEnvelope(offer.originalStroke, offer.interpretation.source);
 +      drawingFrom = from + originalStrokes(after)[0].drawingFrom;
 +    }
@@ -7061,42 +7175,34 @@ index 4e22ccfa..79d73132 100644
 +    if (freehandResultOffer?.autoApply) applyFreehandSuggestion(true);
 +  }, [autoApplyFit, freehandResultOffer, applyFreehandSuggestion]);
 +
-+  // Repeating Simplify on the same curve coarsens the tolerance each time, so repeated steps converge,
-+  // as Inkscape's repeated simplify does; a stroke that kept its recorded ink is refitted from the ink.
-+  const lastSimplifyRef = useRef<{ sourceId: string; source: string; toleranceUnits: number } | null>(null);
++  // Simplify opens the refinement on the selected curve with its first simpler pass previewed; a stroke that
++  // kept its recorded ink is refitted from the ink.
 +  const simplifySelectedPath = useCallback(() => {
 +    if (!selectedPathForFit) return;
-+    const sourceId = selectedPathForFit.path.sourceRef.sourceId;
-+    const last = lastSimplifyRef.current;
-+    const repeat = last !== null && last.sourceId === sourceId && last.source === selectedPathForFit.original;
 +    const inverse = selectedOriginal.entry ? inverseMatrix(resolveFigureCoordinateFrame(source, editParseOptions)) : null;
 +    const draft = selectedOriginal.entry && inverse
 +      ? { points: selectedOriginal.entry.stroke.samples.map((sample) => applyMatrix(inverse, makeWorldPoint(pt(sample.x), pt(sample.y)))), minSampleDistanceWorld: 0 }
 +      : sampleSelectedCurvePath(selectedPathForFit.sourcePath, 1);
-+    const sourcePrefix = /^\s*\\draw(?:\[[^\]]*\])?/.exec(selectedPathForFit.original)?.[0];
++    const prefix = /^\s*\\draw(?:\[[^\]]*\])?/.exec(selectedPathForFit.original)?.[0];
 +    if (!draft) { setWarning("Simplify could not read this curve's points."); return; }
-+    if (!sourcePrefix) { setWarning("Simplify could not read this curve's draw command."); return; }
-+    const oldSegments = selectedPathForFit.sourcePath.commands.filter((command) => command.kind === "C").length;
-+    for (let toleranceUnits = repeat ? last.toleranceUnits * 2 : simplificationUnits;
-+      toleranceUnits <= simplificationUnits * SIMPLIFY_MAX_ESCALATION; toleranceUnits *= 2) {
-+      const interpretation = interpretFreehandToolSource(draft, 1, { preserveCurve: true, toleranceWorld: toleranceUnits * PT_PER_CM });
-+      if (!interpretation) continue;
-+      const fitted = interpretation.source.replace(/^\\draw(?:\[[^\]]*\])?/, sourcePrefix);
-+      const fittedSource = autoSmoothNodes ? smoothAuthoredCurveJoints(fitted) : fitted;
-+      const newSegments = (fittedSource.match(/\.\.\s+controls\b/gu) ?? []).length;
-+      if (newSegments >= oldSegments || newSegments < 1) continue;
-+      const revision = useEditorStore.getState().sourceRevision;
-+      dispatch({ type: "REPLACE_FREEHAND_RESULT", from: selectedPathForFit.from, before: selectedPathForFit.original, after: fittedSource, expectedSourceRevision: revision });
-+      if (useEditorStore.getState().sourceRevision === revision) {
-+        setWarning("Could not simplify the selected path.");
-+        return;
-+      }
-+      lastSimplifyRef.current = { sourceId, source: fittedSource, toleranceUnits };
-+      setWarning(null);
-+      return;
-+    }
-+    setWarning("This curve is already as simple as Simplify can make it.");
-+  }, [autoSmoothNodes, dispatch, editParseOptions, selectedOriginal.entry, simplificationUnits, selectedPathForFit, source]);
++    if (!prefix) { setWarning("Simplify could not read this curve's draw command."); return; }
++    const current = useEditorStore.getState();
++    const { original, from } = selectedPathForFit;
++    const offer: FreehandResultOffer = {
++      draft, interpretation: { source: original, rawSource: original, kind: "curve" }, curve: { prefix, autoSmooth: autoSmoothNodes }, final: false,
++      rawSource: original, originalStroke: selectedOriginal.entry?.stroke ?? null, baselineDrawing: original,
++      rawWorldPoints: selectedOriginal.entry
++        ? selectedOriginal.entry.stroke.samples.map((sample) => makeWorldPoint(pt(sample.x), pt(sample.y)))
++        : sampleSelectedCurvePath(selectedPathForFit.path, 1)?.points ?? draft.points,
++      strokeId: selectedPathForFit.path.sourceRef.sourceId, documentId: current.activeDocumentId, baseSource: current.source, autoApply: false,
++      smoothing: 0, from, toleranceUnits: simplificationUnits, zoom: canvasTransform.scale, strokeColor: creationStrokeColor,
++      sourceRevision: current.sourceRevision, appliedEdit: null
++    };
++    const simpler = simplerRefit(offer, simplificationUnits, selectedPathForFit.sourcePath.commands.filter((command) => command.kind === "C").length);
++    if (!simpler) { setWarning("This curve is already as simple as Simplify can make it."); return; }
++    setWarning(null);
++    showFreehandPreview(offer, simpler.interpretation, simpler.toleranceUnits, 0);
++  }, [autoSmoothNodes, canvasTransform.scale, creationStrokeColor, editParseOptions, selectedOriginal.entry, simplificationUnits, selectedPathForFit, showFreehandPreview, source]);
 +
 +  const simplifySelectedRange = useCallback(() => {
 +    if (!selectedPathForFit || rangeStartIndex === null || selectedAnchorIndex === null) return;
@@ -7148,22 +7254,23 @@ index 4e22ccfa..79d73132 100644
 +    if (statement) dispatch({ type: "SELECT", id: statement.id, additive: false });
 +  }, [dispatch, snapshot.parseResult, snapshot.source, source]);
 +
-+  const applyOriginalStroke = (fit: boolean) => {
-+    const entry = selectedOriginal.entry;
++  const applyOriginalStroke = (key: string, fit: boolean) => {
++    const current = useEditorStore.getState();
++    const entry = originalStrokes(current.source).find((candidate) => candidate.stroke.key === key);
 +    if (!entry) return;
-+    const inverse = inverseMatrix(resolveFigureCoordinateFrame(source, editParseOptions));
++    const inverse = inverseMatrix(resolveFigureCoordinateFrame(current.source, editParseOptions));
 +    if (!inverse) { setWarning("This picture has a singular coordinate frame."); return; }
 +    const next = fit ? refittedInkDrawing(entry.stroke, inverse, simplificationUnits * PT_PER_CM) : originalInkDrawing(entry.stroke, inverse);
 +    if (next === null) { setWarning("No geometric fit is available for this stroke."); return; }
 +    pendingOriginalSelectionRef.current = entry.stroke.key;
 +    dispatch({ type: "REPLACE_FREEHAND_RESULT", from: entry.drawingFrom,
-+      before: source.slice(entry.drawingFrom, entry.drawingTo), after: next,
-+      expectedSourceRevision: sourceRevision });
++      before: current.source.slice(entry.drawingFrom, entry.drawingTo), after: next,
++      expectedSourceRevision: current.sourceRevision });
 +  };
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2742,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2772,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -7171,7 +7278,7 @@ index 4e22ccfa..79d73132 100644
          return;
        }
  
-@@ -2141,7 +2750,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2780,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -7179,7 +7286,7 @@ index 4e22ccfa..79d73132 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2766,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2796,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -7187,7 +7294,7 @@ index 4e22ccfa..79d73132 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2780,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2810,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -7217,7 +7324,7 @@ index 4e22ccfa..79d73132 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3635,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3665,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -7225,7 +7332,7 @@ index 4e22ccfa..79d73132 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3064,9 +3689,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3719,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -7235,7 +7342,7 @@ index 4e22ccfa..79d73132 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3147,7 +3769,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3799,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -7246,7 +7353,7 @@ index 4e22ccfa..79d73132 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3795,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3825,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -7256,7 +7363,7 @@ index 4e22ccfa..79d73132 100644
      ]
    );
  
-@@ -3192,6 +3817,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3847,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -7335,7 +7442,7 @@ index 4e22ccfa..79d73132 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3917,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3947,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -7354,7 +7461,7 @@ index 4e22ccfa..79d73132 100644
      snapshot,
      source,
      setWarning,
-@@ -3267,16 +3970,232 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,16 +4000,232 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -7589,7 +7696,7 @@ index 4e22ccfa..79d73132 100644
    );
  
    const {
-@@ -3306,6 +4225,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4255,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -7597,7 +7704,7 @@ index 4e22ccfa..79d73132 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4250,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4280,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -7622,7 +7729,7 @@ index 4e22ccfa..79d73132 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4368,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4398,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -7657,7 +7764,7 @@ index 4e22ccfa..79d73132 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4389,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4419,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -7665,7 +7772,7 @@ index 4e22ccfa..79d73132 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4403,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4433,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -7673,7 +7780,7 @@ index 4e22ccfa..79d73132 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4479,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4509,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -7682,7 +7789,7 @@ index 4e22ccfa..79d73132 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4524,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4554,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -7691,7 +7798,7 @@ index 4e22ccfa..79d73132 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4603,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4633,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -7715,7 +7822,7 @@ index 4e22ccfa..79d73132 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4716,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4746,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -7723,7 +7830,7 @@ index 4e22ccfa..79d73132 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4729,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4759,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -7731,25 +7838,34 @@ index 4e22ccfa..79d73132 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4740,155 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4770,164 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
 +  // The canvas hint sits in the canvas corner; placement keeps the selection control off it.
 +  const [selectionHintElement, setSelectionHintElement] = useState<HTMLDivElement | null>(null);
 +  // A stroke that kept its recorded original offers it from the selection's own control, not a second panel.
-+  const originalStrokeActions = selectedOriginal.entry ? <>
-+    <button type="button" onClick={() => applyOriginalStroke(false)}>Restore original stroke</button>
-+    {selectedOriginal.entry.stroke.intent === "geometry" ? <button type="button" onClick={() => applyOriginalStroke(true)}>Reapply original fit</button> : null}
++  const selectedOriginalKey = selectedOriginal.entry?.stroke.key ?? null;
++  const originalStrokeActions = selectedOriginal.entry && selectedOriginalKey !== null ? <>
++    <button type="button" onClick={() => applyOriginalStroke(selectedOriginalKey, false)}>Restore original stroke</button>
++    {selectedOriginal.entry.stroke.intent === "geometry" ? <button type="button" onClick={() => applyOriginalStroke(selectedOriginalKey, true)}>Reapply original fit</button> : null}
 +  </> : null;
++  // Restore original differs from Cancel only on a selected curve whose source keeps the recorded stroke.
++  const refinementOriginalKey = freehandResultOffer?.curve ? freehandResultOffer.originalStroke?.key ?? null : null;
 +  // Selection controls belong to the selection tools; under a drawing tool they would sit where the next stroke goes.
 +  const selectionControlsShown = toolMode === "select" || toolMode === "lasso";
 +  // The freehand result sits in a corner of the canvas that the rail, the properties
 +  // panel, and the keyboard leave: the first, from the bottom leading one, whose box
 +  // clears the stroke.
 +  const [freehandPopupSize, setFreehandPopupSize] = useState({ width: 268, height: 240 });
++  // Measured again whenever its content changes size, as when Defaults opens.
 +  const measureFreehandPopup = useCallback((element: HTMLDivElement | null) => {
-+    if (element) setFreehandPopupSize({ width: element.offsetWidth, height: element.scrollHeight });
++    if (!element) return;
++    const measure = () => setFreehandPopupSize({ width: element.offsetWidth, height: element.scrollHeight });
++    measure();
++    const observer = new ResizeObserver(measure);
++    observer.observe(element);
++    return () => observer.disconnect();
 +  }, []);
 +  const freehandPopupPosition = (() => {
 +    const viewport = viewportRef.current?.getBoundingClientRect();
@@ -7887,7 +8003,7 @@ index 4e22ccfa..79d73132 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4911,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4950,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -7910,7 +8026,7 @@ index 4e22ccfa..79d73132 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4942,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4981,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -7925,7 +8041,7 @@ index 4e22ccfa..79d73132 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4968,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5007,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -7959,7 +8075,7 @@ index 4e22ccfa..79d73132 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5000,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5039,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -7969,7 +8085,7 @@ index 4e22ccfa..79d73132 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5013,29 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5052,29 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -8003,7 +8119,7 @@ index 4e22ccfa..79d73132 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5066,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5105,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -8011,7 +8127,7 @@ index 4e22ccfa..79d73132 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5075,75 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5114,81 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -8026,15 +8142,18 @@ index 4e22ccfa..79d73132 100644
 +      ) : null}
 +      {selectionControlsShown && selectedCurve && !freehandResultOffer ? (
 +        <div ref={measureSelectionControl} className={freehandPopupCss.rangeControls} style={selectionPopupStyle} onPointerDown={(event) => event.stopPropagation()}>
-+          <button type="button" className={freehandPopupCss.lockToggle} aria-pressed={lockedCurveId !== null}
-+            onClick={() => setLockedCurveId(lockedCurveId ? null : selectedCurve.path.sourceRef.sourceId)}>
-+            <span aria-hidden="true">{lockedCurveId ? "🔒" : "🔓"}</span>Lock curve
-+          </button>
++          {/* The lock and the actions share the first row, so a short space that scrolls the control still shows both. */}
++          <div className={freehandPopupCss.controlRow}>
++            <button type="button" className={freehandPopupCss.lockToggle} aria-pressed={lockedCurveId !== null}
++              onClick={() => setLockedCurveId(lockedCurveId ? null : selectedCurve.path.sourceRef.sourceId)}>
++              <span aria-hidden="true">{lockedCurveId ? "🔒" : "🔓"}</span>Lock curve
++            </button>
++            <button type="button" aria-expanded={curveActionsOpen} onClick={() => setCurveActionsOpen(!curveActionsOpen)}>
++              {selectedNodeIndices.size ? `${selectedNodeIndices.size} point${selectedNodeIndices.size === 1 ? "" : "s"} selected` : "Curve actions"}
++            </button>
++          </div>
 +          <span className={freehandPopupCss.pointCount}>{selectedCurve.handles.length} point{selectedCurve.handles.length === 1 ? "" : "s"}</span>
 +          {originalStrokeActions}
-+          <button type="button" aria-expanded={curveActionsOpen} onClick={() => setCurveActionsOpen(!curveActionsOpen)}>
-+            {selectedNodeIndices.size ? `${selectedNodeIndices.size} point${selectedNodeIndices.size === 1 ? "" : "s"} selected` : "Curve actions"}
-+          </button>
 +          {selectedNodeIndices.size > 0 ? <>
 +            {selectedNodeIndices.size === 1 && commandRuntime.bindings[APP_MENU_COMMAND_IDS.PATH_POINT_CORNER].enabled
 +              ? <button type="button" onClick={() => commandRuntime.runCommand(APP_MENU_COMMAND_IDS.PATH_POINT_CORNER, "context-menu")}>Make corner</button> : null}
@@ -8051,10 +8170,6 @@ index 4e22ccfa..79d73132 100644
 +              {selectedNodeActionCapabilities.smooth ? <button type="button" onClick={() => editSelectedNodes("smooth")}>Smooth curve</button> : null}
 +              <button type="button" onClick={() => applyActionWithFeedback({ kind: "deleteElements", elementIds: [selectedCurve.path.sourceRef.sourceId] })}>Delete curve</button>
 +            </>}
-+            {selectedPathForFit ? <label>Curve tolerance: {formatNumber(simplificationUnits)} lattice units
-+              <input type="range" min={0.01} max={2} step={0.01} value={simplificationUnits}
-+                onChange={(event) => useSettingsStore.getState().updateCanvasSettings({ freehandSimplificationUnits: Number(event.currentTarget.value) })} />
-+            </label> : null}
 +            <label><input type="checkbox" checked={autoSmoothNodes} onChange={(event) => setAutoSmoothNodes(event.currentTarget.checked)} />Smooth surviving nodes after deletion or simplification</label>
 +            {selectedPathForFit && selectedAnchorIndex !== null ? <button type="button" onClick={() => setRangeStart({ sourceId: selectedCurve.path.sourceRef.sourceId, index: selectedAnchorIndex, revision: sourceRevision })}>Set range start</button> : null}
 +            {selectedPathForFit && rangeStartIndex !== null && selectedAnchorIndex !== null && Math.abs(selectedAnchorIndex - rangeStartIndex) >= 2 ? <button type="button" onClick={simplifySelectedRange}>Simplify range</button> : null}
@@ -8063,25 +8178,32 @@ index 4e22ccfa..79d73132 100644
 +      ) : null}
 +      {freehandResultOffer ? (
 +        <div ref={measureFreehandPopup} style={freehandPopupPosition} className={freehandPopupCss.popup}
-+          role="dialog" aria-label="Freehand result" onPointerDown={(event) => event.stopPropagation()}>
-+          <strong>Freehand result</strong>
++          role="dialog" aria-label={freehandResultOffer.curve ? "Curve refinement" : "Freehand result"} onPointerDown={(event) => event.stopPropagation()}>
++          <strong>{freehandResultOffer.curve ? "Curve refinement" : "Freehand result"}</strong>
 +          <span>{freehandResultOffer.rawWorldPoints.length} raw samples · {freehandResultOffer.interpretation.kind === "line" ? 2 : freehandResultOffer.interpretation.kind === "rectangle" ? 4 : freehandResultOffer.interpretation.kind === "circle" || freehandResultOffer.interpretation.kind === "ellipse" ? 4 : (freehandResultOffer.interpretation.source.match(/\.\. controls/g)?.length ?? 0) + 1} fitted anchors</span>
-+          <label>Smoothing: {formatNumber(freehandResultOffer.smoothing)} lattice units
-+            <input type="range" min={0} max={1} step={0.01} value={freehandResultOffer.smoothing}
-+              onChange={(event) => updateFreehandPreview(freehandResultOffer.toleranceUnits, Number(event.currentTarget.value))} />
-+          </label>
-+          <label>Simplification: {formatNumber(freehandResultOffer.toleranceUnits)} lattice units
-+            <input type="range" min={0.01} max={2} step={0.01} value={freehandResultOffer.toleranceUnits}
-+              onChange={(event) => updateFreehandPreview(Number(event.currentTarget.value), freehandResultOffer.smoothing)} />
-+          </label>
-+          <button type="button" onClick={() => useSettingsStore.getState().updateCanvasSettings({
-+            freehandSimplificationUnits: freehandResultOffer.toleranceUnits, freehandSmoothingUnits: freehandResultOffer.smoothing })}>Use for new strokes</button>
-+          <label><input type="checkbox" checked={autoApplyFit} onChange={(event) => setAutoApplyFit(event.currentTarget.checked)} />Apply automatically to future strokes</label>
-+          <label><input type="checkbox" checked={preserveOriginal} onChange={(event) => setPreserveOriginal(event.currentTarget.checked)} />Keep recoverable original in source</label>
++          <ExactRange label="Smoothing" unit="lattice units" min={0} max={1} step={0.01} value={freehandResultOffer.smoothing}
++            onChange={(value) => updateFreehandPreview(freehandResultOffer.toleranceUnits, value)} />
++          <ExactRange label="Simplification" unit="lattice units" min={0.01} max={2} step={0.01} value={freehandResultOffer.toleranceUnits}
++            onChange={(value) => updateFreehandPreview(value, freehandResultOffer.smoothing)} />
++          {freehandResultOffer.final ? <p role="status">This curve is already as simple as Simplify can make it.</p> : null}
 +          <div className={freehandPopupCss.actions}>
-+            <button type="button" onClick={() => applyFreehandSuggestion()}>Apply simplification</button>
-+            <button type="button" onClick={() => closeFreehandOffer(true)}>Keep original</button>
++            <button type="button" onClick={simplifyRefinementAgain}>Simplify again</button>
++            <button type="button" onClick={() => applyFreehandSuggestion()}>Accept</button>
++            <button type="button" onClick={cancelFreehandOffer}>Cancel</button>
++            {refinementOriginalKey !== null ? <button type="button" onClick={() => { dismissFreehandOffer(); applyOriginalStroke(refinementOriginalKey, false); }}>Restore original</button> : null}
++            {freehandResultOffer.curve ? null : <button type="button" aria-expanded={freehandDefaultsOpen} onClick={() => setFreehandDefaultsOpen(!freehandDefaultsOpen)}>Defaults</button>}
 +          </div>
++          {freehandDefaultsOpen && !freehandResultOffer.curve ? <div className={freehandPopupCss.defaults} role="group" aria-label="New strokes">
++            <label><input type="checkbox" checked={autoApplyFit} onChange={(event) => setNewStrokeSettings({ freehandAutoApply: event.currentTarget.checked })} />Refine new strokes automatically</label>
++            <label><input type="checkbox" checked={preserveOriginal} onChange={(event) => setNewStrokeSettings({ freehandPreserveOriginal: event.currentTarget.checked })} />Keep the original in source</label>
++            <div className={freehandPopupCss.actions}>
++              <button type="button" onClick={() => setNewStrokeSettings({ freehandSimplificationUnits: freehandResultOffer.toleranceUnits, freehandSmoothingUnits: freehandResultOffer.smoothing })}>Use for new strokes</button>
++              <button type="button" onClick={() => {
++                setNewStrokeSettings({ freehandSimplificationUnits: freehandResultOffer.toleranceUnits, freehandSmoothingUnits: freehandResultOffer.smoothing });
++                saveNewStrokeDefaults();
++              }}>Save as default</button>
++            </div>
++          </div> : null}
 +        </div>
 +      ) : null}
        {equationModalTarget ? (
@@ -8404,10 +8526,10 @@ index f0ff59f8..8c75e6be 100644
            ) : null}
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
-index 00000000..46b32fab
+index 00000000..e04d6cac
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
-@@ -0,0 +1,111 @@
+@@ -0,0 +1,117 @@
 +.popup {
 +  position: fixed;
 +  z-index: 200;
@@ -8436,9 +8558,14 @@ index 00000000..46b32fab
 +  gap: 6px;
 +}
 +
-+.popup input {
-+  grid-column: 1 / -1;
-+  width: 100%;
++.defaults {
++  display: grid;
++  gap: 8px;
++  padding-top: 8px;
++  border-top: 1px solid var(--border);
++}
++
++.popup input[type="checkbox"] {
 +  accent-color: #9e2a2b;
 +}
 +
@@ -8518,13 +8645,14 @@ index 00000000..46b32fab
 +
 +.lockToggle { display: flex; align-items: center; justify-content: center; gap: 6px; }
 +.lockToggle[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
++.controlRow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 +.pointCount { justify-self: center; color: var(--text-muted); font-size: 13px; }
 diff --git a/packages/app/src/ui/canvas-panel/canvas-session.ts b/packages/app/src/ui/canvas-panel/canvas-session.ts
 new file mode 100644
-index 00000000..81391a77
+index 00000000..c1402e19
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/canvas-session.ts
-@@ -0,0 +1,311 @@
+@@ -0,0 +1,337 @@
 +/**
 + * The canvas session: the one interaction state the editor is in, and the provisional data that state owns.
 + * The editor store keeps authored source, the chosen tool and the object selection; this statechart keeps what
@@ -8534,7 +8662,7 @@ index 00000000..81391a77
 +import type { MutableRefObject } from "react";
 +import { assign, createActor, emit, setup, type SnapshotFrom } from "xstate";
 +
-+import type { ArcConstruction, CircleConstruction } from "../../settings/types";
++import type { AppSettings, ArcConstruction, CircleConstruction } from "../../settings/types";
 +import { useSettingsStore } from "../../settings/useSettingsStore";
 +import { useEditorStore } from "../../store/store";
 +import type { ToolMode } from "../../store/types";
@@ -8558,12 +8686,22 @@ index 00000000..81391a77
 +  actionsOpen: boolean;
 +};
 +
++/** The freehand settings a new stroke takes; the session can hold its own values apart from the saved defaults. */
++export type NewStrokeSettings = Pick<AppSettings["canvas"], "freehandSimplificationUnits" | "freehandSmoothingUnits" | "freehandAutoApply" | "freehandPreserveOriginal">;
++
++/** The values a new stroke takes: the saved defaults under the session's own values. */
++export function newStrokeSettings(canvas: AppSettings["canvas"], session: Partial<NewStrokeSettings>): NewStrokeSettings {
++  const { freehandSimplificationUnits, freehandSmoothingUnits, freehandAutoApply, freehandPreserveOriginal } = canvas;
++  return { freehandSimplificationUnits, freehandSmoothingUnits, freehandAutoApply, freehandPreserveOriginal, ...session };
++}
++
 +type SessionContext = {
 +  tool: ToolMode;
 +  variant: ConstructionVariant;
 +  construction: Construction | null;
 +  curve: CurveSession;
 +  refinement: FreehandResultOffer | null;
++  newStrokes: Partial<NewStrokeSettings>;
 +};
 +
 +type SessionEvent =
@@ -8579,7 +8717,9 @@ index 00000000..81391a77
 +  | { type: "curve.actions"; open: boolean }
 +  | { type: "refinement.offer"; offer: FreehandResultOffer }
 +  | { type: "refinement.close" }
-+  | { type: "refinement.restore" };
++  | { type: "refinement.cancel" }
++  | { type: "newStrokes.set"; values: Partial<NewStrokeSettings> }
++  | { type: "newStrokes.save" };
 +
 +const IDLE_CURVE: CurveSession = { lockedId: null, points: new Set(), touchMultiple: false, actionsOpen: false };
 +
@@ -8588,7 +8728,7 @@ index 00000000..81391a77
 +const SELECTING_TOOLS: ReadonlySet<ToolMode> = new Set(["select", "lasso"]);
 +
 +/** The offer's preview is still on the canvas only while the document stands at the revision the offer recorded. */
-+function offerIsCurrent(offer: FreehandResultOffer): boolean {
++export function offerIsCurrent(offer: FreehandResultOffer): boolean {
 +  const { activeDocumentId, sourceRevision } = useEditorStore.getState();
 +  return activeDocumentId === offer.documentId && sourceRevision === offer.sourceRevision;
 +}
@@ -8612,8 +8752,8 @@ index 00000000..81391a77
 +      const offer = context.refinement;
 +      if (offer && offerIsCurrent(offer)) useEditorStore.getState().dispatch({ type: "SET_SOURCE_TRANSIENT", source: offer.baseSource });
 +    },
-+    // Keep original also reverses a committed automatic fit, bringing the recorded stroke back.
-+    restoreOriginal: ({ context }) => {
++    // Cancel returns to the state before the refinement opened: it also reverses a committed automatic fit.
++    cancelRefinement: ({ context }) => {
 +      const offer = context.refinement;
 +      if (!offer || !offerIsCurrent(offer)) return;
 +      const { dispatch } = useEditorStore.getState();
@@ -8621,18 +8761,25 @@ index 00000000..81391a77
 +      if (!offer.appliedEdit) return;
 +      const { from, before, after } = offer.appliedEdit;
 +      dispatch({ type: "REPLACE_FREEHAND_RESULT", from, before: after, after: before, expectedSourceRevision: useEditorStore.getState().sourceRevision });
++    },
++    saveNewStrokes: ({ context }) => {
++      const { settings, updateCanvasSettings } = useSettingsStore.getState();
++      updateCanvasSettings(newStrokeSettings(settings.canvas, context.newStrokes));
 +    }
 +  }
 +}).createMachine({
 +  id: "session",
-+  context: ({ input }) => ({ tool: input.tool, variant: input.variant, construction: null, curve: IDLE_CURVE, refinement: null }),
++  context: ({ input }) => ({ tool: input.tool, variant: input.variant, construction: null, curve: IDLE_CURVE, refinement: null, newStrokes: {} }),
 +  initial: "work",
 +  on: {
 +    // A tool change ends the construction and the curve session; finished geometry is already committed.
 +    "tool.chosen": {
 +      target: ".work.route",
 +      actions: ["settleRefinement", assign(({ event }) => ({ tool: event.tool, variant: event.variant, construction: null, curve: IDLE_CURVE }))]
-+    }
++    },
++    // Use for new strokes holds for this session; Save as default makes the session's values the saved defaults.
++    "newStrokes.set": { actions: assign(({ context, event }) => ({ newStrokes: { ...context.newStrokes, ...event.values } })) },
++    "newStrokes.save": { actions: ["saveNewStrokes", assign({ newStrokes: {} })] }
 +  },
 +  states: {
 +    work: {
@@ -8680,7 +8827,7 @@ index 00000000..81391a77
 +      on: {
 +        "refinement.offer": { actions: assign(({ event }) => ({ refinement: event.offer })) },
 +        "refinement.close": { target: "#session.work.resume", actions: "settleRefinement" },
-+        "refinement.restore": { target: "#session.work.resume", actions: "restoreOriginal" }
++        "refinement.cancel": { target: "#session.work.resume", actions: "cancelRefinement" }
 +      }
 +    }
 +  }
@@ -8824,6 +8971,13 @@ index 00000000..81391a77
 +/** Open or update the refinement of a freehand result; null closes it, dropping an unapplied preview. */
 +export function setFreehandResultOffer(offer: FreehandResultOffer | null): void {
 +  canvasSession.send(offer ? { type: "refinement.offer", offer } : { type: "refinement.close" });
++}
++
++export function setNewStrokeSettings(values: Partial<NewStrokeSettings>): void {
++  canvasSession.send({ type: "newStrokes.set", values });
++}
++export function saveNewStrokeDefaults(): void {
++  canvasSession.send({ type: "newStrokes.save" });
 +}
 +
 +/** The path stage as a ref, for gesture handlers that read it between renders. */
@@ -10537,7 +10691,7 @@ index 00000000..61a7b3a6
 +  return { kind: "success", source: nextSource };
 +}
 diff --git a/packages/app/src/ui/canvas-panel/types.ts b/packages/app/src/ui/canvas-panel/types.ts
-index dac6b0b3..997c7589 100644
+index dac6b0b3..53f6a810 100644
 --- a/packages/app/src/ui/canvas-panel/types.ts
 +++ b/packages/app/src/ui/canvas-panel/types.ts
 @@ -1,8 +1,10 @@
@@ -10592,7 +10746,7 @@ index dac6b0b3..997c7589 100644
  export type PathAppendTarget = {
    elementId: string;
    end: "start" | "end";
-@@ -280,9 +292,28 @@ export type PathToolDraft = {
+@@ -280,9 +292,36 @@ export type PathToolDraft = {
    appendTarget?: PathAppendTarget;
  };
  
@@ -10601,13 +10755,21 @@ index dac6b0b3..997c7589 100644
 -  minSampleDistanceWorld: number;
 +export type { FreehandToolDraft } from "./freehand-tool";
 +
-+/** A recorded freehand stroke with its fit open for refinement; `baseSource` is the committed source the preview replaces. */
++/**
++ * A fit open for refinement: a freehand stroke just drawn, or a selected curve that Simplify opened.
++ * `baseSource` is the committed source the preview replaces.
++ */
 +export type FreehandResultOffer = {
 +  draft: FreehandToolDraft;
 +  interpretation: FreehandInterpretation;
++  /** Set for a selected curve: the draw command it keeps, and whether a refit smooths the surviving joints. */
++  curve: { prefix: string; autoSmooth: boolean } | null;
++  /** The last Simplify again found no simpler fit. */
++  final: boolean;
 +  rawSource: string;
 +  rawWorldPoints: WorldPoint[];
-+  originalStroke: OriginalStroke;
++  /** The recorded stroke; a selected curve has one only when the source keeps it. */
++  originalStroke: OriginalStroke | null;
 +  baselineDrawing: string;
 +  strokeId: string;
 +  documentId: string;
@@ -10619,12 +10781,12 @@ index dac6b0b3..997c7589 100644
 +  zoom: number;
 +  strokeColor: string;
 +  sourceRevision: number;
-+  /** The committed edit an automatic fit made; Keep original and Escape commit its inverse to bring the recorded stroke back. */
++  /** The committed edit an automatic fit made; Cancel commits its inverse to bring the recorded stroke back. */
 +  appliedEdit: { from: number; before: string; after: string } | null;
  };
  
  export type TextSelectionOverlay = {
-@@ -442,8 +473,42 @@ export type HandleDisplay =
+@@ -442,8 +481,42 @@ export type HandleDisplay =
        cursor: string;
        kind: "rotate-element";
        elementId: string;
@@ -13525,7 +13687,7 @@ index 00000000..d7b28102
 +  </SidePanel.Section>;
 +}
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..f2de7d85 100644
+index d5c65582..2bdd60dc 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 @@ -1,3 +1,4 @@
@@ -13555,33 +13717,32 @@ index d5c65582..f2de7d85 100644
  import { getInspectorPropertyCapabilityStatus } from "../capabilities";
  import { ColorPickerField } from "../ColorPicker";
  import { MULTI_ARRANGE_ACTIONS,type MultiArrangeAction } from "./arrange-actions";
-@@ -58,7 +61,10 @@ import { useInspectorMutations } from "./useInspectorMutations";
+@@ -58,7 +61,11 @@ import { useInspectorMutations } from "./useInspectorMutations";
  import { useInspectorPreviewScrub } from "./useInspectorPreviewScrub";
  import css from "./InspectorPanel.module.css";
  import { RenderedTooltip } from "../RenderedTooltip";
 +import { GeometryConstructionControls } from "./GeometryConstructionControls";
  import { SidePanel } from "../SidePanel";
 +import { useSelector } from "@xstate/react";
-+import { canvasSession, constructionStep } from "../canvas-panel/canvas-session";
++import { canvasSession, constructionStep, newStrokeSettings, saveNewStrokeDefaults, setNewStrokeSettings } from "../canvas-panel/canvas-session";
++import { ExactRange } from "../ExactRange";
  import {
  getToolLabel,
  isCreationToolMode,
-@@ -91,7 +97,13 @@ export function InspectorPanel() {
+@@ -91,7 +98,11 @@ export function InspectorPanel() {
    const toolMode = useEditorStore((s) => s.toolMode);
    const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
    const creationFillColor = useEditorStore((s) => s.creationFillColor);
 -  const freehandSmoothingPx = useEditorStore((s) => s.freehandSmoothingPx);
 +  const freehandInterpretGeometry = useEditorStore((s) => s.freehandInterpretGeometry);
-+  // The freehand fit's simplification and smoothing, in lattice units, as the result popup sets them.
-+  const { freehandSimplificationUnits, freehandSmoothingUnits } = useSettingsStore(useShallow((s) => ({
-+    freehandSimplificationUnits: s.settings.canvas.freehandSimplificationUnits,
-+    freehandSmoothingUnits: s.settings.canvas.freehandSmoothingUnits
-+  })));
-+  const updateCanvasSettings = useSettingsStore((s) => s.updateCanvasSettings);
++  // The freehand fit's simplification and smoothing for new strokes, in lattice units: this session's values over the saved defaults.
++  const savedCanvasSettings = useSettingsStore((s) => s.settings.canvas);
++  const sessionNewStrokes = useSelector(canvasSession, (snapshot) => snapshot.context.newStrokes);
++  const { freehandSimplificationUnits, freehandSmoothingUnits } = newStrokeSettings(savedCanvasSettings, sessionNewStrokes);
    const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
  
    const {
-@@ -117,6 +129,7 @@ export function InspectorPanel() {
+@@ -117,6 +128,7 @@ export function InspectorPanel() {
      getInspectorDescriptor
    });
  
@@ -13589,7 +13750,7 @@ index d5c65582..f2de7d85 100644
    const [manualLineWidthCustomKeys, setManualLineWidthCustomKeys] = useState<Set<string>>(
      () => new Set()
    );
-@@ -208,7 +221,7 @@ export function InspectorPanel() {
+@@ -208,7 +220,7 @@ export function InspectorPanel() {
      const mutations = buildTransformSetPropertyMutations(
        write.transformContext,
        write.transformContext.key,
@@ -13598,7 +13759,7 @@ index d5c65582..f2de7d85 100644
      );
      if (mutations.length === 0) {
        return;
-@@ -295,7 +308,7 @@ export function InspectorPanel() {
+@@ -295,7 +307,7 @@ export function InspectorPanel() {
        const mutations = buildTransformSetPropertyMutations(
          write.transformContext,
          write.transformContext.key,
@@ -13607,7 +13768,7 @@ index d5c65582..f2de7d85 100644
        );
        for (const mutation of mutations) {
          dispatch({
-@@ -321,7 +334,7 @@ export function InspectorPanel() {
+@@ -321,7 +333,7 @@ export function InspectorPanel() {
      value: number
    ): string {
      const formatted = formatNumber(value);
@@ -13616,7 +13777,7 @@ index d5c65582..f2de7d85 100644
        return `${formatted}${property.unit}`;
      }
      return formatted;
-@@ -886,6 +899,7 @@ export function InspectorPanel() {
+@@ -886,6 +898,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -13624,7 +13785,7 @@ index d5c65582..f2de7d85 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -958,6 +972,7 @@ export function InspectorPanel() {
+@@ -958,6 +971,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -13632,7 +13793,7 @@ index d5c65582..f2de7d85 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1034,6 +1049,7 @@ export function InspectorPanel() {
+@@ -1034,6 +1048,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -13640,7 +13801,7 @@ index d5c65582..f2de7d85 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1107,6 +1123,7 @@ export function InspectorPanel() {
+@@ -1107,6 +1122,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -13648,7 +13809,7 @@ index d5c65582..f2de7d85 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1183,6 +1200,7 @@ export function InspectorPanel() {
+@@ -1183,6 +1199,7 @@ export function InspectorPanel() {
      const inputValue = draftValue ?? (property.value == null ? "" : formatNumber(property.value));
      const input = (
        <input
@@ -13656,7 +13817,7 @@ index d5c65582..f2de7d85 100644
          className={withValueProvenanceClass(css.numberInput, provenance)}
          type="number"
          step={property.step}
-@@ -1249,6 +1267,7 @@ export function InspectorPanel() {
+@@ -1249,6 +1266,7 @@ export function InspectorPanel() {
      const inputValue = draftValue ?? (property.mixed || property.value == null ? "" : formatNumber(property.value));
      const input = (
        <input
@@ -13664,7 +13825,7 @@ index d5c65582..f2de7d85 100644
          className={withValueProvenanceClass(css.numberInput, provenance)}
          type="number"
          step={property.step}
-@@ -1689,21 +1708,11 @@ export function InspectorPanel() {
+@@ -1689,21 +1707,11 @@ export function InspectorPanel() {
      };
    }
  
@@ -13690,7 +13851,7 @@ index d5c65582..f2de7d85 100644
    }
  
    function applyFigureBoundsValue(next: { x: number; y: number; width: number; height: number }): void {
-@@ -1731,6 +1740,7 @@ export function InspectorPanel() {
+@@ -1731,6 +1739,7 @@ export function InspectorPanel() {
          <div className={css.propertyLabel}>{label}</div>
          <div className={css.controlRow}>
            <input
@@ -13698,7 +13859,7 @@ index d5c65582..f2de7d85 100644
              className={css.numberInput}
              type="number"
              step={0.1}
-@@ -1742,13 +1752,11 @@ export function InspectorPanel() {
+@@ -1742,13 +1751,11 @@ export function InspectorPanel() {
                if (!Number.isFinite(parsed)) {
                  return;
                }
@@ -13715,7 +13876,7 @@ index d5c65582..f2de7d85 100644
          </div>
        </div>
      );
-@@ -1756,6 +1764,7 @@ export function InspectorPanel() {
+@@ -1756,6 +1763,7 @@ export function InspectorPanel() {
  
    function renderFigureBoundsControls(): JSX.Element {
      const values = currentFigureBoundsControlsValue();
@@ -13723,7 +13884,7 @@ index d5c65582..f2de7d85 100644
      const fixed = figureBoundsState.mode === "fixed";
      return (
        <>
-@@ -1825,7 +1834,7 @@ export function InspectorPanel() {
+@@ -1825,7 +1833,7 @@ export function InspectorPanel() {
  
    function renderToolOptionsPanel() {
      const toolLabel = getToolLabel(toolMode);
@@ -13732,7 +13893,7 @@ index d5c65582..f2de7d85 100644
      const showStroke = toolSupportsStroke(toolMode);
      const showFill = toolSupportsFill(toolMode);
      const isFreehand = toolMode === "addFreehand";
-@@ -1852,7 +1861,7 @@ export function InspectorPanel() {
+@@ -1852,7 +1860,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation stroke color"
                          value={creationStrokeColor}
                          syntaxValue={creationStrokeColor}
@@ -13741,7 +13902,7 @@ index d5c65582..f2de7d85 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
-@@ -1867,7 +1876,7 @@ export function InspectorPanel() {
+@@ -1867,7 +1875,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation fill color"
                          value={creationFillColor === "none" ? "" : creationFillColor}
                          syntaxValue={creationFillColor}
@@ -13750,7 +13911,7 @@ index d5c65582..f2de7d85 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
-@@ -1879,6 +1888,7 @@ export function InspectorPanel() {
+@@ -1879,6 +1887,7 @@ export function InspectorPanel() {
                </SidePanel.Section>
              ) : null}
  
@@ -13758,7 +13919,7 @@ index d5c65582..f2de7d85 100644
              {isFreehand ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
-@@ -1886,25 +1896,21 @@ export function InspectorPanel() {
+@@ -1886,25 +1895,19 @@ export function InspectorPanel() {
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
@@ -13789,12 +13950,10 @@ index d5c65582..f2de7d85 100644
 +                      { key: "freehandSimplificationUnits", label: "Simplification", min: 0.01, max: 2, step: 0.01, value: freehandSimplificationUnits },
 +                      { key: "freehandSmoothingUnits", label: "Smoothing", min: 0, max: 1, step: 0.01, value: freehandSmoothingUnits }
 +                    ] as const).map(({ key, label, min, max, step, value }) => (
-+                      <label key={key} className={css.propertyLabel}>
-+                        {label}: {formatNumber(value)} lattice units
-+                        <input className={css.rangeInput} type="range" min={min} max={max} step={step} value={value}
-+                          onChange={(event) => updateCanvasSettings({ [key]: Number(event.currentTarget.value) })} />
-+                      </label>
++                      <ExactRange key={key} label={label} unit="lattice units" min={min} max={max} step={step} value={value}
++                        onChange={(next) => setNewStrokeSettings({ [key]: next })} />
 +                    ))}
++                    <button type="button" onClick={saveNewStrokeDefaults}>Save as default</button>
                    </div>
                  </SidePanel.SectionBody>
                </SidePanel.Section>
