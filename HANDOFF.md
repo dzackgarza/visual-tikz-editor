@@ -111,5 +111,5 @@ Slice 2 completion list. Each item needs a failing story first and passes in bot
 2. Simplify on a selected curve opens the same refinement on that curve. Simplify again runs another pass on the preview. Restore original is offered when the source keeps the recorded stroke.
 3. Pen policy on existing points ([research](docs/research/pen-input-on-existing-points.md)): a pen stroke that starts on a point draws at once and attaches to it; a finger held by the other hand, or a pen held still past a configurable delay, moves the point. Double tap never moves points.
 4. Partial erasing: the eraser removes only the swept part of a stroke and keeps the remaining pieces as separate strokes, as one undo step.
-5. Pencil hardware gestures: research what iPadOS Safari exposes to web content, then implement the native mapping or record the platform limit with evidence.
+5. Pencil hardware gestures: done as a recorded platform limit ([research](docs/research/pencil-hardware-gestures.md)). iPadOS Safari delivers no double tap or squeeze to web content; the physical-tablet session confirms that they do nothing on the canvas.
 6. The two freehand observations below: crowded anchors near stroke ends, and a stroke started near a raw stroke's endpoint replacing that stroke's first points.
