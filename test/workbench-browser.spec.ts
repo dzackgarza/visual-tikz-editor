@@ -1078,20 +1078,22 @@ describe("standalone workbench host boundary", function () {
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
       const clear = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
         Math.min(a.x + a.width, b.x + b.width) <= Math.max(a.x, b.x) || Math.min(a.y + a.height, b.y + b.height) <= Math.max(a.y, b.y);
-      // Free canvas to the right of the rail, in fractions of the viewport.
-      const left = (railBox.x + railBox.width - viewport.x) / viewport.width + .03;
-      const corners = [[left, .12], [.72, .12], [left, .82], [.72, .82]] as const;
+      // The corners of the canvas the docked rail leaves free, in fractions of the viewport.
+      const sideRail = railBox.height > railBox.width;
+      const left = sideRail ? (railBox.x + railBox.width - viewport.x) / viewport.width + .03 : .12;
+      const bottom = sideRail ? .82 : Math.min(.82, (railBox.y - viewport.y) / viewport.height - .12);
+      const corners = [[left, .12], [.72, .12], [left, bottom], [.72, bottom]] as const;
       for (const [index, [fx, fy]] of corners.entries()) {
         const before = (await editorDebug(page)).source;
         await input.penStroke(waveAcross(viewport, fx, fy, 110));
-        await expect(result, `No freehand result for a stroke at (${fx.toFixed(2)}, ${fy})`).toBeVisible();
+        await expect(result, `No freehand result for a stroke at (${fx.toFixed(2)}, ${fy.toFixed(2)})`).toBeVisible();
         // Each kept stroke stays drawn, so this one is the element numbered by its index once it renders.
         const idsNow = () => frame.locator('svg [data-source-id]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')!))]);
         await expect.poll(async () => (await idsNow()).length).toBe(index + 1);
         const ids = await idsNow();
         const stroke = (await frame.locator(`svg [data-source-id="${ids[ids.length - 1]}"]`).first().boundingBox())!;
         const popup = (await result.boundingBox())!;
-        assert.ok(clear(popup, stroke), `The freehand result covers a stroke drawn at (${fx.toFixed(2)}, ${fy})`);
+        assert.ok(clear(popup, stroke), `The freehand result covers a stroke drawn at (${fx.toFixed(2)}, ${fy.toFixed(2)})`);
         assert.ok(clear(popup, (await frame.locator('[data-diagram-tools]').boundingBox())!), 'The freehand result covers the rail');
         await page.keyboard.press('Escape');
         await expect(result).toHaveCount(0);
@@ -1984,9 +1986,9 @@ describe("standalone workbench host boundary", function () {
       await tap(panel.getByRole('button', { name: 'Move selection to Ground', exact: true }));
       await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Ground\]\s*\\draw \(-14,-18\) -- \(-2,-12\);\s*\\end\{scope\}/);
       assert.equal((await source()).match(/\\draw/g)!.length, 1);
-      const layerName = (await panel.getByRole('button', { name: 'Ground Layer', exact: true }).boundingBox())!;
-      const childName = (await panel.getByRole('button', { name: 'Line', exact: true }).boundingBox())!;
-      assert.ok(childName.x > layerName.x, 'The layer child is drawn to the left of its parent');
+      const childIndent = async () => (await panel.getByRole('button', { name: 'Line', exact: true }).boundingBox())!.x
+        - (await panel.getByRole('button', { name: 'Ground Layer', exact: true }).boundingBox())!.x;
+      await expect.poll(childIndent, { message: 'The layer child is drawn to the left of its parent' }).toBeGreaterThan(0);
       const line = frame.locator('svg [data-source-id]').first();
       const drawnOpacity = () => line.evaluate(element => {
         let opacity = Number(getComputedStyle(element).strokeOpacity);
@@ -2144,6 +2146,58 @@ describe("standalone workbench host boundary", function () {
       await expect(panel).toBeVisible();
       assert.equal(await overlap(panel), 0, 'The properties panel covers the rail');
       await storyScreenshot(page, `placement-${tablet.name}`);
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `opens Properties as a side panel in landscape and a bottom sheet in portrait, clear of the selected object, in ${tablet.name}`, async function () {
+      await editorReady(page);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}
+\draw (-1,-1) rectangle (1,1);
+\draw (6,-8) rectangle (9,-5);
+\path[use as bounding box] (-10,-10) rectangle (10,10);
+\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const corner = frame.locator('svg [data-source-id="path:1"]').first();
+      await expect(corner).toBeVisible();
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => { await input.touch([await stableCenter(locator)]); };
+      await fitDiagram(frame, input);
+      const rail = frame.locator('[data-diagram-tools]');
+      await tap(rail.getByRole('button', { name: 'Select', exact: true }));
+      await input.penStroke([await strokePoint(page, corner, .1)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(['path:1']);
+      await tap(rail.getByRole('button', { name: 'Properties', exact: true }));
+      const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
+      await expect(panel).toBeVisible();
+      const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+        Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+      const clearOfSubject = async (what: string) => {
+        await expect.poll(async () => overlap((await panel.boundingBox())!, (await corner.boundingBox())!), `${what} covers the selected rectangle`).toBe(0);
+        const box = (await corner.boundingBox())!;
+        assert.ok(box.x >= viewport.x && box.y >= viewport.y && box.x + box.width <= viewport.x + viewport.width && box.y + box.height <= viewport.y + viewport.height, `${what} pushed the selected rectangle off the canvas`);
+        assert.equal(overlap((await rail.boundingBox())!, box), 0, `The rail covers the selected rectangle beside ${what}`);
+      };
+      const box = (await panel.boundingBox())!;
+      if (tablet.name === 'landscape') {
+        assert.ok(box.x > viewport.x + viewport.width / 2 && box.height > box.width, `Properties is not a side panel: ${JSON.stringify(box)}`);
+        await clearOfSubject('the side panel');
+      } else {
+        assert.ok(box.width > viewport.width * .9 && box.height < viewport.height * .5 && box.y > viewport.y + viewport.height / 2, `Properties is not a shallow bottom sheet: ${JSON.stringify({ box, viewport })}`);
+        assert.equal(overlap(box, (await rail.boundingBox())!), 0, 'The bottom sheet covers the dock');
+        await clearOfSubject('the bottom sheet');
+        const expand = panel.getByRole('button', { name: 'Expand properties', exact: true });
+        await expect(expand).toHaveAttribute('aria-expanded', 'false');
+        await tap(expand);
+        await expect(expand).toHaveAttribute('aria-expanded', 'true');
+        await expect.poll(async () => (await panel.boundingBox())!.height).toBeGreaterThan(viewport.height * .6);
+        await tap(expand);
+        await expect.poll(async () => (await panel.boundingBox())!.height).toBeLessThan(viewport.height * .5);
+      }
+      await storyScreenshot(page, `properties-space-${tablet.name}`);
     });
   }
 
@@ -2549,7 +2603,8 @@ describe("standalone workbench host boundary", function () {
         const [label, railBox] = [await settledCenter(origin), (await rail.boundingBox())!];
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         assert.ok(label.x > viewport.x && label.x < viewport.x + viewport.width && label.y > viewport.y && label.y < viewport.y + viewport.height, `origin ${moment} is off the canvas`);
-        assert.ok(label.x > railBox.x + railBox.width, `origin ${moment} is under the rail`);
+        const underRail = label.x >= railBox.x && label.x <= railBox.x + railBox.width && label.y >= railBox.y && label.y <= railBox.y + railBox.height;
+        assert.ok(!underRail, `origin ${moment} is under the rail`);
       }
     });
   }

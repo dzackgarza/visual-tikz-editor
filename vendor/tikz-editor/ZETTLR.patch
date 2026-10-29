@@ -612,7 +612,7 @@ index 4850a87e..a54bc54d 100644
    if (!Number.isFinite(value)) {
      return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
 diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
-index af0a7abe..895801a8 100644
+index af0a7abe..04f2e15e 100644
 --- a/packages/app/src/settings/types.ts
 +++ b/packages/app/src/settings/types.ts
 @@ -1,3 +1,4 @@
@@ -708,7 +708,7 @@ index af0a7abe..895801a8 100644
 +    activeCollectionId: "default"
 +  },
 +  toolbar: {
-+    dock: "left",
++    dock: "bottom",
 +    lassoShape: "freehand",
 +    circleConstruction: "centre",
 +    arcConstruction: "centre",
@@ -3539,10 +3539,10 @@ index 4d4cfa95..b5595dc3 100644
    const replacer = (_key: string, current: unknown): unknown => {
      if (current instanceof Map) {
 diff --git a/packages/app/src/ui/DockLayout.css b/packages/app/src/ui/DockLayout.css
-index 67578882..8673a8d8 100644
+index 67578882..dc04f710 100644
 --- a/packages/app/src/ui/DockLayout.css
 +++ b/packages/app/src/ui/DockLayout.css
-@@ -1,6 +1,70 @@
+@@ -1,6 +1,95 @@
  /* ── FlexLayout theme overrides ─────────────────────────────────────────────── */
  /* Built on top of flexlayout-react/style/gray.css imported in DockLayout.tsx  */
  
@@ -3572,6 +3572,22 @@ index 67578882..8673a8d8 100644
 +  overflow: hidden;
 +}
 +
++/* A portrait sheet spans the canvas above the dock and stays in its lower half,
++   which starts below the canvas header and ruler band; expanded, it takes the
++   canvas height the rail leaves. */
++.embed-inspector[data-placement="sheet"] {
++  top: auto;
++  left: calc(var(--rail-inset-left) + 8px);
++  right: calc(var(--rail-inset-right) + 8px);
++  bottom: calc(var(--rail-inset-bottom) + 8px);
++  width: auto;
++  height: calc(50% - var(--rail-inset-bottom) - 48px);
++}
++
++.embed-inspector[data-placement="sheet"][data-expanded="true"] {
++  height: calc(100% - var(--rail-inset-top) - var(--rail-inset-bottom) - 24px);
++}
++
 +.embed-inspector-tabs {
 +  display: flex;
 +  flex-wrap: wrap;
@@ -3599,9 +3615,18 @@ index 67578882..8673a8d8 100644
 +  color: var(--accent-dark);
 +}
 +
++.embed-inspector-tabs .embed-inspector-expand {
++  margin-left: auto;
++  font-size: 20px;
++}
++
 +.embed-inspector-tabs .embed-inspector-close {
 +  margin-left: auto;
 +  font-size: 24px;
++}
++
++.embed-inspector-tabs .embed-inspector-expand + .embed-inspector-close {
++  margin-left: 0;
 +}
 +
 +.embed-inspector-content {
@@ -3614,15 +3639,25 @@ index 67578882..8673a8d8 100644
    /* Map to app design tokens */
    --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb9..cfc174e7 100644
+index ba28ddb9..15b3a193 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
-@@ -1,3 +1,4 @@
+@@ -1,4 +1,5 @@
+-import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 +import type { CanvasCommandHandle, CanvasCommandId, CommandOrigin } from "./editor-command-runtime";
- import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { Suspense, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
  import { Layout, Model, Actions, DockLocation, type IJsonModel, type TabNode } from "flexlayout-react";
  import { useEditorStore } from "../store/store";
-@@ -91,16 +92,17 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
+ import type { EditorAction } from "../store/types";
+@@ -15,6 +16,7 @@ import type { AssistantComposerImageAttachment } from "./assistant-image-attachm
+ import type { SvgRenderModel } from "tikz-editor/svg";
+ import "flexlayout-react/style/gray.css";
+ import "./DockLayout.css";
++import { publishOccupiedInsets } from "./canvas-panel/occupied-insets";
+ 
+ // ── Panel IDs ─────────────────────────────────────────────────────────────────
+ 
+@@ -91,16 +93,17 @@ function isLayoutSelectionParent(value: unknown): value is FlexLayoutSelectionPa
  }
  
  function buildDefaultLayout(): IJsonModel {
@@ -3642,7 +3677,7 @@ index ba28ddb9..cfc174e7 100644
      global: {
        tabEnableClose: true,
        tabEnableRename: false,
-@@ -135,7 +137,7 @@ function buildDefaultLayout(): IJsonModel {
+@@ -135,7 +138,7 @@ function buildDefaultLayout(): IJsonModel {
          },
          {
            type: "tabset",
@@ -3651,7 +3686,7 @@ index ba28ddb9..cfc174e7 100644
            id: "right-tabset",
            enableDeleteWhenEmpty: false,
            children: rightTabs,
-@@ -143,6 +145,10 @@ function buildDefaultLayout(): IJsonModel {
+@@ -143,6 +146,10 @@ function buildDefaultLayout(): IJsonModel {
        ],
      },
    };
@@ -3662,7 +3697,7 @@ index ba28ddb9..cfc174e7 100644
  }
  
  /** Strip assistant tabs if assistant is not available on this platform,
-@@ -188,7 +194,7 @@ function sanitizeLayout(json: IJsonModel): IJsonModel {
+@@ -188,7 +195,7 @@ function sanitizeLayout(json: IJsonModel): IJsonModel {
  function buildSourceOnTopLayout(): IJsonModel {
    const rightTabs: Array<{ type: "tab"; id: string; name: string; component: string; enableClose?: boolean }> = [
      { type: "tab", id: PANEL_IDS.inspector, name: "Inspector", component: "inspector" },
@@ -3671,7 +3706,7 @@ index ba28ddb9..cfc174e7 100644
      { type: "tab", id: PANEL_IDS.styles, name: "Styles", component: "styles" },
    ];
    if (isAssistantAvailable()) {
-@@ -260,7 +266,7 @@ function buildCanvasOnlyLayout(): IJsonModel {
+@@ -260,7 +267,7 @@ function buildCanvasOnlyLayout(): IJsonModel {
  function buildWideInspectorLayout(): IJsonModel {
    const rightTabs: Array<{ type: "tab"; id: string; name: string; component: string; enableClose?: boolean }> = [
      { type: "tab", id: PANEL_IDS.inspector, name: "Inspector", component: "inspector" },
@@ -3680,7 +3715,7 @@ index ba28ddb9..cfc174e7 100644
      { type: "tab", id: PANEL_IDS.styles, name: "Styles", component: "styles" },
    ];
    if (isAssistantAvailable()) {
-@@ -360,6 +366,7 @@ function syncLayoutStateToStore(model: Model, dispatch: (action: EditorAction) =
+@@ -360,6 +367,7 @@ function syncLayoutStateToStore(model: Model, dispatch: (action: EditorAction) =
  
  export type DockLayoutProps = {
    repeatPreviewModel: SvgRenderModel | null;
@@ -3688,7 +3723,7 @@ index ba28ddb9..cfc174e7 100644
    onSubmitPrompt: (
      prompt: string,
      model: string | null,
-@@ -373,6 +380,7 @@ export type DockLayoutProps = {
+@@ -373,6 +381,7 @@ export type DockLayoutProps = {
  export type DockLayoutHandle = {
    getModel(): Model;
    getCurrentJson(): IJsonModel;
@@ -3696,7 +3731,7 @@ index ba28ddb9..cfc174e7 100644
    togglePanel(panelId: string): void;
    applyPreset(preset: keyof typeof LAYOUT_PRESETS): void;
    applyLayoutJson(json: IJsonModel): void;
-@@ -395,8 +403,13 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
+@@ -395,8 +404,13 @@ export function getDockLayoutHandle(): DockLayoutHandle | null {
  }
  
  function createInitialModel(): Model {
@@ -3711,11 +3746,23 @@ index ba28ddb9..cfc174e7 100644
    try {
      return Model.fromJson(json);
    } catch {
-@@ -404,9 +417,26 @@ function createInitialModel(): Model {
+@@ -404,9 +418,63 @@ function createInitialModel(): Model {
    }
  }
  
 -export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn, onNewChat }: DockLayoutProps) {
++const PORTRAIT_QUERY = "(orientation: portrait)";
++
++function subscribePortrait(onChange: () => void): () => void {
++  const query = window.matchMedia(PORTRAIT_QUERY);
++  query.addEventListener("change", onChange);
++  return () => query.removeEventListener("change", onChange);
++}
++
++function isPortrait(): boolean {
++  return window.matchMedia(PORTRAIT_QUERY).matches;
++}
++
 +export function DockLayout({ repeatPreviewModel, onOpenRepeat, onSubmitPrompt, onInterruptTurn, onNewChat }: DockLayoutProps) {
 +  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
    const dispatch = useEditorStore((s) => s.dispatch);
@@ -3723,6 +3770,31 @@ index ba28ddb9..cfc174e7 100644
 +  const [inspectorOpen, setInspectorOpen] = useState(() => document.documentElement.dataset.embedInspector === "open");
 +  const canvasCommandHandle = useRef<CanvasCommandHandle | null>(null);
 +  const [inspectorTab, setInspectorTab] = useState<"inspector" | "objects">("inspector");
++  // Properties is a side panel in landscape and a bottom sheet in portrait, as in iPadOS apps.
++  const portrait = useSyncExternalStore(subscribePortrait, isPortrait);
++  const [sheetExpanded, setSheetExpanded] = useState(false);
++  const inspectorRef = useRef<HTMLElement | null>(null);
++
++  // The panel takes its edge from the canvas the way the rail does, so fitted
++  // views, popups, and the selected subject stay in the space it leaves.
++  useLayoutEffect(() => {
++    const panel = inspectorRef.current;
++    if (!panel) {
++      publishOccupiedInsets({ "--panel-inset-right": 0, "--panel-inset-bottom": 0 });
++      return;
++    }
++    const publish = () => {
++      const bounds = panel.getBoundingClientRect();
++      publishOccupiedInsets({
++        "--panel-inset-right": portrait ? 0 : window.innerWidth - bounds.left,
++        "--panel-inset-bottom": portrait ? window.innerHeight - bounds.top : 0
++      });
++    };
++    publish();
++    const observer = new ResizeObserver(publish);
++    observer.observe(panel);
++    return () => observer.disconnect();
++  }, [inspectorOpen, portrait, sheetExpanded]);
 +
 +  useEffect(() => {
 +    if (!embedded) return;
@@ -3739,7 +3811,7 @@ index ba28ddb9..cfc174e7 100644
  
    // Factory — renders panel content for each tab
    const factory = useCallback(
-@@ -422,7 +452,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -422,7 +490,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
          case "canvas":
            return (
              <Suspense fallback={<div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading canvas…</div>}>
@@ -3748,7 +3820,7 @@ index ba28ddb9..cfc174e7 100644
              </Suspense>
            );
          case "figure-navigator":
-@@ -445,7 +475,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -445,7 +513,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
            return <div>Unknown panel: {component}</div>;
        }
      },
@@ -3757,7 +3829,7 @@ index ba28ddb9..cfc174e7 100644
    );
  
    // On model change: persist + sync to Zustand
-@@ -471,7 +501,16 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -471,7 +539,16 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    const handle = useMemo<DockLayoutHandle>(() => ({
      getModel: () => modelRef.current,
      getCurrentJson: () => modelRef.current.toJson(),
@@ -3774,7 +3846,7 @@ index ba28ddb9..cfc174e7 100644
        const m = modelRef.current;
        const existing = m.getNodeById(panelId);
        if (existing) {
-@@ -483,7 +522,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -483,7 +560,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
            canvas: "Canvas",
            "figure-navigator": "Figures",
            inspector: "Inspector",
@@ -3783,7 +3855,7 @@ index ba28ddb9..cfc174e7 100644
            styles: "Styles",
            assistant: "Assistant",
          };
-@@ -523,10 +562,12 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -523,10 +600,12 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
        syncLayoutStateToStore(m, dispatchRef.current);
      },
      applyPreset(preset: keyof typeof LAYOUT_PRESETS) {
@@ -3796,7 +3868,7 @@ index ba28ddb9..cfc174e7 100644
        const sanitized = sanitizeLayout(json);
        const newModel = Model.fromJson(sanitized);
        saveDockLayout(sanitized);
-@@ -536,7 +577,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -536,7 +615,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
      resetLayout() {
        this.applyPreset("default");
      },
@@ -3805,7 +3877,7 @@ index ba28ddb9..cfc174e7 100644
  
    useEffect(() => {
      activeDockHandle = handle;
-@@ -590,11 +631,35 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -590,11 +669,38 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    }, [figureCount]);
  
    return (
@@ -3823,7 +3895,8 @@ index ba28ddb9..cfc174e7 100644
 +        realtimeResize
 +      />
 +      {embedded && inspectorOpen && (
-+        <aside className="embed-inspector" aria-label="Diagram properties">
++        <aside ref={inspectorRef} className="embed-inspector" aria-label="Diagram properties"
++          data-placement={portrait ? "sheet" : "side"} data-expanded={portrait && sheetExpanded}>
 +          <div className="embed-inspector-tabs" role="tablist" aria-label="Properties view">
 +            {(["inspector", "objects"] as const).map((tab) => (
 +              <button
@@ -3836,6 +3909,8 @@ index ba28ddb9..cfc174e7 100644
 +                {tab === "inspector" ? "Properties" : "Layers"}
 +              </button>
 +            ))}
++            {portrait ? <button type="button" className="embed-inspector-expand" aria-label="Expand properties" aria-expanded={sheetExpanded}
++              onClick={() => setSheetExpanded(!sheetExpanded)}>{sheetExpanded ? "⌄" : "⌃"}</button> : null}
 +            <button type="button" className="embed-inspector-close" aria-label="Close properties" onClick={closeInspector}>×</button>
 +          </div>
 +          <div className="embed-inspector-content" role="tabpanel">
@@ -4700,7 +4775,7 @@ index 4fba726b..16c1c9f8 100644
            disabled={!writable}
            onChange={(value) => { onPropertyChange(declaration, property, value); }}
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..e39658e9 100644
+index 0ddde08e..461cae78 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
 @@ -144,6 +144,43 @@
@@ -4758,22 +4833,22 @@ index 0ddde08e..e39658e9 100644
 +.paletteSwatch { width: 44px; height: 44px; }
 +
 +/* The rail lays its tools on a 44 px grid; a short canvas adds columns (docked
-+   left or right) or rows (docked top or bottom) instead of scrolling. The saved
-+   colours sit in their own lane beside the tools, which scrolls when it overflows. */
++   left or right) or rows (docked top or bottom) instead of scrolling. Docked
++   left or right, the saved colours sit in their own lane beside the tools; docked
++   top or bottom, they fill the rest of the last row. Either lane scrolls when it overflows. */
 +.embeddedTools { display: flex; gap: 2px; align-items: flex-start; }
-+[data-dock="top"] .embeddedTools, [data-dock="bottom"] .embeddedTools, [data-dock="floating"] .embeddedTools { flex-direction: column; }
++[data-dock="top"] .embeddedTools, [data-dock="bottom"] .embeddedTools, [data-dock="floating"] .embeddedTools { flex-wrap: wrap; align-items: center; }
++[data-dock="top"] .toolGrid, [data-dock="bottom"] .toolGrid, [data-dock="floating"] .toolGrid { display: contents; }
++[data-dock="top"] .paletteLane, [data-dock="bottom"] .paletteLane, [data-dock="floating"] .paletteLane { flex: 1 1 136px; min-width: 136px; max-width: 100%; }
 +.toolGrid { display: grid; gap: 2px; justify-items: center; align-items: center; }
 +.toolGrid .panelButtons { display: contents; }
 +[data-dock="left"] .toolGrid, [data-dock="right"] .toolGrid {
 +  grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
 +}
-+[data-dock="top"] .toolGrid, [data-dock="bottom"] .toolGrid, [data-dock="floating"] .toolGrid {
-+  grid-auto-flow: row; grid-template-columns: repeat(auto-fill, 44px); grid-auto-rows: 44px;
-+}
 +.paletteLane .palette { display: grid; gap: 2px; max-width: none; max-height: inherit; overscroll-behavior: contain; }
 +[data-dock="left"] .paletteLane .palette, [data-dock="right"] .paletteLane .palette { grid-template-columns: 44px; grid-auto-rows: 44px; overflow-y: auto; }
 +[data-dock="top"] .paletteLane .palette, [data-dock="bottom"] .paletteLane .palette, [data-dock="floating"] .paletteLane .palette {
-+  grid-auto-flow: column; grid-auto-columns: 44px; grid-template-rows: 44px; max-width: inherit; overflow-x: auto;
++  grid-auto-flow: column; grid-auto-columns: 44px; grid-template-rows: 44px; overflow-x: auto;
 +}
 +.paletteLane .paletteSwatch[aria-pressed="true"] { box-shadow: inset 0 0 0 3px #9e2a2b, inset 0 0 0 5px #fff; }
 +.embeddedTools .insertTrigger { width: 44px; padding: 0; font-size: 12px; }
@@ -4794,7 +4869,7 @@ index 0ddde08e..e39658e9 100644
 +[data-dock="bottom"] .stepLane { bottom: calc(100% + 8px); left: 0; }
 +.stepText { padding: 4px 8px; font-size: 13px; line-height: 1.3; color: var(--text); }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..ba4857fb 100644
+index a3293df2..e6fec1ac 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -4805,7 +4880,7 @@ index a3293df2..ba4857fb 100644
  import { RiDownloadCloudLine } from "@remixicon/react";
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
-@@ -8,17 +10,19 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
+@@ -8,17 +10,20 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
  import { getToolCapabilityStatus } from "./capabilities";
  import { RenderedTooltip } from "./RenderedTooltip";
  import {
@@ -4825,10 +4900,11 @@ index a3293df2..ba4857fb 100644
  import css from "./Toolbar.module.css";
 +import { useSelector } from "@xstate/react";
 +import { canvasSession, constructionFinishes, constructionName, constructionStep } from "./canvas-panel/canvas-session";
++import { publishOccupiedInsets } from "./canvas-panel/occupied-insets";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    id: option.value,
-@@ -26,26 +30,61 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,26 +31,61 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -4892,7 +4968,7 @@ index a3293df2..ba4857fb 100644
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +95,145 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +96,140 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -5013,17 +5089,12 @@ index a3293df2..ba4857fb 100644
 +    const dock = settings.toolbar.dock;
 +    function publishInsets() {
 +      const bounds = toolbar!.getBoundingClientRect();
-+      const insets = {
-+        left: dock === "left" ? bounds.right : 0,
-+        right: dock === "right" ? window.innerWidth - bounds.left : 0,
-+        top: dock === "top" ? bounds.bottom : 0,
-+        bottom: dock === "bottom" ? window.innerHeight - bounds.top : 0
-+      };
-+      const root = document.documentElement.style;
-+      const changed = Object.entries(insets).filter(([edge, size]) => root.getPropertyValue(`--rail-inset-${edge}`) !== `${size}px`);
-+      if (changed.length === 0) return;
-+      for (const [edge, size] of changed) root.setProperty(`--rail-inset-${edge}`, `${size}px`);
-+      window.dispatchEvent(new Event("tikz-rail-insets"));
++      publishOccupiedInsets({
++        "--rail-inset-left": dock === "left" ? bounds.right : 0,
++        "--rail-inset-right": dock === "right" ? window.innerWidth - bounds.left : 0,
++        "--rail-inset-top": dock === "top" ? bounds.bottom : 0,
++        "--rail-inset-bottom": dock === "bottom" ? window.innerHeight - bounds.top : 0
++      });
 +    }
 +    publishInsets();
 +    const observer = new ResizeObserver(publishInsets);
@@ -5039,7 +5110,7 @@ index a3293df2..ba4857fb 100644
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -92,12 +266,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -92,12 +262,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
    const renderPopup = (popupKind: ToolPopupKind) => {
      if (popupKind === "bucket-color") {
        return (
@@ -5054,7 +5125,7 @@ index a3293df2..ba4857fb 100644
              namedColorSwatches={projectNamedColorSwatches}
              onChange={(nextValue) => {
                dispatch({ type: "SET_BUCKET_FILL_COLOR", value: nextValue });
-@@ -111,7 +285,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,7 +281,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
@@ -5072,7 +5143,7 @@ index a3293df2..ba4857fb 100644
            <ToolbarPopupVisualChoiceGrid
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +309,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,6 +305,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -5091,7 +5162,7 @@ index a3293df2..ba4857fb 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +365,176 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,6 +361,179 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -5254,12 +5325,15 @@ index a3293df2..ba4857fb 100644
 +        : dock === "top" ? { left: centerX - parentX, top: (safeRect?.top ?? 60) - parentY }
 +          : dock === "bottom" ? { left: centerX - parentX, top: (safeRect?.bottom ?? window.innerHeight) - height - parentY }
 +            : { left: centerX - parentX, top: centerY - parentY }),
++    // A horizontal rail is centered by translate(-50%), so its shrink-to-fit width
++    // would stop at the parent's midline; it takes its content width instead.
++    width: dock === "left" || dock === "right" ? undefined : "max-content",
 +    maxWidth: safeRect ? safeRect.right - safeRect.left : undefined,
 +    maxHeight: safeRect ? safeRect.bottom - safeRect.top : undefined,
 +    visibility: safeRect ? "visible" as const : "hidden" as const
 +  };
 +  const verticalDock = dock === "left" || dock === "right";
-+  // The strip's grid adds columns (vertical dock) or rows (horizontal dock) once
++  // The strip adds columns (vertical dock) or wraps to rows (horizontal dock) once
 +  // its controls exceed the canvas cell, so this one bound is all it needs.
 +  const toolStripSize = safeRect ? (verticalDock
 +    ? { maxHeight: Math.max(44, safeRect.bottom - safeRect.top - 56) }
@@ -5268,7 +5342,7 @@ index a3293df2..ba4857fb 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +563,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +562,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -5280,7 +5354,7 @@ index a3293df2..ba4857fb 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +623,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +622,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -5288,7 +5362,7 @@ index a3293df2..ba4857fb 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +666,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +665,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -5296,7 +5370,7 @@ index a3293df2..ba4857fb 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +682,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +681,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -5318,7 +5392,7 @@ index a3293df2..ba4857fb 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +704,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +703,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -5326,7 +5400,7 @@ index a3293df2..ba4857fb 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +712,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +711,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -5338,7 +5412,7 @@ index a3293df2..ba4857fb 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +725,86 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +724,86 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -5427,7 +5501,7 @@ index a3293df2..ba4857fb 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +815,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +814,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -5441,7 +5515,7 @@ index a3293df2..ba4857fb 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +831,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +830,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -5450,7 +5524,7 @@ index a3293df2..ba4857fb 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +856,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +855,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -5864,7 +5938,7 @@ index cf4cf2cf..4a0d0a4e 100644
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..767b3cf0 100644
+index 4e22ccfa..a675bc5d 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,12 @@
@@ -5930,7 +6004,7 @@ index 4e22ccfa..767b3cf0 100644
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
  import { resolveBucketFillEdit } from "./bucket-fill";
  import { recordDragPatchModeFullReason } from "./drag-patch-mode-debug";
-@@ -67,11 +81,24 @@ import { CanvasPanelView } from "./CanvasPanelView";
+@@ -67,11 +81,25 @@ import { CanvasPanelView } from "./CanvasPanelView";
  import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
  import {
  appendFreehandToolPoint,
@@ -5948,6 +6022,7 @@ index 4e22ccfa..767b3cf0 100644
  } from "./freehand-tool";
 +import { editSemanticCurveNodes } from "./semantic-curve-edit";
 +import { collectEraserStrokes, sweptStrokeIds, type EraserStroke } from "./eraser-sweep";
++import { OCCUPIED_INSETS_EVENT, occupiedInsets } from "./occupied-insets";
 +import freehandPopupCss from "./FreehandResultPopup.module.css";
  import {
  clamp,
@@ -5956,7 +6031,7 @@ index 4e22ccfa..767b3cf0 100644
  viewportToSvgPoint,
  viewportToWorldPoint,
  worldToSvgPoint
-@@ -103,7 +130,7 @@ pathToolHasDrawableSegments,
+@@ -103,7 +131,7 @@ pathToolHasDrawableSegments,
  undoLastPathToolSegment,
  type PathToolGestureSegment
  } from "./path-tool";
@@ -5965,7 +6040,7 @@ index 4e22ccfa..767b3cf0 100644
  import type { resolveResizeFrameForSource } from "./resize-frames";
  import { isSvgPointWithinScopeBounds } from "./scope-overlay";
  import {
-@@ -119,6 +146,7 @@ type SnapDebugPoint
+@@ -119,6 +147,7 @@ type SnapDebugPoint
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -5973,7 +6048,7 @@ index 4e22ccfa..767b3cf0 100644
  ApplyActionFeedback,
  CanvasSnapshot,
  DragState,
-@@ -131,9 +159,7 @@ GuidesState,
+@@ -131,9 +160,7 @@ GuidesState,
  MagnifierState,
  NodeAnchorOverlayState,
  NodePositionLinkDisplay,
@@ -5983,7 +6058,7 @@ index 4e22ccfa..767b3cf0 100644
  PendingTouchViewport,
  SnapDebugLogInput,
  SourceBoundsMap,
-@@ -155,7 +181,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
+@@ -155,7 +182,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
  import { useCanvasViewportPersistence } from "./useCanvasViewportPersistence";
  import { useBucketFillPreview,type BucketPreviewSession } from "./useBucketFillPreview";
  import type { ClientPoint,SvgBounds,ViewportPoint,WorldPoint } from "../coords/types";
@@ -5992,7 +6067,7 @@ index 4e22ccfa..767b3cf0 100644
  import {
  formatEquationText,
  type EquationNodeTarget
-@@ -210,6 +236,29 @@ type SnapDebugOverlayDragState =
+@@ -210,6 +237,29 @@ type SnapDebugOverlayDragState =
  
  const RULER_SIZE = 24;
  const MIN_SCALE = 0.05;
@@ -6022,7 +6097,7 @@ index 4e22ccfa..767b3cf0 100644
  const MAX_SCALE = 20;
  const NUDGE_STEP_PT = 0.05 * PT_PER_CM;
  const NUDGE_STEP_SHIFT_PT = 0.25 * PT_PER_CM;
-@@ -668,6 +717,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
+@@ -668,6 +718,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
    return "single-line";
  }
  
@@ -6038,7 +6113,7 @@ index 4e22ccfa..767b3cf0 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,10 +815,32 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +816,32 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -6073,7 +6148,7 @@ index 4e22ccfa..767b3cf0 100644
  }) {
    const platform = getActiveEditorPlatform();
    const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
-@@ -774,6 +854,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +855,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -6082,7 +6157,7 @@ index 4e22ccfa..767b3cf0 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -792,7 +874,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -792,7 +875,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid,
      showTransparencyGrid,
      snapModes,
@@ -6090,7 +6165,7 @@ index 4e22ccfa..767b3cf0 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +895,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +896,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -6099,7 +6174,7 @@ index 4e22ccfa..767b3cf0 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -832,7 +915,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -832,7 +916,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
      snapModes: s.snapModes,
@@ -6107,7 +6182,7 @@ index 4e22ccfa..767b3cf0 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +927,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +928,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -6119,7 +6194,7 @@ index 4e22ccfa..767b3cf0 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,14 +973,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +974,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -6136,7 +6211,7 @@ index 4e22ccfa..767b3cf0 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -911,12 +995,127 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -911,12 +996,127 @@ export const CanvasPanel = memo(function CanvasPanel({
    }, [baseSvgModel, svgResult]);
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
@@ -6267,7 +6342,7 @@ index 4e22ccfa..767b3cf0 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1132,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1133,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -6276,7 +6351,7 @@ index 4e22ccfa..767b3cf0 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1143,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1144,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -6290,7 +6365,7 @@ index 4e22ccfa..767b3cf0 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1236,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1237,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -6313,7 +6388,7 @@ index 4e22ccfa..767b3cf0 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,9 +1306,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,9 +1307,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -6326,7 +6401,7 @@ index 4e22ccfa..767b3cf0 100644
  
    const dispatchCanvasTransform = useCallback(
      (transform: CanvasTransform) => {
-@@ -1156,16 +1333,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1156,16 +1334,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const interactionSvgRef = useRef<SVGSVGElement | null>(null);
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
@@ -6357,7 +6432,7 @@ index 4e22ccfa..767b3cf0 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1265,10 +1454,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1265,10 +1455,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      [setActiveCanvasDragKind]
    );
  
@@ -6368,7 +6443,7 @@ index 4e22ccfa..767b3cf0 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1300,7 +1485,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1486,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -6376,7 +6451,7 @@ index 4e22ccfa..767b3cf0 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1505,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1506,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -6387,7 +6462,7 @@ index 4e22ccfa..767b3cf0 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1689,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1690,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -6411,7 +6486,7 @@ index 4e22ccfa..767b3cf0 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1704,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1705,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -6425,7 +6500,7 @@ index 4e22ccfa..767b3cf0 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1761,11 +1922,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1761,11 +1923,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
      const handleKeyDown = (event: KeyboardEvent) => {
@@ -6438,7 +6513,7 @@ index 4e22ccfa..767b3cf0 100644
        if (event.key !== "Escape" && !isUndo) {
          return;
        }
-@@ -1810,19 +1967,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +1968,37 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -6478,7 +6553,7 @@ index 4e22ccfa..767b3cf0 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,9 +2013,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,9 +2014,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -6491,7 +6566,7 @@ index 4e22ccfa..767b3cf0 100644
      snapModes,
      gridMinorTargetPx,
      canvasTransform,
-@@ -1857,44 +2035,50 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2036,50 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -6551,7 +6626,7 @@ index 4e22ccfa..767b3cf0 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1975,6 +2159,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2160,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -6795,7 +6870,7 @@ index 4e22ccfa..767b3cf0 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,17 +2476,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,17 +2477,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -6820,7 +6895,7 @@ index 4e22ccfa..767b3cf0 100644
    }, []);
  
    const finalizeFreehandDraft = useCallback((overridePoints?: WorldPoint[]) => {
-@@ -2083,41 +2500,233 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2083,41 +2501,233 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState(null);
      }
  
@@ -7078,7 +7153,7 @@ index 4e22ccfa..767b3cf0 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2741,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2742,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -7086,7 +7161,7 @@ index 4e22ccfa..767b3cf0 100644
          return;
        }
  
-@@ -2141,7 +2749,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2750,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -7094,7 +7169,7 @@ index 4e22ccfa..767b3cf0 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2765,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2766,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -7102,7 +7177,7 @@ index 4e22ccfa..767b3cf0 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2779,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2780,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -7132,7 +7207,7 @@ index 4e22ccfa..767b3cf0 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3634,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3635,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -7140,7 +7215,7 @@ index 4e22ccfa..767b3cf0 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3064,9 +3688,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3689,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -7150,7 +7225,7 @@ index 4e22ccfa..767b3cf0 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3147,7 +3768,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3769,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -7161,7 +7236,7 @@ index 4e22ccfa..767b3cf0 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3794,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3795,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -7171,7 +7246,7 @@ index 4e22ccfa..767b3cf0 100644
      ]
    );
  
-@@ -3192,6 +3816,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3817,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -7250,7 +7325,7 @@ index 4e22ccfa..767b3cf0 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3916,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3917,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -7269,7 +7344,7 @@ index 4e22ccfa..767b3cf0 100644
      snapshot,
      source,
      setWarning,
-@@ -3267,16 +3969,232 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,16 +3970,232 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -7504,7 +7579,7 @@ index 4e22ccfa..767b3cf0 100644
    );
  
    const {
-@@ -3306,6 +4224,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4225,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -7512,7 +7587,7 @@ index 4e22ccfa..767b3cf0 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4249,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4250,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -7537,7 +7612,7 @@ index 4e22ccfa..767b3cf0 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4367,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4368,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -7572,7 +7647,7 @@ index 4e22ccfa..767b3cf0 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4388,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4389,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -7580,7 +7655,7 @@ index 4e22ccfa..767b3cf0 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4402,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4403,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -7588,7 +7663,7 @@ index 4e22ccfa..767b3cf0 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4478,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4479,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -7597,7 +7672,7 @@ index 4e22ccfa..767b3cf0 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4523,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4524,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -7606,7 +7681,7 @@ index 4e22ccfa..767b3cf0 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4602,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4603,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -7630,7 +7705,7 @@ index 4e22ccfa..767b3cf0 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4715,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4716,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -7638,7 +7713,7 @@ index 4e22ccfa..767b3cf0 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4728,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4729,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -7646,7 +7721,7 @@ index 4e22ccfa..767b3cf0 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4739,118 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,6 +4740,154 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -7707,14 +7782,11 @@ index 4e22ccfa..767b3cf0 100644
 +    // above, right of, or left of the selection, whichever first fits inside
 +    // the canvas area the rail leaves free.
 +    const viewport = viewportRef.current?.getBoundingClientRect();
-+    const rootStyle = getComputedStyle(document.documentElement);
-+    const inset = (edge: string) => Number.parseFloat(rootStyle.getPropertyValue(`--rail-inset-${edge}`));
-+    const leftEdge = Math.max((viewport?.left ?? 0), inset("left")) + 8;
-+    // An open properties panel floats over the canvas's right side; the control stays left of it.
-+    const panel = document.querySelector(".embed-inspector")?.getBoundingClientRect();
-+    const rightEdge = Math.min((viewport?.right ?? window.innerWidth), window.innerWidth - inset("right"), panel?.left ?? Number.POSITIVE_INFINITY) - 8;
-+    const topEdge = Math.max((viewport?.top ?? 0), inset("top")) + 8;
-+    const bottomEdge = Math.min((viewport?.bottom ?? window.innerHeight), window.innerHeight - inset("bottom")) - 8;
++    const insets = occupiedInsets();
++    const leftEdge = Math.max((viewport?.left ?? 0), insets.left) + 8;
++    const rightEdge = Math.min((viewport?.right ?? window.innerWidth), window.innerWidth - insets.right) - 8;
++    const topEdge = Math.max((viewport?.top ?? 0), insets.top) + 8;
++    const bottomEdge = Math.min((viewport?.bottom ?? window.innerHeight), window.innerHeight - insets.bottom) - 8;
 +    const width = Math.max(0, Math.min(300, rightEdge - leftEdge));
 +    const height = Math.min(selectionControlHeight, Math.max(0, bottomEdge - topEdge));
 +    const bounds = [...selectedElementIds].flatMap((id) => {
@@ -7762,10 +7834,49 @@ index 4e22ccfa..767b3cf0 100644
 +      : { left: alongX, top: topEdge + Math.max(0, roomAbove - height), width, maxHeight: Math.max(0, roomAbove) };
 +  })();
 +
++  // When the rail or the properties panel takes more of the canvas, the selected
++  // subject moves just far enough to stay in the space left, centred there if
++  // it is larger than that space.
++  const scopeBoundsRef = useRef(scopeOverlay.boundsByScopeId);
++  scopeBoundsRef.current = scopeOverlay.boundsByScopeId;
++  useEffect(() => {
++    let frame = 0;
++    const keepSubjectClear = () => {
++      cancelAnimationFrame(frame);
++      // A frame later, so a startup view that follows the insets has moved first.
++      frame = requestAnimationFrame(() => {
++        const viewport = viewportRef.current?.getBoundingClientRect();
++        const svg = svgResultRef.current;
++        const bounds = [...selectedElementIdsRef.current].flatMap((id) => {
++          const box = sourceBoundsSvgRef.current.get(id) ?? scopeBoundsRef.current.get(id);
++          return box ? [box] : [];
++        });
++        if (!viewport || !svg || bounds.length === 0) return;
++        const transform = canvasTransformRef.current;
++        const insets = occupiedInsets();
++        const toClientX = (x: number) => viewport.left + transform.translateX + (x - svg.viewBox.x) * transform.scale;
++        const toClientY = (y: number) => viewport.top + transform.translateY + (y - svg.viewBox.y) * transform.scale;
++        const shift = (low: number, high: number, min: number, max: number) =>
++          high - low > max - min ? (min + max - low - high) / 2 : low < min ? min - low : high > max ? max - high : 0;
++        const dx = shift(toClientX(Math.min(...bounds.map((box) => box.minX))), toClientX(Math.max(...bounds.map((box) => box.maxX))),
++          Math.max(viewport.left, insets.left) + 8, Math.min(viewport.right, window.innerWidth - insets.right) - 8);
++        const dy = shift(toClientY(Math.min(...bounds.map((box) => box.minY))), toClientY(Math.max(...bounds.map((box) => box.maxY))),
++          Math.max(viewport.top, insets.top) + 8, Math.min(viewport.bottom, window.innerHeight - insets.bottom) - 8);
++        if (dx === 0 && dy === 0) return;
++        dispatch({ type: "SET_CANVAS_TRANSFORM", transform: { ...transform, translateX: transform.translateX + dx, translateY: transform.translateY + dy } });
++      });
++    };
++    window.addEventListener(OCCUPIED_INSETS_EVENT, keepSubjectClear);
++    return () => {
++      cancelAnimationFrame(frame);
++      window.removeEventListener(OCCUPIED_INSETS_EVENT, keepSubjectClear);
++    };
++  }, [dispatch]);
++
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +4873,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +4910,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -7788,7 +7899,7 @@ index 4e22ccfa..767b3cf0 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +4904,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +4941,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -7803,7 +7914,7 @@ index 4e22ccfa..767b3cf0 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +4930,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +4967,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -7837,7 +7948,7 @@ index 4e22ccfa..767b3cf0 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +4962,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +4999,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -7847,7 +7958,7 @@ index 4e22ccfa..767b3cf0 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +4975,29 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5012,29 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -7881,7 +7992,7 @@ index 4e22ccfa..767b3cf0 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5028,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5065,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -7889,7 +8000,7 @@ index 4e22ccfa..767b3cf0 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5037,76 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5074,76 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -9659,6 +9770,37 @@ index f22aaafd..fc56bde6 100644
  }
  
  function clampTooltipScalar(value: number): number {
+diff --git a/packages/app/src/ui/canvas-panel/occupied-insets.ts b/packages/app/src/ui/canvas-panel/occupied-insets.ts
+new file mode 100644
+index 00000000..c4c0b225
+--- /dev/null
++++ b/packages/app/src/ui/canvas-panel/occupied-insets.ts
+@@ -0,0 +1,25 @@
++/** Window-coordinate depth that the docked rail and the open properties panel take from each canvas edge. */
++export type OccupiedInsets = { left: number; right: number; top: number; bottom: number };
++
++/** Dispatched on `window` when the rail or the properties panel changes the space it takes. */
++export const OCCUPIED_INSETS_EVENT = "tikz-occupied-insets";
++
++export function occupiedInsets(): OccupiedInsets {
++  const style = getComputedStyle(document.documentElement);
++  const inset = (name: string) => Number.parseFloat(style.getPropertyValue(name));
++  return {
++    left: inset("--rail-inset-left"),
++    right: Math.max(inset("--rail-inset-right"), inset("--panel-inset-right")),
++    top: inset("--rail-inset-top"),
++    bottom: Math.max(inset("--rail-inset-bottom"), inset("--panel-inset-bottom"))
++  };
++}
++
++/** Writes the named inset properties and announces the change; unchanged values announce nothing. */
++export function publishOccupiedInsets(insets: Readonly<Record<string, number>>): void {
++  const root = document.documentElement.style;
++  const changed = Object.entries(insets).filter(([name, size]) => root.getPropertyValue(name) !== `${size}px`);
++  if (changed.length === 0) return;
++  for (const [name, size] of changed) root.setProperty(name, `${size}px`);
++  window.dispatchEvent(new Event(OCCUPIED_INSETS_EVENT));
++}
 diff --git a/packages/app/src/ui/canvas-panel/overlays.tsx b/packages/app/src/ui/canvas-panel/overlays.tsx
 index 13b3ad2b..13f34d91 100644
 --- a/packages/app/src/ui/canvas-panel/overlays.tsx
@@ -9915,6 +10057,74 @@ index 13b3ad2b..13f34d91 100644
              onPointerDown={onPointerDown}
              onContextMenu={onContextMenu}
              data-handle-kind={display.kind}
+diff --git a/packages/app/src/ui/canvas-panel/panel-helpers.ts b/packages/app/src/ui/canvas-panel/panel-helpers.ts
+index 65f82022..d7245709 100644
+--- a/packages/app/src/ui/canvas-panel/panel-helpers.ts
++++ b/packages/app/src/ui/canvas-panel/panel-helpers.ts
+@@ -3,6 +3,7 @@ import type { ResizeRole } from "tikz-editor/edit/actions";
+ import { mapWorldTransformToSvgTransform, svgPoint, svgBounds, worldPoint, worldVector, worldTransform, pt } from "tikz-editor/coords/index";
+ import { parseCoordinateLike, parseLength } from "tikz-editor/semantic/coords/parse-length";
+ import { resolveTransformInspectorMutationContextFromOptionEntries } from "tikz-editor/edit/property-write-builders";
++import { pathCommandBoundsInWorld } from "tikz-editor/edit/snapping";
+ import type { OptionListAst } from "tikz-editor/options/types";
+ import {
+   isFrameLocalCoordinateEditHandle,
+@@ -336,49 +337,14 @@ export function constrainBoundsToClipChain(
+ }
+ 
+ function pathCommandBoundsInSvg(commands: readonly ScenePathCommand[], viewBox: SvgViewBox): SvgBounds | null {
+-  let minX = Number.POSITIVE_INFINITY;
+-  let minY = Number.POSITIVE_INFINITY;
+-  let maxX = Number.NEGATIVE_INFINITY;
+-  let maxY = Number.NEGATIVE_INFINITY;
+-  let previous: SvgPoint | null = null;
+-
+-  const includePoint = (point: SvgPoint) => {
+-    minX = Math.min(minX, point.x);
+-    minY = Math.min(minY, point.y);
+-    maxX = Math.max(maxX, point.x);
+-    maxY = Math.max(maxY, point.y);
+-  };
+-
+-  for (const command of commands) {
+-    if (command.kind === "Z") continue;
+-
+-    if (command.kind === "C") {
+-      includePoint(worldToSvgPoint(command.c1, viewBox));
+-      includePoint(worldToSvgPoint(command.c2, viewBox));
+-    }
+-
+-    if (command.kind === "A") {
+-      if (previous) {
+-        includePoint(svgPoint(pt(previous.x - command.rx), pt(previous.y - command.ry)));
+-        includePoint(svgPoint(pt(previous.x + command.rx), pt(previous.y + command.ry)));
+-      }
+-      const to = worldToSvgPoint(command.to, viewBox);
+-      includePoint(svgPoint(pt(to.x - command.rx), pt(to.y - command.ry)));
+-      includePoint(svgPoint(pt(to.x + command.rx), pt(to.y + command.ry)));
+-      previous = to;
+-      continue;
+-    }
+-
+-    const point = worldToSvgPoint(command.to, viewBox);
+-    includePoint(point);
+-    previous = point;
+-  }
+-
+-  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
++  const bounds = pathCommandBoundsInWorld(commands);
++  if (!bounds) {
+     return null;
+   }
+-
+-  return svgBounds(pt(minX), pt(minY), pt(maxX), pt(maxY));
++  // The SVG y axis points down, so the world maximum is the SVG minimum.
++  const topLeft = worldToSvgPoint(worldPoint(bounds.minX, bounds.maxY), viewBox);
++  const bottomRight = worldToSvgPoint(worldPoint(bounds.maxX, bounds.minY), viewBox);
++  return svgBounds(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y);
+ }
+ 
+ function intersectBounds(a: SvgBounds, b: SvgBounds): SvgBounds | null {
 diff --git a/packages/app/src/ui/canvas-panel/path-selection-hint.ts b/packages/app/src/ui/canvas-panel/path-selection-hint.ts
 index 0961ce75..5418b80f 100644
 --- a/packages/app/src/ui/canvas-panel/path-selection-hint.ts
@@ -10644,7 +10854,7 @@ index de0ccae2..50244477 100644
 +  }).join(" ");
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
-index 0c9bdf4f..8a379c3f 100644
+index 0c9bdf4f..6b3a683f 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 @@ -1,3 +1,4 @@
@@ -10660,17 +10870,18 @@ index 0c9bdf4f..8a379c3f 100644
    pt,
    px
  } from "tikz-editor/coords/index";
-@@ -18,7 +20,9 @@ import { resolvePropertyTarget } from "tikz-editor/edit/property-target";
+@@ -18,7 +20,10 @@ import { resolvePropertyTarget } from "tikz-editor/edit/property-target";
  import { parseLength } from "tikz-editor/semantic/coords/parse-length";
  import { intersectRayWithPolygon } from "tikz-editor/semantic/nodes/shape-geometry";
  import {
++  pathCommandBoundsInWorld,
 +  snapToUnitLattice,
    snapHandlePosition,
 +  snapGridPointer,
    snapSelectionTranslation,
    snapToolPointer,
    type SnapLine
-@@ -53,7 +57,8 @@ import {
+@@ -53,7 +58,8 @@ import {
    resolveGridTooltipCounts,
    resolveToolCreateSize,
    snapPointDeltaToAxisStepMultiples,
@@ -10680,7 +10891,7 @@ index 0c9bdf4f..8a379c3f 100644
  } from "./interaction-helpers";
  import { resolveHandleDragAction, shouldCommitHandleAnchorOnPointerUp } from "./handle-drag-actions";
  import { resolveEndpointAnchorSnap } from "./endpoint-anchor-snap";
-@@ -156,14 +161,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -156,14 +162,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        world: WorldPoint,
        currentSvg: { viewBox: SvgViewBox }
      ) {
@@ -10708,7 +10919,7 @@ index 0c9bdf4f..8a379c3f 100644
        });
        const nextIds = drag.additive
          ? [...new Set([...drag.baseSelectedIds, ...hitIds])]
-@@ -272,6 +285,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -272,6 +286,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        const drag = dragRef.current;
        if (event.pointerId !== drag?.pointerId) return;
        const ctrlOrMeta = event.ctrlKey || event.metaKey;
@@ -10716,7 +10927,7 @@ index 0c9bdf4f..8a379c3f 100644
        const formatPrecision = event.altKey ? "fine" : undefined;
  
        if (drag.kind === "pan") {
-@@ -326,7 +340,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -326,7 +341,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            : { snappedPoint: world, offset: undefined, lines: [] as SnapLine[] };
          let nextRawWorld = snapped.snappedPoint ?? world;
          let endpointAnchorOverlay: NodeAnchorOverlayState | null = null;
@@ -10725,7 +10936,7 @@ index 0c9bdf4f..8a379c3f 100644
            endpointAnchorOverlay = resolveEndpointAnchorSnap({
              pointerWorld: world,
              zoom: drag.snapContext?.zoom ?? 1,
-@@ -345,8 +359,12 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -345,8 +360,12 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            drag.startWorld,
            drag.rawCurrentWorld,
            drag.toolMode,
@@ -10739,7 +10950,7 @@ index 0c9bdf4f..8a379c3f 100644
          if (drag.toolMode === "addGrid" && !ctrlOrMeta) {
            drag.currentWorld = snapPointDeltaToAxisStepMultiples(
              drag.startWorld,
-@@ -361,7 +379,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -361,7 +380,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              : null
          );
          setToolDraft({ ...drag });
@@ -10748,7 +10959,7 @@ index 0c9bdf4f..8a379c3f 100644
          const rows = formatToolCreateLengthRows(drag.toolMode, size);
          if (drag.toolMode === "addGrid") {
            const counts = resolveGridTooltipCounts(drag.startWorld, drag.currentWorld);
-@@ -455,19 +473,33 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -455,19 +474,33 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        if (drag.kind === "tool-freehand") {
          setNodeAnchorOverlay(null);
          setDragTooltip(null);
@@ -10787,7 +10998,7 @@ index 0c9bdf4f..8a379c3f 100644
          });
          return;
        }
-@@ -476,8 +508,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -476,8 +509,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setNodeAnchorOverlay(null);
          setDragTooltip(null);
          drag.currentWorld = world;
@@ -10798,7 +11009,7 @@ index 0c9bdf4f..8a379c3f 100644
            commitMarqueeSelection(drag, world, currentSvg);
          }
          setSnapLines([]);
-@@ -508,6 +541,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -508,6 +542,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        }
  
        if (drag.kind === "resize") {
@@ -10806,7 +11017,7 @@ index 0c9bdf4f..8a379c3f 100644
          setNodeAnchorOverlay(null);
          setSnapLines([]);
          maybeTriggerSnapFeedback(false);
-@@ -517,28 +551,29 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -517,28 +552,29 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            ? { width: liveDimensions.width, height: liveDimensions.height }
            : drag.measurementMode === "opposite-corner"
              ? projectResizeDimensionsFromOppositeCorner(
@@ -10841,7 +11052,7 @@ index 0c9bdf4f..8a379c3f 100644
            lines: []
          });
  
-@@ -547,8 +582,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -547,8 +583,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              kind: "resizeElement",
              elementId: drag.elementId,
              role: drag.role,
@@ -10852,7 +11063,7 @@ index 0c9bdf4f..8a379c3f 100644
              preserveAspectRatio: drag.preserveAspectRatio ?? undefined,
              formatPrecision,
              referenceBounds: resizeFrameWorldBounds(drag.initialFrame),
-@@ -567,7 +602,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -567,7 +603,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          drag.lastPointerWorld = world;
          applyRotateDragUpdate(drag, {
            phase: "drag-rotate-move",
@@ -10861,7 +11072,7 @@ index 0c9bdf4f..8a379c3f 100644
            ctrlOrMetaKey: ctrlOrMeta,
            altKey: event.altKey,
            tooltipAnchor: pointerClient,
-@@ -802,12 +837,17 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -802,12 +838,17 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              return;
            }
          }
@@ -10880,7 +11091,7 @@ index 0c9bdf4f..8a379c3f 100644
                modifiers: { ctrlOrMeta }
              })
            : {
-@@ -815,9 +855,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -815,9 +856,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
                offset: undefined,
                lines: [] as SnapLine[]
              };
@@ -10892,7 +11103,7 @@ index 0c9bdf4f..8a379c3f 100644
          const actualTotalDelta = drag.lastAppliedTotalDelta;
          const incremental = makeWorldVector(totalDelta.x - actualTotalDelta.x, totalDelta.y - actualTotalDelta.y);
          setSnapLines(snapped.lines);
-@@ -866,13 +907,14 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -866,13 +908,14 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          ? snapHandlePosition({
              context: drag.snapContext,
              point: world,
@@ -10908,7 +11119,7 @@ index 0c9bdf4f..8a379c3f 100644
          endpointAnchorOverlay = resolveEndpointAnchorSnap({
            pointerWorld: world,
            zoom: drag.snapContext?.zoom ?? 1,
-@@ -928,6 +970,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -928,6 +971,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        resetSnapFeedbackState();
        suppressNextBackgroundClickRef.current = true;
        const ctrlOrMeta = event.ctrlKey || event.metaKey;
@@ -10916,7 +11127,7 @@ index 0c9bdf4f..8a379c3f 100644
  
        const currentSvg = svgResultRef.current;
        const world =
-@@ -940,7 +983,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -940,7 +984,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setDragTooltip(null);
          const finalWorld = world ?? drag.currentWorld;
          const deltaSq = distanceSquared(finalWorld, drag.startWorld);
@@ -10925,7 +11136,7 @@ index 0c9bdf4f..8a379c3f 100644
  
          if (isClickOnly) {
            if (!drag.additive) {
-@@ -988,8 +1031,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -988,8 +1032,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            drag.startWorld,
            snappedWorld,
            drag.toolMode,
@@ -10937,7 +11148,7 @@ index 0c9bdf4f..8a379c3f 100644
          if (drag.toolMode === "addGrid" && !ctrlOrMeta) {
            finalWorld = snapPointDeltaToAxisStepMultiples(
              drag.startWorld,
-@@ -998,7 +1043,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -998,7 +1044,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              DEFAULT_GRID_TOOL_STEP_PT
            );
          }
@@ -10946,7 +11157,7 @@ index 0c9bdf4f..8a379c3f 100644
            finalWorld = finalEndpointAnchor.world;
          }
          setSnapLines(snapped.lines);
-@@ -1020,7 +1065,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1020,7 +1066,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          const rawTemplate = createTemplateForToolDrag(drag.toolMode, drag.startWorld, finalWorld, {
            selectedAddShape,
            strokeColor: creationStrokeColor,
@@ -10956,7 +11167,7 @@ index 0c9bdf4f..8a379c3f 100644
          });
          const template =
            rawTemplate.kind === "line"
-@@ -1064,7 +1110,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1064,7 +1111,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          }
  
          if (ok.sourceChanged) {
@@ -10964,7 +11175,7 @@ index 0c9bdf4f..8a379c3f 100644
            setToolCursorWorld(null);
          }
          setToolDraft(null);
-@@ -1093,7 +1138,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1093,7 +1139,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
  
          queueSelectionForAddedElement(makeWorldPoint((drag.startWorld.x + drag.endWorld.x) / 2, (drag.startWorld.y + drag.endWorld.y) / 2));
          const template = createBezierTemplateFromBend(drag.startWorld, drag.endWorld, finalBend, {
@@ -10974,7 +11185,7 @@ index 0c9bdf4f..8a379c3f 100644
          });
          const ok = applyActionWithFeedback({
            kind: "addElement",
-@@ -1105,7 +1151,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1105,7 +1152,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          }
  
          if (ok.sourceChanged) {
@@ -10982,7 +11193,7 @@ index 0c9bdf4f..8a379c3f 100644
            setToolCursorWorld(null);
          }
          setPendingBezier(null);
-@@ -1143,7 +1188,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1143,7 +1189,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
                }
              : undefined,
            bendWorld: finalBend,
@@ -10993,7 +11204,7 @@ index 0c9bdf4f..8a379c3f 100644
          });
          setPathSegmentDraft(null);
          setToolCursorWorld(drag.endWorld);
-@@ -1157,13 +1204,20 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1157,13 +1205,20 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setDragTooltip(null);
          let nextWorldPoints: WorldPoint[] | null = null;
          if (world) {
@@ -11020,7 +11231,7 @@ index 0c9bdf4f..8a379c3f 100644
          finalizeFreehandDraft(nextWorldPoints ?? undefined);
          return;
        }
-@@ -1225,7 +1279,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1225,7 +1280,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        event.preventDefault();
        applyRotateDragUpdate(drag, {
          phase: "drag-rotate-modifier",
@@ -11029,6 +11240,62 @@ index 0c9bdf4f..8a379c3f 100644
          ctrlOrMetaKey: event.ctrlKey || event.metaKey,
          altKey,
          tooltipAnchor: drag.lastPointerClient,
+@@ -1919,7 +1974,7 @@ function normalizeDirectionKey(value: string): string {
+ 
+ function elementBoundsInWorld(element: SceneElement): WorldBounds | null {
+   if (element.kind === "Path") {
+-    const bounds = pathBoundsInWorld(element);
++    const bounds = pathCommandBoundsInWorld(element.commands);
+     return bounds ? applyTransformToBounds(bounds, element.transform) : null;
+   }
+   if (element.kind === "Circle") {
+@@ -1951,46 +2006,6 @@ function elementBoundsInWorld(element: SceneElement): WorldBounds | null {
+   );
+ }
+ 
+-function pathBoundsInWorld(path: Extract<SceneElement, { kind: "Path" }>): WorldBounds | null {
+-  let minX = Number.POSITIVE_INFINITY;
+-  let minY = Number.POSITIVE_INFINITY;
+-  let maxX = Number.NEGATIVE_INFINITY;
+-  let maxY = Number.NEGATIVE_INFINITY;
+-  let previous: WorldPoint | null = null;
+-
+-  const includeWorldPoint = (point: WorldPoint) => {
+-    minX = Math.min(minX, point.x);
+-    minY = Math.min(minY, point.y);
+-    maxX = Math.max(maxX, point.x);
+-    maxY = Math.max(maxY, point.y);
+-  };
+-
+-  for (const command of path.commands) {
+-    if (command.kind === "Z") continue;
+-    if (command.kind === "C") {
+-      includeWorldPoint(command.c1);
+-      includeWorldPoint(command.c2);
+-    }
+-    if (command.kind === "A") {
+-      if (previous) {
+-        includeWorldPoint(makeWorldPoint(previous.x - command.rx, previous.y - command.ry));
+-        includeWorldPoint(makeWorldPoint(previous.x + command.rx, previous.y + command.ry));
+-      }
+-      includeWorldPoint(makeWorldPoint(command.to.x - command.rx, command.to.y - command.ry));
+-      includeWorldPoint(makeWorldPoint(command.to.x + command.rx, command.to.y + command.ry));
+-      previous = command.to;
+-      continue;
+-    }
+-    includeWorldPoint(command.to);
+-    previous = command.to;
+-  }
+-
+-  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+-    return null;
+-  }
+-  return worldBounds(pt(minX), pt(minY), pt(maxX), pt(maxY));
+-}
+-
+ function computeRotatedRectLikeEllipseBounds(cx: number, cy: number, rx: number, ry: number, rotation: number): WorldBounds {
+   const theta = (rotation * Math.PI) / 180;
+   const cos = Math.cos(theta);
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDragController.types.ts b/packages/app/src/ui/canvas-panel/useCanvasDragController.types.ts
 index fbf3023a..c4b1c4fb 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDragController.types.ts
@@ -12563,13 +12830,14 @@ index 43f01253..1f14d077 100644
 +    Math.abs(left.scale - right.scale) < 1e-6;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af8..738d9400 100644
+index de737af8..06f29027 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-@@ -7,10 +7,15 @@ import {
+@@ -7,10 +7,16 @@ import {
    type MutableRefObject,
    type RefObject
  } from "react";
++import { OCCUPIED_INSETS_EVENT, occupiedInsets } from "./occupied-insets";
 +import type { LatticeTransform } from "tikz-editor/edit/snapping";
 +import { PT_PER_CM } from "tikz-editor/edit/format";
  import { px, viewportPoint } from "tikz-editor/coords/index";
@@ -12582,7 +12850,7 @@ index de737af8..738d9400 100644
  import type { CanvasDispatch, CanvasSnapshot, ValueSetter } from "./types";
  
  type FigureViewportState = {
-@@ -19,9 +24,11 @@ type FigureViewportState = {
+@@ -19,9 +25,11 @@ type FigureViewportState = {
  };
  
  export type UseCanvasViewportPersistenceArgs = {
@@ -12594,7 +12862,7 @@ index de737af8..738d9400 100644
    dispatch: CanvasDispatch;
    dispatchCanvasTransform: (transform: CanvasTransform) => void;
    activeDocumentId: string;
-@@ -33,6 +40,7 @@ export type UseCanvasViewportPersistenceArgs = {
+@@ -33,6 +41,7 @@ export type UseCanvasViewportPersistenceArgs = {
    setFitToContentModeActive: ValueSetter<boolean>;
    viewportRef: RefObject<HTMLDivElement | null>;
    canvasTransformRef: MutableRefObject<CanvasTransform>;
@@ -12602,7 +12870,7 @@ index de737af8..738d9400 100644
    fitToContentRequestToken: number;
    zoomRequestToken: number;
    zoomRequestDirection: "in" | "out" | null;
-@@ -48,9 +56,11 @@ export type UseCanvasViewportPersistenceArgs = {
+@@ -48,9 +57,11 @@ export type UseCanvasViewportPersistenceArgs = {
  };
  
  export function useCanvasViewportPersistence({
@@ -12614,7 +12882,7 @@ index de737af8..738d9400 100644
    dispatch,
    dispatchCanvasTransform,
    activeDocumentId,
-@@ -62,6 +72,7 @@ export function useCanvasViewportPersistence({
+@@ -62,6 +73,7 @@ export function useCanvasViewportPersistence({
    setFitToContentModeActive,
    viewportRef,
    canvasTransformRef,
@@ -12622,7 +12890,7 @@ index de737af8..738d9400 100644
    fitToContentRequestToken,
    zoomRequestToken,
    zoomRequestDirection,
-@@ -75,6 +86,9 @@ export function useCanvasViewportPersistence({
+@@ -75,6 +87,9 @@ export function useCanvasViewportPersistence({
    MIN_SCALE,
    MAX_SCALE
  }: UseCanvasViewportPersistenceArgs): { maxZoomScale: number } {
@@ -12632,7 +12900,7 @@ index de737af8..738d9400 100644
    const viewportStateByFigureKeyRef = useRef(new Map<string, FigureViewportState>());
    const visitedFigureKeysRef = useRef(new Set<string>());
    const previousFigureViewportKeyRef = useRef<string | null>(null);
-@@ -102,16 +116,17 @@ export function useCanvasViewportPersistence({
+@@ -102,16 +117,17 @@ export function useCanvasViewportPersistence({
      const renderViewBox = svgResult?.viewBox ?? fitViewBox;
      if (!fitViewBox || !renderViewBox || !viewportRef.current) return false;
  
@@ -12654,7 +12922,7 @@ index de737af8..738d9400 100644
      const translateX = fitLeft - (fitViewBox.x - renderViewBox.x) * scale;
      const translateY = fitTop - (fitViewBox.y - renderViewBox.y) * scale;
  
-@@ -119,6 +134,50 @@ export function useCanvasViewportPersistence({
+@@ -119,6 +135,50 @@ export function useCanvasViewportPersistence({
      return true;
    }, [baseSvgResult, dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, svgResult, viewportRef]);
  
@@ -12685,9 +12953,9 @@ index de737af8..738d9400 100644
 +  // The view moves by exactly how far the free area's centre moved, which depends
 +  // only on the inset change, never on the SVG view box at that instant.
 +  useEffect(() => {
-+    let insets = railInsets();
++    let insets = occupiedInsets();
 +    const recentre = () => {
-+      const next = railInsets();
++      const next = occupiedInsets();
 +      const shiftX = ((next.left - insets.left) - (next.right - insets.right)) / 2;
 +      const shiftY = ((next.top - insets.top) - (next.bottom - insets.bottom)) / 2;
 +      insets = next;
@@ -12698,14 +12966,14 @@ index de737af8..738d9400 100644
 +      canvasTransformRef.current = moved;
 +      dispatchCanvasTransform(moved);
 +    };
-+    window.addEventListener("tikz-rail-insets", recentre);
-+    return () => window.removeEventListener("tikz-rail-insets", recentre);
++    window.addEventListener(OCCUPIED_INSETS_EVENT, recentre);
++    return () => window.removeEventListener(OCCUPIED_INSETS_EVENT, recentre);
 +  }, [autoViewRef, canvasTransformRef, dispatchCanvasTransform]);
 +
    const activeFigureViewportKey = useMemo(
      () => makeFigureViewportKey(activeDocumentId, activeFigureId),
      [activeDocumentId, activeFigureId]
-@@ -154,6 +213,25 @@ export function useCanvasViewportPersistence({
+@@ -154,6 +214,25 @@ export function useCanvasViewportPersistence({
    }, [tabOrder]);
  
    useLayoutEffect(() => {
@@ -12731,7 +12999,7 @@ index de737af8..738d9400 100644
      const pendingAutoFit = pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey;
      if (previousFigureViewportKeyRef.current === activeFigureViewportKey && !pendingAutoFit) {
        return;
-@@ -179,10 +257,10 @@ export function useCanvasViewportPersistence({
+@@ -179,10 +258,10 @@ export function useCanvasViewportPersistence({
      const hasVisited = visitedFigureKeysRef.current.has(activeFigureViewportKey);
      if (!hasVisited || pendingAutoFit) {
        visitedFigureKeysRef.current.add(activeFigureViewportKey);
@@ -12745,7 +13013,7 @@ index de737af8..738d9400 100644
        previousFigureViewportKeyRef.current = activeFigureViewportKey;
        if (didFit) {
          pendingFirstVisitAutoFitKeyRef.current = null;
-@@ -196,9 +274,11 @@ export function useCanvasViewportPersistence({
+@@ -196,9 +275,11 @@ export function useCanvasViewportPersistence({
      previousFigureViewportKeyRef.current = activeFigureViewportKey;
    }, [
      activeFigureViewportKey,
@@ -12758,7 +13026,7 @@ index de737af8..738d9400 100644
      fitToContentModeActiveRef,
      saveFigureViewportState,
      setFitToContentModeActive
-@@ -214,8 +294,10 @@ export function useCanvasViewportPersistence({
+@@ -214,8 +295,10 @@ export function useCanvasViewportPersistence({
      if (pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey) {
        return;
      }
@@ -12771,28 +13039,19 @@ index de737af8..738d9400 100644
  
    const handledFitRequestRef = useRef(0);
    useEffect(() => {
-@@ -390,3 +472,23 @@ function computeFitToContentScale(
+@@ -390,3 +473,14 @@ function computeFitToContentScale(
  function makeFigureViewportKey(documentId: string, figureId: string | null): string {
    return `${documentId}::${figureId ?? "__all__"}`;
  }
 +
-+function railInsets(): { left: number; right: number; top: number; bottom: number } {
-+  const style = getComputedStyle(document.documentElement);
-+  const inset = (edge: string) => Number.parseFloat(style.getPropertyValue(`--rail-inset-${edge}`));
-+  return { left: inset("left"), right: inset("right"), top: inset("top"), bottom: inset("bottom") };
-+}
-+
-+/** The part of the canvas viewport, in viewport coordinates, that the docked rail leaves visible. */
++/** The part of the canvas viewport, in viewport coordinates, that the docked rail and the properties panel leave visible. */
 +function railFreeArea(viewport: HTMLElement): { left: number; top: number; width: number; height: number } {
 +  const rect = viewport.getBoundingClientRect();
-+  const insets = railInsets();
-+  const inset = (edge: "left" | "right" | "top" | "bottom") => insets[edge];
-+  const left = Math.max(0, inset("left") - rect.left);
-+  // An open properties panel floats over the canvas's right side; a fitted view stays left of it.
-+  const panel = document.querySelector(".embed-inspector")?.getBoundingClientRect();
-+  const right = Math.max(0, Math.max(inset("right"), panel ? window.innerWidth - panel.left : 0) - (window.innerWidth - rect.right));
-+  const top = Math.max(0, inset("top") - rect.top);
-+  const bottom = Math.max(0, inset("bottom") - (window.innerHeight - rect.bottom));
++  const insets = occupiedInsets();
++  const left = Math.max(0, insets.left - rect.left);
++  const right = Math.max(0, insets.right - (window.innerWidth - rect.right));
++  const top = Math.max(0, insets.top - rect.top);
++  const bottom = Math.max(0, insets.bottom - (window.innerHeight - rect.bottom));
 +  return { left, top, width: Math.max(1, viewport.clientWidth - left - right), height: Math.max(1, viewport.clientHeight - top - bottom) };
 +}
 diff --git a/packages/app/src/ui/capabilities.ts b/packages/app/src/ui/capabilities.ts
@@ -14279,10 +14538,10 @@ index 0101870b..588c1245 100644
  
  export function toolSupportsFill(mode: ToolMode): boolean {
 diff --git a/packages/app/src/ui/variables.css b/packages/app/src/ui/variables.css
-index 6f610623..378d0c0f 100644
+index 6f610623..e43c9795 100644
 --- a/packages/app/src/ui/variables.css
 +++ b/packages/app/src/ui/variables.css
-@@ -73,6 +73,12 @@
+@@ -73,6 +73,16 @@
  /* ── Design tokens ──────────────────────────────────────────────────────────── */
  
  :root {
@@ -14292,6 +14551,10 @@ index 6f610623..378d0c0f 100644
 +  --rail-inset-right: 0px;
 +  --rail-inset-top: 0px;
 +  --rail-inset-bottom: 0px;
++  /* Space the open properties panel takes: its right edge as a side panel,
++     its bottom edge as a bottom sheet. */
++  --panel-inset-right: 0px;
++  --panel-inset-bottom: 0px;
    /* Fonts */
    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
    --font-mono: ui-monospace, "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
@@ -15622,10 +15885,27 @@ index 2f522fd2..c8d3a13e 100644
        enabled: patch.points?.enabled ?? base.points.enabled
      },
 diff --git a/packages/core/src/edit/snapping/geometry.ts b/packages/core/src/edit/snapping/geometry.ts
-index 291bcb24..e59f47b3 100644
+index 291bcb24..d21cc94f 100644
 --- a/packages/core/src/edit/snapping/geometry.ts
 +++ b/packages/core/src/edit/snapping/geometry.ts
-@@ -206,7 +206,13 @@ function elementBoundsInWorld(element: SceneElement): WorldBounds | null {
+@@ -2,7 +2,6 @@ import { worldBounds, worldPoint } from "../../coords/points.js";
+ import { pt } from "../../coords/scalars.js";
+ import type {
+   SceneElement,
+-  ScenePath,
+   ScenePathCommand,
+   SceneText
+ } from "../../semantic/types.js";
+@@ -192,7 +191,7 @@ export function collectSelectionGeometry(
+ 
+ function elementBoundsInWorld(element: SceneElement): WorldBounds | null {
+   if (element.kind === "Path") {
+-    const bounds = pathBoundsInWorld(element);
++    const bounds = pathCommandBoundsInWorld(element.commands);
+     if (!bounds) {
+       return null;
+     }
+@@ -206,7 +205,13 @@ function elementBoundsInWorld(element: SceneElement): WorldBounds | null {
        pt(element.center.x + element.radius),
        pt(element.center.y + element.radius)
      );
@@ -15640,7 +15920,7 @@ index 291bcb24..e59f47b3 100644
    }
  
    if (element.kind === "Ellipse") {
-@@ -231,9 +237,9 @@ function pathIsClosed(commands: readonly ScenePathCommand[]): boolean {
+@@ -231,9 +236,9 @@ function pathIsClosed(commands: readonly ScenePathCommand[]): boolean {
  }
  
  function textBoundsInWorld(element: SceneText): WorldBounds {
@@ -15652,6 +15932,25 @@ index 291bcb24..e59f47b3 100644
  
    return computeRotatedRectBounds(
      element.position.x,
+@@ -244,7 +249,8 @@ function textBoundsInWorld(element: SceneText): WorldBounds {
+   );
+ }
+ 
+-function pathBoundsInWorld(path: ScenePath): WorldBounds | null {
++/** Tight bounds of a path's drawn geometry: curve and arc extrema, not their control points. */
++export function pathCommandBoundsInWorld(commands: readonly ScenePathCommand[]): WorldBounds | null {
+   let minX = Number.POSITIVE_INFINITY;
+   let minY = Number.POSITIVE_INFINITY;
+   let maxX = Number.NEGATIVE_INFINITY;
+@@ -265,7 +271,7 @@ function pathBoundsInWorld(path: ScenePath): WorldBounds | null {
+     includeY(point.y);
+   };
+ 
+-  for (const command of path.commands) {
++  for (const command of commands) {
+     if (command.kind === "Z") {
+       previous = subpathStart;
+       continue;
 diff --git a/packages/core/src/edit/snapping/grid-snaps.ts b/packages/core/src/edit/snapping/grid-snaps.ts
 index 7eccc2f5..8f91f503 100644
 --- a/packages/core/src/edit/snapping/grid-snaps.ts
@@ -15786,7 +16085,7 @@ index 7eccc2f5..8f91f503 100644
 +  return { kind: "point", point: worldPoint(pt((Math.round(cx) + best[0]) * LATTICE_UNIT_PT), pt((Math.round(cy) + best[1]) * LATTICE_UNIT_PT)) };
  }
 diff --git a/packages/core/src/edit/snapping/index.ts b/packages/core/src/edit/snapping/index.ts
-index 9ff1d00f..4e283050 100644
+index 9ff1d00f..e717a6a1 100644
 --- a/packages/core/src/edit/snapping/index.ts
 +++ b/packages/core/src/edit/snapping/index.ts
 @@ -1,5 +1,5 @@
@@ -15817,7 +16116,15 @@ index 9ff1d00f..4e283050 100644
  };
  
  export {
-@@ -62,6 +65,19 @@ export function snapSelectionTranslation(input: SnapSelectionTranslationInput):
+@@ -46,6 +49,7 @@ export {
+   collectSelectionGeometry,
+   collectSelectionGeometryFromBounds,
+   collectSourceWorldBounds,
++  pathCommandBoundsInWorld,
+   selectionSnapPointsFromBounds
+ } from "./geometry.js";
+ 
+@@ -62,6 +66,19 @@ export function snapSelectionTranslation(input: SnapSelectionTranslationInput):
      };
    }
  
@@ -15837,7 +16144,7 @@ index 9ff1d00f..4e283050 100644
    const movedSelection = {
      bounds: translateBounds(input.selection.bounds, input.rawDelta),
      snapPoints: translatePoints(input.selection.snapPoints, input.rawDelta)
-@@ -82,6 +98,20 @@ export function snapSelectionTranslation(input: SnapSelectionTranslationInput):
+@@ -82,6 +99,20 @@ export function snapSelectionTranslation(input: SnapSelectionTranslationInput):
    };
  }
  
@@ -15858,7 +16165,7 @@ index 9ff1d00f..4e283050 100644
  export function snapHandlePosition(input: SnapHandlePositionInput): SnapResult {
    const settings = effectiveSettings(input.context, input.settings);
  
-@@ -93,6 +123,8 @@ export function snapHandlePosition(input: SnapHandlePositionInput): SnapResult {
+@@ -93,6 +124,8 @@ export function snapHandlePosition(input: SnapHandlePositionInput): SnapResult {
      };
    }
  
@@ -15867,7 +16174,7 @@ index 9ff1d00f..4e283050 100644
    const referencePoints =
      input.allowSelfSnap || !input.sourceId
        ? input.context.referencePoints
-@@ -141,6 +173,8 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
+@@ -141,6 +174,8 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
      };
    }
  
@@ -15876,7 +16183,7 @@ index 9ff1d00f..4e283050 100644
    if ((input.kind === "rect-corner" || input.kind === "circle-edge") && input.anchor) {
      // During anchored shape creation the start point is fixed.
      // Snapping against full draft bounds can pin offset to zero when the anchor
-@@ -161,6 +195,20 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
+@@ -161,6 +196,20 @@ export function snapToolPointer(input: SnapToolPointerInput): SnapResult {
    });
  }
  
@@ -15897,7 +16204,7 @@ index 9ff1d00f..4e283050 100644
  function snapPointerWithPointsAndGrid({
    context,
    settings,
-@@ -303,15 +351,6 @@ function collectPointGridAndGapSnaps({
+@@ -303,15 +352,6 @@ function collectPointGridAndGapSnaps({
      enabledAxis
    });
  
@@ -15913,7 +16220,7 @@ index 9ff1d00f..4e283050 100644
  
    if (includeGaps && settings.gaps.enabled) {
      collectGapSnaps({
-@@ -368,15 +407,6 @@ function collectPointAndGridSnaps({
+@@ -368,15 +408,6 @@ function collectPointAndGridSnaps({
      enabledAxis
    });
  
@@ -15929,7 +16236,7 @@ index 9ff1d00f..4e283050 100644
  
    return {
      nearest
-@@ -394,3 +424,8 @@ function shouldBypassSnapping(settings: SnapSettings, modifiers?: { ctrlOrMeta:
+@@ -394,3 +425,8 @@ function shouldBypassSnapping(settings: SnapSettings, modifiers?: { ctrlOrMeta:
  function effectiveSettings(context: SnapContext, patch?: SnapSettingsPatch): SnapSettings {
    return resolveSnapSettings(patch, context.settings);
  }
