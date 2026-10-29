@@ -209,6 +209,15 @@ export class TabletInput {
     await this.cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints });
   }
 
+  /** A finger of the other hand, held down until `fingerUp`, while the pen works. */
+  async fingerDown(point: Point): Promise<void> {
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 2, ...point }] });
+  }
+
+  async fingerUp(): Promise<void> {
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
+
   async palm(point: Point, phase: "touchStart" | "touchMove" | "touchEnd"): Promise<void> {
     await this.cdp.send("Input.dispatchTouchEvent", { type: phase, touchPoints: phase === "touchEnd" ? [] : [{ id: 9, ...point, radiusX: 35, radiusY: 30 }] });
   }

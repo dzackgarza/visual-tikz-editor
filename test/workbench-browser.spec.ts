@@ -1037,6 +1037,70 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story({ viewport: tablet }, `draws from an existing point with the pen, and moves it under a held finger or a held pen, in ${tablet.name}`, async function () {
+      await editorReady(page);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      // Neither end is on the lattice, so a stroke that lands on one took the point, not the lattice.
+      await page.locator('.cm-content').fill(String.raw`\begin{tikzpicture}\draw (0.37,0.61) -- (4.23,2.29);\end{tikzpicture}`);
+      await page.getByRole('button', { name: 'Code: left sidebar', exact: true }).click();
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => { await input.touch([await stableCenter(locator)]); };
+      const rail = frame.locator('[data-diagram-tools]');
+      const line = frame.locator('svg [data-source-id="path:0"]').first();
+      await expect(line).toBeVisible();
+      await fitDiagram(frame, input);
+      const source = async () => (await editorDebug(page)).source;
+      const draws = async () => (await source()).split('\n').flatMap(text => text.split(';')).filter(text => text.trim().startsWith('\\draw'));
+      const original = String.raw`\draw (0.37,0.61) -- (4.23,2.29)`;
+      // The delay that turns a held pen into a move is a setting.
+      await tap(rail.getByRole('button', { name: 'Settings', exact: true }));
+      const settings = frame.getByTestId('settings-modal');
+      await tap(settings.getByTestId('settings-category-canvas'));
+      await expect(settings.getByRole('slider', { name: /^Hold to move a point/ })).toHaveValue('450');
+      await tap(settings.getByRole('button', { name: 'Close settings' }));
+      await tap(rail.getByRole('button', { name: 'Freehand', exact: true }));
+      const start = await strokePoint(page, line, 0);
+      const end = await strokePoint(page, line, 1);
+      // Hovering the pen over a point marks it as the stroke's attachment, before any contact.
+      await input.penHover(start);
+      await expect(frame.locator('[data-point-target="attach"]')).toBeVisible();
+      // A stroke that starts on a point draws at once, from exactly that point.
+      await input.penStroke(Array.from({ length: 12 }, (_, i) => ({ x: start.x + i * 6, y: start.y + i * 4 + Math.sin(i) * 3 })));
+      await expect.poll(async () => (await draws()).length, { message: 'The stroke from the point did not draw' }).toBe(2);
+      assert.match((await draws())[1], /^\s*\\draw(?:\[[^\]]*\])?\s*\(0\.37,\s*0\.61\)/, 'The stroke did not start at the point');
+      assert.equal((await draws())[0].trim(), original, 'Drawing from the point moved it');
+      await page.keyboard.press('Escape');
+      const drawn = await source();
+      // With a finger of the other hand held down, a pen drag on a point moves the point.
+      const clear = (await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0];
+      await input.fingerDown(clear);
+      await input.penDown(end);
+      for (let step = 1; step <= 8; step++) await input.penMove({ x: end.x - step * 5, y: end.y + step * 5 });
+      await input.penUp({ x: end.x - 40, y: end.y + 40 });
+      await input.fingerUp();
+      await expect.poll(async () => (await draws()).length, { message: 'The modified pen drag drew a stroke' }).toBe(2);
+      await expect.poll(async () => (await draws())[0], { message: 'The held finger did not make the pen move the point' }).not.toContain('(4.23,2.29)');
+      assert.match((await draws())[0], /\(0\.37,0\.61\)/, 'Moving the end moved the start');
+      // The move is one undo step.
+      await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
+      await expect.poll(source).toBe(drawn);
+      // A pen held still on a point past the delay moves it, and the mark says so before the pen moves.
+      await input.penDown(end);
+      await expect(frame.locator('[data-point-target="move"]')).toBeVisible({ timeout: 2000 });
+      for (let step = 1; step <= 8; step++) await input.penMove({ x: end.x + step * 5, y: end.y - step * 4 });
+      await input.penUp({ x: end.x + 40, y: end.y - 32 });
+      await expect.poll(async () => (await draws())[0], { message: 'The held pen did not move the point' }).not.toContain('(4.23,2.29)');
+      assert.equal((await draws()).length, 2, 'The held pen drew a stroke');
+      await tap(rail.getByRole('button', { name: 'Undo', exact: true }));
+      await expect.poll(source).toBe(drawn);
+      // A double tap on a point never moves it.
+      await input.doubleTap(end);
+      assert.equal((await draws())[0].trim(), original, 'A double tap moved the point');
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     story({ viewport: tablet }, `refines one stroke from one surface, with new-stroke scope behind Defaults, in ${tablet.name}`, async function () {
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
