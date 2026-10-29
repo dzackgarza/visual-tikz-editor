@@ -138,7 +138,7 @@ export type EditorDebug = {
   scene: { elements: { sourceRef: { sourceId: string }; kind?: string; commands?: { kind: string; to?: { x: number; y: number } }[] }[] } | null;
   viewport: { translateX: number; translateY: number; scale: number };
   canvasAids: { grid: boolean; rulers: boolean; documentBounds: boolean };
-  settings: { canvas: { latticeLock: boolean; freehandSimplificationUnits: number } };
+  settings: { canvas: { latticeLock: boolean; freehandSimplificationUnits: number; freehandAutoApply: boolean } };
 };
 
 // Every shown diagram editor has loaded the current source and reports no synchronization issue.

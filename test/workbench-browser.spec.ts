@@ -971,8 +971,9 @@ describe("standalone workbench host boundary", function () {
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
       // The first stroke turns automatic fitting on for the strokes after it.
       await input.penStroke(waveAcross(viewport, .45, .3, 120));
-      await input.touch([await stableCenter(result.getByRole('checkbox', { name: 'Apply automatically to future strokes' }))]);
-      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Defaults', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('checkbox', { name: 'Refine new strokes automatically', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Cancel', exact: true }))]);
       await expect(result).toHaveCount(0);
       const drawsBefore = ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
       await input.penStroke(waveAcross(viewport, .45, .65, 120));
@@ -980,11 +981,11 @@ describe("standalone workbench host boundary", function () {
       await expect.poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length).toBe(drawsBefore + 1);
       const lastDraw = async () => { const draws = (await editorDebug(page)).source.split('\n').filter(line => line.trim().startsWith('\\draw')); return draws[draws.length - 1]; };
       assert.match(await lastDraw(), /\.\. controls/, 'The automatic fit did not apply');
-      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Cancel', exact: true }))]);
       await expect(result).toHaveCount(0);
-      // Keep original brings back the recorded stroke: a polyline of its samples, not the fit.
+      // Cancel brings back the recorded stroke: a polyline of its samples, not the fit.
       await expect.poll(async () => { const draw = await lastDraw(); return !/\.\. controls/.test(draw) && (draw.match(/--/g) ?? []).length > 5; },
-        { message: 'Keep original left the automatic fit in place' }).toBe(true);
+        { message: 'Cancel left the automatic fit in place' }).toBe(true);
     });
   }
 
@@ -1014,8 +1015,9 @@ describe("standalone workbench host boundary", function () {
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
       const fittedDraws = async () => (await editorDebug(page)).source.split('\n').filter(line => line.trim().startsWith('\\draw') && /\.\. controls/.test(line)).length;
       await input.penStroke(waveAcross(viewport, .45, .2, 120));
-      await input.touch([await stableCenter(result.getByRole('checkbox', { name: 'Apply automatically to future strokes' }))]);
-      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Defaults', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('checkbox', { name: 'Refine new strokes automatically', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Cancel', exact: true }))]);
       await expect(result).toHaveCount(0);
       await input.penStroke(waveAcross(viewport, .45, .45, 120));
       await expect.poll(fittedDraws, { message: 'The automatic fit did not apply' }).toBe(1);
@@ -1035,24 +1037,65 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
-    story({ viewport: tablet }, `adjusts one stroke without changing new-stroke defaults until asked in ${tablet.name}`, async function () {
+    story({ viewport: tablet }, `refines one stroke from one surface, with new-stroke scope behind Defaults, in ${tablet.name}`, async function () {
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
       const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
-      const simplification = result.getByRole('slider', { name: /Simplification/ });
-      const defaults = async () => (await editorDebug(page)).settings.canvas.freehandSimplificationUnits;
-      const initial = await defaults();
-      await input.penStroke(waveAcross(viewport, .45, .25, 140));
-      await simplification.fill('1.2');
-      await expect(result).toContainText('Simplification: 1.2');
-      assert.equal(await defaults(), initial, 'Adjusting one stroke changed the default for new strokes');
-      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
-      await input.penStroke(waveAcross(viewport, .45, .55, 140));
-      await expect(simplification).toHaveValue(String(initial));
-      await simplification.fill('1.2');
+      const simplification = result.getByRole('slider', { name: 'Simplification', exact: true });
+      const exact = result.getByRole('spinbutton', { name: 'Simplification value', exact: true });
+      const defaults = result.getByRole('button', { name: 'Defaults', exact: true });
+      const saved = async () => (await editorDebug(page)).settings.canvas;
+      const lastDraw = async () => { const draws = (await editorDebug(page)).source.split('\n').filter(line => line.trim().startsWith('\\draw')); return draws[draws.length - 1]; };
+      const fitted = async () => /\.\. controls/.test(await lastDraw());
+      const initial = await saved();
+      // The adjustment is primary: sliders with exact values, Accept and Cancel. Scope sits behind Defaults.
+      await input.penStroke(waveAcross(viewport, .45, .2, 140));
+      await expect(result.getByRole('slider', { name: 'Smoothing', exact: true })).toBeVisible();
+      await expect(result.getByRole('spinbutton', { name: 'Smoothing value', exact: true })).toBeVisible();
+      await expect(defaults).toHaveAttribute('aria-expanded', 'false');
+      await expect(result.getByRole('button', { name: 'Use for new strokes', exact: true })).toHaveCount(0);
+      // A fresh stroke has nothing to restore beyond what Cancel restores.
+      await expect(result.getByRole('button', { name: 'Restore original', exact: true })).toHaveCount(0);
+      await exact.fill('1.2');
+      await exact.press('Enter');
+      await expect(simplification).toHaveValue('1.2');
+      assert.deepEqual(await saved(), initial, 'Adjusting one stroke changed a saved default');
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Cancel', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      assert.equal(await fitted(), false, 'Cancel kept the previewed fit');
+      // Use for new strokes holds for this session; it saves nothing.
+      await input.penStroke(waveAcross(viewport, .45, .35, 140));
+      await expect(simplification).toHaveValue(String(initial.freehandSimplificationUnits));
+      await exact.fill('1.2');
+      await exact.press('Enter');
+      await input.touch([await stableCenter(defaults)]);
+      await expect(defaults).toHaveAttribute('aria-expanded', 'true');
       await input.touch([await stableCenter(result.getByRole('button', { name: 'Use for new strokes', exact: true }))]);
-      await expect.poll(defaults, { message: 'Use for new strokes did not save the default' }).toBe(1.2);
+      await input.touch([await stableCenter(result.getByRole('checkbox', { name: 'Refine new strokes automatically', exact: true }))]);
+      assert.deepEqual(await saved(), initial, 'Use for new strokes saved a default');
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Accept', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      await expect.poll(fitted, { message: 'Accept did not apply the fit' }).toBe(true);
+      // The next stroke takes the session values and is refined automatically; Cancel reverts that fit.
+      await input.penStroke(waveAcross(viewport, .45, .5, 140));
+      await expect(simplification).toHaveValue('1.2');
+      await expect.poll(fitted, { message: 'The session did not refine the new stroke automatically' }).toBe(true);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Cancel', exact: true }))]);
+      await expect(result).toHaveCount(0);
+      await expect.poll(fitted, { message: 'Cancel kept the automatic fit' }).toBe(false);
+      // Escape closes and keeps what is on the canvas: the automatic fit stays.
+      await input.penStroke(waveAcross(viewport, .45, .65, 140));
+      await expect.poll(fitted).toBe(true);
+      await page.keyboard.press('Escape');
+      await expect(result).toHaveCount(0);
+      assert.equal(await fitted(), true, 'Escape reverted the automatic fit');
+      // Save as default makes the session values lasting.
+      await input.penStroke(waveAcross(viewport, .45, .8, 140));
+      await input.touch([await stableCenter(defaults)]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Save as default', exact: true }))]);
+      await expect.poll(async () => { const canvas = await saved(); return [canvas.freehandSimplificationUnits, canvas.freehandAutoApply]; },
+        { message: 'Save as default did not save the session values' }).toEqual([1.2, true]);
     });
   }
 
@@ -1247,7 +1290,7 @@ describe("standalone workbench host boundary", function () {
       const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
       await input.penStroke(waveAcross(viewport, .45, .4, 160));
-      await input.touch([await stableCenter(result.getByRole('button', { name: 'Apply simplification', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Accept', exact: true }))]);
       await expect(result).toHaveCount(0);
       const rail = frame.locator('[data-diagram-tools]');
       await input.touch([await stableCenter(rail.getByRole('button', { name: 'Select', exact: true }))]);
@@ -1272,7 +1315,7 @@ describe("standalone workbench host boundary", function () {
       // A long wavy stroke, so a fit has many anchors to shed.
       const wave = Array.from({ length: 60 }, (_, i) => ({ x: viewport.x + viewport.width * .35 + i * 6, y: viewport.y + viewport.height * .45 + Math.sin(i / 4) * 30 }));
       await input.penStroke(wave);
-      await input.touch([await stableCenter(result.getByRole('button', { name: 'Apply simplification', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Accept', exact: true }))]);
       await expect(result).toHaveCount(0);
       const rail = frame.locator('[data-diagram-tools]');
       await input.touch([await stableCenter(rail.getByRole('button', { name: 'Select', exact: true }))]);
@@ -1725,7 +1768,7 @@ describe("standalone workbench host boundary", function () {
       const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       await input.penStroke(Array.from({ length: 60 }, (_, i) => ({ x: viewport.x + viewport.width * .35 + i * 6, y: viewport.y + viewport.height * .45 + Math.sin(i / 4) * 30 })));
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
-      await tap(result.getByRole('button', { name: 'Apply simplification', exact: true }));
+      await tap(result.getByRole('button', { name: 'Accept', exact: true }));
       await expect(result).toHaveCount(0);
       await tap(rail.getByRole('button', { name: 'Select', exact: true }));
       const ids = await frame.locator('svg [data-source-id^="path:"]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')!))]);
@@ -2209,7 +2252,7 @@ describe("standalone workbench host boundary", function () {
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
       await expect(result).toBeVisible();
       assert.equal(await overlap(result), 0, 'The freehand result covers the rail');
-      await input.touch([await center(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await input.touch([await center(result.getByRole('button', { name: 'Cancel', exact: true }))]);
       await input.touch([await center(rail.getByRole('button', { name: 'Properties', exact: true }))]);
       const panel = frame.getByRole('complementary', { name: 'Diagram properties', exact: true });
       await expect(panel).toBeVisible();
@@ -2811,7 +2854,7 @@ describe("standalone workbench host boundary", function () {
       const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       await input.penStroke(waveAcross(viewport, .45, .4, 120));
       const result = frame.getByRole('dialog', { name: 'Freehand result' });
-      await input.touch([await stableCenter(result.getByRole('button', { name: 'Keep original', exact: true }))]);
+      await input.touch([await stableCenter(result.getByRole('button', { name: 'Cancel', exact: true }))]);
       await expect(result).toHaveCount(0);
       const drawn = await frame.locator('svg [data-source-id]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-source-id')))]);
       assert.equal(drawn.length, 1);
@@ -3397,7 +3440,7 @@ describe("standalone workbench host boundary", function () {
       await page.mouse.down();
       await page.mouse.move(bounds.x + bounds.width * .35 + 110, bounds.y + bounds.height * .6 + 25, {steps: 15});
       await page.mouse.up();
-      await frame.getByRole('dialog', {name: 'Freehand result'}).getByRole('button', {name: 'Apply simplification', exact: true}).click();
+      await frame.getByRole('dialog', {name: 'Freehand result'}).getByRole('button', {name: 'Accept', exact: true}).click();
       // The stroke stays selected; its restore control belongs to the Select tool.
       await frame.getByRole('button', {name: 'Select', exact: true}).click();
       await expect(frame.getByRole('button', {name: 'Restore original stroke', exact: true})).toBeVisible();
@@ -3696,7 +3739,7 @@ describe("standalone workbench host boundary", function () {
       }
       await input.palm({ x: x + 180, y: y + 70 }, 'touchEnd');
       await input.penUp({ x: x + 100, y });
-      await frame.getByRole('dialog', { name: 'Freehand result' }).getByRole('button', { name: 'Apply simplification', exact: true }).click();
+      await frame.getByRole('dialog', { name: 'Freehand result' }).getByRole('button', { name: 'Accept', exact: true }).click();
       await expect(frame.getByRole('dialog', { name: 'Freehand result' })).toHaveCount(0);
       await page.getByRole('button', { name: 'Copy current source', exact: true }).click();
       await expect(page.getByLabel('Authored source')).toHaveValue(/workbench-ink:/);
@@ -3882,7 +3925,7 @@ describe("standalone workbench host boundary", function () {
       const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       const before = (await editorDebug(page)).historyIndex;
       await input.penStroke(waveAcross(bounds, .45, .5, 100));
-      await frame.getByRole('dialog', { name: 'Freehand result' }).getByRole('button', { name: 'Apply simplification', exact: true }).click();
+      await frame.getByRole('dialog', { name: 'Freehand result' }).getByRole('button', { name: 'Accept', exact: true }).click();
       await expect(page.locator('.cm-content')).toContainText('workbench-ink:');
       await expect(freehandTool(frame)).toHaveAttribute('aria-pressed', 'true');
       const strokeEdits = (await editorDebug(page)).historyIndex - before;
