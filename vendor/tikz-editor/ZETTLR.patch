@@ -6064,7 +6064,7 @@ index cf4cf2cf..a1e10f63 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..f58979ee 100644
+index 4e22ccfa..f6c440d0 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -6133,7 +6133,7 @@ index 4e22ccfa..f58979ee 100644
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
  import { resolveBucketFillEdit } from "./bucket-fill";
  import { recordDragPatchModeFullReason } from "./drag-patch-mode-debug";
-@@ -67,11 +84,27 @@ import { CanvasPanelView } from "./CanvasPanelView";
+@@ -67,11 +84,28 @@ import { CanvasPanelView } from "./CanvasPanelView";
  import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
  import {
  appendFreehandToolPoint,
@@ -6148,6 +6148,7 @@ index 4e22ccfa..f58979ee 100644
 +type FreehandPointerSample,
 +  originalInkDrawing,
 +  refittedInkDrawing,
++  withSnappedEnds,
  } from "./freehand-tool";
 +import { editSemanticCurveNodes } from "./semantic-curve-edit";
 +import { collectEraserStrokes, ERASER_RADIUS_PX, sweptStrokeIds, type EraserStroke } from "./eraser-sweep";
@@ -6162,7 +6163,7 @@ index 4e22ccfa..f58979ee 100644
  viewportToSvgPoint,
  viewportToWorldPoint,
  worldToSvgPoint
-@@ -103,7 +136,7 @@ pathToolHasDrawableSegments,
+@@ -103,7 +137,7 @@ pathToolHasDrawableSegments,
  undoLastPathToolSegment,
  type PathToolGestureSegment
  } from "./path-tool";
@@ -6171,7 +6172,7 @@ index 4e22ccfa..f58979ee 100644
  import type { resolveResizeFrameForSource } from "./resize-frames";
  import { isSvgPointWithinScopeBounds } from "./scope-overlay";
  import {
-@@ -119,11 +152,13 @@ type SnapDebugPoint
+@@ -119,11 +153,13 @@ type SnapDebugPoint
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -6185,7 +6186,7 @@ index 4e22ccfa..f58979ee 100644
  FreehandToolDraft,
  GuideDragState,
  GuidePreview,
-@@ -131,9 +166,7 @@ GuidesState,
+@@ -131,9 +167,7 @@ GuidesState,
  MagnifierState,
  NodeAnchorOverlayState,
  NodePositionLinkDisplay,
@@ -6195,7 +6196,7 @@ index 4e22ccfa..f58979ee 100644
  PendingTouchViewport,
  SnapDebugLogInput,
  SourceBoundsMap,
-@@ -155,7 +188,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
+@@ -155,7 +189,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
  import { useCanvasViewportPersistence } from "./useCanvasViewportPersistence";
  import { useBucketFillPreview,type BucketPreviewSession } from "./useBucketFillPreview";
  import type { ClientPoint,SvgBounds,ViewportPoint,WorldPoint } from "../coords/types";
@@ -6204,7 +6205,7 @@ index 4e22ccfa..f58979ee 100644
  import {
  formatEquationText,
  type EquationNodeTarget
-@@ -210,6 +243,29 @@ type SnapDebugOverlayDragState =
+@@ -210,6 +244,29 @@ type SnapDebugOverlayDragState =
  
  const RULER_SIZE = 24;
  const MIN_SCALE = 0.05;
@@ -6234,7 +6235,7 @@ index 4e22ccfa..f58979ee 100644
  const MAX_SCALE = 20;
  const NUDGE_STEP_PT = 0.05 * PT_PER_CM;
  const NUDGE_STEP_SHIFT_PT = 0.25 * PT_PER_CM;
-@@ -668,6 +724,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
+@@ -668,6 +725,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
    return "single-line";
  }
  
@@ -6250,7 +6251,7 @@ index 4e22ccfa..f58979ee 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,10 +822,62 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +823,62 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -6315,7 +6316,7 @@ index 4e22ccfa..f58979ee 100644
  }) {
    const platform = getActiveEditorPlatform();
    const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
-@@ -774,6 +891,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +892,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -6324,7 +6325,7 @@ index 4e22ccfa..f58979ee 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -792,7 +911,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -792,7 +912,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid,
      showTransparencyGrid,
      snapModes,
@@ -6332,7 +6333,7 @@ index 4e22ccfa..f58979ee 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +932,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +933,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -6341,7 +6342,7 @@ index 4e22ccfa..f58979ee 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -832,7 +952,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -832,7 +953,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
      snapModes: s.snapModes,
@@ -6349,7 +6350,7 @@ index 4e22ccfa..f58979ee 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +964,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +965,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -6361,7 +6362,7 @@ index 4e22ccfa..f58979ee 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,14 +1010,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +1011,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -6378,7 +6379,7 @@ index 4e22ccfa..f58979ee 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -911,12 +1032,124 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -911,12 +1033,124 @@ export const CanvasPanel = memo(function CanvasPanel({
    }, [baseSvgModel, svgResult]);
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
@@ -6506,7 +6507,7 @@ index 4e22ccfa..f58979ee 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,8 +1166,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,8 +1167,6 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -6515,7 +6516,7 @@ index 4e22ccfa..f58979ee 100644
    const applyActionWithFeedbackRef = useRef<((
      action: EditAction,
      historyMergeKey?: string,
-@@ -946,13 +1177,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -946,13 +1178,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingNodePositionAnchorHoverSourceId(null);
      setNodeAnchorOverlay(null);
    }, []);
@@ -6529,7 +6530,7 @@ index 4e22ccfa..f58979ee 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1270,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1271,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -6552,7 +6553,7 @@ index 4e22ccfa..f58979ee 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,9 +1340,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,9 +1341,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -6565,7 +6566,7 @@ index 4e22ccfa..f58979ee 100644
  
    const dispatchCanvasTransform = useCallback(
      (transform: CanvasTransform) => {
-@@ -1156,16 +1367,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1156,16 +1368,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const interactionSvgRef = useRef<SVGSVGElement | null>(null);
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
@@ -6596,7 +6597,7 @@ index 4e22ccfa..f58979ee 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1265,10 +1488,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1265,10 +1489,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      [setActiveCanvasDragKind]
    );
  
@@ -6607,7 +6608,7 @@ index 4e22ccfa..f58979ee 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1300,7 +1519,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1520,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -6615,7 +6616,7 @@ index 4e22ccfa..f58979ee 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1539,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1540,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -6626,7 +6627,7 @@ index 4e22ccfa..f58979ee 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1723,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1724,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -6650,7 +6651,7 @@ index 4e22ccfa..f58979ee 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1738,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1739,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -6664,7 +6665,7 @@ index 4e22ccfa..f58979ee 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1761,11 +1956,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1761,11 +1957,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
      const handleKeyDown = (event: KeyboardEvent) => {
@@ -6677,7 +6678,7 @@ index 4e22ccfa..f58979ee 100644
        if (event.key !== "Escape" && !isUndo) {
          return;
        }
-@@ -1810,19 +2001,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +2002,37 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -6717,7 +6718,7 @@ index 4e22ccfa..f58979ee 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,9 +2047,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,9 +2048,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -6730,7 +6731,7 @@ index 4e22ccfa..f58979ee 100644
      snapModes,
      gridMinorTargetPx,
      canvasTransform,
-@@ -1857,44 +2069,50 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2070,50 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -6790,7 +6791,7 @@ index 4e22ccfa..f58979ee 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1975,6 +2193,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2194,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -7034,7 +7035,7 @@ index 4e22ccfa..f58979ee 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,69 +2510,292 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,69 +2511,291 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -7157,9 +7158,8 @@ index 4e22ccfa..f58979ee 100644
 -      }
 -    } else {
 +    const rawSource = originalDrawingSource({ ...original, samples: sourceSamples });
-+    const geometricPoints = sourceSamples.map((sample) => makeWorldPoint(pt(sample.x), pt(sample.y)));
-+    geometricPoints[0] = applyMatrix(inverse, draft.points[0]);
-+    geometricPoints[geometricPoints.length - 1] = applyMatrix(inverse, draft.points[draft.points.length - 1]);
++    const geometricPoints = withSnappedEnds(sourceSamples.map((sample) => makeWorldPoint(pt(sample.x), pt(sample.y))),
++      applyMatrix(inverse, draft.points[0]), applyMatrix(inverse, draft.points[draft.points.length - 1]));
 +    const sourceDraft: FreehandToolDraft = { ...draft, points: geometricPoints, minSampleDistanceWorld: 0 };
 +    const fitted = intent === "geometry" ? interpretFreehandToolSource({ ...sourceDraft, points: smoothFreehandPoints(sourceDraft.points, smoothingUnits) }, 1, {
 +      strokeColor: creationStrokeColor, toleranceWorld: simplificationUnits * PT_PER_CM
@@ -9306,7 +9306,7 @@ index 00000000..316de820
 +  return strokes;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-index a7b0a7e2..ec57afeb 100644
+index a7b0a7e2..6f8fb027 100644
 --- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
 @@ -2,18 +2,23 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
@@ -9425,7 +9425,7 @@ index a7b0a7e2..ec57afeb 100644
    for (const segment of segments) {
      parts.push(
        `.. controls ${formatPointCm(segment.control1)} and ${formatPointCm(segment.control2)} .. ${formatPointCm(segment.to)}`
-@@ -164,6 +176,228 @@ export function generateFreehandToolSource(
+@@ -164,6 +176,264 @@ export function generateFreehandToolSource(
    return `\\draw${drawOptions} ${parts.join(" ")};`;
  }
  
@@ -9549,9 +9549,14 @@ index a7b0a7e2..ec57afeb 100644
 +    }
 +  }
 +
++  // paper.js takes each end tangent from the two outermost samples (PathFitter in path/PathFitter.js),
++  // so the slow, jittered samples at a pen's ends tilt it and the fit crowds anchors there.
++  // The fit takes samples at least a tolerance apart, the last one included.
++  const spaced = simplifyFreehandPoints(points, toleranceWorld);
++  if (spaced.length > 2 && distanceSquared(spaced[spaced.length - 2], last) < toleranceWorld * toleranceWorld) spaced.splice(spaced.length - 2, 1);
 +  const scope = geometryScope();
 +  const path = new scope.Path({
-+    segments: points.map((point) => new scope.Point(point.x, point.y)),
++    segments: spaced.map((point) => new scope.Point(point.x, point.y)),
 +    insert: false
 +  });
 +  const fitted = path.simplify(toleranceWorld);
@@ -9651,10 +9656,41 @@ index a7b0a7e2..ec57afeb 100644
 +  return source.slice(0, from) + replacement + source.slice(to);
 +}
 +
++/** How far along the stroke, in multiples of an end's snap distance, the move of that end fades out. */
++const SNAPPED_END_FALLOFF = 3;
++
++/**
++ * The samples with each end moved to `start` and `end`. An end snapped or attached away from
++ * where the pen went down or lifted drags the samples near it along, fading with the distance
++ * travelled from it, so the stroke leads into the moved end instead of turning sharply to it.
++ * The fade is the smooth falloff of proportional editing, 3t² − 2t³
++ * (https://docs.blender.org/manual/en/latest/editors/3dview/controls/proportional_editing.html).
++ */
++export function withSnappedEnds(points: readonly WorldPoint[], start: WorldPoint, end: WorldPoint): WorldPoint[] {
++  const moved = [...points];
++  const drag = (order: readonly number[], pin: WorldPoint) => {
++    const dx = pin.x - points[order[0]].x, dy = pin.y - points[order[0]].y;
++    const reach = SNAPPED_END_FALLOFF * Math.hypot(dx, dy);
++    let travelled = 0;
++    for (let k = 0; k < order.length && travelled < reach; k += 1) {
++      if (k > 0) travelled += Math.sqrt(distanceSquared(points[order[k - 1]], points[order[k]]));
++      const t = Math.max(0, 1 - travelled / reach), weight = t * t * (3 - 2 * t);
++      const point = moved[order[k]];
++      moved[order[k]] = worldPoint(pt(point.x + dx * weight), pt(point.y + dy * weight));
++    }
++  };
++  const indices = points.map((_, index) => index);
++  drag(indices, start);
++  drag(indices.reverse(), end);
++  moved[0] = start;
++  moved[moved.length - 1] = end;
++  return moved;
++}
++
  function polylineLength(points: readonly WorldPoint[]): number {
    let length = 0;
    for (let i = 1; i < points.length; i += 1) {
-@@ -182,10 +416,145 @@ function distanceSquared(a: WorldPoint, b: WorldPoint): number {
+@@ -182,10 +452,145 @@ function distanceSquared(a: WorldPoint, b: WorldPoint): number {
    return dx * dx + dy * dy;
  }
  
@@ -9672,7 +9708,9 @@ index a7b0a7e2..ec57afeb 100644
 +  const commands: ScenePath["commands"] = [{ kind: "M", to: coordinates[0] }];
 +  for (let index = 1; index < coordinates.length; index += 3) {
 +    commands.push({ kind: "C", c1: coordinates[index], c2: coordinates[index + 1], to: coordinates[index + 2] });
-+  }
+   }
+-  const rounded = Math.round(value);
+-  return Math.max(FREEHAND_SMOOTHING_MIN_PX, Math.min(FREEHAND_SMOOTHING_MAX_PX, rounded));
 +  return { ...path, commands, transform: undefined };
 +}
 +
@@ -9699,7 +9737,7 @@ index a7b0a7e2..ec57afeb 100644
 +    return [fx / fs, fy / fs];
 +  })();
 +  return { x: node.x + ux * length, y: node.y + uy * length };
-+}
+ }
 +
 +export function editAuthoredCurveNodes(
 +  path: ScenePath,
@@ -9771,9 +9809,7 @@ index a7b0a7e2..ec57afeb 100644
 +    if (size < 1e-9) continue;
 +    handles[joint - 1][1] = { x: node.x - ux / size * inLength, y: node.y - uy / size * inLength };
 +    handles[joint][0] = { x: node.x + ux / size * outLength, y: node.y + uy / size * outLength };
-   }
--  const rounded = Math.round(value);
--  return Math.max(FREEHAND_SMOOTHING_MIN_PX, Math.min(FREEHAND_SMOOTHING_MAX_PX, rounded));
++  }
 +  let index = 0;
 +  return source.replace(authoredCubicSegmentPattern, (segment: string) => {
 +    const current = index++;
@@ -9782,7 +9818,7 @@ index a7b0a7e2..ec57afeb 100644
 +    return segment.replace(/(\.\.\s+controls\s+)\([^)]+\)(\s+and\s+)\([^)]+\)/u,
 +      (_, first: string, second: string) => first + formatCmPoint(c1) + second + formatCmPoint(c2));
 +  });
- }
++}
 +
 +function localInkPoints(stroke: OriginalStroke, inverse: WorldTransform): WorldPoint[] {
 +  return stroke.samples.map((sample) => applyMatrix(inverse, worldPoint(pt(sample.x), pt(sample.y))));

@@ -84,7 +84,7 @@ The guidance also proposes reusable constructions and mixed handwritten annotati
 
 ### Observations requiring disposition
 
-- Freehand fits can place anchors close together near stroke ends: reproduce and assess geometry/editability under E.
+- Freehand fits can place anchors close together near stroke ends (reproduced at `5596976`: 1–9 px gaps at slow, hooked, and lattice-snapped ends). Disposed: the fit takes samples a tolerance apart, and a snapped end drags the nearby samples along with a smooth falloff; the story "fits a stroke with anchors a pen can pick apart" requires adjacent anchors at least the 12 px point reach apart in both orientations.
 - A freehand stroke started near the endpoint of an existing raw stroke replaced that stroke's first points instead of creating a new stroke (observed at `998283e`, portrait story geometry). Disposed: under the pen policy a stroke near an end draws a new stroke and leaves the old one unchanged; the story "starts a new stroke near a raw stroke's end and leaves that stroke unchanged" holds this in both orientations.
 
 ## Qualification and release
@@ -112,4 +112,4 @@ Slice 2 completion list. Each item needs a failing story first and passes in bot
 3. Pen policy on existing points ([research](docs/research/pen-input-on-existing-points.md)): a pen stroke that starts on a point draws at once and attaches to it; a finger held by the other hand, or a pen held still past a configurable delay, moves the point. Double tap never moves points. Done: a mark on the point shows attach, the filling hold, and move; the delay is the "Hold to move a point" setting (450 ms by default); a pen on a point under a held finger never draws.
 4. Partial erasing: the eraser removes only the swept part of a stroke and keeps the remaining pieces as separate strokes, as one undo step. Done for explicit line and cubic paths, recorded strokes included: the pieces replace the stroke, and absolute points keep their source text. A circle, an ellipse, or a path with other operations is still erased whole; the physical-tablet session judges whether that is acceptable.
 5. Pencil hardware gestures: done as a recorded platform limit ([research](docs/research/pencil-hardware-gestures.md)). iPadOS Safari delivers no double tap or squeeze to web content; the physical-tablet session confirms that they do nothing on the canvas.
-6. The two freehand observations below: crowded anchors near stroke ends, and a stroke started near a raw stroke's endpoint replacing that stroke's first points. The second is disposed; the first remains.
+6. The two freehand observations below: crowded anchors near stroke ends, and a stroke started near a raw stroke's endpoint replacing that stroke's first points. Done: both are disposed.
