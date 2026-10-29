@@ -71,7 +71,15 @@ These rows define final acceptance. They do not classify every listed feature as
 
 ### Product decisions to retain
 
-The guidance proposes attached graph/arrow/label relationships, reusable styles/constructions, partial erasing, hardware pencil gestures, autosave/interruption recovery, and broader export formats. Compare each with the established contract and implementation. Record whether it is required, an approved extension, or a proposal awaiting a user decision. Proposals cannot silently become release requirements or disappear from the inventory. Preserve mixed mathematical figures and handwritten annotations within the agreed source model.
+User decisions of 2026-10-29:
+
+| Topic | Decision |
+| --- | --- |
+| Release scope | Partial erasing, autosave with interruption recovery, PDF/SVG/PNG export, and attached relationships (arrows and labels follow the nodes and objects they attach to, reusable styles, pencil hardware gestures) are release requirements. |
+| Snapping precedence | Object features first (Ipe model): endpoints, intersections, and centers beat alignment guides, which beat the lattice. The guide names the chosen target. Angle snapping constrains direction after the point target. |
+| Pen input on existing points | Use iPadOS-native interaction patterns, established by UI pattern research, not by preference. Working hypothesis from the user: with the pen tool active, a stroke started on a node draws a new stroke connected to that node; a deliberate intent gesture such as long press or double tap moves the node instead. |
+
+The guidance also proposes reusable constructions and mixed handwritten annotation. Compare remaining proposals with the established contract and implementation. Proposals cannot silently become release requirements or disappear from the inventory. Preserve mixed mathematical figures and handwritten annotations within the agreed source model.
 
 ### Observations requiring disposition
 
