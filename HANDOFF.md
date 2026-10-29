@@ -20,21 +20,44 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 | GitHub #1 | Open | Reconcile its delivery links with unresolved acceptance |
 | GitHub #2–#5, #7–#9 | Closed | Retain their technical acceptance requirements |
 | Open pull requests | None | Establish review state for subsequent implementation |
-| PR #11 | Merged | Verify live threads against pending local `.pr/` records |
+| PR #11 | Merged; live review threads all resolved on 2026-10-29 | Historical review record |
 | Latest listed release | Prerelease `workbench-07f072a` | Qualify later changes independently |
-| Project cards, including archived | Workspace plan and its feature | Earlier handoff references to `PLAN-VTE-REMEDIATION-ROADMAP` and `PHASE-VTE-M7` were not found in this inventory; recover their evidence before relying on them |
+| Project cards, including archived | Workspace plan and its feature | Use the current card and this inventory |
 
 ## Next work, ranked
 
-1. Map every original complaint and later audit finding to current source/runtime evidence. Start with correction persistence, tool identity, save status, and usable canvas space. Keep requirements open until their actual user outcomes are proved.
-2. Present alternatives and a recommendation for the shared interaction model. Obtain the user's choice before major architecture changes. Define tool stages, selection scope, edit scope, cancellation, undo, snapping, and panel space together.
-3. Implement that model and repair the state defects. Construction, selection, refinement, color, and properties must use consistent scopes. Preserve source and host contracts throughout.
-4. Complete integration and publication checks, then qualify combined workflows. Keep unresolved product decisions explicit.
-5. The user performs the physical-tablet session. After software and physical acceptance, publish the tested immutable revision and artifacts.
+1. Confirm the state defects below through focused reproductions. Read the whole complaint list and map it to the acceptance catalogue. Separate reproduced defects, existing behavior to preserve, and proposed capabilities. This is diagnosis for the design choice, not a full qualification run.
+2. Settle the interaction model and release scope. Present alternatives only for decisions not already settled by the product guidance. Obtain the user's choice before major architecture changes. Define tool/construction stages, object/point selection, current-edit versus default scope, commit/cancel/undo transitions, snapping precedence, and available canvas space as one model.
+3. Implement the chosen state transitions and the controls that use them in the dependency order below. Each slice delivers its final interaction and verifies continued editing. Run affected workflows as each slice lands.
+4. Verify the full preserved host/source contract and agreed publication behavior against the finished interaction model. Repair demonstrated failures at their owners. Run combined qualification at the resulting revision.
+5. The user performs physical-tablet qualification. Publish the tested immutable revision and artifacts after both gates pass.
+
+### Implementation dependencies
+
+The lettered rows below are an acceptance catalogue, not an execution sequence. They share owners and must be implemented in these slices:
+
+| Order | Slice | Prerequisite and resulting behavior |
+| --- | --- | --- |
+| 1 | Interaction state and space allocation | Approved model. Define source transactions, commit/cancel/undo, tool and selection scopes, settings scope, and the shared panel/dock space policy. Use existing host/document ownership. |
+| 2 | Continuous drawing and correction | Slice 1. Deliver refinement transitions together with their final correction surface and explicit defaults action. Drawing again and changing tools preserve accepted results. The same slice covers E and its B/G dependencies. |
+| 3 | Construction and precision | Slice 1. Deliver persistent tool/stage presentation, grouped construction choices, constraint policy, and visible targets together. Cover C/F and their B dependencies. Reuse the geometry engines. |
+| 4 | Object and point editing | Slices 1–3. Deliver contextual selection, point editing, lock, transforms, Layers, and target-aware properties/color together. Cover D/G and remaining B obligations. |
+| 5 | Whole-workspace verification | Slices 2–4. Check A/H/I through real standalone and embedding sequences, including source navigation, saving, rendering, copy, undo, offline use, and reopen. Fix only failures established by these checks. |
+| 6 | Qualification and release | Slice 5, then software and physical gates on the same revision. Publish artifacts and update public acceptance state. |
+
+Slices 2 and 3 are independent after slice 1; their listed order is a workable default. Carry document-save visibility into the shared layout in slice 1 and check it throughout. Decide extra export/recovery/relationship capabilities at step 2 so they cannot force a later redesign of completed slices.
+
+### Current source evidence
+
+At baseline `17d6892`, the maintained fork patch still retains an `appliedEdit` after automatic fitting. `cancelFreehandOffer` applies its inverse, and both another drawing gesture and a tool change call that cancellation path. The same patch writes persistent canvas defaults inside `updateFreehandPreview`. Reproduce these transitions first; they belong to slice 2's state-and-surface change.
+
+`standalone/StandaloneApp.vue` hides `.tikz-standalone-status` below 900 px. Its template also appends editor status to file status. Resolve visible, storage-based status in slice 1's document layout.
+
+Existing production paths include the typed request client in `src/editor-request.ts`, snapshot/source clients, and original-ink commands in `vendor/tikz-editor/embed/src/ink-commands.ts`. Existing stories cover native save/reopen, immediate view-switch saves, snapshot cancellation/restoration, source copying, and Quiver/view retention. These are preservation and verification surfaces under A/H, not instructions to build those features again.
 
 ## Workstreams and acceptance
 
-Each row is unresolved for current acceptance. Verify existing implementations before deciding what needs repair. During execution, record the source requirement, tested revision, observation, evidence path, and remaining defect in the evidence ledger below.
+These rows define final acceptance. They do not classify every listed feature as unfinished implementation. Use current evidence to identify repairs within each slice. Record the source requirement, tested revision, observation, evidence path, and remaining defect in the ledger below. Existing behavior stays in place unless an accepted design change requires its owner to change.
 
 | Workstream | Required outcome and coverage | Acceptance evidence |
 | --- | --- | --- |
@@ -56,7 +79,6 @@ The guidance proposes attached graph/arrow/label relationships, reusable styles/
 
 - Freehand fits can place anchors close together near stroke ends: reproduce and assess geometry/editability under E.
 - Floating panels do not automatically fit/recenter: resolve subject visibility under B; automatic Fit is only one possible mechanism.
-- Local `.pr/` records list pending original-ink findings from merged PR #11: inspect live threads and current production paths. Commit accepted repairs before replying or resolving.
 
 ## Qualification and release
 
@@ -70,4 +92,4 @@ The guidance proposes attached graph/arrow/label relationships, reusable styles/
 
 Preserve user work and authored source. Keep the existing editors as semantic owners. Use the maintained source patch/vendor refresh workflow for fork changes; batch refreshes and exclude incidental fork dependency-lock rewrites. Reproduced regressions need committed failing stories before repairs. Negative gesture assertions need a positive baseline; Fit existing geometry before its first gesture.
 
-Current acceptance has not been rerun for this inventory. Add criterion-specific evidence here during execution. Recover older roadmap/M7 evidence where available, but evaluate it against later audit findings. Resume at ranked step 1.
+Current runtime acceptance has not been rerun for this inventory. Source inspection identifies the initial state and status defects above; live GitHub inspection establishes PR #11's resolved thread state. Add criterion-specific runtime evidence during execution. Resume at ranked step 1.
