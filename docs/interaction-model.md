@@ -35,7 +35,7 @@ A slider in a refinement or properties surface never writes new-stroke settings 
 
 ## Snapping
 
-Object features win over alignment guides, which win over the lattice: endpoints, intersections, and centers first. Angle snapping then constrains direction. The guide names the chosen target before commit. The lattice controls geometry; grid appearance is a separate view setting.
+Object features win over alignment guides, which win over the lattice: endpoints, corners, intersections, and centers first. Angle snapping then constrains direction. The same order holds for tool placement, handle drags, and selection moves. Reach is a fixed screen distance, so zooming in narrows the world distance a target can pull from, and a target just outside reach yields no target. Before commit, a cross with a label names the chosen target: an object feature by its kind or by the node name and anchor it attaches to, an alignment by its edge, and otherwise "Lattice". The lattice controls geometry; grid appearance is a separate view setting.
 
 ## Space
 

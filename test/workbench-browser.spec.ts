@@ -445,6 +445,156 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `names the snap target it chooses, object points before alignment before the lattice, at two zooms and on a scaled lattice, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        // Axes of length 10; a line off the lattice; two crossing lines; a circle; a circle whose
+        // left edge x = 2.4 competes with the endpoint (2.3,1.4) as an alignment guide.
+        const figure = (options: string) => String.raw`\begin{tikzpicture}${options}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (2.3,1.4) -- (5.3,3.4);
+\draw (3,5.3) -- (7,5.3);
+\draw (5.4,3) -- (5.4,7);
+\draw (8.4,7.6) circle (0.9);
+\draw (3,9.6) circle (0.6);
+\end{tikzpicture}`;
+        const load = async (source: string) => {
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await page.locator(".cm-content").fill(source);
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await expect.poll(async () => (await editorDebug(page)).source.trim()).toBe(source);
+          await editorReady(page);
+        };
+        await load(figure(""));
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        // Screen position of lattice coordinates (x, y), from the two axes of length 10.
+        const lattice = async () => {
+          const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+          return (x: number, y: number) => ({
+            x:
+              frameBox.x +
+              origin.x +
+              ((xTen.x - origin.x) * x) / 10 +
+              ((yTen.x - origin.x) * y) / 10,
+            y:
+              frameBox.y +
+              origin.y +
+              ((xTen.y - origin.y) * x) / 10 +
+              ((yTen.y - origin.y) * y) / 10,
+          });
+        };
+        const target = frame.locator("[data-snap-target]").first();
+        const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        // Hovers a pen at `start`, checks the named target, draws a line to `end` whose target is
+        // named too, and returns the committed line's coordinates after undoing it.
+        const draw = async (
+          start: { x: number; y: number },
+          startTarget: string,
+          end: { x: number; y: number },
+          endTarget: string,
+        ) => {
+          await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+          await tap(frame.getByRole("option", { name: "Line", exact: true }));
+          await input.penHover(start);
+          await expect(target).toHaveAttribute("data-snap-target", startTarget);
+          await input.penDown(start);
+          await input.penMove({ x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 });
+          await input.penMove(end);
+          await expect(target).toHaveAttribute("data-snap-target", endTarget);
+          await input.penUp(end);
+          await expect.poll(draws).toBe(8);
+          const added = (await editorDebug(page)).source
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("\\draw"))
+            .at(-1)!;
+          await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+          await expect.poll(draws).toBe(7);
+          return [...added.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
+        };
+        await fitDiagram(frame, input);
+        let at = await lattice();
+        const snap = rail.getByRole("button", { name: /^Snap: / });
+        await expect(snap).toHaveAccessibleName("Snap: lattice");
+        // An endpoint beats the alignment guide 0.1 units away and the lattice; the far end lands on the lattice.
+        assert.deepEqual(
+          await draw(at(2.3, 1.4), "Endpoint", at(6, 1), "Lattice"),
+          [2.3, 1.4, 6, 1],
+          "The line does not start at the endpoint it named",
+        );
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Line", exact: true }));
+        await input.penHover(at(2.3, 1.4));
+        await expect(target).toHaveAttribute("data-snap-target", "Endpoint");
+        await storyScreenshot(page, `snap-target-${tablet.name}`);
+        assert.deepEqual(
+          await draw(at(8.4, 7.6), "Centre", at(6, 1), "Lattice"),
+          [8.4, 7.6, 6, 1],
+          "The line does not start at the circle centre it named",
+        );
+        assert.deepEqual(
+          await draw(at(5.4, 5.3), "Intersection", at(6, 1), "Lattice"),
+          [5.4, 5.3, 6, 1],
+          "The line does not start at the crossing it named",
+        );
+        // No object point near (6, 8.5): the circle's top aligns the y coordinate and the lattice owns x.
+        assert.deepEqual(
+          await draw(at(6, 8.5), "Aligned with top", at(6, 1), "Lattice"),
+          [6, 8.5, 6, 1],
+          "The line does not start on the alignment guide it named",
+        );
+        // Twelve pixels short of the endpoint is out of reach: no object target, so the lattice takes the point.
+        const shy = { x: at(2.3, 1.4).x - 12, y: at(2.3, 1.4).y };
+        assert.deepEqual(
+          await draw(shy, "Lattice", at(6, 1), "Lattice"),
+          [2, 1, 6, 1],
+          "A pointer out of reach of the endpoint is still pulled to it",
+        );
+        // The same figure on a lattice of 2 cm steps, at a zoom preset other than the fit.
+        await load(figure("[x=2cm,y=2cm]"));
+        await fitDiagram(frame, input);
+        const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
+        const fitZoom = await zoom.innerText();
+        await tap(zoom);
+        await tap(frame.getByRole("button", { name: "15%", exact: true }));
+        await tap(zoom);
+        await expect(zoom).toHaveText("15%");
+        assert.notEqual(fitZoom, "15%", "The preset zoom is the fit zoom");
+        at = await lattice();
+        assert.deepEqual(
+          await draw(at(2.3, 1.4), "Endpoint", at(6, 1), "Lattice"),
+          [2.3, 1.4, 6, 1],
+          "On the scaled lattice the line does not start at the endpoint it named",
+        );
+        const shyScaled = { x: at(2.3, 1.4).x - 12, y: at(2.3, 1.4).y };
+        assert.deepEqual(
+          await draw(shyScaled, "Lattice", at(6, 1), "Lattice"),
+          [2, 1, 6, 1],
+          "On the scaled lattice a pointer out of reach of the endpoint is still pulled to it",
+        );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `commits the locked curve its preview shows, with lattice control points, in ${tablet.name}`,
       async function () {
         await editorReady(page);
