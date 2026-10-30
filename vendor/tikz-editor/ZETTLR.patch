@@ -4881,7 +4881,7 @@ index 4fba726b..16c1c9f8 100644
            disabled={!writable}
            onChange={(value) => { onPropertyChange(declaration, property, value); }}
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..461cae78 100644
+index 0ddde08e..aee735f3 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
 @@ -144,6 +144,43 @@
@@ -4928,7 +4928,7 @@ index 0ddde08e..461cae78 100644
  .updateChip {
    display: inline-flex;
    align-items: center;
-@@ -224,3 +261,45 @@
+@@ -224,3 +261,40 @@
      padding: 8px;
    }
  }
@@ -4957,11 +4957,6 @@ index 0ddde08e..461cae78 100644
 +  grid-auto-flow: column; grid-auto-columns: 44px; grid-template-rows: 44px; overflow-x: auto;
 +}
 +.paletteLane .paletteSwatch[aria-pressed="true"] { box-shadow: inset 0 0 0 3px #9e2a2b, inset 0 0 0 5px #fff; }
-+.embeddedTools .insertTrigger { width: 44px; padding: 0; font-size: 12px; }
-+
-+.insertChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: min(300px, calc(100vw - 48px)); }
-+.insertChoice { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-pane); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
-+.insertChoice:disabled { opacity: .5; }
 +
 +/* The step line names the construction in progress and its next point, with the controls that end it.
 +   It sits beside the rail, on the canvas side, so the rail keeps its size. */
@@ -4975,7 +4970,7 @@ index 0ddde08e..461cae78 100644
 +[data-dock="bottom"] .stepLane { bottom: calc(100% + 8px); left: 0; }
 +.stepText { padding: 4px 8px; font-size: 13px; line-height: 1.3; color: var(--text); }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..d7614fde 100644
+index a3293df2..2ff0ef85 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,6 @@
@@ -4986,7 +4981,7 @@ index a3293df2..d7614fde 100644
  import { RiDownloadCloudLine } from "@remixicon/react";
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
-@@ -8,17 +10,20 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
+@@ -8,17 +10,26 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
  import { getToolCapabilityStatus } from "./capabilities";
  import { RenderedTooltip } from "./RenderedTooltip";
  import {
@@ -4994,6 +4989,12 @@ index a3293df2..d7614fde 100644
    TOOL_BUTTONS,
 -  TOOL_COLOR_OPTIONS,
    CaretDownIcon,
++  EquationIcon,
++  GEOMETRY_FAMILIES,
++  geometryChoiceFor,
++  geometryChoiceVariant,
++  NodeIcon,
++  type GeometryChoice,
    type ToolPopupKind
  } from "./tool-config";
  import { GENERATED_NODE_SHAPE_PREVIEWS } from "./generated-node-shape-previews";
@@ -5002,7 +5003,7 @@ index a3293df2..d7614fde 100644
  import popupCss from "./ToolbarToolPopup.module.css";
  import type { ToolMode } from "../store/types";
 +import { useSettingsStore } from "../settings/useSettingsStore";
-+import { activePalette, type ToolbarSettings, type ToolbarToolId } from "../settings/types";
++import { activePalette, type ToolbarToolId } from "../settings/types";
  import css from "./Toolbar.module.css";
 +import { useSelector } from "@xstate/react";
 +import { canvasSession, constructionFinishes, constructionName, constructionStep } from "./canvas-panel/canvas-session";
@@ -5010,7 +5011,7 @@ index a3293df2..d7614fde 100644
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    id: option.value,
-@@ -26,26 +31,61 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,26 +37,66 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -5041,7 +5042,6 @@ index a3293df2..d7614fde 100644
    const toolMode = useEditorStore((s) => s.toolMode);
 +  const constructionStepText = useSelector(canvasSession, constructionStep);
 +  const constructionHasFinish = useSelector(canvasSession, constructionFinishes);
-+  const freehandInterpretGeometry = useEditorStore((s) => s.freehandInterpretGeometry);
    const bucketFillColor = useEditorStore((s) => s.bucketFillColor);
 +  const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
    const selectedAddShape = useEditorStore((s) => s.selectedAddShape);
@@ -5059,8 +5059,14 @@ index a3293df2..d7614fde 100644
 +  const settings = useSettingsStore((s) => s.settings);
 +  const updateToolbarSettings = useSettingsStore((s) => s.updateToolbarSettings);
 +  const updateCanvasSettings = useSettingsStore((s) => s.updateCanvasSettings);
-+  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | "color" | "insert" | null>(null);
-+  const [insertSection, setInsertSection] = useState<"all" | "shape" | "matrix">("all");
++  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | "color" | "geometry" | "label" | null>(null);
++  const [geometryPage, setGeometryPage] = useState<"families" | "shape" | "matrix">("families");
++  // The dock's Geometry control keeps the icon and name of the last chosen construction while another tool is active.
++  const geometryVariant = { circle: settings.toolbar.circleConstruction, arc: settings.toolbar.arcConstruction };
++  const activeGeometry = geometryChoiceFor(toolMode, geometryVariant);
++  const [lastGeometryId, setLastGeometryId] = useState(activeGeometry?.id ?? "addLine");
++  useEffect(() => { if (activeGeometry) setLastGeometryId(activeGeometry.id); }, [activeGeometry]);
++  const shownGeometry = activeGeometry ?? GEOMETRY_FAMILIES.flatMap((family) => family.choices).find((choice) => choice.id === lastGeometryId)!;
 +  const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
 +  const [dockPreview, setDockPreview] = useState<{ dock: ToolbarDock; x: number; y: number } | null>(null);
 +  const dragReady = useRef(false);
@@ -5074,7 +5080,7 @@ index a3293df2..d7614fde 100644
    const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +96,143 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,10 +107,143 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -5215,11 +5221,11 @@ index a3293df2..d7614fde 100644
    // Close popup when tool mode changes (unless it's a popup that can be used independently)
    useEffect(() => {
 -    if (openPopupMode && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== toolMode) {
-+    if (openPopupMode && openPopupMode !== "color" && openPopupMode !== "insert" && openPopupMode !== "lasso" && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== "addLine" && openPopupMode !== toolMode) {
++    if (openPopupMode && openPopupMode !== "color" && openPopupMode !== "geometry" && openPopupMode !== "label" && openPopupMode !== "lasso" && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== "addLine" && openPopupMode !== toolMode) {
        setOpenPopupMode(null);
      }
    }, [openPopupMode, toolMode]);
-@@ -92,12 +265,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -92,12 +276,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
    const renderPopup = (popupKind: ToolPopupKind) => {
      if (popupKind === "bucket-color") {
        return (
@@ -5234,25 +5240,18 @@ index a3293df2..d7614fde 100644
              namedColorSwatches={projectNamedColorSwatches}
              onChange={(nextValue) => {
                dispatch({ type: "SET_BUCKET_FILL_COLOR", value: nextValue });
-@@ -111,7 +284,16 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -111,8 +295,9 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      }
      if (popupKind === "shape-picker") {
        return (
 -        <ToolbarPopupSection title="Shape">
-+        <ToolbarPopupSection title={embedded ? "Drawing shapes" : "Shape"}>
-+          {embedded ? <ToolbarPopupChoiceList
-+            choices={[{ id: "addRect", label: "Rectangle" }, { id: "addEllipse", label: "Ellipse" }, { id: "addCircle", label: "Circle" }]}
-+            selectedId={toolMode}
-+            onSelect={(id) => {
-+              dispatch({ type: "SET_TOOL_MODE", mode: id as "addRect" | "addEllipse" | "addCircle" });
-+              setOpenPopupMode(null);
-+            }}
-+          /> : null}
-+          {embedded ? <div className={popupCss.sectionTitle}>Node shapes</div> : null}
++        <ToolbarPopupSection title={embedded ? undefined : "Shape"}>
            <ToolbarPopupVisualChoiceGrid
++            label="Node shapes"
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
-@@ -126,6 +308,18 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+             onSelect={(id) => {
+@@ -126,15 +311,29 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -5271,7 +5270,27 @@ index a3293df2..d7614fde 100644
      if (popupKind === "matrix-picker") {
        const maxColumns = 10;
        const maxRows = 8;
-@@ -170,6 +364,179 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+       const isSelected = (row: number, column: number): boolean =>
+         row <= matrixPreviewRows && column <= matrixPreviewColumns;
+       return (
+-        <ToolbarPopupSection title={`Insert Matrix (${matrixPreviewColumns} x ${matrixPreviewRows})`}>
++        <ToolbarPopupSection title={embedded ? undefined : `Insert Matrix (${matrixPreviewColumns} x ${matrixPreviewRows})`}>
+           <div
+             className={popupCss.matrixPicker}
++            role="listbox"
++            aria-label="Matrix size"
+             data-testid="toolbar-matrix-picker-grid"
+             onMouseLeave={() => { setMatrixHoverSize(null); }}
+           >
+@@ -144,6 +343,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+                   <button
+                     key={`${row}-${column}`}
+                     type="button"
++                    role="option"
+                     className={[
+                       popupCss.matrixPickerCell,
+                       isSelected(row, column) ? popupCss.matrixPickerCellSelected : ""
+@@ -170,6 +370,212 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -5356,46 +5375,79 @@ index a3293df2..d7614fde 100644
 +    return toolDef ? renderStandardButton(toolDef) : null;
 +  };
 +
-+  // Circle and Arc entries also choose how the tool takes its points (IPE's constructions).
-+  const insertionModes: { mode: ToolMode; construction?: Partial<Pick<ToolbarSettings, "circleConstruction" | "arcConstruction">> }[] = [
-+    { mode: "addLine" }, { mode: "addArrow" }, { mode: "addPath" }, { mode: "addBezier" },
-+    { mode: "addArc", construction: { arcConstruction: "centre" } }, { mode: "addArc", construction: { arcConstruction: "three-points" } },
-+    { mode: "addPoint" }, { mode: "addCircle", construction: { circleConstruction: "centre" } },
-+    { mode: "addCircle", construction: { circleConstruction: "diameter" } }, { mode: "addCircle", construction: { circleConstruction: "three-points" } },
-+    { mode: "addEllipse" }, { mode: "addRect" }, { mode: "addNode" }, { mode: "addGrid" }, { mode: "addImage" }
-+  ];
-+  const insertionLabel = (mode: ToolMode, construction: (typeof insertionModes)[number]["construction"]) =>
-+    constructionName(mode, { circle: construction?.circleConstruction ?? "centre", arc: construction?.arcConstruction ?? "centre" });
-+  const renderInsertButton = () => <ToolbarToolPopup open={openPopupMode === "insert"} onClose={() => setOpenPopupMode(null)}
-+    popup={<ToolbarPopupSection title={insertSection === "all" ? "Insert" : insertSection === "shape" ? "Insert shape" : "Insert matrix"}>
-+      {insertSection === "all" ? <>
-+        <div className={css.insertChoices}>
-+          {insertionModes.map(({ mode, construction }) => <button type="button" key={insertionLabel(mode, construction)} className={css.insertChoice}
-+            disabled={getToolCapabilityStatus(mode).status === "unsupported"} onClick={() => {
-+              if (construction) updateToolbarSettings(construction);
-+              dispatch({ type: "SET_TOOL_MODE", mode }); setOpenPopupMode(null);
-+            }}>{insertionLabel(mode, construction)}</button>)}
-+          {([{ enabled: true, label: "Freehand geometry" }, { enabled: false, label: "Freehand ink" }] as const).map(({ enabled, label }) =>
-+            <button type="button" key={label} className={css.insertChoice}
-+              aria-pressed={toolMode === "addFreehand" && freehandInterpretGeometry === enabled} onClick={() => {
-+                dispatch({ type: "SET_FREEHAND_INTERPRETATION", enabled });
-+                dispatch({ type: "SET_TOOL_MODE", mode: "addFreehand" });
-+                setOpenPopupMode(null);
-+              }}>{label}</button>)}
-+          <button type="button" className={css.insertChoice} onClick={() => setInsertSection("shape")}>Node shapes…</button>
-+          <button type="button" className={css.insertChoice} onClick={() => setInsertSection("matrix")}>Matrix…</button>
-+          <button type="button" className={css.insertChoice} disabled={!onInsertEquation} onClick={() => {
-+            onInsertEquation?.(); setOpenPopupMode(null);
-+          }}>Equation…</button>
-+        </div>
-+      </> : <>
-+        <button type="button" className={css.insertChoice} onClick={() => setInsertSection("all")}>‹ All insertions</button>
-+        {renderPopup(insertSection === "shape" ? "shape-picker" : "matrix-picker")}
++  // The Geometry picker names each choice as the step line will, so a reader follows one name from the picker to the stage.
++  const geometryChoiceLabel = (choice: GeometryChoice) => constructionName(choice.mode, geometryChoiceVariant(choice, geometryVariant));
++  const chooseGeometry = (choice: GeometryChoice) => {
++    if (choice.more) {
++      setGeometryPage(choice.more);
++      return;
++    }
++    if (choice.construction) updateToolbarSettings(choice.construction);
++    dispatch({ type: "SET_TOOL_MODE", mode: choice.mode });
++    setOpenPopupMode(null);
++  };
++  const renderGeometryButton = () => {
++    const Icon = shownGeometry.icon;
++    const name = geometryChoiceLabel(shownGeometry);
++    const popup = <ToolbarPopupSection title={geometryPage === "families" ? "Geometry" : geometryPage === "shape" ? "Node shapes" : `Matrix (${matrixPreviewColumns} x ${matrixPreviewRows})`}>
++      {geometryPage === "families" ? GEOMETRY_FAMILIES.map((family) => <div key={family.name} className={popupCss.family} role="group" aria-label={family.name}>
++        <div className={popupCss.familyTitle}>{family.name}</div>
++        <ToolbarPopupVisualChoiceGrid
++          label={family.name}
++          dense
++          choices={family.choices.map((choice) => ({
++            id: choice.id,
++            label: geometryChoiceLabel(choice),
++            preview: <choice.icon size={36} />,
++            opensMore: choice.more !== undefined,
++            disabled: getToolCapabilityStatus(choice.mode).status === "unsupported"
++          }))}
++          selectedId={shownGeometry.id}
++          onSelect={(id) => chooseGeometry(family.choices.find((choice) => choice.id === id)!)}
++        />
++      </div>) : <>
++        <button type="button" className={popupCss.backButton} onClick={() => setGeometryPage("families")}>‹ Geometry</button>
++        {renderPopup(geometryPage === "shape" ? "shape-picker" : "matrix-picker")}
 +      </>}
-+    </ToolbarPopupSection>}>
-+      <button type="button" className={`${css.btn} ${css.insertTrigger}`} aria-label="Insert" aria-haspopup="dialog" aria-expanded={openPopupMode === "insert"}
-+        onClick={() => { setInsertSection("all"); setOpenPopupMode((mode) => mode === "insert" ? null : "insert"); }}>Insert</button>
++    </ToolbarPopupSection>;
++    return <ToolbarToolPopup open={openPopupMode === "geometry"} onClose={() => setOpenPopupMode(null)} popup={popup} popupClassName={popupCss.geometryPicker}>
++      <RenderedTooltip content={`Geometry: ${name}`}>
++        <button type="button" className={[css.btn, activeGeometry ? css.btnActive : ""].filter(Boolean).join(" ")}
++          aria-label="Geometry" aria-description={name} data-geometry={shownGeometry.id}
++          aria-haspopup="dialog" aria-expanded={openPopupMode === "geometry"}
++          onClick={() => { setGeometryPage("families"); setOpenPopupMode((mode) => mode === "geometry" ? null : "geometry"); }}>
++          <Icon size={18} />
++        </button>
++      </RenderedTooltip>
 +    </ToolbarToolPopup>;
++  };
++
++  // Text and equations label a drawing rather than construct it, so they sit under their own control.
++  const renderLabelButton = () => <ToolbarToolPopup open={openPopupMode === "label"} onClose={() => setOpenPopupMode(null)}
++    popup={<ToolbarPopupSection title="Label">
++      <ToolbarPopupVisualChoiceGrid
++        label="Label"
++        dense
++        choices={[
++          { id: "addNode", label: "Text", preview: <NodeIcon size={36} /> },
++          { id: "equation", label: "Equation", preview: <EquationIcon size={36} />, disabled: !onInsertEquation }
++        ]}
++        selectedId={toolMode === "addNode" ? "addNode" : ""}
++        onSelect={(id) => {
++          if (id === "equation") onInsertEquation?.();
++          else dispatch({ type: "SET_TOOL_MODE", mode: "addNode" });
++          setOpenPopupMode(null);
++        }}
++      />
++    </ToolbarPopupSection>}>
++    <RenderedTooltip content="Label: text or an equation">
++      <button type="button" className={[css.btn, toolMode === "addNode" ? css.btnActive : ""].filter(Boolean).join(" ")}
++        aria-label="Label" aria-haspopup="dialog" aria-expanded={openPopupMode === "label"}
++        onClick={() => setOpenPopupMode((mode) => mode === "label" ? null : "label")}>
++        <NodeIcon size={18} />
++      </button>
++    </RenderedTooltip>
++  </ToolbarToolPopup>;
 +
 +  const finishToolbarDrag = (clientX: number, clientY: number) => {
 +    if (!dragReady.current) return;
@@ -5451,7 +5503,7 @@ index a3293df2..d7614fde 100644
    const renderBucketButton = () => {
      const mode = "addBucket" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +565,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -198,9 +604,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                type="button"
                className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
                aria-label={toolDef.label}
@@ -5463,7 +5515,7 @@ index a3293df2..d7614fde 100644
                  closeBucketPopup();
                }}
              >
-@@ -257,6 +625,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +664,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -5471,7 +5523,7 @@ index a3293df2..d7614fde 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +668,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +707,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -5479,7 +5531,7 @@ index a3293df2..d7614fde 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +684,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +723,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -5501,7 +5553,7 @@ index a3293df2..d7614fde 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +706,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +745,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -5509,7 +5561,7 @@ index a3293df2..d7614fde 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +714,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +753,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -5521,7 +5573,7 @@ index a3293df2..d7614fde 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +727,86 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +766,86 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -5571,7 +5623,7 @@ index a3293df2..d7614fde 100644
 +        <ZoomDisplayControl triggerClassName={`${css.btn} ${css.zoomTrigger}`} />
 +      </div>
 +      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("erase")}
-+      {renderEmbeddedTool("addFreehand")}{renderInsertButton()}
++      {renderEmbeddedTool("addFreehand")}{renderGeometryButton()}{renderLabelButton()}
 +      {(["color", "addBucket", "undo", "redo"] as const).map((id) => <Fragment key={id}>{renderEmbeddedTool(id)}</Fragment>)}
 +      <RenderedTooltip content="Constrain drawing angles, shapes and movement axes">
 +        <button type="button" className={[css.btn, settings.canvas.constrainGeometry ? css.btnActive : ""].filter(Boolean).join(" ")}
@@ -5610,7 +5662,7 @@ index a3293df2..d7614fde 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +817,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,7 +856,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -5624,7 +5676,7 @@ index a3293df2..d7614fde 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +833,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -364,6 +872,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -5633,17 +5685,23 @@ index a3293df2..d7614fde 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +858,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +897,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
 +  return toolbar;
  }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.module.css b/packages/app/src/ui/ToolbarToolPopup.module.css
-index b12fedb2..0bb553c9 100644
+index b12fedb2..56b927f9 100644
 --- a/packages/app/src/ui/ToolbarToolPopup.module.css
 +++ b/packages/app/src/ui/ToolbarToolPopup.module.css
-@@ -11,7 +11,7 @@
+@@ -7,11 +7,12 @@
+   position: absolute;
+   top: calc(100% + 4px);
+   left: 0;
+-  z-index: 30;
++  /* Above the canvas's floating selection controls (190), below modals and the freehand offer (200). */
++  z-index: 195;
    min-width: 170px;
    padding: 8px;
    border: 1px solid var(--border);
@@ -5652,7 +5710,7 @@ index b12fedb2..0bb553c9 100644
    background: var(--bg-pane);
    box-shadow: 0 6px 16px color-mix(in srgb, black 24%, transparent);
  }
-@@ -35,10 +35,10 @@
+@@ -35,10 +36,10 @@
  }
  
  .matrixPickerCell {
@@ -5666,7 +5724,7 @@ index b12fedb2..0bb553c9 100644
    background: color-mix(in srgb, var(--bg-pane) 82%, var(--bg-app));
    cursor: pointer;
    padding: 0;
-@@ -63,7 +63,7 @@
+@@ -63,7 +64,7 @@
  }
  
  .sectionTitle {
@@ -5675,7 +5733,7 @@ index b12fedb2..0bb553c9 100644
    color: var(--text-faint);
  }
  
-@@ -75,15 +75,15 @@
+@@ -75,15 +76,15 @@
  
  .choiceButton {
    width: 100%;
@@ -5694,7 +5752,7 @@ index b12fedb2..0bb553c9 100644
    text-align: left;
    cursor: pointer;
    padding: 2px 6px;
-@@ -159,7 +159,12 @@
+@@ -159,7 +160,68 @@
  }
  
  .visualChoiceLabel {
@@ -5704,12 +5762,68 @@ index b12fedb2..0bb553c9 100644
    text-align: center;
  }
 +
++.visualChoiceButton:disabled {
++  opacity: 0.5;
++  cursor: default;
++}
++
++/* A picker of tools: small drawings in as many columns as fit, the whole popup scrolling instead of the grid. */
++.visualChoiceGridDense {
++  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
++  min-width: 0;
++  max-height: none;
++  overflow: visible;
++}
++
++.visualChoiceGridDense .visualChoicePreview {
++  min-height: 44px;
++}
++
++.visualChoiceGridDense .visualChoicePreview svg {
++  max-width: 36px;
++}
++
++.geometryPicker {
++  width: min(336px, calc(100vw - 24px));
++  box-sizing: border-box;
++}
++
++.family {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++}
++
++.familyTitle {
++  padding-top: 4px;
++  font-size: calc(var(--app-ui-scale, 1) * 12px);
++  color: var(--text-faint);
++}
++
++.backButton {
++  min-height: 44px;
++  padding: 2px 8px;
++  border: 1px solid transparent;
++  border-radius: 8px;
++  background: transparent;
++  color: var(--text);
++  font: inherit;
++  font-size: calc(var(--app-ui-scale, 1) * 14px);
++  text-align: left;
++  cursor: pointer;
++}
++
++.backButton:hover {
++  background: var(--btn-hover-bg);
++  border-color: var(--border-light);
++}
++
 +.popup { max-width: calc(100vw - 24px); max-height: calc(100vh - 100px); overflow: auto; }
 +.bucketColorPopup { width: 370px; max-width: calc(100vw - 24px); }
 +
 +.matrixPickerCell { flex: 0 0 44px; min-width: 44px; }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
-index 8aeb4133..5bcb1222 100644
+index 8aeb4133..6b8de202 100644
 --- a/packages/app/src/ui/ToolbarToolPopup.tsx
 +++ b/packages/app/src/ui/ToolbarToolPopup.tsx
 @@ -1,4 +1,5 @@
@@ -5801,6 +5915,61 @@ index 8aeb4133..5bcb1222 100644
        ) : null}
      </div>
    );
+@@ -93,6 +142,11 @@ export type ToolbarPopupVisualChoice = {
+   id: string;
+   label: string;
+   previewSvg?: string | null;
++  /** A drawn preview; it wins over `previewSvg`. */
++  preview?: ReactNode;
++  /** The choice leads to a further list instead of finishing the choice. */
++  opensMore?: boolean;
++  disabled?: boolean;
+ };
+ 
+ export function ToolbarPopupChoiceList({
+@@ -126,18 +180,23 @@ export function ToolbarPopupChoiceList({
+ }
+ 
+ export function ToolbarPopupVisualChoiceGrid({
++  label,
+   choices,
+   selectedId,
+   onSelect,
++  dense = false,
+   testIdPrefix
+ }: {
++  label: string;
+   choices: readonly ToolbarPopupVisualChoice[];
+   selectedId: string;
+   onSelect: (id: string) => void;
++  /** Small drawings in as many columns as fit, for a picker of tools rather than of rendered shapes. */
++  dense?: boolean;
+   testIdPrefix?: string;
+ }) {
+   return (
+-    <div className={css.visualChoiceGrid} role="listbox" aria-label="Node shapes">
++    <div className={[css.visualChoiceGrid, dense ? css.visualChoiceGridDense : ""].filter(Boolean).join(" ")} role="listbox" aria-label={label}>
+       {choices.map((choice) => {
+         const selected = choice.id === selectedId;
+         const testId = testIdPrefix ? `${testIdPrefix}-${choice.id.replace(/\s+/g, "-")}` : undefined;
+@@ -147,13 +206,16 @@ export function ToolbarPopupVisualChoiceGrid({
+             type="button"
+             role="option"
+             aria-selected={selected}
++            aria-haspopup={choice.opensMore ? "listbox" : undefined}
+             data-testid={testId}
++            data-choice={choice.id}
++            disabled={choice.disabled}
+             className={[css.visualChoiceButton, selected ? css.visualChoiceButtonSelected : ""].filter(Boolean).join(" ")}
+             onClick={() => { onSelect(choice.id); }}
+             title={choice.label}
+           >
+             <span className={css.visualChoicePreview} aria-hidden="true">
+-              {choice.previewSvg ? <span dangerouslySetInnerHTML={{ __html: choice.previewSvg }} /> : choice.label[0]}
++              {choice.preview ?? (choice.previewSvg ? <span dangerouslySetInnerHTML={{ __html: choice.previewSvg }} /> : choice.label[0])}
+             </span>
+             <span className={css.visualChoiceLabel}>{choice.label}</span>
+           </button>
 diff --git a/packages/app/src/ui/ZoomDisplayControl.module.css b/packages/app/src/ui/ZoomDisplayControl.module.css
 new file mode 100644
 index 00000000..a3cd7fb7
@@ -8875,7 +9044,7 @@ index 00000000..e04d6cac
 +.pointCount { justify-self: center; color: var(--text-muted); font-size: 13px; }
 diff --git a/packages/app/src/ui/canvas-panel/canvas-session.ts b/packages/app/src/ui/canvas-panel/canvas-session.ts
 new file mode 100644
-index 00000000..c1402e19
+index 00000000..b9c74d11
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/canvas-session.ts
 @@ -0,0 +1,337 @@
@@ -9094,7 +9263,7 @@ index 00000000..c1402e19
 +  return "constructing";
 +}
 +
-+/** The name the Insert menu and the step line give a construction. */
++/** The name the Geometry picker, the Label control and the step line give a construction. */
 +export function constructionName(tool: ToolMode, variant: ConstructionVariant): string {
 +  switch (tool) {
 +    case "addArc": return variant.arc === "three-points" ? "Arc through three points" : "Arc";
@@ -9109,7 +9278,7 @@ index 00000000..c1402e19
 +    case "addGrid": return "Grid";
 +    case "addShape": return "Node shape";
 +    case "addMatrix": return "Matrix";
-+    case "addNode": return "Node or text";
++    case "addNode": return "Text";
 +    case "addImage": return "Image";
 +    default: return tool;
 +  }
@@ -15336,17 +15505,19 @@ index 4e8f0b66..f93430fd 100644
  function clamp(v: number, lo: number, hi: number) {
    return Math.min(hi, Math.max(lo, v));
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870b..588c1245 100644
+index 0101870b..6f6cf693 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
-@@ -1,5 +1,5 @@
+@@ -1,6 +1,7 @@
  import React from "react";
 -import { BASIC_PICKER_COLORS } from "../colors/color-palette";
 +import { RiEraserLine } from "@remixicon/react";
  import type { SnapToolPointerKind } from "tikz-editor/edit/snapping";
++import type { ArcConstruction, CircleConstruction } from "../settings/types";
  import type { ToolMode } from "../store/types";
  
-@@ -14,6 +14,10 @@ function SelectIcon({ size = 20 }: { size?: number }) {
+ // ── Custom Tool Icons ─────────────────────────────────────────────────────────
+@@ -14,6 +15,10 @@ function SelectIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -15357,7 +15528,7 @@ index 0101870b..588c1245 100644
  function MagnifyIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-@@ -32,6 +36,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
+@@ -32,6 +37,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -15372,7 +15543,7 @@ index 0101870b..588c1245 100644
  function MatrixIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" strokeLinecap="round" strokeLinejoin="round">
-@@ -135,6 +147,15 @@ function CircleIcon({ size = 20 }: { size?: number }) {
+@@ -135,6 +148,84 @@ function CircleIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -15385,10 +15556,79 @@ index 0101870b..588c1245 100644
 +  );
 +}
 +
++// The picker's drawings of each construction: the points it takes are the filled dots.
++function CircleCentreIcon({ size = 20 }: { size?: number }) {
++  return (
++    <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
++      <circle cx="10" cy="10" r="6.5" />
++      <line x1="10" y1="10" x2="16.5" y2="10" strokeOpacity="0.6" />
++      <circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none" />
++      <circle cx="16.5" cy="10" r="1.3" fill="currentColor" stroke="none" />
++    </svg>
++  );
++}
++
++function CircleDiameterIcon({ size = 20 }: { size?: number }) {
++  return (
++    <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
++      <circle cx="10" cy="10" r="6.5" />
++      <line x1="3.5" y1="10" x2="16.5" y2="10" strokeOpacity="0.6" />
++      <circle cx="3.5" cy="10" r="1.3" fill="currentColor" stroke="none" />
++      <circle cx="16.5" cy="10" r="1.3" fill="currentColor" stroke="none" />
++    </svg>
++  );
++}
++
++function CircleThreePointsIcon({ size = 20 }: { size?: number }) {
++  return (
++    <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
++      <circle cx="10" cy="10" r="6.5" />
++      <circle cx="10" cy="3.5" r="1.3" fill="currentColor" stroke="none" />
++      <circle cx="15.6" cy="13.3" r="1.3" fill="currentColor" stroke="none" />
++      <circle cx="4.4" cy="13.3" r="1.3" fill="currentColor" stroke="none" />
++    </svg>
++  );
++}
++
++function ArcCentreIcon({ size = 20 }: { size?: number }) {
++  return (
++    <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
++      <path d="M3 16a7 7 0 0 1 14 0" />
++      <path d="M3 16L10 16L17 16" strokeOpacity="0.6" />
++      <circle cx="10" cy="16" r="1.3" fill="currentColor" stroke="none" />
++      <circle cx="3" cy="16" r="1.3" fill="currentColor" stroke="none" />
++      <circle cx="17" cy="16" r="1.3" fill="currentColor" stroke="none" />
++    </svg>
++  );
++}
++
++function ArcThreePointsIcon({ size = 20 }: { size?: number }) {
++  return (
++    <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
++      <path d="M3 16a7 7 0 0 1 14 0" />
++      <circle cx="3" cy="16" r="1.3" fill="currentColor" stroke="none" />
++      <circle cx="10" cy="9" r="1.3" fill="currentColor" stroke="none" />
++      <circle cx="17" cy="16" r="1.3" fill="currentColor" stroke="none" />
++    </svg>
++  );
++}
++
++function EquationIcon({ size = 20 }: { size?: number }) {
++  return (
++    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor">
++      <text x="3" y="14.5" fontSize="12" fontStyle="italic" fontFamily="serif">x</text>
++      <text x="10" y="9" fontSize="7" fontFamily="serif">2</text>
++      <text x="13" y="14.5" fontSize="9" fontFamily="serif">dx</text>
++    </svg>
++  );
++}
++
++export { EquationIcon, NodeIcon };
++
  function BucketIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-@@ -159,33 +180,36 @@ export type ToolButtonDef = {
+@@ -159,33 +250,36 @@ export type ToolButtonDef = {
    mode: ToolMode;
    label: string;
    title: string;
@@ -15440,7 +15680,7 @@ index 0101870b..588c1245 100644
    { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
  ];
  
-@@ -204,26 +228,12 @@ export const TOOL_CREATE_MODES = [
+@@ -204,26 +298,12 @@ export const TOOL_CREATE_MODES = [
  
  export type ToolCreateMode = (typeof TOOL_CREATE_MODES)[number];
  
@@ -15467,10 +15707,66 @@ index 0101870b..588c1245 100644
  export function toolModePopupKind(mode: ToolMode): ToolPopupKind | null {
    return TOOL_POPUP_KIND_MAP.get(mode) ?? null;
  }
-@@ -256,28 +266,18 @@ export function shouldConstrainToolCreateToSquare(mode: ToolCreateMode): boolean
+@@ -256,28 +336,74 @@ export function shouldConstrainToolCreateToSquare(mode: ToolCreateMode): boolean
    return mode === "addGrid" || mode === "addRect" || mode === "addEllipse";
  }
  
++export type GeometryChoice = {
++  /** The tool, followed by the construction when the tool has several: `addCircle:diameter`. */
++  id: string;
++  mode: ToolMode;
++  construction?: { circleConstruction: CircleConstruction } | { arcConstruction: ArcConstruction };
++  icon: ToolIconType;
++  /** The choice turns the picker to a second page: the shape catalogue or the matrix size. */
++  more?: "shape" | "matrix";
++};
++
++export type GeometryFamily = { name: string; choices: readonly GeometryChoice[] };
++
++/** The dock's Geometry picker, by family. Text and equations are labels and live under the Label control. */
++export const GEOMETRY_FAMILIES: readonly GeometryFamily[] = [
++  { name: "Lines and arrows", choices: [
++    { id: "addPoint", mode: "addPoint", icon: PointIcon },
++    { id: "addLine", mode: "addLine", icon: LineIcon },
++    { id: "addArrow", mode: "addArrow", icon: ArrowIcon },
++    { id: "addPath", mode: "addPath", icon: PathIcon }
++  ] },
++  { name: "Curves", choices: [{ id: "addBezier", mode: "addBezier", icon: BezierIcon }] },
++  { name: "Circles and arcs", choices: [
++    { id: "addCircle:centre", mode: "addCircle", construction: { circleConstruction: "centre" }, icon: CircleCentreIcon },
++    { id: "addCircle:diameter", mode: "addCircle", construction: { circleConstruction: "diameter" }, icon: CircleDiameterIcon },
++    { id: "addCircle:three-points", mode: "addCircle", construction: { circleConstruction: "three-points" }, icon: CircleThreePointsIcon },
++    { id: "addArc:centre", mode: "addArc", construction: { arcConstruction: "centre" }, icon: ArcCentreIcon },
++    { id: "addArc:three-points", mode: "addArc", construction: { arcConstruction: "three-points" }, icon: ArcThreePointsIcon }
++  ] },
++  { name: "Shapes", choices: [
++    { id: "addRect", mode: "addRect", icon: RectIcon },
++    { id: "addEllipse", mode: "addEllipse", icon: EllipseIcon },
++    { id: "addShape", mode: "addShape", icon: ShapeIcon, more: "shape" }
++  ] },
++  { name: "Diagrams", choices: [
++    { id: "addGrid", mode: "addGrid", icon: GridIcon },
++    { id: "addMatrix", mode: "addMatrix", icon: MatrixIcon, more: "matrix" },
++    { id: "addImage", mode: "addImage", icon: ImageIcon }
++  ] }
++];
++
++const GEOMETRY_CHOICES = GEOMETRY_FAMILIES.flatMap((family) => family.choices);
++
++/** The picker choice a tool and the chosen constructions name; null for tools outside the picker. */
++export function geometryChoiceFor(mode: ToolMode, variant: { circle: CircleConstruction; arc: ArcConstruction }): GeometryChoice | null {
++  const id = mode === "addCircle" ? `addCircle:${variant.circle}` : mode === "addArc" ? `addArc:${variant.arc}` : mode;
++  return GEOMETRY_CHOICES.find((choice) => choice.id === id) ?? null;
++}
++
++/** The constructions a picker choice stands for, with the other tools' current choice kept. */
++export function geometryChoiceVariant(choice: GeometryChoice, current: { circle: CircleConstruction; arc: ArcConstruction }): { circle: CircleConstruction; arc: ArcConstruction } {
++  if (!choice.construction) return current;
++  return "circleConstruction" in choice.construction
++    ? { ...current, circle: choice.construction.circleConstruction }
++    : { ...current, arc: choice.construction.arcConstruction };
++}
++
 +// Construction tools take their step text from the canvas session; these tools draw at once.
  export const TOOL_HINTS: Partial<Record<ToolMode, string>> = {
    magnify: "Hold and drag to magnify the canvas",

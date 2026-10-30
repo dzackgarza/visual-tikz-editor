@@ -254,10 +254,10 @@ describe("standalone workbench host boundary", function () {
               ((yTen.y - origin.y) * y) / 10,
           });
           await input.touch([
-            await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
+            await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
           ]);
           await input.touch([
-            await stableCenter(frame.getByRole("button", { name: "Line", exact: true })),
+            await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
           ]);
           const [from, to] = [at(3.5, 2.5), at(6.5, 4.5)];
           await input.penStroke([from, { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }, to]);
@@ -344,10 +344,10 @@ describe("standalone workbench host boundary", function () {
           rail.getByRole("button", { name: "Lock to lattice", exact: true }),
         ).toHaveAttribute("aria-pressed", "true");
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "Curve", exact: true })),
+          await stableCenter(frame.getByRole("option", { name: "Curve", exact: true })),
         ]);
         assert.equal((await editorDebug(page)).tool, "addBezier");
         await input.penStroke([at(2, 1), at(5, 1), at(8, 1)]);
@@ -682,7 +682,7 @@ describe("standalone workbench host boundary", function () {
           }
           await expect(rail).toHaveAttribute("data-dock", placement.dock);
           clear(`the ${placement.dock} rail`, (await rail.boundingBox())!);
-          for (const name of ["Insert", /^Drawing color/, "Zoom and display"] as const) {
+          for (const name of ["Geometry", "Label", /^Drawing color/, "Zoom and display"] as const) {
             const button =
               typeof name === "string"
                 ? rail.getByRole("button", { name, exact: true })
@@ -748,10 +748,10 @@ describe("standalone workbench host boundary", function () {
         await input.touch([await stableCenter(lock)]);
         await expect(lock).toHaveAttribute("aria-pressed", "false");
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "Arc", exact: true })),
+          await stableCenter(frame.getByRole("option", { name: "Arc", exact: true })),
         ]);
         assert.equal((await editorDebug(page)).tool, "addArc");
         // Centre, radius point, then an end 7 degrees short of the half circle and clear of the lattice pull.
@@ -816,10 +816,10 @@ describe("standalone workbench host boundary", function () {
         });
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "Arc", exact: true })),
+          await stableCenter(frame.getByRole("option", { name: "Arc", exact: true })),
         ]);
         await input.penStroke([at(0, 0)]);
         await input.penStroke([at(3, 0)]);
@@ -888,13 +888,13 @@ describe("standalone workbench host boundary", function () {
         const rail = frame.locator("[data-diagram-tools]");
         const construct = async (choice: string, taps: { x: number; y: number }[]) => {
           await input.touch([
-            await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
+            await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
           ]);
           await input.touch([
             await stableCenter(
               frame
                 .getByRole("dialog", { name: "Tool options" })
-                .getByRole("button", { name: choice, exact: true }),
+                .getByRole("option", { name: choice, exact: true }),
             ),
           ]);
           const before = ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
@@ -978,11 +978,11 @@ describe("standalone workbench host boundary", function () {
         const rail = frame.locator("[data-diagram-tools]");
         const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
         const step = rail.getByRole("status", { name: "Current step", exact: true });
-        await tap(rail.getByRole("button", { name: "Insert", exact: true }));
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(
           frame
             .getByRole("dialog", { name: "Tool options" })
-            .getByRole("button", { name: "Arc through three points", exact: true }),
+            .getByRole("option", { name: "Arc through three points", exact: true }),
         );
         await expect(frame.getByRole("dialog", { name: "Tool options" })).toHaveCount(0);
         await expect(step).toHaveText("Arc through three points: place the first point");
@@ -1009,14 +1009,164 @@ describe("standalone workbench host boundary", function () {
         await expect(step).toHaveText("Arc through three points: place the second point");
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await expect(step).toHaveCount(0);
-        await tap(rail.getByRole("button", { name: "Insert", exact: true }));
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(
           frame
             .getByRole("dialog", { name: "Tool options" })
-            .getByRole("button", { name: "Arc through three points", exact: true }),
+            .getByRole("option", { name: "Arc through three points", exact: true }),
         );
         await expect(step).toHaveText("Arc through three points: place the first point");
         await storyScreenshot(page, `construction-step-${tablet.name}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `finishes every geometry construction by reading only the picker and the stage instruction in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\path[use as bounding box] (-10,-10) rectangle (15,15);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const rail = frame.locator("[data-diagram-tools]");
+        const geometry = rail.getByRole("button", { name: "Geometry", exact: true });
+        const picker = frame.getByRole("dialog", { name: "Tool options" });
+        const step = rail.getByRole("status", { name: "Current step", exact: true });
+        const source = async () => (await editorDebug(page)).source;
+        // The picker groups its illustrated choices by family; text belongs to the Label control.
+        await tap(geometry);
+        await storyScreenshot(page, `geometry-picker-${tablet.name}`);
+        const families = ["Lines and arrows", "Curves", "Circles and arcs", "Shapes", "Diagrams"];
+        const choices: { family: string; label: string; id: string; opensMore: boolean }[] = [];
+        for (const family of families) {
+          const group = picker.getByRole("group", { name: family, exact: true });
+          for (const option of await group.getByRole("option").all()) {
+            const label = (await option.getAttribute("title"))!;
+            assert.ok((await option.locator("svg").count()) > 0, `${label} shows no drawing`);
+            choices.push({
+              family,
+              label,
+              id: (await option.getAttribute("data-choice"))!,
+              opensMore: (await option.getAttribute("aria-haspopup")) !== null,
+            });
+          }
+        }
+        assert.equal(await picker.getByRole("option").count(), choices.length, "Choices outside the families");
+        assert.deepEqual(
+          choices.map((choice) => choice.label).sort(),
+          [
+            "Arc",
+            "Arc through three points",
+            "Arrow",
+            "Circle",
+            "Circle on a diameter",
+            "Circle through three points",
+            "Curve",
+            "Ellipse",
+            "Grid",
+            "Image",
+            "Line",
+            "Matrix",
+            "Node shape",
+            "Path",
+            "Point",
+            "Rectangle",
+          ],
+        );
+        await tap(geometry);
+        await expect(picker).toHaveCount(0);
+        // Every construction finishes from the picker and the step line alone: the step names the
+        // chosen construction, and its instruction says whether to place a point or to drag.
+        const points = [at(2, 1), at(6, 1), at(6, 4), at(2, 4), at(4, 2)];
+        const undo = rail.getByRole("button", { name: "Undo", exact: true });
+        const finish = rail.getByRole("button", { name: "Finish", exact: true });
+        page.on("dialog", (dialog) => dialog.accept("figure.png"));
+        for (const choice of choices) {
+          const before = await source();
+          await tap(geometry);
+          await tap(
+            picker
+              .getByRole("group", { name: choice.family, exact: true })
+              .getByRole("option", { name: choice.label, exact: true }),
+          );
+          if (choice.opensMore) {
+            await tap(picker.getByRole("option").first());
+          }
+          await expect(picker).toHaveCount(0);
+          await expect(geometry).toHaveAttribute("data-geometry", choice.id);
+          await expect(geometry).toHaveAccessibleDescription(choice.label);
+          let placed = 0;
+          for (let turn = 0; turn < 6 && (await source()) === before; turn++) {
+            const text = await step.innerText();
+            assert.ok(text.startsWith(`${choice.label}: `), `The step line reads "${text}"`);
+            const instruction = text.slice(choice.label.length + 2);
+            if (placed >= 3 && (await finish.count()) > 0) {
+              await tap(finish);
+            } else if (instruction.startsWith("drag ")) {
+              await input.penStroke([points[placed], points[placed + 1]]);
+              placed += 2;
+            } else if (/^(place|tap) /.test(instruction)) {
+              await input.penStroke([points[placed]]);
+              placed += 1;
+            } else {
+              assert.fail(`No gesture reads from "${text}"`);
+            }
+          }
+          assert.notEqual(await source(), before, `${choice.label} left the source unchanged`);
+          await tap(undo);
+          await expect.poll(source, { message: `Undo did not remove the ${choice.label}` }).toBe(before);
+        }
+        // Text and equations are labels, under their own dock control.
+        const label = rail.getByRole("button", { name: "Label", exact: true });
+        const before = await source();
+        await tap(label);
+        assert.deepEqual(
+          await Promise.all((await picker.getByRole("option").all()).map((option) => option.getAttribute("title"))),
+          ["Text", "Equation"],
+        );
+        await tap(picker.getByRole("option", { name: "Text", exact: true }));
+        await expect(picker).toHaveCount(0);
+        await expect(step).toHaveText("Text: tap to place");
+        await input.penStroke([at(2, 1)]);
+        await expect.poll(source).toMatch(/\\node/);
+        await tap(undo);
+        await expect.poll(source).toBe(before);
+        await tap(label);
+        await tap(picker.getByRole("option", { name: "Equation", exact: true }));
+        const closeEquation = frame.getByRole("button", { name: "Close equation editor", exact: true });
+        await expect(closeEquation).toBeVisible();
+        await tap(closeEquation);
+        await expect(closeEquation).toHaveCount(0);
       },
     );
   }
@@ -1377,10 +1527,10 @@ describe("standalone workbench host boundary", function () {
         });
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "Line", exact: true })),
+          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
         ]);
         const [from, to] = [at(1, 1), at(3, 2)];
         await input.penDown(from);
@@ -2514,10 +2664,10 @@ describe("standalone workbench host boundary", function () {
           await stableCenter(rail.getByRole("button", { name: /^Drawing color/ })),
         ]);
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "Line", exact: true })),
+          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
         ]);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const from = {
@@ -2692,7 +2842,16 @@ describe("standalone workbench host boundary", function () {
           overflow > 0,
           `The palette strip does not scroll (overflow ${overflow}px); the rail grows instead`,
         );
-        for (const name of ["Select", "Lasso", "Eraser", "Freehand", "Insert", "Undo", "Redo"]) {
+        for (const name of [
+          "Select",
+          "Lasso",
+          "Eraser",
+          "Freehand",
+          "Geometry",
+          "Label",
+          "Undo",
+          "Redo",
+        ]) {
           await expect(rail.getByRole("button", { name, exact: true })).toBeInViewport({
             ratio: 1,
           });
@@ -2719,7 +2878,7 @@ describe("standalone workbench host boundary", function () {
           ),
           [0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
         );
-        for (const name of ["Select", "Lasso", "Eraser", "Freehand", "Insert"]) {
+        for (const name of ["Select", "Lasso", "Eraser", "Freehand", "Geometry", "Label"]) {
           await expect(rail.getByRole("button", { name, exact: true })).toBeInViewport({
             ratio: 1,
           });
@@ -2882,7 +3041,8 @@ describe("standalone workbench host boundary", function () {
             "Lasso",
             "Eraser",
             "Freehand",
-            "Insert",
+            "Geometry",
+            "Label",
             "Bucket",
             "Undo",
             "Redo",
@@ -3317,8 +3477,8 @@ describe("standalone workbench host boundary", function () {
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Lock to lattice", exact: true }));
-        await tap(rail.getByRole("button", { name: "Insert", exact: true }));
-        await tap(frame.getByRole("button", { name: "Line", exact: true }));
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Line", exact: true }));
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const from = {
           x: viewport.x + viewport.width * 0.55,
@@ -3361,8 +3521,8 @@ describe("standalone workbench host boundary", function () {
           `The constrained line was at ${await angle()} degrees`,
         );
         await tap(rail.getByRole("button", { name: "Undo", exact: true }));
-        await tap(rail.getByRole("button", { name: "Insert", exact: true }));
-        await tap(frame.getByRole("button", { name: "Rectangle", exact: true }));
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Rectangle", exact: true }));
         await input.penStroke([
           from,
           { x: from.x + 55, y: from.y + 22.5 },
@@ -3575,10 +3735,10 @@ describe("standalone workbench host boundary", function () {
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
 
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "Line", exact: true })),
+          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
         ]);
         assert.equal((await editorDebug(page)).tool, "addLine");
         const from = {
