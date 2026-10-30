@@ -19,6 +19,7 @@ import {
   editorReady,
   emptyCanvasGesture,
   fitDiagram,
+  type Point,
   settledCenter,
   stableCenter,
   startPageCoverage,
@@ -2473,7 +2474,8 @@ describe("standalone workbench host boundary", function () {
         await fitDiagram(frame, input);
         const source = async () => (await editorDebug(page)).source;
         const draws = async () => (await source()).match(/\\draw[^;]*;/g) ?? ([] as string[]);
-        const original = String.raw`\draw (0.37,0.61) -- (4.23,2.29);`;
+        // The stroke is written against the point's name, so it follows the point (slice 3, item 5).
+        const named = String.raw`\draw (0.37,0.61) coordinate (p1) -- (4.23,2.29);`;
         // The delay that turns a held pen into a move is a setting.
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));
         const settings = frame.getByTestId("settings-modal");
@@ -2501,10 +2503,10 @@ describe("standalone workbench host boundary", function () {
           .toBe(2);
         assert.match(
           (await draws())[1],
-          /^\s*\\draw(?:\[[^\]]*\])?\s*\(0\.37,\s*0\.61\)/,
+          /^\s*\\draw(?:\[[^\]]*\])?\s*\(p1\)/,
           "The stroke did not start at the point",
         );
-        assert.equal((await draws())[0].trim(), original, "Drawing from the point moved it");
+        assert.equal((await draws())[0].trim(), named, "Drawing from the point moved it");
         await page.keyboard.press("Escape");
         const drawn = await source();
         // With a finger of the other hand held down, a pen drag on a point moves the point.
@@ -2549,7 +2551,219 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(source).toBe(drawn);
         // A double tap on a point never moves it.
         await input.doubleTap(await endPoint());
-        assert.equal((await draws())[0].trim(), original, "A double tap moved the point");
+        assert.equal((await draws())[0].trim(), named, "A double tap moved the point");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `attaches an arrow end to a node, a label to a line, and a stroke to a point, each named before commit, and moves them with their hosts as one undo step, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        // Axes of length 10; a named node; a line to label; a line whose ends are off the lattice.
+        const figure = String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\node[draw] (A) at (2,6) {A};
+\draw (5,3) -- (9,3);
+\draw (3.37,8.61) -- (7.23,9.29);
+\end{tikzpicture}`;
+        const load = async (text: string) => {
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await page.locator(".cm-content").fill(text);
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await expect.poll(async () => (await editorDebug(page)).source.trim()).toBe(text);
+          await editorReady(page);
+        };
+        await load(figure);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeVisible();
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const unit = Math.hypot(xTen.x - origin.x, xTen.y - origin.y) / 10;
+        const rail = frame.locator("[data-diagram-tools]");
+        const picker = frame.getByRole("dialog", { name: "Tool options" });
+        const tap = async (locator: Locator) => {
+          await input.touch([await stableCenter(locator)]);
+        };
+        const undo = rail.getByRole("button", { name: "Undo", exact: true });
+        const source = async () => (await editorDebug(page)).source;
+        const sourceIds = async () =>
+          frame
+            .locator("svg [data-source-id]")
+            .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-source-id")!));
+        const newSourceId = async (before: string[]) =>
+          (await sourceIds()).find((id) => !before.includes(id))!;
+        // Rendered elements carry their source id; the node statement is path:2.
+        const centerOf = async (id: string) => {
+          const box = (await frame.locator(`svg [data-source-id="${id}"]`).first().boundingBox())!;
+          return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        };
+        const labelId = async () =>
+          (await editorDebug(page)).scene!.elements.find(
+            (element) => element.pathAttachment?.hostPathSourceId === "path:3",
+          )!.sourceRef.sourceId;
+        const target = frame.locator("[data-snap-target]");
+        const targetLabel = async () => target.first().getAttribute("data-snap-target");
+        // The arrow ends on the node's border, so "at the node" means inside its drawn box (frame coordinates, as `ends` reports).
+        const onNode = async (point: Point) => {
+          const box = (await frame.locator('svg path[data-source-id="path:2"]').first().boundingBox())!;
+          const x = point.x + frameBox.x, y = point.y + frameBox.y;
+          return x >= box.x - 2 && x <= box.x + box.width + 2 && y >= box.y - 2 && y <= box.y + box.height + 2;
+        };
+        const drag = async (from: Point, to: Point) => {
+          await input.penDown(from);
+          for (let step = 1; step <= 10; step++) {
+            await input.penMove({
+              x: from.x + ((to.x - from.x) * step) / 10,
+              y: from.y + ((to.y - from.y) * step) / 10,
+            });
+          }
+          await input.penUp(to);
+        };
+
+        // An arrow end placed on a node is written against the node's name: the mark names the node before commit.
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(picker.getByRole("option", { name: "Arrow", exact: true }));
+        await expect(picker).toHaveCount(0);
+        const nodeCenter = await centerOf("path:2");
+        await input.penHover(nodeCenter);
+        await expect.poll(targetLabel, { message: "Hovering the node did not name it" }).toBe("A");
+        const before = await sourceIds();
+        await drag(at(6, 6), nodeCenter);
+        await expect
+          .poll(source, { message: "The arrow end was not written against the node" })
+          .toMatch(/\\draw\[[^\]]*->[^\]]*\]\s*\(6,6\) -- \(A(?:\.[a-z ]+)?\);/);
+        await editorReady(page);
+        const arrowId = await newSourceId(before);
+        await storyScreenshot(page, `attached-arrow-${tablet.name}`);
+
+        // A label placed on a line is a path-attached node: the mark says "On line" before commit.
+        await tap(rail.getByRole("button", { name: "Label", exact: true }));
+        await tap(picker.getByRole("option", { name: "Text", exact: true }));
+        await expect(picker).toHaveCount(0);
+        await input.penHover(at(7, 3));
+        await expect.poll(targetLabel, { message: "Hovering the line did not name it" }).toBe("On line");
+        await input.penStroke([at(7, 3)]);
+        await expect
+          .poll(source, { message: "The label was not attached to the line" })
+          .toMatch(/\\draw \(5,3\) -- \(9,3\) node\[midway[^\]]*\] \{[^}]*\};/);
+        await editorReady(page);
+        await expect.poll(labelId, { message: "The label is not a path-attached node" }).toMatch(/./);
+        const label = await labelId();
+        await expect(frame.locator(`svg [data-source-id="${label}"]`).first()).toBeVisible();
+        await storyScreenshot(page, `attached-label-${tablet.name}`);
+
+        // A stroke that starts on a point is written against the point's name.
+        await tap(rail.getByRole("button", { name: "Freehand", exact: true }));
+        const host = frame.locator('svg [data-source-id="path:4"]').first();
+        const start = await strokePoint(page, host, 0);
+        await input.penHover(start);
+        await expect(frame.locator('[data-point-target="attach"]')).toBeVisible();
+        const beforeStroke = await sourceIds();
+        await input.penStroke(
+          Array.from({ length: 12 }, (_, i) => ({
+            x: start.x + i * 6,
+            y: start.y - i * 5 + Math.sin(i) * 3,
+          })),
+        );
+        await expect
+          .poll(source, { message: "The host point was not named" })
+          .toMatch(/\\draw \(3\.37,8\.61\) coordinate \(p1\) -- \(7\.23,9\.29\);/);
+        assert.match(await source(), /\\draw(?:\[[^\]]*\])?\s*\(p1\)/, "The stroke does not start at the named point");
+        await page.keyboard.press("Escape");
+        await editorReady(page);
+        const strokeId = await newSourceId(beforeStroke);
+        const attached = await source();
+
+        // Moving the node moves the arrow end; the arrow's source keeps the reference; one undo restores all.
+        // A press on the node's text edits the text, so the drag starts on the node's drawn border.
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        const arrowEndBefore = (await ends(arrowId))[1];
+        const grip = await strokePoint(page, frame.locator('svg path[data-source-id="path:2"]').first(), 0.5);
+        const lift = { x: at(2, 8).x - at(2, 6).x, y: at(2, 8).y - at(2, 6).y };
+        await drag(grip, { x: grip.x + lift.x, y: grip.y + lift.y });
+        await expect.poll(source, { message: "The node did not move" }).toMatch(/\\node\[draw\] \(A\) at \(2,8\) \{A\};/);
+        await editorReady(page);
+        const arrowEndAfter = (await ends(arrowId))[1];
+        assert.ok(
+          (await onNode(arrowEndAfter)) && arrowEndAfter.y < arrowEndBefore.y - unit,
+          `The arrow end did not follow the node: ${JSON.stringify({ arrowEndBefore, arrowEndAfter, unit })}`,
+        );
+        assert.match(await source(), /\(6,6\) -- \(A(?:\.[a-z ]+)?\);/, "Moving the node rewrote the arrow");
+        await tap(undo);
+        await expect.poll(source, { message: "One undo did not restore the node move" }).toBe(attached);
+        await editorReady(page);
+
+        // Moving the line moves its label.
+        const labelBefore = await centerOf(label);
+        await drag(at(6, 3), at(6, 2));
+        await expect.poll(source, { message: "The line did not move" }).toMatch(/\\draw \(5,2\) -- \(9,2\) node\[/);
+        await editorReady(page);
+        const labelAfter = await centerOf(label);
+        assert.ok(
+          Math.abs(labelAfter.y - (labelBefore.y + unit)) < 3 && Math.abs(labelAfter.x - labelBefore.x) < 3,
+          `The label did not follow the line: ${JSON.stringify({ labelBefore, labelAfter, unit })}`,
+        );
+        await tap(undo);
+        await expect.poll(source, { message: "One undo did not restore the line move" }).toBe(attached);
+        await editorReady(page);
+
+        // Moving the point under a held finger moves the stroke's start with it.
+        await tap(rail.getByRole("button", { name: "Freehand", exact: true }));
+        const clear = (await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0];
+        const point = await strokePoint(page, host, 0);
+        await input.fingerDown(clear);
+        await drag(point, { x: point.x - 30, y: point.y + 30 });
+        await input.fingerUp();
+        await expect
+          .poll(source, { message: "The held finger did not make the pen move the point" })
+          .not.toContain("(3.37,8.61)");
+        await editorReady(page);
+        assert.match(await source(), /coordinate \(p1\) -- \(7\.23,9\.29\);/, "Moving the point lost its name");
+        const hostStart = (await ends("path:4"))[0];
+        const strokeStart = (await ends(strokeId))[0];
+        assert.ok(
+          Math.hypot(hostStart.x - strokeStart.x, hostStart.y - strokeStart.y) < 1.5,
+          `The stroke did not follow the point: ${JSON.stringify({ hostStart, strokeStart })}`,
+        );
+        await tap(undo);
+        await expect.poll(source, { message: "One undo did not restore the point move" }).toBe(attached);
+
+        // The attachments are authored references, so they survive save and reopen.
+        await load(attached);
+        await fitDiagram(frame, input);
+        const arrowEnd = (await ends(arrowId))[1];
+        assert.ok(await onNode(arrowEnd), `After reopening, the arrow end is not at the node: ${JSON.stringify({ arrowEnd })}`);
+        // The reopened figure fits differently, so the line's own midpoint is the reference.
+        const [lineStart, lineEnd] = await ends("path:3");
+        const lineMiddle = { x: (lineStart.x + lineEnd.x) / 2 + frameBox.x, y: (lineStart.y + lineEnd.y) / 2 + frameBox.y };
+        const reopenedLabel = await centerOf(label);
+        assert.ok(
+          Math.hypot(reopenedLabel.x - lineMiddle.x, reopenedLabel.y - lineMiddle.y) < Math.hypot(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y) / 4,
+          `After reopening, the label is not on the line: ${JSON.stringify({ reopenedLabel, lineMiddle })}`,
+        );
       },
     );
   }

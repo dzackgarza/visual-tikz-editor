@@ -29,6 +29,8 @@ export const originalStrokeSchema = z.object({
     phase: z.number().int().nonnegative().optional(), predicted: z.boolean().optional(),
   }).strict()).min(2),
   outline: z.object({ path: z.string(), fill: z.string() }).strict().optional(),
+  /** Named points the first and last samples are attached to, written as TikZ references so the stroke follows them. */
+  ends: z.object({ start: z.string().optional(), end: z.string().optional() }).strict().optional(),
 }).strict();
 
 export type OriginalStroke = z.infer<typeof originalStrokeSchema>;
@@ -61,7 +63,12 @@ export function originalDrawingSource(stroke: OriginalStroke): string {
       .replace('\\begin{tikzpicture}', '\\begin{scope}[yscale=-1]')
       .replace('\\end{tikzpicture}', '\\end{scope}');
   }
-  return `\\draw[draw=${tikzStrokeColor(stroke)},draw opacity=${tikzStrokeOpacity(stroke)}] ${stroke.samples.map(sample => `(${sample.x}pt,${sample.y}pt)`).join(' -- ')};`;
+  const last = stroke.samples.length - 1;
+  const point = (index: number) => {
+    const name = index === 0 ? stroke.ends?.start : index === last ? stroke.ends?.end : undefined;
+    return name === undefined ? `(${stroke.samples[index].x}pt,${stroke.samples[index].y}pt)` : `(${name})`;
+  };
+  return `\\draw[draw=${tikzStrokeColor(stroke)},draw opacity=${tikzStrokeOpacity(stroke)}] ${stroke.samples.map((_sample, index) => point(index)).join(' -- ')};`;
 }
 export const originalAssociationSchema = z.object({
   stroke: originalStrokeSchema,

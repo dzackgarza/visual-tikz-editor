@@ -188,6 +188,7 @@ export type EditorDebug = {
       sourceRef: { sourceId: string };
       kind?: string;
       commands?: { kind: string; to?: { x: number; y: number } }[];
+      pathAttachment?: { hostPathSourceId: string; nodeSourceId: string; pos: number };
     }[];
   } | null;
   viewport: { translateX: number; translateY: number; scale: number };
