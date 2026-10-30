@@ -21,7 +21,9 @@ import {
   fitDiagram,
   settledCenter,
   stableCenter,
+  startPageCoverage,
   startWorkbench,
+  stopPageCoverage,
   storyScreenshot,
   strokePoint,
   TABLET_VIEWPORTS,
@@ -108,6 +110,7 @@ describe("standalone workbench host boundary", function () {
     context = await browser.newContext(viewport ? { viewport } : {});
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
+    await startPageCoverage(page);
     await page.request.post(`${url}api/new`, { data: "tikzpicture" });
     if (setup?.initialPage === "blank") {
       return;
@@ -125,6 +128,7 @@ describe("standalone workbench host boundary", function () {
     try {
       await storyScreenshot(page, name);
       await context.tracing.stop({ path: `test-results/workbench/${name}.zip` });
+      await stopPageCoverage(page);
       // A rerun overwrites the trace above, so a failure also keeps its own copy for intermittent failures.
       if (this.currentTest!.state === "failed") {
         await copyFile(

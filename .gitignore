@@ -6,3 +6,5 @@ src-tauri/target/
 src-tauri/gen/
 test-results/
 .cache/
+coverage/
+lcov.info

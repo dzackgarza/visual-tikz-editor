@@ -33,7 +33,7 @@ build: install
 
 # Build a Linux desktop package with an application entry and icon.
 package:
-    bunx tauri build --bundles deb
+    bun run package
 
 # Sync the desktop app and menu entry for this user.
 install-desktop: package

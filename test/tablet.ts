@@ -1,6 +1,7 @@
 /** Shared story harness: an isolated workbench server and tablet pen/touch input. */
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -416,6 +417,28 @@ export function waveAcross(
     x: box.x + box.width * fx + (i * length) / 15,
     y: box.y + box.height * fy + (25 * i) / 15 + Math.sin(i) * 2,
   }));
+}
+
+/**
+ * Record V8 coverage of the page's scripts when TIKZ_WORKBENCH_V8_COVERAGE names a
+ * directory, as NODE_V8_COVERAGE does for Node; unset means no collection. Call it
+ * before the first navigation; `stopPageCoverage` writes the result.
+ */
+export async function startPageCoverage(page: Page): Promise<void> {
+  if (process.env.TIKZ_WORKBENCH_V8_COVERAGE === undefined) return;
+  await page.coverage.startJSCoverage({ resetOnNavigation: false });
+}
+
+/** Write the page's coverage of the standalone build's chunks as one JSON file; scripts/coverage.mjs reads them. */
+export async function stopPageCoverage(page: Page): Promise<void> {
+  const directory = process.env.TIKZ_WORKBENCH_V8_COVERAGE;
+  if (directory === undefined) return;
+  const entries = await page.coverage.stopJSCoverage();
+  const chunks = entries.filter(
+    (entry) => entry.url.startsWith("http") && new URL(entry.url).pathname.startsWith("/assets/"),
+  );
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, `${randomUUID()}.json`), JSON.stringify(chunks));
 }
 
 export async function storyScreenshot(page: Page, title: string): Promise<void> {

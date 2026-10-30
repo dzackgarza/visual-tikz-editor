@@ -24,6 +24,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    // Browser coverage (scripts/coverage.mjs) maps each chunk back to its sources.
+    sourcemap: true,
     rollupOptions: {
       input: {
         app: path.join(import.meta.dirname, "standalone/index.html"),

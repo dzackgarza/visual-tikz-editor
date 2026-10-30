@@ -6,7 +6,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { type Browser, chromium, expect, type Page } from "@playwright/test";
-import { buildWorkbench, editorReady, startWorkbench, type Workbench } from "./tablet";
+import {
+  buildWorkbench,
+  editorReady,
+  startPageCoverage,
+  startWorkbench,
+  stopPageCoverage,
+  type Workbench,
+} from "./tablet";
 
 const execute = promisify(execFile);
 
@@ -99,6 +106,7 @@ describe("standalone native file workflow", function () {
     await startServer();
     browser = await chromium.launch({ headless: false, env: desktopEnv });
     page = await browser.newPage();
+    await startPageCoverage(page);
     await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
   });
 
@@ -108,6 +116,7 @@ describe("standalone native file workflow", function () {
         env: desktopEnv,
       });
       await page.context().tracing.stop({ path: "test-results/workbench/native-files.zip" });
+      await stopPageCoverage(page);
     }
     await browser?.close();
     await workbench?.stop();
