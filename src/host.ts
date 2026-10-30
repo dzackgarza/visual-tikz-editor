@@ -10,13 +10,25 @@ import type { TikzRenderSuccess } from "./live-preview";
 import type { QuiverMacroProjection } from "./quiver-macros";
 import type { TikzRenderRequest, TikzRenderResult } from "./tikz-render";
 
-export type { EditorSnapshot, EditorSnapshotResult } from "../vendor/tikz-editor/embed/src/snapshot-protocol";
-export { requestEditorSource } from "./editor-source";
-export { requestEditorSnapshot } from "./editor-snapshot";
-export { editorEventSchema, editorNotificationSchema, commandReplySchema } from "../vendor/tikz-editor/embed/src/events";
-export type { EditorEvent, EditorNotification, CommandReply, CommandFailure } from "../vendor/tikz-editor/embed/src/events";
 export type { HostCommand } from "../vendor/tikz-editor/embed/src/commands";
+export type {
+  CommandFailure,
+  CommandReply,
+  EditorEvent,
+  EditorNotification,
+} from "../vendor/tikz-editor/embed/src/events";
+export {
+  commandReplySchema,
+  editorEventSchema,
+  editorNotificationSchema,
+} from "../vendor/tikz-editor/embed/src/events";
 export type { OriginalStroke } from "../vendor/tikz-editor/embed/src/original-ink";
+export type {
+  EditorSnapshot,
+  EditorSnapshotResult,
+} from "../vendor/tikz-editor/embed/src/snapshot-protocol";
+export { requestEditorSnapshot } from "./editor-snapshot";
+export { requestEditorSource } from "./editor-source";
 
 export type TikzWorkbenchTheme = "light" | "dark";
 

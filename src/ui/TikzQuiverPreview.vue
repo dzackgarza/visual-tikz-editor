@@ -105,7 +105,10 @@ function sameBlockIdentity(a: TikzQuiverSourceSession, b: TikzQuiverSourceSessio
 function postToQuiver(message: Record<string, unknown>): void {
   const target = frame.value?.contentWindow;
   if (target === undefined || target === null) return;
-  target.postMessage({ ...message, sessionId: session.value.id, revision: session.value.revision }, quiverOrigin);
+  target.postMessage(
+    { ...message, sessionId: session.value.id, revision: session.value.revision },
+    quiverOrigin,
+  );
 }
 
 function sendFullLoad(): void {
@@ -210,8 +213,11 @@ async function saveCurrentSource(): Promise<void> {
 async function currentSource(signal: AbortSignal): Promise<string> {
   const active = session.value;
   if (frame.value === null || !hostReady.value) throw new Error("Quiver has not loaded its source");
-  const source = await requestEditorSource(frame.value, { sessionId: active.id, revision: active.revision },
-    AbortSignal.any([signal, lifetime.signal]));
+  const source = await requestEditorSource(
+    frame.value,
+    { sessionId: active.id, revision: active.revision },
+    AbortSignal.any([signal, lifetime.signal]),
+  );
   if (session.value.id !== active.id || session.value.revision !== active.revision) {
     throw new Error("The source changed while reading Quiver");
   }

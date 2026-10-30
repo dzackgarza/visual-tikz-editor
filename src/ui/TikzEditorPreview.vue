@@ -36,12 +36,20 @@
 
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
+  type EditorNotification,
+  editorNotificationSchema,
+} from "../../vendor/tikz-editor/embed/src/events";
+import {
   type TikzEditorSourceSession,
   tikzEditorReplacement,
   tikzEditorSessionForBlock,
 } from "../editor-bridge";
-import { requestEditorSource, requestEditorSnapshot, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../host";
-import { editorNotificationSchema, type EditorNotification } from "../../vendor/tikz-editor/embed/src/events";
+import {
+  requestEditorSnapshot,
+  requestEditorSource,
+  type TikzWorkbenchHost,
+  type TikzWorkbenchTheme,
+} from "../host";
 import type { TikzLivePreviewTarget } from "../live-preview";
 
 interface PreviewSession {
@@ -49,7 +57,6 @@ interface PreviewSession {
   revision: number;
   source: TikzEditorSourceSession;
 }
-
 
 const props = defineProps<{
   target: TikzLivePreviewTarget;
@@ -78,23 +85,33 @@ const errorMessage = ref("");
 const lifetime = new AbortController();
 
 function snapshot(signal: AbortSignal) {
-  if (frame.value === null || !loaded.value) throw new Error("The editor has not loaded its source");
+  if (frame.value === null || !loaded.value)
+    throw new Error("The editor has not loaded its source");
   const active = session.value;
-  return requestEditorSnapshot(frame.value, {
-    sessionId: active.id, revision: active.revision, source: active.source.source,
-  }, AbortSignal.any([signal, lifetime.signal]));
+  return requestEditorSnapshot(
+    frame.value,
+    {
+      sessionId: active.id,
+      revision: active.revision,
+      source: active.source.source,
+    },
+    AbortSignal.any([signal, lifetime.signal]),
+  );
 }
 
 async function currentSource(signal: AbortSignal): Promise<string> {
   const active = session.value;
   if (frame.value === null || !loaded.value) return active.source.source;
-  const source = await requestEditorSource(frame.value, { sessionId: active.id, revision: active.revision },
-    AbortSignal.any([signal, lifetime.signal]));
-  if (session.value.revision !== active.revision) throw new Error("The source changed while reading the editor");
+  const source = await requestEditorSource(
+    frame.value,
+    { sessionId: active.id, revision: active.revision },
+    AbortSignal.any([signal, lifetime.signal]),
+  );
+  if (session.value.revision !== active.revision)
+    throw new Error("The source changed while reading the editor");
   applyEditorSource(source, active.revision);
   return session.value.source.source;
 }
-
 
 function sameBlockIdentity(a: TikzEditorSourceSession, b: TikzEditorSourceSession): boolean {
   return a.kind === b.kind && a.blockFrom === b.blockFrom;
@@ -105,10 +122,15 @@ function postToEditor(message: Record<string, unknown>): void {
   if (target === undefined || target === null) {
     return;
   }
-  target.postMessage({
-    requestId: crypto.randomUUID(), sessionId: session.value.id,
-    revision: session.value.revision, ...message,
-  }, new URL(props.host.editorUrl, location.href).origin);
+  target.postMessage(
+    {
+      requestId: crypto.randomUUID(),
+      sessionId: session.value.id,
+      revision: session.value.revision,
+      ...message,
+    },
+    new URL(props.host.editorUrl, location.href).origin,
+  );
 }
 
 // iPadOS reports the on-screen keyboard only to the top-level visual viewport,
@@ -118,7 +140,10 @@ function reportKeyboard(always = false): void {
   const visual = window.visualViewport;
   const target = frame.value;
   if (!loaded.value || visual === null || target === null) return;
-  const bottom = Math.max(0, Math.round(target.getBoundingClientRect().bottom - (visual.offsetTop + visual.height)));
+  const bottom = Math.max(
+    0,
+    Math.round(target.getBoundingClientRect().bottom - (visual.offsetTop + visual.height)),
+  );
   if (bottom === keyboardBottom && !always) return;
   keyboardBottom = bottom;
   postToEditor({ action: "keyboard", bottom });
@@ -214,7 +239,11 @@ watch(
 
 function parseHostMessage(data: unknown): EditorNotification | null {
   if (typeof data === "string") {
-    try { data = JSON.parse(data); } catch { return null; }
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return null;
+    }
   }
   const parsed = editorNotificationSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
@@ -255,19 +284,26 @@ function onMessage(event: MessageEvent): void {
     return;
   }
   const message = parseHostMessage(event.data);
-  if (message === null || (message.event !== "init" && message.sessionId !== session.value.id)) return;
+  if (message === null || (message.event !== "init" && message.sessionId !== session.value.id))
+    return;
 
   if (message.event === "clipboard-read" || message.event === "clipboard-write") {
     const clipboard = props.host.clipboard;
     if (clipboard === undefined || message.revision !== session.value.revision) return;
     const active = session.value;
-    const operation = message.event === "clipboard-read"
-      ? clipboard.readText() : clipboard.writeText(message.text);
+    const operation =
+      message.event === "clipboard-read" ? clipboard.readText() : clipboard.writeText(message.text);
     const respond = (result: { text?: string; error?: string }): void => {
-      if (session.value.id !== active.id || session.value.revision !== active.revision || lifetime.signal.aborted) return;
+      if (
+        session.value.id !== active.id ||
+        session.value.revision !== active.revision ||
+        lifetime.signal.aborted
+      )
+        return;
       postToEditor({ action: "clipboard-result", targetRequestId: message.requestId, ...result });
     };
-    void operation.then((text) => respond(typeof text === "string" ? { text } : {}))
+    void operation
+      .then((text) => respond(typeof text === "string" ? { text } : {}))
       .catch((error) => respond({ error: error instanceof Error ? error.message : String(error) }));
     return;
   }
@@ -275,9 +311,14 @@ function onMessage(event: MessageEvent): void {
   switch (message.event) {
     case "persistence-save":
       if (message.revision !== session.value.revision) break;
-      if (typeof message.key === "string" && typeof message.value === "string" && props.host.savePreference !== undefined) {
-        void props.host.savePreference(message.key, message.value)
-          .catch(error => props.host.reportError("Could not save editor preferences", error));
+      if (
+        typeof message.key === "string" &&
+        typeof message.value === "string" &&
+        props.host.savePreference !== undefined
+      ) {
+        void props.host
+          .savePreference(message.key, message.value)
+          .catch((error) => props.host.reportError("Could not save editor preferences", error));
       }
       break;
     case "init":
@@ -324,9 +365,15 @@ function onMessage(event: MessageEvent): void {
       if (message.revision !== session.value.revision || typeof message.source !== "string") break;
       applyEditorSource(message.source, message.revision);
       const active = session.value.source;
-      if (active.source !== message.source ||
-          !Number.isInteger(message.from) || !Number.isInteger(message.to) ||
-          message.from < 0 || message.to < message.from || message.to > active.source.length) break;
+      if (
+        active.source !== message.source ||
+        !Number.isInteger(message.from) ||
+        !Number.isInteger(message.to) ||
+        message.from < 0 ||
+        message.to < message.from ||
+        message.to > active.source.length
+      )
+        break;
       props.host.selectSource?.(active.sourceFrom + message.from, active.sourceFrom + message.to);
       break;
     }

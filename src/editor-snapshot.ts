@@ -1,7 +1,7 @@
 import {
-  snapshotResultSchema,
   type EditorSnapshotResult,
   type SnapshotRequest,
+  snapshotResultSchema,
 } from "../vendor/tikz-editor/embed/src/snapshot-protocol";
 import { requestEditor } from "./editor-request";
 
@@ -13,6 +13,11 @@ export function requestEditorSnapshot(
   target: Pick<SnapshotRequest, "sessionId" | "revision" | "source">,
   signal: AbortSignal,
 ): Promise<EditorSnapshotResult> {
-  return requestEditor(frame, { action: "snapshot", ...target }, snapshotResultSchema, signal,
-    (requestId, error) => ({ event: "snapshot", status: "failed", ...target, requestId, error }));
+  return requestEditor(
+    frame,
+    { action: "snapshot", ...target },
+    snapshotResultSchema,
+    signal,
+    (requestId, error) => ({ event: "snapshot", status: "failed", ...target, requestId, error }),
+  );
 }

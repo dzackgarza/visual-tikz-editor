@@ -129,18 +129,21 @@ import type { TikzLivePreviewTarget } from "../live-preview";
 import { defaultTikzPreviewMode, type TikzPreviewModeId } from "../preview-modes";
 import { TIKZ_PREVIEW_PROVIDERS, type TikzPreviewProvider } from "./providers";
 
-const props = withDefaults(defineProps<{
-  target: TikzLivePreviewTarget;
-  host: TikzWorkbenchHost;
-  theme: TikzWorkbenchTheme;
-  initialMode?: TikzPreviewModeId;
-  requestedMode?: TikzPreviewModeId;
-  showInspector?: boolean;
-  showModeSwitcher?: boolean;
-  showStatus?: boolean;
-  showFullscreen?: boolean;
-  showHeader?: boolean;
-}>(), { showHeader: true });
+const props = withDefaults(
+  defineProps<{
+    target: TikzLivePreviewTarget;
+    host: TikzWorkbenchHost;
+    theme: TikzWorkbenchTheme;
+    initialMode?: TikzPreviewModeId;
+    requestedMode?: TikzPreviewModeId;
+    showInspector?: boolean;
+    showModeSwitcher?: boolean;
+    showStatus?: boolean;
+    showFullscreen?: boolean;
+    showHeader?: boolean;
+  }>(),
+  { showHeader: true },
+);
 
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
@@ -165,8 +168,12 @@ const requestedMode = ref<TikzPreviewModeId>(
 const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
 const activeBusy = ref(false);
-const showShellHeader = computed(() =>
-  props.showHeader !== false && (props.showModeSwitcher !== false || props.showStatus !== false || props.showFullscreen !== false),
+const showShellHeader = computed(
+  () =>
+    props.showHeader !== false &&
+    (props.showModeSwitcher !== false ||
+      props.showStatus !== false ||
+      props.showFullscreen !== false),
 );
 const providerStatus = ref<Record<TikzPreviewModeId, string>>({ tikz: "", quiver: "", visual: "" });
 const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({

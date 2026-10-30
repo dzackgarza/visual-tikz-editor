@@ -6,8 +6,21 @@ export async function requestEditorSource(
   target: { sessionId: string; revision: number },
   signal: AbortSignal,
 ): Promise<string> {
-  const result = await requestEditor(frame, { action: "source", ...target }, sourceReplySchema, signal,
-    (requestId, error) => ({ event: "reply", action: "source", status: "failed", ...target, requestId, error } as const));
+  const result = await requestEditor(
+    frame,
+    { action: "source", ...target },
+    sourceReplySchema,
+    signal,
+    (requestId, error) =>
+      ({
+        event: "reply",
+        action: "source",
+        status: "failed",
+        ...target,
+        requestId,
+        error,
+      }) as const,
+  );
   if (result.status === "failed") throw new Error(`Could not read editor source: ${result.error}`);
   return result.source;
 }
