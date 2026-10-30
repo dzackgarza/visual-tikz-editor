@@ -23,7 +23,7 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 | PR #11 | Merged; live review threads all resolved on 2026-10-29 | Historical review record |
 | Latest listed release | Prerelease `workbench-07f072a` | Qualify later changes independently |
 | Project cards, including archived | Workspace plan and its feature | Use the current card and this inventory |
-| GitHub #14 | Open; the ruler and copy-source stories set their own view and read the editor's source since `30fdae3`; run 41024136888 at that revision is green, 1 of 3 | Two more consecutive green Development diagnostics runs close it; later pushes supply them |
+| GitHub #14 | Open; the ruler, copy-source, and context-menu stories fit the figure and read the editor's source themselves since `d99de49`; the startup view is no longer read by any story | Three consecutive green Development diagnostics runs at `d99de49` or later close it; runs 41041017615, 41041089902, and 41041110331 are the candidates |
 | GitHub #15 | Open; the eraser erases circles, ellipses, and multi-operation paths whole | The physical-tablet session decides; see the decisions table below |
 | GitHub #16 | Closed on run 41024136888 at `30fdae3`; the Development diagnostics workflow runs `just test-ci`, logic tests and browser suite included, on every push to any branch | Branch protection and PR review belong to the stabilized phase, which the user chooses after the baseline freezes |
 
