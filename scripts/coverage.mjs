@@ -11,8 +11,9 @@
  * - Browser: every story page records V8 coverage of the standalone page's Vite
  *   chunks (test/tablet.ts, TIKZ_WORKBENCH_V8_COVERAGE), mapped back through the
  *   .map files `vite build` writes next to each chunk.
- * The standalone server itself runs under Bun, which writes no V8 coverage; the
- * lines of standalone/server.ts are not in this report.
+ * The standalone server itself runs under Bun, whose coverage exists only inside
+ * `bun test` (oven-sh/bun#17867 for spawned processes, oven-sh/bun#22128 for
+ * takeCoverage); the lines of standalone/server.ts are not in this report.
  */
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readdir, readFile } from "node:fs/promises";
