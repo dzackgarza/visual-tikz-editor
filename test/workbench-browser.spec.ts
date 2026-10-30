@@ -4411,6 +4411,112 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `lands a placed line's ends and a dragged Bézier control point on whole lattice points in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (2,4) .. controls (4,7) and (6,7) .. (8,4);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const curve = frame.locator('svg [data-source-id="path:2"]').first();
+        await expect(curve).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const rail = frame.locator("[data-diagram-tools]");
+        await expect(rail.getByRole("button", { name: /^Snap: / })).toHaveAccessibleName(
+          "Snap: lattice",
+        );
+        const numbers = (line: string) =>
+          [...line.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
+        const sourceLines = async () =>
+          (await editorDebug(page)).source.split("\n").map((line) => line.trim());
+        // A line placed between two off-lattice pen positions, away from every object point and
+        // alignment guide, is written on whole lattice points.
+        await input.touch([
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
+        ]);
+        await input.touch([
+          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
+        ]);
+        await input.penStroke([at(1.3, 1.6), at(2.4, 2.1), at(3.6, 2.4)]);
+        await expect.poll(async () => (await sourceLines()).filter((line) => line.startsWith("\\draw")).length).toBe(4);
+        const placed = (await sourceLines()).filter((line) => line.startsWith("\\draw")).at(-1)!;
+        assert.deepEqual(
+          numbers(placed),
+          [1, 2, 4, 2],
+          `The placed line's ends are not the nearest whole lattice points: ${placed}`,
+        );
+        // A Bézier control point dragged to an off-lattice pen position lands on a whole lattice point.
+        await input.touch([
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
+        ]);
+        // The placed line stays selected, with its controls near the curve; clear it on empty canvas first.
+        await input.touch([at(9, 9)]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+        await input.penStroke([await strokePoint(page, curve, 0.5)]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
+        // Control handles show next to a selected curve point: select the start (2,4) to reach (4,7).
+        const anchors = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:2"]');
+        await expect(anchors).toHaveCount(2);
+        const start = (await Promise.all((await anchors.all()).map((anchor) => stableCenter(anchor)))).sort(
+          (a, b) => a.x - b.x,
+        )[0];
+        await input.penStroke([start]);
+        await expect(
+          frame.getByRole("button", { name: "1 point selected", exact: true }),
+        ).toBeVisible();
+        const controls = frame.locator('circle[data-handle-kind="move-handle"][data-source-id="path:2"]');
+        await expect(controls).toHaveCount(1);
+        const firstControl = await stableCenter(controls.first());
+        const to = at(3.4, 8.6);
+        await input.penDown(firstControl);
+        for (let i = 1; i <= 8; i++) {
+          await input.penMove({
+            x: firstControl.x + ((to.x - firstControl.x) * i) / 8,
+            y: firstControl.y + ((to.y - firstControl.y) * i) / 8,
+          });
+        }
+        await input.penUp(to);
+        await expect
+          .poll(async () => (await sourceLines()).find((line) => line.includes(".. controls")))
+          .not.toMatch(/controls \(4,7\)/);
+        const dragged = (await sourceLines()).find((line) => line.includes(".. controls"))!;
+        assert.deepEqual(
+          numbers(dragged),
+          [2, 4, 3, 9, 6, 7, 8, 4],
+          `The dragged control point is not on the nearest whole lattice point: ${dragged}`,
+        );
+        await storyScreenshot(page, `lattice-whole-points-${tablet.name}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `offers touch-sized floating Properties controls and only mounted tabs in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
