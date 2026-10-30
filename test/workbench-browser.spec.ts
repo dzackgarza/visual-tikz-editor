@@ -595,6 +595,230 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `constrains an arrow's angle, a square, and an axis move, aligns to a bottom and a side, takes circle and arc radii from the centre, and ends an arc on a common angle or a lattice point of its ray, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (8,8) circle (3);
+\draw (-3,-3) rectangle (-1,-1);
+\draw (-3,4.5) -- (-1,4.5);
+\path[use as bounding box] (-6,-6) rectangle (14,14);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const rectangle = frame.locator('svg [data-source-id="path:3"]').first();
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        // The screen point `dx`, `dy` lattice units away from `from`.
+        const offset = (from: { x: number; y: number }, dx: number, dy: number) => ({
+          x: from.x + at(dx, dy).x - at(0, 0).x,
+          y: from.y + at(dx, dy).y - at(0, 0).y,
+        });
+        const target = frame.locator("[data-snap-target]").first();
+        const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        const lastDraw = async () =>
+          (await editorDebug(page)).source
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("\\draw"))
+            .at(-1)!;
+        const numbers = (text: string) =>
+          [...text.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
+        // A tool tap on a diagram whose geometry is still recomputing is dropped, so an undo waits for the editor to settle.
+        const undo = async () => {
+          await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+          await expect.poll(draws).toBe(5);
+          await editorReady(page);
+        };
+        const pick = async (choice: string) => {
+          await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+          await tap(frame.getByRole("option", { name: choice, exact: true }));
+        };
+        // Drags a pen from `from` to `to` in two moves, checks the target the last move names, and lifts.
+        const drag = async (from: { x: number; y: number }, to: { x: number; y: number }, named: string) => {
+          await input.penDown(from);
+          await input.penMove({ x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 });
+          await input.penMove(to);
+          await expect(target).toHaveAttribute("data-snap-target", named);
+          await input.penUp(to);
+          await expect.poll(draws).toBe(6);
+          return lastDraw();
+        };
+        const angle = (raw: string) => {
+          const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
+          return pair
+            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + Number(pair[3] ?? 0)
+            : Number(raw.replace(/[{}]/g, ""));
+        };
+        const arcAngles = (arc: string) => ({
+          start: angle(/start angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]),
+          end: angle(/end angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]),
+        });
+
+        // Angle snapping alone: an arrow drawn at 12.9 degrees is written at 15.
+        await setSnapRule(frame, input, "Lattice", false);
+        await setSnapRule(frame, input, "Alignment", false);
+        await setSnapRule(frame, input, "Angle", true);
+        await pick("Arrow");
+        const arrow = await drag(at(2, 1), at(5.5, 1.8), "Angle");
+        assert.match(arrow, /^\\draw\[->\]/, arrow);
+        const [x0, y0, x1, y1] = numbers(arrow.replace(/^\\draw\[->\]/, ""));
+        const arrowAngle = (Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI;
+        assert.ok(Math.abs(arrowAngle - 15) < 0.1, `The arrow is at ${arrowAngle} degrees: ${arrow}`);
+        await undo();
+        // The rectangle tool draws a square and names the constraint.
+        await pick("Rectangle");
+        const square = await drag(at(1, -3), at(4, -1.5), "Square");
+        const [sx0, sy0, sx1, sy1] = numbers(square);
+        assert.ok(
+          Math.abs(sx1 - sx0) > 1 && Math.abs(Math.abs(sx1 - sx0) - Math.abs(sy1 - sy0)) < 0.05,
+          `The constrained rectangle is ${sx1 - sx0} by ${sy1 - sy0}: ${square}`,
+        );
+        await undo();
+        // A selection move stays on its dominant axis and names it.
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        const grip = await strokePoint(page, rectangle, 0.06);
+        await input.penDown(grip);
+        await input.penMove(offset(grip, 1.5, 0.4));
+        await input.penMove(offset(grip, 3, 0.8));
+        await expect(target).toHaveAttribute("data-snap-target", "Axis");
+        await input.penUp(offset(grip, 3, 0.8));
+        await expect
+          .poll(async () => (await editorDebug(page)).source)
+          .toMatch(/\((-?[\d.]+),-3\) rectangle \((-?[\d.]+),-1\)/);
+        const moved = numbers(
+          /\((-?[\d.]+),-3\) rectangle \((-?[\d.]+),-1\)/.exec((await editorDebug(page)).source)![0],
+        );
+        assert.ok(
+          Math.abs(moved[0]) < 0.1 && Math.abs(moved[2] - 2) < 0.1,
+          `The axis move left the rectangle at x ${moved[0]} to ${moved[2]}`,
+        );
+        await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+        await expect
+          .poll(async () => (await editorDebug(page)).source)
+          .toContain("(-3,-3) rectangle (-1,-1)");
+
+        // Alignment snapping alone: the dragged rectangle's bottom meets the circle's bottom, then its left side meets the circle's right side.
+        await setSnapRule(frame, input, "Angle", false);
+        await setSnapRule(frame, input, "Alignment", true);
+        // `dx`, `dy` move the rectangle's centre from (-2,-2) in lattice units.
+        const slide = async (dx: number, dy: number, named: string, expected: RegExp) => {
+          const from = await strokePoint(page, rectangle, 0.06);
+          const to = offset(from, dx, dy);
+          await input.penDown(from);
+          for (let step = 1; step <= 8; step++) {
+            await input.penMove({
+              x: from.x + ((to.x - from.x) * step) / 8,
+              y: from.y + ((to.y - from.y) * step) / 8,
+            });
+          }
+          await expect(target).toHaveAttribute("data-snap-target", named);
+          await input.penUp(to);
+          await expect.poll(async () => (await editorDebug(page)).source).toMatch(expected);
+          await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+          await expect
+            .poll(async () => (await editorDebug(page)).source)
+            .toContain("(-3,-3) rectangle (-1,-1)");
+          await editorReady(page);
+        };
+        // The rectangle's bottom meets the circle's bottom at y=5; its left side then meets the circle's right side at x=11.
+        await slide(0.5, 8.15, "Aligned with bottom", /\(-2\.\d+,5\) rectangle \(-0\.\d+,7\)/);
+        await slide(13.95, 2.5, "Aligned with right", /\(11,-0\.\d+\) rectangle \(13,1\.\d+\)/);
+
+        // The circle and arc tools take the radius from the centre; the written radius is the lattice distance.
+        await setSnapRule(frame, input, "Alignment", false);
+        await setSnapRule(frame, input, "Lattice", true);
+        await pick("Circle");
+        const circle = await drag(at(2, -4), at(5, -4), "Lattice");
+        assert.match(circle, /\(2,-4\) circle \(\{3cm\}\)/, circle);
+        await undo();
+        await pick("Arc");
+        const ray = (centre: { x: number; y: number }, radius: number, degrees: number) =>
+          at(
+            centre.x + radius * Math.cos((degrees * Math.PI) / 180),
+            centre.y + radius * Math.sin((degrees * Math.PI) / 180),
+          );
+        // Centre (10,-3), radius point (12,-1): the half circle ends on the lattice point (8,-5) of that ray.
+        for (const point of [at(10, -3), at(12, -1)]) await input.penStroke([point]);
+        for (const degrees of [90, 135, 180]) await input.penHover(ray({ x: 10, y: -3 }, Math.SQRT2 * 2, degrees));
+        const halfEnd = ray({ x: 10, y: -3 }, Math.SQRT2 * 2, 227);
+        await input.penHover(halfEnd);
+        await expect(target).toHaveAttribute("data-snap-target", "Lattice");
+        await input.penStroke([halfEnd]);
+        await expect.poll(draws).toBe(6);
+        const half = await lastDraw();
+        assert.match(half, /^\\draw \(12,-1\) arc\[/, half);
+        assert.match(half, /radius=\{sqrt\(8\)\*1cm\}/, half);
+        const halfAngles = arcAngles(half);
+        assert.ok(
+          Math.abs(halfAngles.end - halfAngles.start - 180) < 1e-6 && Math.abs(((halfAngles.end % 360) + 360) % 360 - 225) < 1e-6,
+          `The half circle runs from ${halfAngles.start} to ${halfAngles.end}: ${half}`,
+        );
+        await undo();
+        // Radius 3 has no lattice point near 31 degrees, so the common angle 30 takes the end.
+        assert.equal((await editorDebug(page)).tool, "addArc", "the Arc tool stays active across a commit and an undo");
+        for (const point of [at(10, -3), at(13, -3)]) await input.penStroke([point]);
+        const thirtyEnd = ray({ x: 10, y: -3 }, 3, 31);
+        for (const degrees of [8, 20]) await input.penHover(ray({ x: 10, y: -3 }, 3, degrees));
+        await input.penHover(thirtyEnd);
+        await expect(target).toHaveAttribute("data-snap-target", "Angle");
+        await input.penStroke([thirtyEnd]);
+        await expect.poll(draws).toBe(6);
+        const thirty = await lastDraw();
+        assert.match(thirty, /radius=\{3cm\}/, thirty);
+        const thirtyAngles = arcAngles(thirty);
+        assert.ok(
+          Math.abs(thirtyAngles.end - 30) < 1e-6 && Math.abs(thirtyAngles.start) < 1e-6,
+          `The arc runs from ${thirtyAngles.start} to ${thirtyAngles.end}: ${thirty}`,
+        );
+        await undo();
+        // A centre on an object point off the lattice still takes an arc; its end lands on the common angle 90.
+        await input.penHover(at(-1, 4.5));
+        await expect(target).toHaveAttribute("data-snap-target", "Endpoint");
+        for (const point of [at(-1, 4.5), at(1, 5)]) await input.penStroke([point]);
+        const upEnd = ray({ x: -1, y: 4.5 }, Math.sqrt(4.25), 91);
+        for (const degrees of [40, 70]) await input.penHover(ray({ x: -1, y: 4.5 }, Math.sqrt(4.25), degrees));
+        await input.penHover(upEnd);
+        await expect(target).toHaveAttribute("data-snap-target", "Angle");
+        await input.penStroke([upEnd]);
+        await expect.poll(draws).toBe(6);
+        const up = await lastDraw();
+        assert.match(up, /^\\draw \(1,5\) arc\[/, up);
+        const upAngles = arcAngles(up);
+        assert.ok(Math.abs(upAngles.end - 90) < 1e-6, `The arc ends at ${upAngles.end}: ${up}`);
+        await storyScreenshot(page, `constrained-constructions-${tablet.name}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `commits the locked curve its preview shows, with lattice control points, in ${tablet.name}`,
       async function () {
         await editorReady(page);
