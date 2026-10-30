@@ -6064,7 +6064,7 @@ index cf4cf2cf..a1e10f63 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..f6c440d0 100644
+index 4e22ccfa..9a259817 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -6752,7 +6752,8 @@ index 4e22ccfa..f6c440d0 100644
      canvasTransform
    });
  
-   const { maxZoomScale } = useCanvasViewportPersistence({
+-  const { maxZoomScale } = useCanvasViewportPersistence({
++  const { maxZoomScale, viewReady } = useCanvasViewportPersistence({
 +    fitToContentModeActive,
 +    fitToContentModeActiveRef,
 +    setFitToContentModeActive,
@@ -7988,7 +7989,7 @@ index 4e22ccfa..f6c440d0 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,6 +4851,191 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4851,195 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -8180,7 +8181,11 @@ index 4e22ccfa..f6c440d0 100644
    return (
      <>
        <CanvasPanelView
-@@ -3863,7 +5058,21 @@ export const CanvasPanel = memo(function CanvasPanel({
++        viewReady={viewReady}
+         prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
+         showRulers={showRulers}
+         viewportSize={viewportSize}
+@@ -3863,7 +5059,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -8203,7 +8208,7 @@ index 4e22ccfa..f6c440d0 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5089,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5090,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -8218,7 +8223,7 @@ index 4e22ccfa..f6c440d0 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +5115,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5116,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -8252,7 +8257,7 @@ index 4e22ccfa..f6c440d0 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5147,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5148,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -8262,7 +8267,7 @@ index 4e22ccfa..f6c440d0 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5160,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5161,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -8297,7 +8302,7 @@ index 4e22ccfa..f6c440d0 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5214,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5215,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -8305,7 +8310,7 @@ index 4e22ccfa..f6c440d0 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5223,81 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5224,81 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -8388,7 +8393,7 @@ index 4e22ccfa..f6c440d0 100644
          <Suspense fallback={null}>
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
-index f0ff59f8..0a361c03 100644
+index f0ff59f8..7e221135 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 @@ -14,6 +14,7 @@ import type { CanvasContextMenuDefinition } from "../../context-menu";
@@ -8416,7 +8421,16 @@ index f0ff59f8..0a361c03 100644
  import { fmt, worldToSvgY, type RulerTick, type VisibleRanges } from "./geometry";
  import { CanvasContextMenu } from "../CanvasContextMenu";
  import { RenderedTooltip } from "../RenderedTooltip";
-@@ -98,6 +100,7 @@ type CanvasPanelViewProps = {
+@@ -75,6 +77,8 @@ type CanvasPanelViewProps = {
+   LEFT_RULER_DRAG_SOURCE_WIDTH_PX: number;
+   toolMode: ToolMode;
+   viewportRef: RefObject<HTMLDivElement | null>;
++  /** The shown figure's startup or restored view is installed; the transform is not about to change. */
++  viewReady: boolean;
+   onViewportKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
+   onViewportCopy: (event: ReactClipboardEvent<HTMLDivElement>) => void;
+   onViewportCut: (event: ReactClipboardEvent<HTMLDivElement>) => void;
+@@ -98,6 +102,7 @@ type CanvasPanelViewProps = {
    onSvgPatchFallback: (reason: "replaceDefs" | "replaceAll" | "patch-failure") => void;
    repeatPreviewModel: SvgRenderModel | null;
    interactionSvgRef: RefObject<SVGSVGElement | null>;
@@ -8424,7 +8438,7 @@ index f0ff59f8..0a361c03 100644
    onInteractionPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
    onInteractionPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
    onInteractionLostPointerCapture: (event: ReactPointerEvent<SVGSVGElement>) => void;
-@@ -105,6 +108,7 @@ type CanvasPanelViewProps = {
+@@ -105,6 +110,7 @@ type CanvasPanelViewProps = {
    onInteractionPointerEnter: (event: ReactPointerEvent<SVGSVGElement>) => void;
    onInteractionPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
    gridLines: GridLines | null;
@@ -8432,7 +8446,7 @@ index f0ff59f8..0a361c03 100644
    gridMinorStrokeWidth: number;
    gridMajorStrokeWidth: number;
    gridAxisStrokeWidth: number;
-@@ -123,6 +127,7 @@ type CanvasPanelViewProps = {
+@@ -123,6 +129,7 @@ type CanvasPanelViewProps = {
    previewArrowPoints: (x1: number, y1: number, x2: number, y2: number, size: number) => string;
    hitRegions: readonly HitRegion[];
    hoveredElementId: string | null;
@@ -8440,7 +8454,7 @@ index f0ff59f8..0a361c03 100644
    editableTextRegionKeys: ReadonlySet<string>;
    draggableSourceIds: ReadonlySet<string>;
    hitRegionCursorByTargetId?: ReadonlyMap<string, string>;
-@@ -132,6 +137,8 @@ type CanvasPanelViewProps = {
+@@ -132,6 +139,8 @@ type CanvasPanelViewProps = {
    onHoverChange: (id: string | null) => void;
    nodePositionLinks: readonly NodePositionLinkDisplay[];
    marqueeBounds: SvgBounds | null;
@@ -8449,7 +8463,7 @@ index f0ff59f8..0a361c03 100644
    selectionBoxes: readonly SelectionBoxDisplay[];
    adornmentHighlightBoxes: readonly AdornmentHighlightBox[];
    selectedAdornmentConnectors: readonly AdornmentConnectorDisplay[];
-@@ -147,6 +154,12 @@ type CanvasPanelViewProps = {
+@@ -147,6 +156,12 @@ type CanvasPanelViewProps = {
    onNodeAnchorHoverChange?: (targetId: string | null) => void;
    nodePositionTargetTooltip: { content: string; anchor: { x: number; y: number } } | null;
    handleHalfSize: number;
@@ -8462,7 +8476,7 @@ index f0ff59f8..0a361c03 100644
    handleDisplays: readonly HandleDisplay[];
    onHandlePointerDown: (event: ReactPointerEvent<SVGElement>, handle: EditHandle) => void;
    onResizeHandlePointerDown: (event: ReactPointerEvent<SVGElement>, sourceId: string, role: ResizeRole, cursor: string) => void;
-@@ -157,6 +170,11 @@ type CanvasPanelViewProps = {
+@@ -157,6 +172,11 @@ type CanvasPanelViewProps = {
      centerPivotWorld: WorldPoint,
      cursor: string
    ) => void;
@@ -8474,7 +8488,7 @@ index f0ff59f8..0a361c03 100644
    platform: EditorPlatform;
    contextMenuState: CanvasContextMenuState | null;
    commandRuntimeBindings: CommandBindings;
-@@ -184,6 +202,7 @@ type CanvasPanelViewProps = {
+@@ -184,6 +204,7 @@ type CanvasPanelViewProps = {
    onTextEditTextareaDrop: (event: ReactDragEvent<HTMLTextAreaElement>) => void;
    onTextEditTextareaKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
    selectionHint: string | null;
@@ -8482,7 +8496,15 @@ index f0ff59f8..0a361c03 100644
    showDevPanel: boolean;
    snapDebugRect: { left: number; top: number; width: number; height: number };
    onSnapDebugMovePointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
-@@ -230,12 +249,14 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -206,6 +227,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+     LEFT_RULER_DRAG_SOURCE_WIDTH_PX,
+     toolMode,
+     viewportRef,
++    viewReady,
+     onViewportKeyDown,
+     onViewportCopy,
+     onViewportCut,
+@@ -230,12 +252,14 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      repeatPreviewModel,
      interactionSvgRef,
      onInteractionPointerDown,
@@ -8497,7 +8519,7 @@ index f0ff59f8..0a361c03 100644
      gridMinorStrokeWidth,
      gridMajorStrokeWidth,
      gridAxisStrokeWidth,
-@@ -254,6 +275,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -254,6 +278,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      previewArrowPoints,
      hitRegions,
      hoveredElementId,
@@ -8505,7 +8527,7 @@ index f0ff59f8..0a361c03 100644
      editableTextRegionKeys,
      draggableSourceIds,
      hitRegionCursorByTargetId,
-@@ -263,6 +285,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -263,6 +288,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      onHoverChange,
      nodePositionLinks,
      marqueeBounds,
@@ -8514,7 +8536,7 @@ index f0ff59f8..0a361c03 100644
      selectionBoxes,
      adornmentHighlightBoxes,
      selectedAdornmentConnectors,
-@@ -279,9 +303,19 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -279,9 +306,19 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      nodePositionTargetTooltip,
      handleHalfSize,
      handleDisplays,
@@ -8534,7 +8556,7 @@ index f0ff59f8..0a361c03 100644
      platform,
      contextMenuState,
      commandRuntimeBindings,
-@@ -308,6 +342,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -308,6 +345,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
      onTextEditTextareaDrop,
      onTextEditTextareaKeyDown,
      selectionHint,
@@ -8542,7 +8564,7 @@ index f0ff59f8..0a361c03 100644
      showDevPanel,
      snapDebugRect,
      onSnapDebugMovePointerDown,
-@@ -383,7 +418,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -383,7 +421,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
    return (
      <div className={css.panel}>
        <div className={[css.canvasGrid, showRulers ? "" : css.canvasGridNoRulers].filter(Boolean).join(" ")}>
@@ -8551,7 +8573,15 @@ index f0ff59f8..0a361c03 100644
  
          {showRulers ? (
            <div className={css.topRulerSlot} data-select="chrome">
-@@ -511,6 +546,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -463,6 +501,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+           className={[css.viewport, viewportCursorClass].filter(Boolean).join(" ")}
+           ref={viewportRef}
+           data-canvas-viewport="true"
++          data-canvas-view={viewReady ? "ready" : "pending"}
+           data-testid="canvas-viewport"
+           tabIndex={0}
+           onKeyDown={onViewportKeyDown}
+@@ -511,6 +550,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  onFallback={onSvgPatchFallback}
                  hostRef={svgLayerHostRef}
                />
@@ -8569,7 +8599,7 @@ index f0ff59f8..0a361c03 100644
  
                {repeatPreviewModel ? (
                  <svg
-@@ -534,6 +580,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -534,6 +584,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  viewBox={`${svgResult.viewBox.x} ${svgResult.viewBox.y} ${svgResult.viewBox.width} ${svgResult.viewBox.height}`}
                  onClick={onBackgroundClick}
                  onPointerDown={onInteractionPointerDown}
@@ -8577,7 +8607,7 @@ index f0ff59f8..0a361c03 100644
                  onPointerUp={onInteractionPointerUp}
                  onPointerCancel={onInteractionPointerUp}
                  onLostPointerCapture={onInteractionLostPointerCapture}
-@@ -543,7 +590,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -543,7 +594,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                  onContextMenu={onCanvasContextMenu}
                >
                  {gridLines && (
@@ -8586,7 +8616,7 @@ index f0ff59f8..0a361c03 100644
                      {gridLines.verticalMinor.map((x: number) => (
                        <line
                          key={`v-min-${x}`}
-@@ -569,8 +616,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -569,8 +620,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      {gridLines.horizontalMinor.map((y: number) => (
                        <line
                          key={`h-min-${y}`}
@@ -8597,7 +8627,7 @@ index f0ff59f8..0a361c03 100644
                          y1={y}
                          y2={y}
                          className={css.gridMinor}
-@@ -580,14 +627,28 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -580,14 +631,28 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      {gridLines.horizontalMajor.map((y: number) => (
                        <line
                          key={`h-maj-${y}`}
@@ -8628,7 +8658,7 @@ index f0ff59f8..0a361c03 100644
                      {gridLines.verticalAxisX != null && (
                        <line
                          key="v-axis-0"
-@@ -602,8 +663,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -602,8 +667,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      {gridLines.horizontalAxisY != null && (
                        <line
                          key="h-axis-0"
@@ -8639,7 +8669,7 @@ index f0ff59f8..0a361c03 100644
                          y1={gridLines.horizontalAxisY}
                          y2={gridLines.horizontalAxisY}
                          className={css.gridAxis}
-@@ -681,7 +742,24 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -681,7 +746,24 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    previewArrowPoints={previewArrowPoints}
                  />
  
@@ -8665,7 +8695,7 @@ index f0ff59f8..0a361c03 100644
                    hitRegions={hitRegions}
                    hoveredElementId={hoveredElementId}
                    toolMode={toolMode}
-@@ -692,7 +770,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -692,7 +774,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    onElementContextMenu={onElementContextMenu}
                    onElementDoubleClick={onElementDoubleClick}
                    onHoverChange={onHoverChange}
@@ -8674,7 +8704,7 @@ index f0ff59f8..0a361c03 100644
  
                  <NodePositionLinkOverlay
                    links={nodePositionLinks}
-@@ -701,6 +779,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -701,6 +783,8 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
  
                  <SelectionOverlay
                    marqueeBounds={marqueeBounds}
@@ -8683,7 +8713,7 @@ index f0ff59f8..0a361c03 100644
                    selectionBoxes={selectionBoxes}
                    adornmentHighlightBoxes={adornmentHighlightBoxes}
                    adornmentConnectors={selectedAdornmentConnectors}
-@@ -753,9 +833,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -753,9 +837,17 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                    }
                  />
  
@@ -8701,7 +8731,7 @@ index f0ff59f8..0a361c03 100644
                      handleHalfSize={handleHalfSize}
                      handleStrokeWidth={handleStrokeWidth}
                      onHandlePointerDown={onHandlePointerDown}
-@@ -763,6 +851,9 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -763,6 +855,9 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
                      onElementContextMenu={onElementContextMenu}
                      onResizeHandlePointerDown={onResizeHandlePointerDown}
                      onRotateHandlePointerDown={onRotateHandlePointerDown}
@@ -8711,7 +8741,7 @@ index f0ff59f8..0a361c03 100644
                    />
                  )}
                </svg>
-@@ -993,7 +1084,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -993,7 +1088,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
              </RenderedTooltip>
            )}
            {selectionHint && !warning ? (
@@ -13654,10 +13684,14 @@ index 43f01253..1f14d077 100644
 +    Math.abs(left.scale - right.scale) < 1e-6;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-index de737af8..7528fb3b 100644
+index de737af8..24622e7d 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasViewportPersistence.ts
-@@ -7,10 +7,16 @@ import {
+@@ -4,13 +4,20 @@ import {
+   useLayoutEffect,
+   useMemo,
+   useRef,
++  useState,
    type MutableRefObject,
    type RefObject
  } from "react";
@@ -13674,7 +13708,7 @@ index de737af8..7528fb3b 100644
  import type { CanvasDispatch, CanvasSnapshot, ValueSetter } from "./types";
  
  type FigureViewportState = {
-@@ -19,9 +25,11 @@ type FigureViewportState = {
+@@ -19,9 +26,11 @@ type FigureViewportState = {
  };
  
  export type UseCanvasViewportPersistenceArgs = {
@@ -13686,7 +13720,7 @@ index de737af8..7528fb3b 100644
    dispatch: CanvasDispatch;
    dispatchCanvasTransform: (transform: CanvasTransform) => void;
    activeDocumentId: string;
-@@ -33,6 +41,7 @@ export type UseCanvasViewportPersistenceArgs = {
+@@ -33,6 +42,7 @@ export type UseCanvasViewportPersistenceArgs = {
    setFitToContentModeActive: ValueSetter<boolean>;
    viewportRef: RefObject<HTMLDivElement | null>;
    canvasTransformRef: MutableRefObject<CanvasTransform>;
@@ -13694,7 +13728,7 @@ index de737af8..7528fb3b 100644
    fitToContentRequestToken: number;
    zoomRequestToken: number;
    zoomRequestDirection: "in" | "out" | null;
-@@ -48,9 +57,11 @@ export type UseCanvasViewportPersistenceArgs = {
+@@ -48,9 +58,11 @@ export type UseCanvasViewportPersistenceArgs = {
  };
  
  export function useCanvasViewportPersistence({
@@ -13706,7 +13740,7 @@ index de737af8..7528fb3b 100644
    dispatch,
    dispatchCanvasTransform,
    activeDocumentId,
-@@ -62,6 +73,7 @@ export function useCanvasViewportPersistence({
+@@ -62,6 +74,7 @@ export function useCanvasViewportPersistence({
    setFitToContentModeActive,
    viewportRef,
    canvasTransformRef,
@@ -13714,17 +13748,27 @@ index de737af8..7528fb3b 100644
    fitToContentRequestToken,
    zoomRequestToken,
    zoomRequestDirection,
-@@ -75,6 +87,9 @@ export function useCanvasViewportPersistence({
+@@ -74,11 +87,18 @@ export function useCanvasViewportPersistence({
+   lastEditChangeToken,
    MIN_SCALE,
    MAX_SCALE
- }: UseCanvasViewportPersistenceArgs): { maxZoomScale: number } {
+-}: UseCanvasViewportPersistenceArgs): { maxZoomScale: number } {
++}: UseCanvasViewportPersistenceArgs): { maxZoomScale: number; viewReady: boolean } {
 +  const pendingRestore = useEditorStore(state => state.pendingViewportRestore);
 +  const renderReady = useEditorStore(state => state.pendingRequestId === null &&
 +    state.snapshot.activeFigureId === state.activeFigureId);
    const viewportStateByFigureKeyRef = useRef(new Map<string, FigureViewportState>());
    const visitedFigureKeysRef = useRef(new Set<string>());
    const previousFigureViewportKeyRef = useRef<string | null>(null);
-@@ -102,16 +117,17 @@ export function useCanvasViewportPersistence({
+   const pendingFirstVisitAutoFitKeyRef = useRef<string | null>(null);
++  // The figure whose view this hook has installed: centred on the page, restored by
++  // the host, or brought back from an earlier visit. Until the shown figure's view is
++  // installed, the canvas transform is about to change.
++  const [installedViewKey, setInstalledViewKey] = useState<string | null>(null);
+ 
+   const fitToContentScale = useMemo(
+     () => computeFitToContentScale(
+@@ -102,16 +122,17 @@ export function useCanvasViewportPersistence({
      const renderViewBox = svgResult?.viewBox ?? fitViewBox;
      if (!fitViewBox || !renderViewBox || !viewportRef.current) return false;
  
@@ -13746,7 +13790,7 @@ index de737af8..7528fb3b 100644
      const translateX = fitLeft - (fitViewBox.x - renderViewBox.x) * scale;
      const translateY = fitTop - (fitViewBox.y - renderViewBox.y) * scale;
  
-@@ -119,6 +135,65 @@ export function useCanvasViewportPersistence({
+@@ -119,6 +140,65 @@ export function useCanvasViewportPersistence({
      return true;
    }, [baseSvgResult, dispatchCanvasTransform, MAX_SCALE, MIN_SCALE, svgResult, viewportRef]);
  
@@ -13812,7 +13856,7 @@ index de737af8..7528fb3b 100644
    const activeFigureViewportKey = useMemo(
      () => makeFigureViewportKey(activeDocumentId, activeFigureId),
      [activeDocumentId, activeFigureId]
-@@ -154,6 +229,25 @@ export function useCanvasViewportPersistence({
+@@ -154,6 +234,26 @@ export function useCanvasViewportPersistence({
    }, [tabOrder]);
  
    useLayoutEffect(() => {
@@ -13832,13 +13876,21 @@ index de737af8..7528fb3b 100644
 +      setFitToContentModeActive(pendingRestore.fitToContent);
 +      dispatchCanvasTransform(pendingRestore.transform);
 +      dispatch({ type: "RESTORE_CANVAS_VIEWPORT", restore: null });
++      setInstalledViewKey(activeFigureViewportKey);
 +      return;
 +    }
 +    if (!renderReady || snapshotSource !== source || !baseSvgResult || !svgResult) return;
      const pendingAutoFit = pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey;
      if (previousFigureViewportKeyRef.current === activeFigureViewportKey && !pendingAutoFit) {
        return;
-@@ -179,10 +273,10 @@ export function useCanvasViewportPersistence({
+@@ -173,32 +273,38 @@ export function useCanvasViewportPersistence({
+       }
+       dispatchCanvasTransform(savedState.transform);
+       previousFigureViewportKeyRef.current = activeFigureViewportKey;
++      setInstalledViewKey(activeFigureViewportKey);
+       return;
+     }
+ 
      const hasVisited = visitedFigureKeysRef.current.has(activeFigureViewportKey);
      if (!hasVisited || pendingAutoFit) {
        visitedFigureKeysRef.current.add(activeFigureViewportKey);
@@ -13852,8 +13904,17 @@ index de737af8..7528fb3b 100644
        previousFigureViewportKeyRef.current = activeFigureViewportKey;
        if (didFit) {
          pendingFirstVisitAutoFitKeyRef.current = null;
-@@ -196,9 +290,11 @@ export function useCanvasViewportPersistence({
++        setInstalledViewKey(activeFigureViewportKey);
+       } else {
+         pendingFirstVisitAutoFitKeyRef.current = activeFigureViewportKey;
++        setInstalledViewKey(null);
+       }
+       return;
+     }
+ 
+     pendingFirstVisitAutoFitKeyRef.current = null;
      previousFigureViewportKeyRef.current = activeFigureViewportKey;
++    setInstalledViewKey(activeFigureViewportKey);
    }, [
      activeFigureViewportKey,
 +    pendingRestore, renderReady, source, snapshotSource, baseSvgResult, svgResult, dispatch,
@@ -13865,7 +13926,7 @@ index de737af8..7528fb3b 100644
      fitToContentModeActiveRef,
      saveFigureViewportState,
      setFitToContentModeActive
-@@ -214,8 +310,10 @@ export function useCanvasViewportPersistence({
+@@ -214,8 +320,10 @@ export function useCanvasViewportPersistence({
      if (pendingFirstVisitAutoFitKeyRef.current === activeFigureViewportKey) {
        return;
      }
@@ -13878,7 +13939,16 @@ index de737af8..7528fb3b 100644
  
    const handledFitRequestRef = useRef(0);
    useEffect(() => {
-@@ -390,3 +488,14 @@ function computeFitToContentScale(
+@@ -359,7 +467,7 @@ export function useCanvasViewportPersistence({
+     viewportSize.width
+   ]);
+ 
+-  return { maxZoomScale };
++  return { maxZoomScale, viewReady: pendingRestore === null && installedViewKey === activeFigureViewportKey };
+ }
+ 
+ function computeFitToContentScale(
+@@ -390,3 +498,14 @@ function computeFitToContentScale(
  function makeFigureViewportKey(documentId: string, figureId: string | null): string {
    return `${documentId}::${figureId ?? "__all__"}`;
  }

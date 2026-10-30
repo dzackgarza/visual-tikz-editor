@@ -205,10 +205,12 @@ export type EditorDebug = {
 
 /**
  * Every shown diagram editor has loaded the current source, reports no synchronization
- * issue, has rendered that source, and holds a startup view that no longer moves. The
- * host reports the load once the editor's parse matches the source; the first render
- * and the view centred on the page follow, and a pen contact before them is measured
- * against a view that is about to change.
+ * issue, has rendered that source, has installed its startup view, and holds a view that
+ * no longer moves. The host reports the load once the editor's parse matches the source;
+ * the first render and the view centred on the page follow, and the canvas marks its view
+ * ready only once that view is installed (data-canvas-view). The rail then shifts the
+ * startup view as it reports the space it takes, so the view must also hold still across
+ * two frames. A pen contact before either is measured against a view about to change.
  */
 export async function editorReady(page: Page, timeout = 30_000): Promise<void> {
   await expect(page.locator('[data-editor-state="ready"]:visible').first()).toBeVisible({
@@ -230,7 +232,11 @@ export async function editorReady(page: Page, timeout = 30_000): Promise<void> {
           if (before.pendingRequestId !== null || before.snapshotSource !== before.source) {
             return "rendering";
           }
-          if ((document.querySelector('[data-canvas-viewport="true"]')?.clientWidth ?? 0) === 0) {
+          const viewport = document.querySelector('[data-canvas-viewport="true"]');
+          if (viewport?.getAttribute("data-canvas-view") !== "ready") {
+            return "startup view pending";
+          }
+          if (viewport.clientWidth === 0) {
             return "no canvas size";
           }
           await new Promise(requestAnimationFrame);
