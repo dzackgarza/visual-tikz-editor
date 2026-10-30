@@ -2913,7 +2913,7 @@ describe("standalone workbench host boundary", function () {
           .fill(String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (2cm);\end{tikzpicture}`);
         const frame = editorFrame(page);
         const circle = frame.locator("circle[data-source-id]");
-        await expect(circle).toBeInViewport();
+        await expect(circle).toBeAttached();
         const input = await TabletInput.attach(page);
         const tapCenter = async (locator: ReturnType<typeof frame.locator>) => {
           return stableCenter(locator);
@@ -2921,7 +2921,9 @@ describe("standalone workbench host boundary", function () {
         await input.touch([
           await tapCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
+        // The startup view depends on the canvas size at mount; the user fits the figure through the zoom popup.
         await fitDiagram(frame, input);
+        await expect(circle).toBeInViewport();
         await input.longPress(
           await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         );
