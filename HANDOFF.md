@@ -2,7 +2,7 @@
 
 ## Task and completion condition
 
-Deliver the complete standalone mathematical diagram editor and reusable host API. Drawing, selection, correction, source editing, saving, export, and reopening must form one coherent pen-and-touch workflow. Authored TikZ remains authoritative. This is the authoritative work inventory. The agent-memory card `PLAN-TABLET-DIAGRAM-WORKSPACE` holds the planning context.
+Deliver the complete standalone mathematical diagram editor and reusable host API. Drawing, selection, correction, source editing, saving, export, and reopening must form one coherent pen-and-touch workflow. Authored TikZ remains authoritative. This is the authoritative work inventory. The agent-memory plan card `PLAN-TABLET-DIAGRAM-WORKSPACE` holds the planning context; read it with `agent-memory plan show PLAN-TABLET-DIAGRAM-WORKSPACE` from this repository (it is a schema-backed card, not a memory note, so `retrieve` cannot read it).
 
 Completion requires every workstream below to meet its acceptance condition, a software gate on the resulting revision, physical-tablet qualification, and an immutable release with its artifacts. Closed issues and prereleases do not discharge unresolved requirements. No stub allowance is recorded.
 
