@@ -197,6 +197,9 @@ export type EditorDebug = {
   settings: {
     canvas: {
       latticeLock: boolean;
+      snapObjects: boolean;
+      snapAlignment: boolean;
+      constrainGeometry: boolean;
       freehandSimplificationUnits: number;
       freehandAutoApply: boolean;
     };

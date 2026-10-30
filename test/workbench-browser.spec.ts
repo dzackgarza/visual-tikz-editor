@@ -49,6 +49,28 @@ describe("standalone workbench host boundary", function () {
     it(title, run);
   }
 
+  type SnapRule = "Lattice" | "Objects" | "Alignment" | "Angle";
+
+  /** Opens the rail's snap control, puts one rule in the wanted state, and closes it. */
+  async function setSnapRule(
+    frame: FrameLocator,
+    input: TabletInput,
+    rule: SnapRule,
+    on: boolean,
+  ): Promise<void> {
+    const trigger = frame.locator("[data-diagram-tools]").getByRole("button", { name: /^Snap: / });
+    await input.touch([await stableCenter(trigger)]);
+    const popup = frame.getByRole("dialog", { name: "Tool options" });
+    const toggle = popup.getByRole("button", { name: rule, exact: true });
+    await expect(toggle).toBeVisible();
+    if ((await toggle.getAttribute("aria-pressed")) !== String(on)) {
+      await input.touch([await stableCenter(toggle)]);
+    }
+    await expect(toggle).toHaveAttribute("aria-pressed", String(on));
+    await input.touch([await stableCenter(trigger)]);
+    await expect(popup).toHaveCount(0);
+  }
+
   async function snapshotResult(): Promise<EditorSnapshotResult> {
     return snapshotResultSchema.parse(JSON.parse(await page.locator("#result").innerText()));
   }
@@ -283,10 +305,10 @@ describe("standalone workbench host boundary", function () {
           locked.length >= 4 && locked.every(Number.isInteger),
           `A line drawn with default settings leaves the lattice: ${locked}`,
         );
-        const lock = rail.getByRole("button", { name: "Lock to lattice", exact: true });
-        await expect(lock).toHaveAttribute("aria-pressed", "true");
-        await input.touch([await stableCenter(lock)]);
-        await expect(lock).toHaveAttribute("aria-pressed", "false");
+        const snap = rail.getByRole("button", { name: /^Snap: / });
+        await expect(snap).toHaveAccessibleName("Snap: lattice");
+        await setSnapRule(frame, input, "Lattice", false);
+        await expect(snap).toHaveAccessibleName("Snap: objects");
         // Zoomed out, a lattice cell is a few pixels wide: points still move freely.
         const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
         await input.touch([await stableCenter(zoom)]);
@@ -299,6 +321,122 @@ describe("standalone workbench host boundary", function () {
         assert.ok(
           free.some((value) => !Number.isInteger(value)),
           `With the lock off the line still lands on the lattice: ${free}`,
+        );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `shows one snap control naming the active rule, with lattice, object, alignment and angle snapping behind it, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\node[draw] (A) at (5,5) {A};
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const node = frame.locator('svg [data-source-id="path:2"]').first();
+        await expect(node).toBeAttached();
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        await fitDiagram(frame, input);
+        const rail = frame.locator("[data-diagram-tools]");
+        const popup = frame.getByRole("dialog", { name: "Tool options" });
+        // At rest the rail names the active rule and holds no separate lattice or angle toggles.
+        const snap = rail.getByRole("button", { name: /^Snap: / });
+        await expect(snap).toHaveAccessibleName("Snap: lattice");
+        await expect(
+          rail.getByRole("button", { name: "Lock to lattice", exact: true }),
+        ).toHaveCount(0);
+        await expect(
+          rail.getByRole("button", { name: "Constrain geometry", exact: true }),
+        ).toHaveCount(0);
+        // The zoom popup keeps the view settings only.
+        const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
+        await tap(zoom);
+        await expect(popup.getByRole("button", { name: "Grid", exact: true })).toBeVisible();
+        for (const name of ["Lattice", "Objects", "Alignment", "Angle"]) {
+          await expect(popup.getByRole("button", { name, exact: true })).toHaveCount(0);
+        }
+        await tap(zoom);
+        await expect(popup).toHaveCount(0);
+        // The snap control shows every rule with its state.
+        await tap(snap);
+        const rule = (name: SnapRule) => popup.getByRole("button", { name, exact: true });
+        for (const [name, pressed] of [
+          ["Lattice", "true"],
+          ["Objects", "true"],
+          ["Alignment", "true"],
+          ["Angle", "false"],
+        ] as const) {
+          await expect(rule(name)).toHaveAttribute("aria-pressed", pressed);
+        }
+        await storyScreenshot(page, `snap-control-${tablet.name}`);
+        // Turning rules off walks the name down the precedence order, and the settings follow.
+        await tap(rule("Lattice"));
+        await expect(snap).toHaveAccessibleName("Snap: objects");
+        await tap(rule("Objects"));
+        await expect(snap).toHaveAccessibleName("Snap: alignment");
+        await tap(rule("Alignment"));
+        await expect(snap).toHaveAccessibleName("Snap: off");
+        await tap(rule("Angle"));
+        await expect(snap).toHaveAccessibleName("Snap: angle");
+        const canvas = (await editorDebug(page)).settings.canvas;
+        assert.deepEqual(
+          {
+            latticeLock: canvas.latticeLock,
+            snapObjects: canvas.snapObjects,
+            snapAlignment: canvas.snapAlignment,
+            constrainGeometry: canvas.constrainGeometry,
+          },
+          { latticeLock: false, snapObjects: false, snapAlignment: false, constrainGeometry: true },
+        );
+        await tap(rule("Angle"));
+        await tap(rule("Objects"));
+        await expect(snap).toHaveAccessibleName("Snap: objects");
+        await tap(snap);
+        await expect(popup).toHaveCount(0);
+        // Object snapping: a line started at the node's edge is attached to the node in the source.
+        const drawFromNodeEdge = async () => {
+          const box = (await node.boundingBox())!;
+          await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+          await tap(frame.getByRole("option", { name: "Line", exact: true }));
+          const from = { x: box.x + box.width, y: box.y + box.height / 2 };
+          await input.penStroke([
+            from,
+            { x: from.x + 60, y: from.y + 40 },
+            { x: from.x + 120, y: from.y + 80 },
+          ]);
+          const draws = async () =>
+            ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+          await expect.poll(draws).toBe(3);
+          const added = (await editorDebug(page)).source
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("\\draw"))
+            .at(-1)!;
+          await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+          await expect.poll(draws).toBe(2);
+          return added;
+        };
+        const attached = await drawFromNodeEdge();
+        assert.match(
+          attached,
+          /\(A(\.[a-z ]+)?\)/,
+          `With Objects on, the line is not attached to the node: ${attached}`,
+        );
+        await setSnapRule(frame, input, "Objects", false);
+        await expect(snap).toHaveAccessibleName("Snap: off");
+        const loose = await drawFromNodeEdge();
+        assert.doesNotMatch(
+          loose,
+          /\(A[.)]/,
+          `With Objects off, the line is still attached to the node: ${loose}`,
         );
       },
     );
@@ -340,9 +478,9 @@ describe("standalone workbench host boundary", function () {
             frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        await expect(
-          rail.getByRole("button", { name: "Lock to lattice", exact: true }),
-        ).toHaveAttribute("aria-pressed", "true");
+        await expect(rail.getByRole("button", { name: /^Snap: / })).toHaveAccessibleName(
+          "Snap: lattice",
+        );
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
@@ -429,11 +567,7 @@ describe("standalone workbench host boundary", function () {
         ]);
         const guides = frame.locator('[class*="snapOverlay"] [class*="snapLine"]');
         for (const locked of [true, false]) {
-          const lock = rail.getByRole("button", { name: "Lock to lattice", exact: true });
-          if ((await lock.getAttribute("aria-pressed")) !== String(locked)) {
-            await input.touch([await stableCenter(lock)]);
-          }
-          await expect(lock).toHaveAttribute("aria-pressed", String(locked));
+          await setSnapRule(frame, input, "Lattice", locked);
           // Grab the square's left edge and lift its top edge from y = -4 to the circle's top, y = 2.
           const grab = at(4, -5);
           await input.penDown(grab);
@@ -480,6 +614,29 @@ describe("standalone workbench host boundary", function () {
             .poll(async () => (await editorDebug(page)).source)
             .toContain("(4,-6) rectangle (6,-4)");
         }
+        // With alignment snapping off the same drag draws no guide.
+        await setSnapRule(frame, input, "Alignment", false);
+        await input.penDown(at(4, -5));
+        for (let step = 1; step <= 12; step++) {
+          await input.penMove(at(4, -5 + step / 2));
+        }
+        await expect
+          .poll(async () =>
+            Math.abs(
+              (await frame.locator('svg [data-source-id="path:3"]').first().boundingBox())!.y -
+                at(0, 2).y,
+            ),
+          )
+          .toBeLessThan(3);
+        await expect(guides).toHaveCount(0);
+        await input.penUp(at(4, 1));
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/rectangle/);
+        await input.touch([
+          await stableCenter(rail.getByRole("button", { name: "Undo", exact: true })),
+        ]);
+        await expect
+          .poll(async () => (await editorDebug(page)).source)
+          .toContain("(4,-6) rectangle (6,-4)");
       },
     );
   }
@@ -744,9 +901,7 @@ describe("standalone workbench host boundary", function () {
             frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        const lock = rail.getByRole("button", { name: "Lock to lattice", exact: true });
-        await input.touch([await stableCenter(lock)]);
-        await expect(lock).toHaveAttribute("aria-pressed", "false");
+        await setSnapRule(frame, input, "Lattice", false);
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
@@ -3036,7 +3191,7 @@ describe("standalone workbench host boundary", function () {
             "Properties",
             "Settings",
             "Zoom and display",
-            "Lock to lattice",
+            /^Snap: /,
             "Select",
             "Lasso",
             "Eraser",
@@ -3476,7 +3631,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
-        await tap(rail.getByRole("button", { name: "Lock to lattice", exact: true }));
+        await setSnapRule(frame, input, "Lattice", false);
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(frame.getByRole("option", { name: "Line", exact: true }));
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
@@ -3511,10 +3666,7 @@ describe("standalone workbench host boundary", function () {
         );
         await tap(rail.getByRole("button", { name: "Undo", exact: true }));
         await expect(frame.locator('svg [data-source-id^="path:"]')).toHaveCount(0);
-        const constrain = rail.getByRole("button", { name: "Constrain geometry", exact: true });
-        await expect(constrain).toHaveAttribute("aria-pressed", "false");
-        await tap(constrain);
-        await expect(constrain).toHaveAttribute("aria-pressed", "true");
+        await setSnapRule(frame, input, "Angle", true);
         await draw();
         assert.ok(
           Math.abs((await angle()) - 15) < 0.1,
@@ -3554,8 +3706,7 @@ describe("standalone workbench host boundary", function () {
           Math.abs(constrained.y - before.y) < 0.1,
           "The constrained move changed its other axis",
         );
-        await tap(constrain);
-        await expect(constrain).toHaveAttribute("aria-pressed", "false");
+        await setSnapRule(frame, input, "Angle", false);
         await fitDiagram(frame, input);
         await drag();
         const free = (await points())[0];

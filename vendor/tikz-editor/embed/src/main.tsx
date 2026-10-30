@@ -557,7 +557,6 @@ Object.defineProperty(window, 'visualTikzEditorDebug', {
 			historyIndex: state.historyIndex,
 			historyLength: state.history.length,
 			canvasAids: { grid: state.showGrid, rulers: state.showRulers, documentBounds: state.showDocumentBounds },
-			snapModes: state.snapModes,
 			diagnostics: {
 				parse: state.snapshot.parseResult?.diagnostics ?? [],
 				semantic: state.snapshot.semanticResult?.diagnostics ?? [],
