@@ -4891,10 +4891,10 @@ index e849b257..67526a2b 100644
  
 diff --git a/packages/app/src/ui/SnapControl.module.css b/packages/app/src/ui/SnapControl.module.css
 new file mode 100644
-index 00000000..47792e9f
+index 00000000..b73f27ab
 --- /dev/null
 +++ b/packages/app/src/ui/SnapControl.module.css
-@@ -0,0 +1,9 @@
+@@ -0,0 +1,10 @@
 +.trigger { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; line-height: 1; }
 +.triggerIcon { font-size: 15px; }
 +.triggerRule { font-size: 9px; letter-spacing: -0.01em; }
@@ -4904,15 +4904,19 @@ index 00000000..47792e9f
 +.rule[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 +.ruleLabel { font-weight: 600; }
 +.ruleDescription { font-size: 12px; opacity: 0.85; }
++.latticeStep { margin: 8px 0 0; font-size: 12px; opacity: 0.85; }
 diff --git a/packages/app/src/ui/SnapControl.tsx b/packages/app/src/ui/SnapControl.tsx
 new file mode 100644
-index 00000000..4313cfde
+index 00000000..12d29ac0
 --- /dev/null
 +++ b/packages/app/src/ui/SnapControl.tsx
-@@ -0,0 +1,51 @@
-+import { useState } from "react";
+@@ -0,0 +1,61 @@
++import { useMemo, useState } from "react";
++import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
++import { latticeStepStatement } from "tikz-editor/edit/lattice-units";
 +import type { CanvasSettings } from "../settings/types";
 +import { useSettingsStore } from "../settings/useSettingsStore";
++import { useEditorStore } from "../store/store";
 +import { ToolbarToolPopup, ToolbarPopupSection } from "./ToolbarToolPopup";
 +import css from "./SnapControl.module.css";
 +
@@ -4939,8 +4943,14 @@ index 00000000..4313cfde
 +  const [open, setOpen] = useState(false);
 +  const canvas = useSettingsStore((state) => state.settings.canvas);
 +  const updateCanvasSettings = useSettingsStore((state) => state.updateCanvasSettings);
++  const source = useEditorStore((state) => state.source);
++  const activeFigureId = useEditorStore((state) => state.activeFigureId);
 +  const active = SNAP_RULES.find((rule) => canvas[rule.key]);
 +  const ruleName = active?.name ?? "off";
++  const latticeStep = useMemo(
++    () => open ? latticeStepStatement(resolveFigureCoordinateFrame(source, { activeFigureId })) : null,
++    [open, source, activeFigureId]
++  );
 +
 +  return (
 +    <ToolbarToolPopup open={open} onClose={() => setOpen(false)} popup={
@@ -4952,6 +4962,7 @@ index 00000000..4313cfde
 +            <span className={css.ruleDescription}>{rule.description}</span>
 +          </button>
 +        ))}</div>
++        <p className={css.latticeStep}>{latticeStep}</p>
 +      </ToolbarPopupSection>}>
 +      <button type="button" className={`${triggerClassName} ${css.trigger}`} aria-label={`Snap: ${ruleName}`}
 +        aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
@@ -18367,14 +18378,15 @@ index bc59eb6c..fd0fd1c6 100644
        write?: SetPropertyWriteTarget;
 diff --git a/packages/core/src/edit/lattice-units.ts b/packages/core/src/edit/lattice-units.ts
 new file mode 100644
-index 00000000..198924cc
+index 00000000..e652702b
 --- /dev/null
 +++ b/packages/core/src/edit/lattice-units.ts
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,63 @@
 +import { pt, worldPoint, type WorldBounds } from "../coords/index.js";
 +import { applyMatrix, inverseMatrix } from "../semantic/transform.js";
 +import type { WorldTransform } from "../coords/transforms.js";
 +import { LATTICE_UNIT_PT } from "./snapping/grid-snaps.js";
++import { PT_PER_CM } from "../coords/source.js";
 +import type { InspectorProperty } from "./inspector/types.js";
 +
 +/**
@@ -18393,6 +18405,17 @@ index 00000000..198924cc
 +    x: Math.abs(frame.b) < 1e-9 ? Math.abs(frame.a) * LATTICE_UNIT_PT : null,
 +    y: Math.abs(frame.c) < 1e-9 ? Math.abs(frame.d) * LATTICE_UNIT_PT : null
 +  };
++}
++
++/**
++ * The physical length of one lattice step along each lattice axis: the figure's own
++ * `x`, `y`, and `scale` options, stated in centimetres per axis when they differ.
++ */
++export function latticeStepStatement(frame: WorldTransform): string {
++  const centimetres = (stepX: number, stepY: number) =>
++    `${Number((Math.hypot(stepX, stepY) * LATTICE_UNIT_PT / PT_PER_CM).toFixed(3))} cm`;
++  const [x, y] = [centimetres(frame.a, frame.b), centimetres(frame.c, frame.d)];
++  return x === y ? `One lattice step is ${x}.` : `One lattice step is ${x} along x and ${y} along y.`;
 +}
 +
 +type ShiftField = Extract<InspectorProperty, { kind: "number" }>;
@@ -21351,11 +21374,12 @@ index f4e310bc..075e80d3 100644
      expect(initial.fitToContentRequestToken).toBe(0);
 diff --git a/test/tablet-logic.spec.ts b/test/tablet-logic.spec.ts
 new file mode 100644
-index 00000000..431d9512
+index 00000000..591a9e37
 --- /dev/null
 +++ b/test/tablet-logic.spec.ts
-@@ -0,0 +1,335 @@
-+import { boundsInLatticeUnits } from '../packages/core/src/edit/lattice-units';
+@@ -0,0 +1,353 @@
++import { boundsInLatticeUnits, latticeStepStatement } from '../packages/core/src/edit/lattice-units';
++import { resolveFigureCoordinateFrame } from '../packages/core/src/edit/coordinate-frame';
 +import { worldBounds, worldTransform, worldVector, pt } from '../packages/core/src/coords/index';
 +import { constrainTranslationToAxis, resolveToolCreateCurrentWorld } from '../packages/app/src/ui/canvas-panel/interaction-helpers';
 +import { resolveArcToolPoint } from '../packages/app/src/ui/canvas-panel/arc-tool';
@@ -21688,6 +21712,23 @@ index 00000000..431d9512
 +    expect(capability.draggableHandleIds.has(reference.id)).toBe(true);
 +    const target = resolvePointTarget({ world: reference.world, scale: 1, handles, draggableHandleIds: capability.draggableHandleIds, lockedSourceIds: new Set() });
 +    expect(target).toEqual({ handle: defining, movable: true });
++  });
++});
++
++describe('lattice step physical size', () => {
++  const statement = (options: string) =>
++    latticeStepStatement(resolveFigureCoordinateFrame(`\\begin{tikzpicture}${options}\n\\draw (0,0) -- (1,1);\n\\end{tikzpicture}`));
++
++  it('states one step from the figure options x, y, and scale', () => {
++    expect(statement('')).toBe('One lattice step is 1 cm.');
++    expect(statement('[x=2cm,y=2cm]')).toBe('One lattice step is 2 cm.');
++    expect(statement('[scale=0.5]')).toBe('One lattice step is 0.5 cm.');
++    expect(statement('[x=1in]')).toBe('One lattice step is 2.54 cm along x and 1 cm along y.');
++    expect(statement('[x=2cm,y=0.5cm]')).toBe('One lattice step is 2 cm along x and 0.5 cm along y.');
++  });
++
++  it('states the length of a skewed lattice vector', () => {
++    expect(statement('[x={(1cm,1cm)},y={(-1cm,1cm)}]')).toBe('One lattice step is 1.414 cm.');
 +  });
 +});
 diff --git a/test/web/editor-command-runtime.spec.ts b/test/web/editor-command-runtime.spec.ts

@@ -4357,6 +4357,60 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `states the physical size of one lattice step from the figure's own options in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const trigger = frame
+          .locator("[data-diagram-tools]")
+          .getByRole("button", { name: /^Snap: / });
+        const popup = frame.getByRole("dialog", { name: "Tool options" });
+        // The Snap popup's text after the figure's options are set to `options`.
+        const snapPopupText = async (options: string) => {
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}${options}
+\draw (0,0) -- (3,2);
+\end{tikzpicture}`);
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await expect(frame.locator('svg [data-source-id="path:0"]').first()).toBeAttached();
+          await input.touch([await stableCenter(trigger)]);
+          await expect(popup).toBeVisible();
+          const text = await popup.innerText();
+          await input.touch([await stableCenter(trigger)]);
+          await expect(popup).toHaveCount(0);
+          return text;
+        };
+        assert.match(
+          await snapPopupText(""),
+          /One lattice step is 1 cm\./,
+          "The default lattice step of one centimetre is not stated",
+        );
+        assert.match(
+          await snapPopupText("[x=2cm,y=2cm]"),
+          /One lattice step is 2 cm\./,
+          "The step size does not follow the figure's x and y options",
+        );
+        assert.match(
+          await snapPopupText("[scale=0.5]"),
+          /One lattice step is 0\.5 cm\./,
+          "The step size does not follow the figure's scale option",
+        );
+        assert.match(
+          await snapPopupText("[x=2cm,y=0.5cm]"),
+          /One lattice step is 2 cm along x and 0\.5 cm along y\./,
+          "Unequal x and y units are not stated per axis",
+        );
+        await input.touch([await stableCenter(trigger)]);
+        await expect(popup).toBeVisible();
+        await storyScreenshot(page, `lattice-step-size-${tablet.name}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `offers touch-sized floating Properties controls and only mounted tabs in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
