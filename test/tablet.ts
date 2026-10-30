@@ -441,6 +441,10 @@ export async function stopPageCoverage(page: Page): Promise<void> {
   const chunks = entries.filter(
     (entry) => entry.url.startsWith("http") && new URL(entry.url).pathname.startsWith("/assets/"),
   );
+  // A page that never loaded a built chunk has nothing to report; the reporter rejects an empty list.
+  if (chunks.length === 0) {
+    return;
+  }
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, `${randomUUID()}.json`), JSON.stringify(chunks));
 }

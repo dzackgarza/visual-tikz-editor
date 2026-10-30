@@ -35,13 +35,13 @@ export function requestEditor<T extends { sessionId: string; revision: number; r
       }
       finish(failure(requestId, "cancelled"));
     };
-    const receive = (event: MessageEvent): void => {
+    const receive = (event: MessageEvent<unknown>): void => {
       if (event.source !== peer || event.origin !== origin) return;
-      // The editor posts every reply as a JSON string; anything else from it is a defect to surface.
-      if (typeof event.data !== "string") {
-        return;
-      }
-      const parsed = schema.safeParse(JSON.parse(event.data));
+      // The TikZ editor posts each reply as a JSON string (vendor/tikz-editor/embed/src/main.tsx);
+      // the Quiver host posts objects (vendor/quiver/src/zettlr-host.mjs). A malformed string
+      // from a peer that passed the source and origin checks is a defect and throws here.
+      const data: unknown = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+      const parsed = schema.safeParse(data);
       if (!parsed.success) return;
       const reply = parsed.data;
       if (
