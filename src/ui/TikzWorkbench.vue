@@ -6,9 +6,12 @@
     :data-tikz-language="props.target.language"
   >
     <header v-if="showShellHeader" class="tikz-live-preview-header">
-      <span v-if="props.showModeSwitcher !== false" class="tikz-live-preview-label">View:</span>
+      <span
+        v-if="props.showModeSwitcher"
+        class="tikz-live-preview-label"
+      >View:</span>
       <div
-        v-if="props.showModeSwitcher !== false"
+        v-if="props.showModeSwitcher"
         class="tikz-live-preview-modes"
         role="group"
         aria-label="Diagram view"
@@ -27,7 +30,10 @@
         </button>
       </div>
 
-      <span v-if="props.showStatus !== false" class="tikz-live-preview-status">{{ unavailableMessage !== '' ? 'Unavailable' : activeStatus }}</span>
+      <span
+        v-if="props.showStatus"
+        class="tikz-live-preview-status"
+      >{{ unavailableMessage !== '' ? 'Unavailable' : activeStatus }}</span>
       <span
         v-if="activeBusy"
         class="tikz-live-preview-spinner"
@@ -44,7 +50,7 @@
         <span aria-hidden="true">↻</span>
       </button>
       <button
-        v-if="props.showFullscreen !== false"
+        v-if="props.showFullscreen"
         type="button"
         class="tikz-live-preview-action tikz-live-preview-expand"
         :title="fullscreen ? 'Exit fullscreen preview (Esc)' : 'Open fullscreen preview'"
@@ -142,7 +148,14 @@ const props = withDefaults(
     showFullscreen?: boolean;
     showHeader?: boolean;
   }>(),
-  { showHeader: true },
+  {
+    initialMode: undefined,
+    requestedMode: undefined,
+    showModeSwitcher: true,
+    showStatus: true,
+    showFullscreen: true,
+    showHeader: true,
+  },
 );
 
 const emit = defineEmits<{
@@ -169,11 +182,7 @@ const visitedEditors = ref<Set<TikzPreviewModeId>>(new Set());
 const activeStatus = ref("");
 const activeBusy = ref(false);
 const showShellHeader = computed(
-  () =>
-    props.showHeader !== false &&
-    (props.showModeSwitcher !== false ||
-      props.showStatus !== false ||
-      props.showFullscreen !== false),
+  () => props.showHeader && (props.showModeSwitcher || props.showStatus || props.showFullscreen),
 );
 const providerStatus = ref<Record<TikzPreviewModeId, string>>({ tikz: "", quiver: "", visual: "" });
 const providerBusy = ref<Record<TikzPreviewModeId, boolean>>({

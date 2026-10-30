@@ -425,14 +425,18 @@ export function waveAcross(
  * before the first navigation; `stopPageCoverage` writes the result.
  */
 export async function startPageCoverage(page: Page): Promise<void> {
-  if (process.env.TIKZ_WORKBENCH_V8_COVERAGE === undefined) return;
+  if (process.env.TIKZ_WORKBENCH_V8_COVERAGE === undefined) {
+    return;
+  }
   await page.coverage.startJSCoverage({ resetOnNavigation: false });
 }
 
 /** Write the page's coverage of the standalone build's chunks as one JSON file; scripts/coverage.mjs reads them. */
 export async function stopPageCoverage(page: Page): Promise<void> {
   const directory = process.env.TIKZ_WORKBENCH_V8_COVERAGE;
-  if (directory === undefined) return;
+  if (directory === undefined) {
+    return;
+  }
   const entries = await page.coverage.stopJSCoverage();
   const chunks = entries.filter(
     (entry) => entry.url.startsWith("http") && new URL(entry.url).pathname.startsWith("/assets/"),

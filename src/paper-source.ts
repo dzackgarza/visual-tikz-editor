@@ -12,8 +12,11 @@ export function paperSource(source: string): string {
     const closing = `% workbench-ink-end:${record.stroke.key}`;
     projected += envelope.slice(opening.length, -closing.length);
     cursor = record.to;
-    if (source.startsWith("\r\n", cursor)) cursor += 2;
-    else if (source[cursor] === "\n") cursor++;
+    if (source.startsWith("\r\n", cursor)) {
+      cursor += 2;
+    } else if (source[cursor] === "\n") {
+      cursor++;
+    }
   }
   return projected + source.slice(cursor);
 }

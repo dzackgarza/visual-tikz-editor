@@ -85,8 +85,9 @@ const errorMessage = ref("");
 const lifetime = new AbortController();
 
 function snapshot(signal: AbortSignal) {
-  if (frame.value === null || !loaded.value)
+  if (frame.value === null || !loaded.value) {
     throw new Error("The editor has not loaded its source");
+  }
   const active = session.value;
   return requestEditorSnapshot(
     frame.value,
@@ -107,8 +108,9 @@ async function currentSource(signal: AbortSignal): Promise<string> {
     { sessionId: active.id, revision: active.revision },
     AbortSignal.any([signal, lifetime.signal]),
   );
-  if (session.value.revision !== active.revision)
+  if (session.value.revision !== active.revision) {
     throw new Error("The source changed while reading the editor");
+  }
   applyEditorSource(source, active.revision);
   return session.value.source.source;
 }
@@ -284,8 +286,9 @@ function onMessage(event: MessageEvent): void {
     return;
   }
   const message = parseHostMessage(event.data);
-  if (message === null || (message.event !== "init" && message.sessionId !== session.value.id))
+  if (message === null || (message.event !== "init" && message.sessionId !== session.value.id)) {
     return;
+  }
 
   if (message.event === "clipboard-read" || message.event === "clipboard-write") {
     const clipboard = props.host.clipboard;
@@ -298,8 +301,9 @@ function onMessage(event: MessageEvent): void {
         session.value.id !== active.id ||
         session.value.revision !== active.revision ||
         lifetime.signal.aborted
-      )
+      ) {
         return;
+      }
       postToEditor({ action: "clipboard-result", targetRequestId: message.requestId, ...result });
     };
     void operation
@@ -372,8 +376,9 @@ function onMessage(event: MessageEvent): void {
         message.from < 0 ||
         message.to < message.from ||
         message.to > active.source.length
-      )
+      ) {
         break;
+      }
       props.host.selectSource?.(active.sourceFrom + message.from, active.sourceFrom + message.to);
       break;
     }

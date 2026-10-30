@@ -2919,11 +2919,8 @@ describe("standalone workbench host boundary", function () {
         const circle = frame.locator("circle[data-source-id]");
         await expect(circle).toBeAttached();
         const input = await TabletInput.attach(page);
-        const tapCenter = async (locator: ReturnType<typeof frame.locator>) => {
-          return stableCenter(locator);
-        };
         await input.touch([
-          await tapCenter(frame.getByRole("button", { name: "Select", exact: true })),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         // The startup view depends on the canvas size at mount; the user fits the figure through the zoom popup.
         await fitDiagram(frame, input);
@@ -3001,11 +2998,8 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(2);
         const input = await TabletInput.attach(page);
-        const center = async (locator: ReturnType<typeof frame.locator>) => {
-          return stableCenter(locator);
-        };
         await input.touch([
-          await center(frame.getByRole("button", { name: "Select", exact: true })),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.longPress({
@@ -3015,7 +3009,7 @@ describe("standalone workbench host boundary", function () {
         const menu = frame.getByRole("menu").first();
         await expect(menu.getByRole("menuitem", { name: "Paste", exact: true })).toBeVisible();
         await input.touch([
-          await center(menu.getByRole("menuitem", { name: "Select All", exact: true })),
+          await stableCenter(menu.getByRole("menuitem", { name: "Select All", exact: true })),
         ]);
         const debug = await editorDebug(page);
         assert.deepEqual(
@@ -3577,16 +3571,15 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(1);
         const input = await TabletInput.attach(page);
-        const center = async (locator: ReturnType<typeof frame.locator>) => {
-          return stableCenter(locator);
-        };
         const rail = frame.locator("[data-diagram-tools]");
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
 
         await input.touch([
-          await center(rail.getByRole("button", { name: "Insert", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Insert", exact: true })),
         ]);
-        await input.touch([await center(frame.getByRole("button", { name: "Line", exact: true }))]);
+        await input.touch([
+          await stableCenter(frame.getByRole("button", { name: "Line", exact: true })),
+        ]);
         assert.equal((await editorDebug(page)).tool, "addLine");
         const from = {
           x: viewport.x + viewport.width * 0.7,
@@ -3603,7 +3596,7 @@ describe("standalone workbench host boundary", function () {
           .toMatch(/\\draw[^;]*--[^;]*;/);
 
         await input.touch([
-          await center(rail.getByRole("button", { name: "Select", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         // The inserted line stays selected and its control may cover the circle; tap empty canvas to dismiss it.
         await input.touch([
@@ -3615,7 +3608,7 @@ describe("standalone workbench host boundary", function () {
           await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         );
         await input.touch([
-          await center(
+          await stableCenter(
             frame.getByRole("menu").first().getByRole("menuitem", { name: "Delete", exact: true }),
           ),
         ]);
@@ -3623,7 +3616,7 @@ describe("standalone workbench host boundary", function () {
         assert.doesNotMatch((await editorDebug(page)).source, /circle/);
 
         await input.touch([
-          await center(rail.getByRole("button", { name: "Layers", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Layers", exact: true })),
         ]);
         const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         await expect(panel).toBeVisible();
@@ -3954,9 +3947,6 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
-        const center = async (locator: ReturnType<typeof frame.locator>) => {
-          return stableCenter(locator);
-        };
         const overlap = async (locator: ReturnType<typeof frame.locator>) => {
           const [a, b] = [(await rail.boundingBox())!, (await locator.boundingBox())!];
           return (
@@ -3970,10 +3960,10 @@ describe("standalone workbench host boundary", function () {
         await expect(result).toBeVisible();
         assert.equal(await overlap(result), 0, "The freehand result covers the rail");
         await input.touch([
-          await center(result.getByRole("button", { name: "Cancel", exact: true })),
+          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await input.touch([
-          await center(rail.getByRole("button", { name: "Properties", exact: true })),
+          await stableCenter(rail.getByRole("button", { name: "Properties", exact: true })),
         ]);
         const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         await expect(panel).toBeVisible();
@@ -4183,9 +4173,6 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const center = async (locator: ReturnType<typeof frame.locator>) => {
-          return stableCenter(locator);
-        };
         const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) =>
           input.touch(
             Array.from({ length: 13 }, (_, i) => ({
@@ -4211,27 +4198,36 @@ describe("standalone workbench host boundary", function () {
           .getByRole("button")
           .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
         assert.ok(names.indexOf("Lasso") < 8 && names.indexOf("Eraser") < 8, names.join(", "));
-        await drag(await center(rail.getByRole("button", { name: "Select", exact: true })), {
+        await drag(await stableCenter(rail.getByRole("button", { name: "Select", exact: true })), {
           x: viewport.x + viewport.width - 10,
           y: viewport.y + viewport.height / 2,
         });
         await expect(rail).toHaveAttribute("data-dock", "bottom");
-        await drag(await center(rail.getByRole("button", { name: "Move toolbar", exact: true })), {
-          x: viewport.x + viewport.width - 10,
-          y: viewport.y + viewport.height / 2,
-        });
+        await drag(
+          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
+          {
+            x: viewport.x + viewport.width - 10,
+            y: viewport.y + viewport.height / 2,
+          },
+        );
         await expect(rail).toHaveAttribute("data-dock", "right");
         await clearOfRulers();
-        await drag(await center(rail.getByRole("button", { name: "Move toolbar", exact: true })), {
-          x: viewport.x + viewport.width / 2,
-          y: viewport.y + 10,
-        });
+        await drag(
+          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
+          {
+            x: viewport.x + viewport.width / 2,
+            y: viewport.y + 10,
+          },
+        );
         await expect(rail).toHaveAttribute("data-dock", "top");
         await clearOfRulers();
-        await drag(await center(rail.getByRole("button", { name: "Move toolbar", exact: true })), {
-          x: viewport.x + 10,
-          y: viewport.y + viewport.height / 2,
-        });
+        await drag(
+          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
+          {
+            x: viewport.x + 10,
+            y: viewport.y + viewport.height / 2,
+          },
+        );
         await expect(rail).toHaveAttribute("data-dock", "left");
         await clearOfRulers();
       },
@@ -4250,18 +4246,15 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         await expect(frame.locator("circle[data-source-id]")).toHaveCount(1);
         const input = await TabletInput.attach(page);
-        const center = async (locator: ReturnType<typeof frame.locator>) => {
-          return stableCenter(locator);
-        };
         await input.touch([
-          await center(frame.getByRole("button", { name: "Select", exact: true })),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await fitDiagram(frame, input);
         await input.longPress(
           await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         );
         await input.touch([
-          await center(
+          await stableCenter(
             frame.getByRole("menu").first().getByRole("menuitem", { name: "Copy", exact: true }),
           ),
         ]);
@@ -4271,7 +4264,7 @@ describe("standalone workbench host boundary", function () {
           y: viewport.y + viewport.height * 0.2,
         });
         await input.touch([
-          await center(
+          await stableCenter(
             frame.getByRole("menu").first().getByRole("menuitem", { name: "Paste", exact: true }),
           ),
         ]);
@@ -4355,18 +4348,15 @@ describe("standalone workbench host boundary", function () {
         const line = frame.locator("[data-source-id]").first();
         await expect(line).toBeVisible();
         const input = await TabletInput.attach(page);
-        const center = async (locator: ReturnType<typeof frame.locator>) => {
-          return stableCenter(locator);
-        };
         await input.touch([
-          await center(frame.getByRole("button", { name: "Select", exact: true })),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await fitDiagram(frame, input);
         await input.longPress(await strokePoint(page, line, 0.5));
         const menu = frame.getByRole("menu").first();
-        await input.touch([await center(menu.getByRole("menuitem", { name: /^Path/ }))]);
+        await input.touch([await stableCenter(menu.getByRole("menuitem", { name: /^Path/ }))]);
         await input.touch([
-          await center(frame.getByRole("menuitem", { name: "Reverse Path", exact: true })),
+          await stableCenter(frame.getByRole("menuitem", { name: "Reverse Path", exact: true })),
         ]);
         await expect
           .poll(async () => (await editorDebug(page)).source)
@@ -4503,9 +4493,6 @@ describe("standalone workbench host boundary", function () {
         await expect(frame.locator("[data-source-id]")).toHaveCount(2);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const center = async (locator: ReturnType<typeof frame.locator>) => {
-          return stableCenter(locator);
-        };
         // The source lines the code pane's selection highlight spans, as the author sees them.
         const codeSelection = () =>
           page.locator(".cm-editor").evaluate((editor) => {
@@ -4532,7 +4519,7 @@ describe("standalone workbench host boundary", function () {
               .join("\n");
           });
         await input.touch([
-          await center(frame.getByRole("button", { name: "Select", exact: true })),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.touch([
           await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
@@ -4640,9 +4627,6 @@ describe("standalone workbench host boundary", function () {
           const frameBox = (await page
             .locator('iframe[title="TikZ visual editor"]')
             .boundingBox())!;
-          const centerOf = async (locator: ReturnType<typeof frame.locator>) => {
-            return stableCenter(locator);
-          };
           const tap = async (point: { x: number; y: number }) =>
             contact === "touch" ? input.touch([point]) : input.penStroke([point]);
           const onCurve = async (fraction: number) => {
@@ -4657,7 +4641,7 @@ describe("standalone workbench host boundary", function () {
             return { x: frameBox.x + point.x, y: frameBox.y + point.y };
           };
           await input.touch([
-            await centerOf(frame.getByRole("button", { name: "Select", exact: true })),
+            await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
           ]);
           await tap(await onCurve(0.3));
           await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
@@ -4674,7 +4658,7 @@ describe("standalone workbench host boundary", function () {
             `The curve control covers the canvas hint ${JSON.stringify({ hint, control })}`,
           );
           await storyScreenshot(page, `curve-selected-${contact}-${tablet.name}`);
-          await input.touch([await centerOf(lock)]);
+          await input.touch([await stableCenter(lock)]);
           await expect(lock).toHaveAttribute("aria-pressed", "true");
           await storyScreenshot(page, `curve-locked-${contact}-${tablet.name}`);
           await tap((await emptyCanvasGesture(frame))[0]);
@@ -4704,7 +4688,7 @@ describe("standalone workbench host boundary", function () {
           );
           await expect(lock).toHaveAttribute("aria-pressed", "true");
           assert.deepEqual((await editorDebug(page)).selection, ["path:0"]);
-          await input.touch([await centerOf(lock)]);
+          await input.touch([await stableCenter(lock)]);
           await expect(lock).toHaveAttribute("aria-pressed", "false");
           // Positive baseline: that same line is selectable once the curve is unlocked.
           await tap(
@@ -4816,13 +4800,10 @@ describe("standalone workbench host boundary", function () {
           const frameBox = (await page
             .locator('iframe[title="TikZ visual editor"]')
             .boundingBox())!;
-          const centerOf = async (locator: ReturnType<typeof frame.locator>) => {
-            return stableCenter(locator);
-          };
           const tap = async (point: { x: number; y: number }) =>
             contact === "touch" ? input.touch([point]) : input.penStroke([point]);
           await input.touch([
-            await centerOf(frame.getByRole("button", { name: "Select", exact: true })),
+            await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
           ]);
           const onCurve = await curve.evaluate((path: SVGGeometryElement) => {
             const p = path.getPointAtLength(path.getTotalLength() * 0.15);
@@ -4832,14 +4813,14 @@ describe("standalone workbench host boundary", function () {
           await tap({ x: frameBox.x + onCurve.x, y: frameBox.y + onCurve.y });
           await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
           await input.touch([
-            await centerOf(frame.getByRole("button", { name: "Curve actions", exact: true })),
+            await stableCenter(frame.getByRole("button", { name: "Curve actions", exact: true })),
           ]);
           await expect(
             frame.getByRole("button", { name: "Select multiple nodes", exact: true }),
           ).toBeVisible();
           await storyScreenshot(page, `curve-actions-${contact}-${tablet.name}`);
           await input.touch([
-            await centerOf(
+            await stableCenter(
               frame.getByRole("button", { name: "Select multiple nodes", exact: true }),
             ),
           ]);
@@ -4862,7 +4843,7 @@ describe("standalone workbench host boundary", function () {
             frame.getByRole("button", { name: "2 points selected", exact: true }),
           ).toBeVisible();
           await input.touch([
-            await centerOf(frame.getByRole("button", { name: "Delete points", exact: true })),
+            await stableCenter(frame.getByRole("button", { name: "Delete points", exact: true })),
           ]);
           await expect
             .poll(
@@ -6417,7 +6398,7 @@ describe("standalone workbench host boundary", function () {
   async function embeddingSnapshot(): Promise<EditorSnapshot> {
     await page.getByRole("button", { name: "Snapshot", exact: true }).click();
     await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-    return await readySnapshot();
+    return readySnapshot();
   }
 
   for (const tablet of TABLET_VIEWPORTS) {

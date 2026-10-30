@@ -37,23 +37,20 @@ export function requestEditor<T extends { sessionId: string; revision: number; r
     };
     const receive = (event: MessageEvent): void => {
       if (event.source !== peer || event.origin !== origin) return;
-      let data = event.data;
-      if (typeof data === "string") {
-        try {
-          data = JSON.parse(data);
-        } catch {
-          return;
-        }
+      // The editor posts every reply as a JSON string; anything else from it is a defect to surface.
+      if (typeof event.data !== "string") {
+        return;
       }
-      const parsed = schema.safeParse(data);
+      const parsed = schema.safeParse(JSON.parse(event.data));
       if (!parsed.success) return;
       const reply = parsed.data;
       if (
         reply.requestId !== requestId ||
         reply.sessionId !== command.sessionId ||
         reply.revision !== command.revision
-      )
+      ) {
         return;
+      }
       finish(reply);
     };
     if (signal.aborted) {

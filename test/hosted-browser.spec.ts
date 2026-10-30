@@ -34,7 +34,7 @@ describe("hosted workbench", function () {
       document.body.innerHTML =
         '<iframe title="Hosted figure" style="width:100%;height:750px" src="/hosted.html"></iframe>';
       (window as typeof window & { editorMessages: unknown[] }).editorMessages = [];
-      window.addEventListener("message", (event) => {
+      window.addEventListener("message", (event: MessageEvent<string>) => {
         if (
           event.source === document.querySelector("iframe")?.contentWindow &&
           event.origin === location.origin
@@ -49,9 +49,17 @@ describe("hosted workbench", function () {
     await expect(hosted.getByText("Loading figure…")).toBeVisible();
     const sessionId = crypto.randomUUID();
     const source = String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`;
-    await page.evaluate(
-      ({ sessionId, source }) => {
-        document.querySelector("iframe")!.contentWindow!.postMessage(
+    // Post to the hosted document as its embedding page does; the page keeps the iframe's window.
+    const hostedWindow = await page.evaluateHandle(() => {
+      const hostedWindow = document.querySelector("iframe")?.contentWindow;
+      if (hostedWindow == null) {
+        throw new Error("The hosted figure iframe has no window");
+      }
+      return hostedWindow;
+    });
+    await hostedWindow.evaluate(
+      (target, { sessionId, source }) => {
+        target.postMessage(
           JSON.stringify({
             action: "load",
             sessionId,
@@ -73,9 +81,9 @@ describe("hosted workbench", function () {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.55, { steps: 12 });
     await page.mouse.up();
-    await page.evaluate(
-      (sessionId) =>
-        document.querySelector("iframe")!.contentWindow!.postMessage(
+    await hostedWindow.evaluate(
+      (target, sessionId) =>
+        target.postMessage(
           JSON.stringify({
             action: "source",
             sessionId,

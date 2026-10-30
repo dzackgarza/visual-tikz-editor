@@ -36,9 +36,7 @@ const suite = spawnSync("bun", ["run", "test"], {
     TIKZ_WORKBENCH_V8_COVERAGE: browserCoverageDir,
   },
 });
-if (suite.status !== 0) {
-  process.exit(suite.status ?? 1);
-}
+// The report covers whatever ran; the suite's own status is returned after it is written.
 
 /** A source path from either coverage source, relative to the repository root. */
 function repoRelative(source) {
@@ -82,3 +80,4 @@ for (const file of await readdir(browserCoverageDir)) {
   await report.add(JSON.parse(await readFile(path.join(browserCoverageDir, file), "utf8")));
 }
 await report.generate();
+process.exit(suite.status ?? 1);
