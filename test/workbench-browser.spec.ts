@@ -494,31 +494,40 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const axis = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(axis).toBeAttached();
-        // Screen x of lattice x = 10, the segment's far end.
-        const tenX = await axis.evaluate((path: SVGGeometryElement) => {
-          const p = path.getPointAtLength(path.getTotalLength());
-          const m = path.getScreenCTM()!;
-          return p.x * m.a + p.y * m.c + m.e;
-        });
+        // The startup view depends on the canvas size at mount; the user fits the figure through the zoom popup.
+        await fitDiagram(frame, await TabletInput.attach(page));
+        // Screen x of lattice x = 0 and the screen width of one lattice step, from the segment (0,0) -- (10,0).
+        const lattice = () =>
+          axis.evaluate((path: SVGGeometryElement) => {
+            const m = path.getScreenCTM()!;
+            const start = path.getPointAtLength(0);
+            const end = path.getPointAtLength(path.getTotalLength());
+            const origin = start.x * m.a + start.y * m.c + m.e;
+            return { origin, unit: (end.x * m.a + end.y * m.c + m.e - origin) / 10 };
+          });
+        // Each label with its tick's screen x: the label's group is translated to the tick.
         const labels = () =>
           frame
             .getByTestId("canvas-top-ruler")
             .locator("text")
             .evaluateAll((texts) =>
               texts.map((text) => ({
-                label: text.textContent?.trim() ?? "",
-                x: text.getBoundingClientRect().x + text.getBoundingClientRect().width / 2,
+                label: Number(text.textContent),
+                x: text.parentElement!.getBoundingClientRect().left,
               })),
             );
-        // The rulers relabel once the startup view has settled on the new source.
+        // Every ruler label sits at its own lattice coordinate once the fitted view has rendered its labels.
         await expect
-          .poll(async () => (await labels()).map((entry) => entry.label), "No ruler label 10")
-          .toContain("10");
-        const ten = (await labels()).find((entry) => entry.label === "10")!;
-        assert.ok(
-          Math.abs(ten.x - tenX) < 12,
-          `Ruler label 10 sits at ${ten.x}, lattice x = 10 at ${tenX}`,
-        );
+          .poll(async () => {
+            const [{ origin, unit }, entries] = await Promise.all([lattice(), labels()]);
+            const misplaced = entries.filter(
+              (entry) => Math.abs(entry.x - (origin + entry.label * unit)) > 2,
+            );
+            return entries.length >= 3 && misplaced.length === 0
+              ? "aligned"
+              : JSON.stringify({ entries, origin, unit, misplaced });
+          })
+          .toBe("aligned");
       },
     );
   }
@@ -6598,13 +6607,9 @@ describe("standalone workbench host boundary", function () {
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("workbench-ink-end:");
-    const current = await page.evaluate(() => navigator.clipboard.readText());
-    assert.ok(current.includes("workbench-ink-end:"));
-    // CodeMirror virtualizes long metadata lines; use its full-document copy.
-    await page.evaluate(() => navigator.clipboard.writeText("previous clipboard"));
-    await page.locator(".cm-content").press("Control+a");
-    await page.locator(".cm-content").press("Control+c");
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(current);
+    // The copy is the editor's complete current source, not the host pane's throttled copy of it.
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    assert.equal(copied, (await editorDebug(page)).source);
   });
 
   for (const width of [1280, 768]) {
