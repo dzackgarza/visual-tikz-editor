@@ -6032,6 +6032,7 @@ describe("standalone workbench host boundary", function () {
         }, { point: linePoint, targetId: lineId });
         assert.ok(pick.point, `Line has no hit region near its stroke: ${pick.center}`);
         await input.penStroke([pick.point, pick.point]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([lineId]);
         await expect
           .poll(codeSelection, { message: "pen tap on the line" })
           .toBe(String.raw`\draw (2,8) -- (12,14);`);
