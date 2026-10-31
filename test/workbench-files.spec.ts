@@ -352,6 +352,42 @@ describe("standalone native file workflow", function () {
     await expect(page.locator(".tikz-standalone-status")).toHaveText("Saved");
   });
 
+  it("exports every authored figure as PDF, SVG, and PNG while preserving editable source", async function () {
+    const directory = await mkdtemp(join(tmpdir(), "workbench-export-"));
+    const authored = String.raw`\begin{tikzpicture}
+\draw (0,0) -- (3,2);
+\end{tikzpicture}
+
+\begin{tikzpicture}
+\draw (0,0) circle (1cm);
+\end{tikzpicture}`;
+    await page.request.post(`${url}api/new`, { data: "tikzpicture" });
+    await page.goto(url);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await page.locator(".cm-content").fill(authored);
+    await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
+    for (const format of ["PDF", "SVG", "PNG"] as const) {
+      diagramPath = join(directory, `figures.${format.toLowerCase()}`);
+      await page.getByRole("group", { name: "Export" }).locator("summary").click();
+      await page.getByRole("button", { name: format, exact: true }).click();
+      await chooseFile(`export-${format.toLowerCase()}`);
+      const outputs = format === "PDF"
+        ? [diagramPath]
+        : [join(directory, `figures-1.${format.toLowerCase()}`), join(directory, `figures-2.${format.toLowerCase()}`)];
+      await expect.poll(() => outputs.every((output) => existsSync(output))).toBe(true);
+      for (const output of outputs) {
+        const bytes = await readFile(output);
+        assert.ok(bytes.length > 100, `${output} is empty`);
+        if (format === "PDF") assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
+        if (format === "SVG") assert.match(bytes.toString(), /<svg[\s\S]*<\/svg>/);
+        if (format === "PNG") assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+      }
+    }
+    assert.equal(await page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n")), authored);
+    await page.locator(".cm-content").fill(authored.replace("(3,2)", "(4,2)"));
+    await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
+  });
+
   for (const tablet of TABLET_VIEWPORTS) {
   it(`reopens layered source from disk with its names, order, visibility, and references in ${tablet.name}`, async function () {
     await page.setViewportSize(tablet);
