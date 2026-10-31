@@ -3450,6 +3450,61 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `applies one color control to selected stroke, selected fill, bucket, and new strokes in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,5);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        await fitDiagram(frame, input);
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.1)]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await expect(rail.getByRole("button", { name: /^Color: Selected stroke:/ })).toBeVisible();
+        await tap(rail.getByRole("button", { name: "Use red" }));
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/draw=red/);
+        await tap(rail.getByRole("button", { name: /^Color: Selected stroke:/ }));
+        const popup = frame.getByRole("dialog", { name: "Tool options" });
+        await tap(popup.getByRole("button", { name: "Selected fill" }));
+        await tap(rail.getByRole("button", { name: "Use blue" }));
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/fill=blue/);
+        await tap(rail.getByRole("button", { name: /^Color: Selected fill:/ }));
+        await tap(rail.getByRole("button", { name: "Bucket", exact: true }));
+        await expect(rail.getByRole("button", { name: /^Color: Fill:/ })).toBeVisible();
+        await expect(rail.getByTestId("toolbar-bucket-color-caret")).toHaveCount(0);
+        await tap(rail.getByRole("button", { name: "Use green" }));
+        await tap(rail.getByRole("button", { name: /^Color: Fill:/ }));
+        await expect(popup.getByLabel("Exact xcolor")).toBeVisible();
+        await popup.getByLabel("Exact xcolor").fill("orange!35!black");
+        await tap(popup.getByRole("button", { name: "Apply exact color" }));
+        await expect(rail.getByRole("button", { name: "Color: Fill: orange!35!black" })).toBeVisible();
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await input.penStroke([await stableCenter(frame.locator('[data-canvas-viewport="true"]'))]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+        await expect(rail.getByRole("button", { name: /^Color: New strokes:/ })).toBeVisible();
+        await tap(rail.getByRole("button", { name: "Use violet" }));
+        const unchanged = (await editorDebug(page)).source;
+        assert.match(unchanged, /draw=red/);
+        assert.match(unchanged, /fill=blue/);
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Line", exact: true }));
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await input.penStroke([
+          { x: viewport.x + viewport.width * 0.35, y: viewport.y + viewport.height * 0.4 },
+          { x: viewport.x + viewport.width * 0.65, y: viewport.y + viewport.height * 0.4 },
+        ]);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/draw=violet/);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `writes a colour picked at full opacity as an xcolor value in ${tablet.name}`,
       async function () {
         await editorReady(page);
