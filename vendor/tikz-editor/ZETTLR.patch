@@ -2426,10 +2426,39 @@ index 0e491d69..bc7250a0 100644
        data-testid="canvas-context-menu"
      >
 diff --git a/packages/app/src/ui/ColorPicker.module.css b/packages/app/src/ui/ColorPicker.module.css
-index dd74530a..69f9361a 100644
+index dd74530a..435d19d4 100644
 --- a/packages/app/src/ui/ColorPicker.module.css
 +++ b/packages/app/src/ui/ColorPicker.module.css
-@@ -200,6 +200,13 @@
+@@ -99,26 +99,14 @@
+ }
+ 
+ .popover {
+-  position: absolute;
+-  top: calc(100% + 2px);
+-  left: 0;
+-  z-index: 80;
++  position: fixed;
++  z-index: 180;
+   width: 258px;
+   max-width: min(258px, calc(100vw - 24px));
+   overflow-y: auto;
+   box-shadow: 0 10px 24px color-mix(in srgb, black 28%, transparent);
+ }
+ 
+-.popoverEnd {
+-  left: auto;
+-  right: 0;
+-}
+-
+-.popoverUp {
+-  top: auto;
+-  bottom: calc(100% + 2px);
+-}
+-
+ .root {
+   display: flex;
+   flex-direction: column;
+@@ -200,6 +188,13 @@
    gap: 6px;
  }
  
@@ -2443,7 +2472,7 @@ index dd74530a..69f9361a 100644
  .customHueTrack {
    position: relative;
    width: 100%;
-@@ -521,3 +528,17 @@
+@@ -521,3 +516,17 @@
    flex: 1;
    text-align: center;
  }
@@ -2462,13 +2491,14 @@ index dd74530a..69f9361a 100644
 +.opacity { display: grid; gap: 4px; }
 +.opacity input[type="range"] { width: 100%; }
 diff --git a/packages/app/src/ui/ColorPicker.tsx b/packages/app/src/ui/ColorPicker.tsx
-index 49a2d341..7ea9f766 100644
+index 49a2d341..d8791263 100644
 --- a/packages/app/src/ui/ColorPicker.tsx
 +++ b/packages/app/src/ui/ColorPicker.tsx
-@@ -1,43 +1,25 @@
+@@ -1,43 +1,24 @@
 -import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 -import { rgbToXcolorExpression, type RgbColor, type RgbToXcolorMode } from "xcolor-rgb-convert";
 +import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { createPortal } from "react-dom";
 +import type { RgbColor } from "xcolor-rgb-convert";
  import { normalizeColor } from "tikz-editor/semantic/style/colors";
 -import { BASIC_PICKER_COLORS, BASIC_PICKER_COLOR_SET } from "../colors/color-palette";
@@ -2484,8 +2514,8 @@ index 49a2d341..7ea9f766 100644
  
 -type ColorPickerTabId = "standard" | "custom";
 -type ToneState = { baseColor: string; position: number };
- type PopoverPlacement = "down" | "up";
- type PopoverHorizontalPlacement = "start" | "end";
+-type PopoverPlacement = "down" | "up";
+-type PopoverHorizontalPlacement = "start" | "end";
 -type ToneHitBucket = { value: number; start: number; end: number; center: number };
 -
  const BUILTIN_COLOR_SET = BASIC_PICKER_COLOR_SET;
@@ -2518,7 +2548,7 @@ index 49a2d341..7ea9f766 100644
    namedColorSwatches?: readonly NamedColorSwatch[];
    value: string | null;
    syntaxValue?: string | null;
-@@ -49,7 +31,7 @@ export type ColorPickerProps = {
+@@ -49,7 +30,7 @@ export type ColorPickerProps = {
  
  export function ColorPickerField({
    ariaLabel,
@@ -2527,7 +2557,18 @@ index 49a2d341..7ea9f766 100644
    namedColorSwatches = [],
    value,
    syntaxValue = null,
-@@ -75,7 +57,7 @@ export function ColorPickerField({
+@@ -59,9 +40,7 @@ export function ColorPickerField({
+   onChange
+ }: ColorPickerProps) {
+   const [open, setOpen] = useState(false);
+-  const [popoverPlacement, setPopoverPlacement] = useState<PopoverPlacement>("down");
+-  const [popoverHorizontalPlacement, setPopoverHorizontalPlacement] = useState<PopoverHorizontalPlacement>("start");
+-  const [popoverMaxHeight, setPopoverMaxHeight] = useState<number>(POPOVER_MAX_HEIGHT_PX);
++  const [popoverPosition, setPopoverPosition] = useState({ left: 0, top: 0, maxHeight: POPOVER_MAX_HEIGHT_PX });
+   const rootRef = useRef<HTMLDivElement | null>(null);
+   const popoverRef = useRef<HTMLDivElement | null>(null);
+   const normalizedNamedColorSwatches = useMemo(
+@@ -75,7 +54,7 @@ export function ColorPickerField({
    const normalizedValue = normalizeColorToken(value);
    const normalizedSyntaxValue = normalizeColorToken(syntaxValue);
    const displayLabel = mixed ? "mixed" : (normalizedSyntaxValue ?? normalizedValue ?? "none");
@@ -2536,7 +2577,49 @@ index 49a2d341..7ea9f766 100644
    const displaySwatchColor = displaySwatchToken
      ? cssColorForToken(displaySwatchToken, namedColorLookup)
      : null;
-@@ -193,7 +175,7 @@ export function ColorPickerField({
+@@ -90,7 +69,7 @@ export function ColorPickerField({
+       if (!target) {
+         return;
+       }
+-      if (!rootRef.current?.contains(target)) {
++      if (!rootRef.current?.contains(target) && !popoverRef.current?.contains(target)) {
+         setOpen(false);
+       }
+     }
+@@ -137,24 +116,18 @@ export function ColorPickerField({
+       const spaceAbove = rootRect.top - POPOVER_VIEWPORT_PADDING_PX - POPOVER_GAP_PX;
+       const naturalHeight = popover.scrollHeight;
+       const popoverWidth = Math.ceil(popover.getBoundingClientRect().width);
+-      const shouldOpenUpward = naturalHeight > spaceBelow && spaceAbove > 0;
+-      const nextPlacement: PopoverPlacement = shouldOpenUpward ? "up" : "down";
+-      const wouldOverflowRight =
+-        rootRect.left + popoverWidth > window.innerWidth - POPOVER_VIEWPORT_PADDING_PX;
+-      const hasRoomOnLeft = rootRect.right - popoverWidth >= POPOVER_VIEWPORT_PADDING_PX;
+-      const nextHorizontalPlacement: PopoverHorizontalPlacement =
+-        wouldOverflowRight && hasRoomOnLeft ? "end" : "start";
+-      const availableSpace = nextPlacement === "up" ? spaceAbove : spaceBelow;
++      const shouldOpenUpward = naturalHeight > spaceBelow && spaceAbove > spaceBelow;
++      const availableSpace = shouldOpenUpward ? spaceAbove : spaceBelow;
+       const boundedMaxHeight = Math.min(
+         POPOVER_MAX_HEIGHT_PX,
+         Math.max(POPOVER_MIN_HEIGHT_PX, Math.floor(availableSpace))
+       );
+-
+-      setPopoverPlacement((current) => (current === nextPlacement ? current : nextPlacement));
+-      setPopoverHorizontalPlacement((current) =>
+-        current === nextHorizontalPlacement ? current : nextHorizontalPlacement
+-      );
+-      setPopoverMaxHeight((current) => (current === boundedMaxHeight ? current : boundedMaxHeight));
++      const left = Math.max(POPOVER_VIEWPORT_PADDING_PX, Math.min(rootRect.left, window.innerWidth - popoverWidth - POPOVER_VIEWPORT_PADDING_PX));
++      const top = shouldOpenUpward
++        ? rootRect.top - Math.min(naturalHeight, boundedMaxHeight) - POPOVER_GAP_PX
++        : rootRect.bottom + POPOVER_GAP_PX;
++      setPopoverPosition((current) => current.left === left && current.top === top && current.maxHeight === boundedMaxHeight
++        ? current : { left, top, maxHeight: boundedMaxHeight });
+     }
+ 
+     updatePopoverPlacement();
+@@ -193,7 +166,7 @@ export function ColorPickerField({
              style={displaySwatchColor != null ? { background: displaySwatchColor } : undefined}
              aria-hidden="true"
            />
@@ -2545,7 +2628,24 @@ index 49a2d341..7ea9f766 100644
          </span>
          <span className={css.triggerCaret} aria-hidden="true">
            <svg className={css.triggerCaretIcon} viewBox="0 0 12 8" focusable="false">
-@@ -215,7 +197,7 @@ export function ColorPickerField({
+@@ -201,802 +174,57 @@ export function ColorPickerField({
+           </svg>
+         </span>
+       </button>
+-      {open ? (
++      {open ? createPortal(
+         <div
+-          className={[
+-            css.popover,
+-            popoverPlacement === "up" ? css.popoverUp : "",
+-            popoverHorizontalPlacement === "end" ? css.popoverEnd : ""
+-          ].filter(Boolean).join(" ")}
++          className={css.popover}
+           ref={popoverRef}
+-          style={{ maxHeight: `${popoverMaxHeight}px` }}
++          style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px`, maxHeight: `${popoverPosition.maxHeight}px` }}
+         >
+           <ColorPicker
              ariaLabel={ariaLabel}
              value={value}
              syntaxValue={syntaxValue}
@@ -2554,7 +2654,12 @@ index 49a2d341..7ea9f766 100644
              namedColorSwatches={normalizedNamedColorSwatches}
              mixed={mixed}
              disabled={disabled}
-@@ -227,776 +209,35 @@ export function ColorPickerField({
+             onChange={onChange}
+           />
+-        </div>
++        </div>, document.body
+       ) : null}
+     </div>
    );
  }
  
@@ -3359,7 +3464,7 @@ index 49a2d341..7ea9f766 100644
  }
  
  function resolveCustomRgbFromDriver(
-@@ -1041,20 +282,6 @@ function normalizeColorToken(value: string | null): string | null {
+@@ -1041,20 +269,6 @@ function normalizeColorToken(value: string | null): string | null {
    return normalized.length === 0 ? null : normalized;
  }
  
@@ -3380,7 +3485,7 @@ index 49a2d341..7ea9f766 100644
  function normalizeNamedColorSwatches(swatches: readonly NamedColorSwatch[]): NamedColorSwatch[] {
    const normalized: NamedColorSwatch[] = [];
    const seen = new Set<string>();
-@@ -1083,190 +310,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
+@@ -1083,190 +297,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
    return lookup;
  }
  
@@ -3571,7 +3676,7 @@ index 49a2d341..7ea9f766 100644
  export function cssColorForToken(token: string, namedColorLookup: ReadonlyMap<string, string> | null = null): string | null {
    const normalizedToken = normalizeColorToken(token);
    if (!normalizedToken || normalizedToken === "none") {
-@@ -1392,134 +435,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
+@@ -1392,134 +422,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
    );
  }
  
@@ -15992,8 +16097,26 @@ index 00000000..d7b28102
 +    </SidePanel.SectionBody>
 +  </SidePanel.Section>;
 +}
+diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.module.css b/packages/app/src/ui/inspector-panel/InspectorPanel.module.css
+index 3173d35f..cd3fcaa0 100644
+--- a/packages/app/src/ui/inspector-panel/InspectorPanel.module.css
++++ b/packages/app/src/ui/inspector-panel/InspectorPanel.module.css
+@@ -21,6 +21,13 @@
+   flex-direction: column;
+ }
+ 
++.scopeLabel {
++  font-size: calc(var(--app-ui-scale, 1) * 11px);
++  font-weight: 600;
++  color: var(--text-muted);
++  padding: 8px 9px;
++}
++
+ .globalNote {
+   margin-top: 2px;
+   font-size: calc(var(--app-ui-scale, 1) * 10px);
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..2bdd60dc 100644
+index d5c65582..5732cecf 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 @@ -1,3 +1,4 @@
@@ -16048,15 +16171,27 @@ index d5c65582..2bdd60dc 100644
    const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
  
    const {
-@@ -117,6 +128,7 @@ export function InspectorPanel() {
+@@ -116,7 +127,18 @@ export function InspectorPanel() {
+     dispatch,
      getInspectorDescriptor
    });
- 
+-
++  const selectedElement = snapshot.scene?.elements.find((element) => element.sourceRef.sourceId === selectedSourceIds[0]);
++  const selectedKind = !selectedElement ? "Selection"
++    : selectedElement.kind === "Text" ? "Node"
++    : selectedElement.kind === "Circle" ? "Circle"
++    : selectedElement.kind === "Ellipse" ? "Ellipse"
++    : selectedElement.shapeHint === "rectangle" ? "Rectangle"
++    : selectedElement.shapeHint === "circle" ? "Circle"
++    : selectedElement.shapeHint === "ellipse" ? "Ellipse"
++    : selectedElement.commands.some((command) => command.kind === "C" || command.kind === "A") ? "Curve"
++    : selectedElement.commands.length === 2 ? "Line" : "Path";
++
 +  const constructionStepText = useSelector(canvasSession, constructionStep);
    const [manualLineWidthCustomKeys, setManualLineWidthCustomKeys] = useState<Set<string>>(
      () => new Set()
    );
-@@ -208,7 +220,7 @@ export function InspectorPanel() {
+@@ -208,7 +230,7 @@ export function InspectorPanel() {
      const mutations = buildTransformSetPropertyMutations(
        write.transformContext,
        write.transformContext.key,
@@ -16065,7 +16200,7 @@ index d5c65582..2bdd60dc 100644
      );
      if (mutations.length === 0) {
        return;
-@@ -295,7 +307,7 @@ export function InspectorPanel() {
+@@ -295,7 +317,7 @@ export function InspectorPanel() {
        const mutations = buildTransformSetPropertyMutations(
          write.transformContext,
          write.transformContext.key,
@@ -16074,7 +16209,7 @@ index d5c65582..2bdd60dc 100644
        );
        for (const mutation of mutations) {
          dispatch({
-@@ -321,7 +333,7 @@ export function InspectorPanel() {
+@@ -321,7 +343,7 @@ export function InspectorPanel() {
      value: number
    ): string {
      const formatted = formatNumber(value);
@@ -16083,7 +16218,7 @@ index d5c65582..2bdd60dc 100644
        return `${formatted}${property.unit}`;
      }
      return formatted;
-@@ -886,6 +898,7 @@ export function InspectorPanel() {
+@@ -886,6 +908,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -16091,7 +16226,7 @@ index d5c65582..2bdd60dc 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -958,6 +971,7 @@ export function InspectorPanel() {
+@@ -958,6 +981,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -16099,7 +16234,7 @@ index d5c65582..2bdd60dc 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1034,6 +1048,7 @@ export function InspectorPanel() {
+@@ -1034,6 +1058,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -16107,7 +16242,7 @@ index d5c65582..2bdd60dc 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1107,6 +1122,7 @@ export function InspectorPanel() {
+@@ -1107,6 +1132,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -16115,7 +16250,7 @@ index d5c65582..2bdd60dc 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1183,6 +1199,7 @@ export function InspectorPanel() {
+@@ -1183,6 +1209,7 @@ export function InspectorPanel() {
      const inputValue = draftValue ?? (property.value == null ? "" : formatNumber(property.value));
      const input = (
        <input
@@ -16123,7 +16258,7 @@ index d5c65582..2bdd60dc 100644
          className={withValueProvenanceClass(css.numberInput, provenance)}
          type="number"
          step={property.step}
-@@ -1249,6 +1266,7 @@ export function InspectorPanel() {
+@@ -1249,6 +1276,7 @@ export function InspectorPanel() {
      const inputValue = draftValue ?? (property.mixed || property.value == null ? "" : formatNumber(property.value));
      const input = (
        <input
@@ -16131,7 +16266,7 @@ index d5c65582..2bdd60dc 100644
          className={withValueProvenanceClass(css.numberInput, provenance)}
          type="number"
          step={property.step}
-@@ -1689,21 +1707,11 @@ export function InspectorPanel() {
+@@ -1689,21 +1717,11 @@ export function InspectorPanel() {
      };
    }
  
@@ -16157,7 +16292,7 @@ index d5c65582..2bdd60dc 100644
    }
  
    function applyFigureBoundsValue(next: { x: number; y: number; width: number; height: number }): void {
-@@ -1731,6 +1739,7 @@ export function InspectorPanel() {
+@@ -1731,6 +1749,7 @@ export function InspectorPanel() {
          <div className={css.propertyLabel}>{label}</div>
          <div className={css.controlRow}>
            <input
@@ -16165,7 +16300,7 @@ index d5c65582..2bdd60dc 100644
              className={css.numberInput}
              type="number"
              step={0.1}
-@@ -1742,13 +1751,11 @@ export function InspectorPanel() {
+@@ -1742,13 +1761,11 @@ export function InspectorPanel() {
                if (!Number.isFinite(parsed)) {
                  return;
                }
@@ -16182,7 +16317,7 @@ index d5c65582..2bdd60dc 100644
          </div>
        </div>
      );
-@@ -1756,6 +1763,7 @@ export function InspectorPanel() {
+@@ -1756,6 +1773,7 @@ export function InspectorPanel() {
  
    function renderFigureBoundsControls(): JSX.Element {
      const values = currentFigureBoundsControlsValue();
@@ -16190,7 +16325,16 @@ index d5c65582..2bdd60dc 100644
      const fixed = figureBoundsState.mode === "fixed";
      return (
        <>
-@@ -1825,7 +1833,7 @@ export function InspectorPanel() {
+@@ -1802,7 +1820,7 @@ export function InspectorPanel() {
+     const yscale = makeGlobalTransformNumberProperty("yscale", "Y scale");
+     return (
+       <>
+-        <SidePanel.Header>tikzpicture</SidePanel.Header>
++        <SidePanel.Header>{getToolLabel(toolMode)}</SidePanel.Header>
+         <SidePanel.Content className={css.content}>
+           <div className={css.elementInfo}>
+             <SidePanel.Section>
+@@ -1825,14 +1843,14 @@ export function InspectorPanel() {
  
    function renderToolOptionsPanel() {
      const toolLabel = getToolLabel(toolMode);
@@ -16199,7 +16343,24 @@ index d5c65582..2bdd60dc 100644
      const showStroke = toolSupportsStroke(toolMode);
      const showFill = toolSupportsFill(toolMode);
      const isFreehand = toolMode === "addFreehand";
-@@ -1852,7 +1860,7 @@ export function InspectorPanel() {
+ 
+     return (
+       <>
+-        <SidePanel.Header>{toolLabel} Tool</SidePanel.Header>
++        <SidePanel.Header>{toolLabel}</SidePanel.Header>
+         <SidePanel.Content className={css.content}>
+           <div className={css.elementInfo}>
+             {hint ? (
+@@ -1842,7 +1860,7 @@ export function InspectorPanel() {
+             {showStroke || showFill ? (
+               <SidePanel.Section>
+                 <SidePanel.SectionHeader>
+-                  <span>Defaults</span>
++                  <span>New strokes</span>
+                 </SidePanel.SectionHeader>
+                 <SidePanel.SectionBody>
+                   {showStroke ? (
+@@ -1852,7 +1870,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation stroke color"
                          value={creationStrokeColor}
                          syntaxValue={creationStrokeColor}
@@ -16208,7 +16369,7 @@ index d5c65582..2bdd60dc 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
-@@ -1867,7 +1875,7 @@ export function InspectorPanel() {
+@@ -1867,7 +1885,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation fill color"
                          value={creationFillColor === "none" ? "" : creationFillColor}
                          syntaxValue={creationFillColor}
@@ -16217,7 +16378,7 @@ index d5c65582..2bdd60dc 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
-@@ -1879,6 +1887,7 @@ export function InspectorPanel() {
+@@ -1879,6 +1897,7 @@ export function InspectorPanel() {
                </SidePanel.Section>
              ) : null}
  
@@ -16225,7 +16386,7 @@ index d5c65582..2bdd60dc 100644
              {isFreehand ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
-@@ -1886,25 +1895,19 @@ export function InspectorPanel() {
+@@ -1886,25 +1905,19 @@ export function InspectorPanel() {
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
@@ -16263,6 +16424,56 @@ index d5c65582..2bdd60dc 100644
                    </div>
                  </SidePanel.SectionBody>
                </SidePanel.Section>
+@@ -1972,20 +1985,17 @@ export function InspectorPanel() {
+ 
+   return (
+     <SidePanel className={css.panel}>
+-      {isCreationToolMode(toolMode) ? (
+-        renderToolOptionsPanel()
+-      ) : selectedSourceIds.length === 0 ? (
+-        renderGlobalTransformPanel()
+-      ) : selectedSourceIds.length === 1 ? (
++      {selectedSourceIds.length === 1 ? (
+         !renderedDescriptor ? (
+           <SidePanel.Content>
+             <p className={css.hint}>Inspector data is unavailable for the current selection.</p>
+           </SidePanel.Content>
+         ) : (
+           <>
+-            <SidePanel.Header>{renderedDescriptor.elementKind}</SidePanel.Header>
++            <SidePanel.Header>{selectedKind}</SidePanel.Header>
+             <SidePanel.Content className={css.content}>
+               <div className={css.elementInfo}>
++                <div className={css.scopeLabel}>Selected {selectedKind.toLowerCase()}</div>
+                 {renderedDescriptor.readOnlyReason ? (
+                   <div className={css.globalNote}>{renderedDescriptor.readOnlyReason}</div>
+                 ) : null}
+@@ -2016,13 +2026,14 @@ export function InspectorPanel() {
+             </SidePanel.Content>
+           </>
+         )
+-      ) : (
++      ) : selectedSourceIds.length > 1 ? (
+         <>
+           <SidePanel.Header>
+-            {renderedMultiModel?.selectionCount ?? selectedSourceIds.length} selected
++            {renderedMultiModel?.selectionCount ?? selectedSourceIds.length} selected objects
+           </SidePanel.Header>
+           <SidePanel.Content className={css.content}>
+             <div className={css.elementInfo}>
++              <div className={css.scopeLabel}>Selected objects</div>
+               {renderMultiArrangeQuickActions()}
+               {!renderedMultiModel || renderedMultiModel.sections.length === 0 ? (
+                 <p className={css.hint}>No shared editable properties were found across the selected elements.</p>
+@@ -2050,7 +2061,7 @@ export function InspectorPanel() {
+             </div>
+           </SidePanel.Content>
+         </>
+-      )}
++      ) : isCreationToolMode(toolMode) ? renderToolOptionsPanel() : renderGlobalTransformPanel()}
+     </SidePanel>
+   );
+ }
 diff --git a/packages/app/src/ui/inspector-panel/panel-helpers.tsx b/packages/app/src/ui/inspector-panel/panel-helpers.tsx
 index c6e6ffe4..a780384f 100644
 --- a/packages/app/src/ui/inspector-panel/panel-helpers.tsx

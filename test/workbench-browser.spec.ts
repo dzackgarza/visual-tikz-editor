@@ -2264,7 +2264,8 @@ describe("standalone workbench host boundary", function () {
         await expect(panel.getByText("Line", { exact: true })).toBeVisible();
         await expect(panel.getByText("New strokes", { exact: true })).toBeVisible();
         await tap(panel.getByRole("button", { name: "Creation stroke color" }));
-        await tap(panel.getByRole("button", { name: "Choose green" }));
+        await tap(frame.getByRole("button", { name: "Choose green" }));
+        await expect(rail.getByRole("button", { name: "Color: New strokes: green" })).toBeVisible();
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const y = viewport.y + viewport.height * 0.35;
         await input.penStroke([
@@ -2275,8 +2276,8 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await expect(panel.getByText("Line", { exact: true })).toBeVisible();
         await expect(panel.getByText("Selected line", { exact: true })).toBeVisible();
-        await tap(panel.getByRole("button", { name: "Stroke color" }));
-        await tap(panel.getByRole("button", { name: "Choose red" }));
+        await tap(panel.getByRole("button", { name: "Color", exact: true }).first());
+        await tap(frame.getByRole("button", { name: "Choose red" }));
         await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*red/);
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
@@ -6294,6 +6295,11 @@ describe("standalone workbench host boundary", function () {
         const selected = async () => [...(await editorDebug(page)).selection].sort();
         await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
         await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Properties", exact: true }))]);
+        const properties = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        await expect(properties.getByText("3 selected objects", { exact: true })).toBeVisible();
+        await expect(properties.getByText("Selected objects", { exact: true })).toBeVisible();
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Properties", exact: true }))]);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const source = async () => (await editorDebug(page)).source;
         const command = async (group: string, name: string) => {
