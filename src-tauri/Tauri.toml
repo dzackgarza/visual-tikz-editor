@@ -24,3 +24,4 @@ shortDescription = "Edit mathematical diagrams as TikZ source"
 
 [bundle.linux.deb]
 desktopTemplate = "desktop-entry.desktop"
+depends = ["zenity", "pandoc", "pdf2svg", "librsvg2-bin", "texlive-latex-base", "texlive-pictures", "texlive-latex-extra"]
