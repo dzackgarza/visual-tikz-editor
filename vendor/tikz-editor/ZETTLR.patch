@@ -2219,7 +2219,7 @@ index 5818d92b..60743223 100644
    const arrayBuffer = await blob.arrayBuffer();
    const bytes = new Uint8Array(arrayBuffer);
 diff --git a/packages/app/src/ui/CanvasContextMenu.module.css b/packages/app/src/ui/CanvasContextMenu.module.css
-index 558a0a1b..c5ed3f6d 100644
+index 558a0a1b..edefd456 100644
 --- a/packages/app/src/ui/CanvasContextMenu.module.css
 +++ b/packages/app/src/ui/CanvasContextMenu.module.css
 @@ -100,3 +100,19 @@
@@ -2230,8 +2230,8 @@ index 558a0a1b..c5ed3f6d 100644
 +.submenuExpanded { display: block; }
 +
 +@media (pointer: coarse) {
-+  .root { font-size: 14px; max-width: calc(100vw - 16px); }
-+  .root > .menu { max-height: calc(100vh - 32px); overflow: auto; }
++  .root { font-size: 14px; max-width: calc(100vw - 16px); max-height: var(--context-menu-max-height); overflow: auto; }
++  .root > .menu { max-height: var(--context-menu-max-height); }
 +  .item { min-height: 44px; font-size: 14px; white-space: normal; }
 +  .shortcut { display: none; }
 +  .submenuPopup { position: static; padding-left: 12px; }
@@ -2243,10 +2243,18 @@ index 558a0a1b..c5ed3f6d 100644
 +  .submenu:focus-within > .submenuExpanded { display: block; }
 +}
 diff --git a/packages/app/src/ui/CanvasContextMenu.tsx b/packages/app/src/ui/CanvasContextMenu.tsx
-index 0e491d69..34a5ad3f 100644
+index 0e491d69..bc7250a0 100644
 --- a/packages/app/src/ui/CanvasContextMenu.tsx
 +++ b/packages/app/src/ui/CanvasContextMenu.tsx
-@@ -35,7 +35,20 @@ function formatAccelerator(accelerator: string | undefined): string {
+@@ -17,6 +17,7 @@ const IS_MAC_PLATFORM =
+ type ContextMenuInheritedStyle = CSSProperties & {
+   "--app-ui-font-size"?: string;
+   "--app-ui-scale"?: string;
++  "--context-menu-max-height"?: string;
+ };
+ 
+ function formatAccelerator(accelerator: string | undefined): string {
+@@ -35,7 +36,20 @@ function formatAccelerator(accelerator: string | undefined): string {
      .join(IS_MAC_PLATFORM ? " " : "+");
  }
  
@@ -2268,7 +2276,7 @@ index 0e491d69..34a5ad3f 100644
    items,
    path,
    bindings,
-@@ -48,13 +61,15 @@ function ContextMenuPopup({
+@@ -48,13 +62,15 @@ function ContextMenuPopup({
    origin: CommandOrigin;
    onCommandRun: (commandId: AppMenuCommandId, origin: CommandOrigin) => void;
  }) {
@@ -2286,7 +2294,7 @@ index 0e491d69..34a5ad3f 100644
          const itemKey = `${path}-${index}`;
          if (item.kind === "separator") {
            return <div key={`${itemKey}-separator`} className={css.separator} role="separator" />;
-@@ -63,19 +78,22 @@ function ContextMenuPopup({
+@@ -63,19 +79,22 @@ function ContextMenuPopup({
          if (item.kind === "submenu") {
            return (
              <div key={`${itemKey}-submenu`} className={css.submenu}>
@@ -2312,7 +2320,7 @@ index 0e491d69..34a5ad3f 100644
                  <ContextMenuPopup
                    items={item.items}
                    path={`${itemKey}-submenu`}
-@@ -99,7 +117,6 @@ function ContextMenuPopup({
+@@ -99,7 +118,6 @@ function ContextMenuPopup({
              type="button"
              role={role}
              aria-checked={binding.checked}
@@ -2320,7 +2328,7 @@ index 0e491d69..34a5ad3f 100644
              className={[css.item, hasCheckItems ? "" : css.itemNoCheck].filter(Boolean).join(" ")}
              data-testid={`canvas-context-cmd-${item.commandId}`}
              onClick={() => {
-@@ -144,15 +161,6 @@ export function CanvasContextMenu({
+@@ -144,15 +162,6 @@ export function CanvasContextMenu({
    const [position, setPosition] = useState<ContextMenuAnchor>(anchor);
    const [inheritedStyle, setInheritedStyle] = useState<ContextMenuInheritedStyle>({});
  
@@ -2336,34 +2344,87 @@ index 0e491d69..34a5ad3f 100644
    useLayoutEffect(() => {
      if (!open) {
        return;
-@@ -164,6 +172,7 @@ export function CanvasContextMenu({
+@@ -164,23 +173,24 @@ export function CanvasContextMenu({
        return;
      }
  
-+    const containerRect = container.getBoundingClientRect();
-     const nextPosition = clampContextMenuAnchor(
-       anchor,
-       {
-@@ -171,8 +180,8 @@ export function CanvasContextMenu({
-         height: menuRoot.offsetHeight
-       },
-       {
+-    const nextPosition = clampContextMenuAnchor(
+-      anchor,
+-      {
+-        width: menuRoot.offsetWidth,
+-        height: menuRoot.offsetHeight
+-      },
+-      {
 -        width: container.clientWidth,
 -        height: container.clientHeight
-+        width: Math.min(container.clientWidth, window.innerWidth - containerRect.left),
-+        height: Math.min(container.clientHeight, window.innerHeight - containerRect.top)
-       }
-     );
+-      }
+-    );
+-
+-    setPosition((current) =>
+-      current.x === nextPosition.x && current.y === nextPosition.y
+-        ? current
+-        : nextPosition
+-    );
++    const placeMenu = () => {
++      const containerRect = container.getBoundingClientRect();
++      const nextPosition = clampContextMenuAnchor(
++        anchor,
++        { width: menuRoot.offsetWidth, height: menuRoot.offsetHeight },
++        {
++          width: Math.min(container.clientWidth, window.innerWidth - containerRect.left),
++          height: Math.min(container.clientHeight, window.innerHeight - containerRect.top)
++        }
++      );
++      setPosition((current) =>
++        current.x === nextPosition.x && current.y === nextPosition.y ? current : nextPosition
++      );
++    };
++    placeMenu();
++    const observer = new ResizeObserver(placeMenu);
++    observer.observe(menuRoot);
++    window.addEventListener("resize", placeMenu);
  
-@@ -193,7 +202,7 @@ export function CanvasContextMenu({
+     const computedStyle = getComputedStyle(container);
+     const nextInheritedStyle: ContextMenuInheritedStyle = {
+@@ -193,7 +203,11 @@ export function CanvasContextMenu({
          ? current
          : nextInheritedStyle
      );
 -  }, [anchor, containerRef, open, target]);
++    return () => {
++      observer.disconnect();
++      window.removeEventListener("resize", placeMenu);
++    };
 +  }, [anchor, containerRef, inheritedStyle, open, target]);
  
    useEffect(() => {
      if (!open) {
+@@ -242,15 +256,20 @@ export function CanvasContextMenu({
+         y: containerRect.top + position.y
+       }
+     : position;
++  const menuHeight = containerRect
++    ? Math.max(0, Math.min(containerRef.current!.clientHeight, window.innerHeight - containerRect.top) - 8)
++    : window.innerHeight - 8;
++  const menuStyle: ContextMenuInheritedStyle = {
++    ...inheritedStyle,
++    "--context-menu-max-height": `${menuHeight}px`,
++    left: `${viewportPosition.x}px`,
++    top: `${viewportPosition.y}px`
++  };
+   const menu = (
+     <div
+       ref={menuRootRef}
+       className={css.root}
+-      style={{
+-        ...inheritedStyle,
+-        left: `${viewportPosition.x}px`,
+-        top: `${viewportPosition.y}px`
+-      }}
++      style={menuStyle}
+       role="menu"
+       data-testid="canvas-context-menu"
+     >
 diff --git a/packages/app/src/ui/ColorPicker.module.css b/packages/app/src/ui/ColorPicker.module.css
 index dd74530a..69f9361a 100644
 --- a/packages/app/src/ui/ColorPicker.module.css
