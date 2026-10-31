@@ -1808,13 +1808,14 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+        const authored = String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \draw (2,2) circle (1);
 \draw (6,2) circle (1);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
-\end{tikzpicture}`);
+\end{tikzpicture}`;
+        await page.locator(".cm-content").fill(authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
@@ -1910,6 +1911,10 @@ describe("standalone workbench host boundary", function () {
             `${id} centre at ${JSON.stringify(centre)}, expected (${x},${y}) at ${JSON.stringify(expected)}: ${(await editorDebug(page)).source}`,
           );
         }
+        await input.penStroke([await stableCenter(rail.getByRole("button", { name: "Undo", exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
+        await editorReady(page);
+        await expect.poll(async () => [...(await editorDebug(page)).selection].sort()).toEqual(["path:2", "path:3"]);
       },
     );
   }
@@ -1921,11 +1926,12 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+        const authored = String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \draw (2,2) rectangle (6,6);
-\end{tikzpicture}`);
+\end{tikzpicture}`;
+        await page.locator(".cm-content").fill(authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const square = frame.locator('svg [data-source-id="path:2"]').first();
@@ -1991,6 +1997,10 @@ describe("standalone workbench host boundary", function () {
             { message: "The square is not 4 wide and 6 tall after the shear" },
           )
           .toBe(true);
+        await input.penStroke([await stableCenter(frame.locator("[data-diagram-tools]").getByRole("button", { name: "Undo", exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
+        await editorReady(page);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
       },
     );
   }
