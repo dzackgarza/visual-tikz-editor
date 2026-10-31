@@ -12,6 +12,7 @@ import {
   startPageCoverage,
   startWorkbench,
   stopPageCoverage,
+  TABLET_VIEWPORTS,
   type Workbench,
 } from "./tablet";
 
@@ -287,4 +288,53 @@ describe("standalone native file workflow", function () {
       await expect.poll(() => readFile(diagramPath, "utf8")).toBe(later);
     }
   });
+
+  for (const tablet of TABLET_VIEWPORTS) {
+  it(`reopens layered source from disk with its names, order, visibility, and references in ${tablet.name}`, async function () {
+    await page.setViewportSize(tablet);
+    const authored = String.raw`\begin{tikzpicture}
+\coordinate (anchor) at (0,0);
+\begin{scope}[name=Rear, transparent]
+\draw (anchor) -- (4,0);
+\end{scope}
+\begin{scope}[name=Front]
+\draw (0,2) -- (4,2);
+\end{scope}
+\end{tikzpicture}`;
+    diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-layer-reopen-")), "layered.tikz");
+    await page.request.post(`${url}api/new`, { data: "tikzpicture" });
+    await page.goto(url);
+    await editorReady(page);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await page.locator(".cm-content").fill(authored);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
+    await frame.getByRole("button", { name: "Layers", exact: true }).click();
+    await frame.getByRole("button", { name: "Lock Front", exact: true }).click();
+    await expect(frame.getByRole("button", { name: "Unlock Front", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await fileMenu().click();
+    await page.getByRole("button", { name: "Save As…", exact: true }).click();
+    await chooseFile("save");
+    await expect.poll(() => existsSync(diagramPath)).toBe(true);
+    await expect.poll(() => readFile(diagramPath, "utf8")).toBe(authored);
+    await page.goto("about:blank");
+    await workbench.stop();
+    await startServer();
+    await page.goto(url);
+    await page.getByRole("button", { name: "Open existing…", exact: true }).click();
+    await chooseFile("open");
+    await editorReady(page);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(authored);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    const reopened = page.frameLocator('iframe[title="TikZ visual editor"]');
+    await reopened.getByRole("button", { name: "Layers", exact: true }).click();
+    const panel = reopened.getByRole("complementary", { name: "Diagram properties" }).getByRole("tabpanel");
+    await expect.poll(() => panel.getByRole("group", { name: / layer$/ }).evaluateAll((groups) => groups.map((group) => group.getAttribute("aria-label")))).toEqual(["Front layer", "Rear layer"]);
+    await expect(panel.getByRole("button", { name: "Show Rear", exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Lock Front", exact: true })).toHaveAttribute("aria-pressed", "false");
+    await expect(reopened.locator('svg [data-source-id^="path:"]')).toHaveCount(2);
+    await expect(page.locator(".tikz-standalone-status")).toContainText("Saved");
+  });
+  }
 });
