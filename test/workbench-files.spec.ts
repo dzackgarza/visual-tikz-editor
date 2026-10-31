@@ -289,7 +289,7 @@ describe("standalone native file workflow", function () {
     }
   });
 
-  it("keeps both sources intact when an existing file changes on disk before Save", async function () {
+  it("keeps both sources intact when an existing file changes on disk before the source editor Save shortcut", async function () {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-save-conflict-")), "conflict.tikz");
     await page.request.post(`${url}api/new`, { data: "tikzpicture" });
@@ -308,8 +308,7 @@ describe("standalone native file workflow", function () {
     const edited = original.replace("(1,1)", "(3,3)");
     await writeFile(diagramPath, external, "utf8");
     await page.locator(".cm-content").fill(edited);
-    await fileMenu().click();
-    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.keyboard.press("Control+s");
     await expect(page.locator(".tikz-standalone-status")).toContainText("The file changed on disk");
     assert.equal(await readFile(diagramPath, "utf8"), external);
     await page.getByRole("button", { name: "Copy source", exact: true }).click();
