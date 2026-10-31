@@ -5995,6 +5995,41 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `leaves point editing with Escape and keeps the curve ready to edit in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const authored = String.raw`\begin{tikzpicture}
+\draw (1,1) .. controls (2,4) and (4,4) .. (5,1) .. controls (6,-2) and (8,-2) .. (9,1);
+\end{tikzpicture}`;
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        await input.touch([await stableCenter(frame.getByRole("button", { name: "Select", exact: true }))]);
+        const curve = frame.locator('svg [data-source-id="path:0"]').first();
+        await input.penStroke([await strokePoint(page, curve, 0.3)]);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toBeVisible();
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit points", exact: true }))]);
+        const anchor = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]').nth(1);
+        const anchorBox = (await anchor.boundingBox())!;
+        await input.penStroke([{ x: anchorBox.x + anchorBox.width / 2, y: anchorBox.y + anchorBox.height / 2 }]);
+        await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toBeVisible();
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit points", exact: true }))]);
+        await expect(strip.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+        assert.equal((await editorDebug(page)).source, authored);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     for (const contact of ["touch", "pen"] as const) {
       story(
         { viewport: tablet },
