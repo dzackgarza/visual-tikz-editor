@@ -6017,6 +6017,8 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit points", exact: true }))]);
         const anchor = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]').nth(1);
         const anchorBox = (await anchor.boundingBox())!;
+        await input.penHover({ x: anchorBox.x + anchorBox.width / 2 + 9, y: anchorBox.y + anchorBox.height / 2 });
+        await expect(anchor).toHaveAttribute("style", /fill: var\(--accent\)/);
         await input.penStroke([{ x: anchorBox.x + anchorBox.width / 2, y: anchorBox.y + anchorBox.height / 2 }]);
         await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
         await page.keyboard.press("Escape");
