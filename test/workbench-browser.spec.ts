@@ -4247,6 +4247,51 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `persists canvas aids and grid controls after reload in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        await tap(rail.getByRole("button", { name: "Zoom and display", exact: true }));
+        const popup = frame.getByRole("dialog", { name: "Tool options" });
+        for (const aid of ["Grid", "Rulers", "Ruler guides"]) {
+          const control = popup.getByRole("button", { name: aid, exact: true });
+          await tap(control);
+          await expect(control).toHaveAttribute("aria-pressed", "false");
+        }
+        await tap(rail.getByRole("button", { name: "Zoom and display", exact: true }));
+        await tap(rail.getByRole("button", { name: "Settings", exact: true }));
+        const settings = frame.getByTestId("settings-modal");
+        await tap(settings.getByRole("button", { name: "Canvas", exact: true }));
+        await settings.getByLabel("Grid Size").selectOption("coarse");
+        await settings.getByLabel("Grid Opacity").fill("42");
+        await settings.getByLabel("Edit Handle Size").selectOption("11");
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
+        await page.reload();
+        await editorReady(page);
+        const reopened = editorFrame(page);
+        const reopenedRail = reopened.locator("[data-diagram-tools]");
+        await tap(reopenedRail.getByRole("button", { name: "Zoom and display", exact: true }));
+        const reopenedPopup = reopened.getByRole("dialog", { name: "Tool options" });
+        for (const aid of ["Grid", "Rulers", "Ruler guides"]) {
+          await expect(reopenedPopup.getByRole("button", { name: aid, exact: true })).toHaveAttribute("aria-pressed", "false");
+        }
+        await tap(reopenedRail.getByRole("button", { name: "Zoom and display", exact: true }));
+        await tap(reopenedRail.getByRole("button", { name: "Settings", exact: true }));
+        const reopenedSettings = reopened.getByTestId("settings-modal");
+        await tap(reopenedSettings.getByRole("button", { name: "Canvas", exact: true }));
+        await expect(reopenedSettings.getByLabel("Grid Size")).toHaveValue("coarse");
+        await expect(reopenedSettings.getByLabel("Grid Opacity")).toHaveValue("42");
+        await expect(reopenedSettings.getByLabel("Edit Handle Size")).toHaveValue("11");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `keeps typing native when Settings has a single-letter shortcut in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
