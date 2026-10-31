@@ -3791,6 +3791,21 @@ describe("standalone workbench host boundary", function () {
         await collection.selectOption({ label: "Roots" });
         await expect.poll(railColors).toEqual(original.slice(1));
         // Collections and the active choice survive a reload.
+        const rootsId = await collection.inputValue();
+        await expect.poll(async () => {
+          const response = await page.request.get(`${url}api/preferences`);
+          assert.equal(response.status(), 200);
+          const preferences = await response.json() as Record<string, string>;
+          const saved = preferences["tikz-editor:settings"];
+          if (!saved) return null;
+          const colorPicker = (JSON.parse(saved) as {
+            settings: { colorPicker: { activeCollectionId: string; collections: { id: string; colors: string[] }[] } };
+          }).settings.colorPicker;
+          return {
+            active: colorPicker.activeCollectionId,
+            colors: colorPicker.collections.find((entry) => entry.id === rootsId)?.colors,
+          };
+        }).toEqual({ active: rootsId, colors: original.slice(1) });
         await page.reload();
         await editorReady(page);
         await expect.poll(railColors).toEqual(original.slice(1));
