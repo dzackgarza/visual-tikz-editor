@@ -5991,9 +5991,9 @@ describe("standalone workbench host boundary", function () {
         await expect
           .poll(codeSelection, { message: "touch tap on the circle" })
           .toBe(String.raw`\draw (8,-6) circle (3cm);`);
-        await input.penStroke([
-          await strokePoint(page, frame.locator("path[data-source-id]").first(), 0.25),
-        ]);
+        await editorReady(page);
+        const linePoint = await strokePoint(page, frame.locator("path[data-source-id]").first(), 0.25);
+        await input.penStroke([linePoint, linePoint]);
         await expect
           .poll(codeSelection, { message: "pen tap on the line" })
           .toBe(String.raw`\draw (2,8) -- (12,14);`);
