@@ -4066,6 +4066,42 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `orders and labels the dock over a dark canvas in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Dark theme", exact: true }).click();
+        const frame = editorFrame(page);
+        const rail = frame.locator("[data-diagram-tools]");
+        const names = await rail.getByRole("button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? ""));
+        const position = (name: string) => names.findIndex((entry) => entry === name || entry.startsWith(`${name}:`));
+        for (const name of ["Select", "Lasso", "Freehand", "Eraser", "Geometry", "Label", "Bucket", "Color", "Undo", "Redo", "Layers", "Properties", "Settings"]) {
+          assert.ok(position(name) >= 0, `${name} is missing from the dock`);
+        }
+        for (const [before, after] of [["Select", "Freehand"], ["Freehand", "Eraser"], ["Eraser", "Geometry"], ["Geometry", "Label"], ["Label", "Bucket"], ["Bucket", "Color"], ["Color", "Undo"], ["Undo", "Redo"], ["Redo", "Layers"], ["Layers", "Properties"], ["Properties", "Settings"]]) {
+          assert.ok(position(before) < position(after), `${before} must precede ${after}: ${names.join(", ")}`);
+        }
+        const swatch = names.findIndex((name) => name.startsWith("Use "));
+        assert.ok(position("Color") < swatch && swatch < position("Undo"), `Saved colors are outside the Color group: ${names.join(", ")}`);
+        for (const label of ["Layers", "Properties", "Settings", "Lasso"]) {
+          const text = await rail.getByRole("button", { name: label, exact: true }).innerText();
+          assert.ok(text.includes(label), `${label} has no readable label`);
+        }
+        const backgrounds = await Promise.all([
+          frame.locator('[data-canvas-viewport="true"]').evaluate((element) => getComputedStyle(element).backgroundColor),
+          frame.locator('[class*="svgLayer"]').first().evaluate((element) => getComputedStyle(element).backgroundColor),
+        ]);
+        for (const background of backgrounds) {
+          const channels = background.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+          assert.ok(channels.length === 3 && Math.max(...channels) < 90, `Canvas surface is light: ${background}`);
+        }
+        await storyScreenshot(page, `dark-dock-${tablet.name}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `names no key in the context menu a long press opens in ${tablet.name}`,
       async function () {
         await editorReady(page);
