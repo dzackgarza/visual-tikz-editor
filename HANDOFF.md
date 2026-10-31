@@ -31,11 +31,9 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 
 ## Next work, ranked
 
-1. Confirm the state defects below through focused reproductions. Read the whole complaint list and map it to the acceptance catalogue. Separate reproduced defects, existing behavior to preserve, and proposed capabilities. This is diagnosis for the design choice, not a full qualification run.
-2. Settle the interaction model and release scope. Present alternatives only for decisions not already settled by the product guidance. Obtain the user's choice before major architecture changes. Define tool/construction stages, object/point selection, current-edit versus default scope, commit/cancel/undo transitions, snapping precedence, and available canvas space as one model.
-3. Implement the chosen state transitions and the controls that use them in the dependency order below. Each slice delivers its final interaction and verifies continued editing. Run affected workflows as each slice lands.
-4. Verify the full preserved host/source contract and agreed publication behavior against the finished interaction model. Repair demonstrated failures at their owners. Run combined qualification at the resulting revision.
-5. The user performs physical-tablet qualification. Publish the tested immutable revision and artifacts after both gates pass.
+1. Verify A/H/I and the original complaints through combined standalone, mounted-host, offline, source-fidelity, save/reopen, copy, undo, and export sequences. Repair failures at their owners. Confirm the combined editor revision has a green Development diagnostics run.
+2. The user performs physical-tablet qualification on that revision, including pen and finger behavior, erasing, hover, both orientations, whole-object erasing, and the hold-to-move delay. Record actual results in the decisions table.
+3. After both gates pass on the same revision, publish immutable standalone and qualification artifacts. Reconcile public issues against the original acceptance conditions and release evidence.
 
 ### Implementation dependencies
 
@@ -107,7 +105,7 @@ The guidance also proposes reusable constructions and mixed handwritten annotati
 
 Preserve user work and authored source. Keep the existing editors as semantic owners. Use the maintained source patch/vendor refresh workflow for fork changes; batch refreshes and exclude incidental fork dependency-lock rewrites. Reproduced regressions need committed failing stories before repairs. Negative gesture assertions need a positive baseline; Fit existing geometry before its first gesture.
 
-Steps 1 and 2 are complete; the decisions are recorded above and in [the interaction model](docs/interaction-model.md). Slices 1 to 3 are complete. Resume at ranked step 3, slice 4: its completion list is below; implement its items in order, each with a failing story first. Before believing a slice 2 or slice 3 claim, run its named story in both orientations at the current revision.
+The interaction decisions are recorded above and in [the interaction model](docs/interaction-model.md). Slices 1 to 4 and the slice 5 autosave/export implementation have focused evidence. Resume at ranked step 1. Verify earlier slice claims against the current revision where a combined workflow depends on them.
 
 Slice 1 state: the session statechart (`packages/app/src/ui/canvas-panel/canvas-session.ts` in the fork) owns construction stages, the curve session, and the refinement offer. The dock and Properties show the construction step with Cancel and Finish. The dock sits at the lower edge by default. Properties is a side panel in landscape and an expandable bottom sheet in portrait. The rail, the panel, and the on-screen keyboard (reported by the host through the `keyboard` embed command) publish the canvas edge space they take (`occupied-insets.ts`). Selection controls and the selected subject stay in the space left; the subject moves by a pan only. Zoom-to-fit and the startup view frame the area the rail and Properties leave with the keyboard closed. Selection bounds are the tight bounds of the drawn geometry. The freehand result takes a corner of the space left that clears its stroke, in every dock with Properties open or closed, and scrolls when that space is shorter than it. The slice 1 space rules are complete; resume at slice 2.
 
