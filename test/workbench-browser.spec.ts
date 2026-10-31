@@ -3177,10 +3177,10 @@ describe("standalone workbench host boundary", function () {
         assert.equal(anchors.length, 5, `anchors: ${anchors.length}`);
         await input.penStroke([{ x: frameBox.x + anchors[2].x, y: frameBox.y + anchors[2].y }]);
         await expect(
-          frame.getByRole("button", { name: "1 point selected", exact: true }),
+          frame.getByText("1 point selected", { exact: true }),
         ).toBeVisible();
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "Delete points", exact: true })),
+          await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Delete", exact: true })),
         ]);
         await expect.poll(async () => (await editorDebug(page)).source).not.toMatch(/\(6,0\)/);
         const source = (await editorDebug(page)).source;
@@ -3238,7 +3238,7 @@ describe("standalone workbench host boundary", function () {
             message: "Tapping the fitted stroke selected its recovery envelope",
           })
           .toEqual([fitted]);
-        await expect(frame.getByRole("button", { name: "Lock curve", exact: true })).toBeVisible();
+        await expect(frame.getByRole("button", { name: "Lock", exact: true })).toBeVisible();
       },
     );
   }
@@ -3277,7 +3277,7 @@ describe("standalone workbench host boundary", function () {
         await input.touch([await strokePoint(page, curve, 0.3)]);
         await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
         // A tap that lands on an anchor selects that point; the curve's own actions are one tap away.
-        const whole = frame.getByRole("button", { name: "Select entire curve", exact: true });
+        const whole = frame.getByRole("button", { name: "Done", exact: true });
         if (await whole.isVisible()) {
           await input.touch([await stableCenter(whole)]);
         }
@@ -3287,13 +3287,9 @@ describe("standalone workbench host boundary", function () {
         const counts = [await anchors()];
         const refinement = frame.getByRole("dialog", { name: "Curve refinement" });
         const openRefinement = async () => {
-          const simplify = frame.getByRole("button", { name: "Simplify curve", exact: true });
-          // The disclosure says whether the curve's actions are open; the controls can be between renders.
-          const actions = frame.getByRole("button", { name: "Curve actions", exact: true });
-          if ((await actions.getAttribute("aria-expanded")) === "false") {
-            await input.touch([await stableCenter(actions)]);
-          }
-          await input.touch([await stableCenter(simplify)]);
+          await input.touch([
+            await stableCenter(frame.getByRole("button", { name: "Simplify", exact: true })),
+          ]);
           await expect(refinement).toBeVisible();
         };
         // Simplify opens the same refinement on the curve, with its first pass previewed.
@@ -4077,7 +4073,7 @@ describe("standalone workbench host boundary", function () {
         const selectCurve = async () => {
           await fitDiagram(frame, input);
           await input.touch([await strokePoint(page, curve, 0.3)]);
-          const whole = frame.getByRole("button", { name: "Select entire curve", exact: true });
+          const whole = frame.getByRole("button", { name: "Done", exact: true });
           if (await whole.isVisible()) {
             await tap(whole);
           }
@@ -4087,8 +4083,7 @@ describe("standalone workbench host boundary", function () {
         const anchors = async () =>
           ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length;
         const count = await anchors();
-        await tap(frame.getByRole("button", { name: "Curve actions", exact: true }));
-        await tap(frame.getByRole("button", { name: "Simplify curve", exact: true }));
+        await tap(frame.getByRole("button", { name: "Simplify", exact: true }));
         await expect.poll(anchors, { timeout: 30_000 }).toBeLessThan(count);
         const refinement = frame.getByRole("dialog", { name: "Curve refinement" });
         await tap(refinement.getByRole("button", { name: "Cancel", exact: true }));
@@ -4096,16 +4091,7 @@ describe("standalone workbench host boundary", function () {
         await expect
           .poll(async () => (await editorDebug(page)).selection)
           .toEqual([ids[ids.length - 1]]);
-        if (
-          (await frame
-            .getByRole("button", { name: "Curve actions", exact: true })
-            .getAttribute("aria-expanded")) === "false"
-        ) {
-          await tap(frame.getByRole("button", { name: "Curve actions", exact: true }));
-        }
-        await expect(
-          frame.getByRole("button", { name: "Simplify curve", exact: true }),
-        ).toBeVisible();
+        await expect(frame.getByRole("button", { name: "Simplify", exact: true })).toBeVisible();
         assert.equal(await anchors(), count, "Reaching the keyboard baseline changed the curve");
         await page.keyboard.press("Control+Alt+p");
         await expect(
@@ -4486,7 +4472,7 @@ describe("standalone workbench host boundary", function () {
         )[0];
         await input.penStroke([start]);
         await expect(
-          frame.getByRole("button", { name: "1 point selected", exact: true }),
+          frame.getByText("1 point selected", { exact: true }),
         ).toBeVisible();
         const controls = frame.locator('circle[data-handle-kind="move-handle"][data-source-id="path:2"]');
         await expect(controls).toHaveCount(1);
@@ -4830,8 +4816,8 @@ describe("standalone workbench host boundary", function () {
           .getByRole("complementary", { name: "Diagram properties", exact: true })
           .boundingBox())!;
         for (const control of [
-          frame.getByRole("button", { name: /Lock curve/ }),
-          frame.getByRole("button", { name: /curve actions/i }).first(),
+          frame.getByRole("button", { name: "Lock", exact: true }),
+          frame.getByRole("button", { name: "Edit points", exact: true }),
         ]) {
           const box = (await control.boundingBox())!;
           assert.ok(
@@ -4933,7 +4919,7 @@ describe("standalone workbench host boundary", function () {
         await input.touch([
           await stableCenter(panel.getByRole("button", { name: "Rectangle", exact: true })),
         ]);
-        const actions = frame.getByRole("button", { name: "Selection actions", exact: true });
+        const actions = frame.getByRole("button", { name: "More", exact: true });
         await expect(actions).toBeInViewport({ ratio: 1 });
         const control = (await actions.boundingBox())!;
         const aside = (await panel.boundingBox())!;
@@ -4943,7 +4929,7 @@ describe("standalone workbench host boundary", function () {
             control.x >= aside.x + aside.width ||
             control.y + control.height <= aside.y ||
             control.y >= aside.y + aside.height,
-          "Selection actions overlap Layers",
+          "The selection strip overlaps Layers",
         );
         await input.touch([await stableCenter(actions)]);
         await expect(frame.getByRole("menuitem", { name: "Delete", exact: true })).toBeVisible();
@@ -5198,9 +5184,7 @@ describe("standalone workbench host boundary", function () {
             "The raised panel covers the selected rectangle",
           )
           .toBe(0);
-        const control = frame
-          .getByRole("button", { name: "Selection actions", exact: true })
-          .locator("..");
+        const control = frame.getByRole("toolbar", { name: "Selection", exact: true });
         assert.equal(
           overlap((await control.boundingBox())!, (await panel.boundingBox())!),
           0,
@@ -5650,9 +5634,7 @@ describe("standalone workbench host boundary", function () {
           } else {
             await input.penStroke([tapAt]);
           }
-          const control = frame
-            .getByRole("button", { name: "Curve actions", exact: true })
-            .locator("..");
+          const control = frame.getByRole("toolbar", { name: "Selection", exact: true });
           await expect(control).toBeVisible();
           const controlBox = (await control.boundingBox())!;
           assert.ok(!intersects(controlBox, box), `${contact}: the curve control covers the curve`);
@@ -5705,7 +5687,7 @@ describe("standalone workbench host boundary", function () {
           await tap(await onCurve(0.3));
           await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
           await expect(frame.locator('[data-selection-highlight="path:0"]')).toBeVisible();
-          const lock = frame.getByRole("button", { name: "Lock curve", exact: true });
+          const lock = frame.getByRole("button", { name: "Lock", exact: true });
           await expect(lock).toHaveAttribute("aria-pressed", "false");
           const hint = (await frame.getByTestId("canvas-selection-hint").boundingBox())!;
           const control = (await lock.locator("..").boundingBox())!;
@@ -5782,7 +5764,7 @@ describe("standalone workbench host boundary", function () {
         ]);
         await input.touch([await strokePoint(page, curve, 0.2)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
-        await expect(frame.getByText("3 points", { exact: true })).toBeVisible();
+        await expect(frame.getByText("Curve · 3 points", { exact: true })).toBeVisible();
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const middle = await frame
           .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
@@ -5797,7 +5779,7 @@ describe("standalone workbench host boundary", function () {
           );
         await input.touch([{ x: frameBox.x + middle.x, y: frameBox.y + middle.y }]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "Make corner", exact: true })),
+          await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Corner", exact: true })),
         ]);
         await expect
           .poll(async () => (await editorDebug(page)).source)
@@ -5828,13 +5810,186 @@ describe("standalone workbench host boundary", function () {
         ]);
         await input.touch([await strokePoint(page, rectangle, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        await expect(strip.getByRole("button", { name: "Fill and stroke", exact: true })).toBeVisible();
+        await expect(strip.getByText("Rectangle", { exact: true })).toBeVisible();
+        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toHaveCount(0);
+        await expect(strip.getByRole("button", { name: "Simplify", exact: true })).toHaveCount(0);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `shows one selection strip whose actions follow the selection: a shape, a curve, curve points, and several objects, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (1,1) rectangle (3,3);
+\draw (5,2) circle (1);
+\draw (4,6) .. controls (5,9) and (7,9) .. (8,6) .. controls (9,3) and (11,3) .. (12,6);
+\path[use as bounding box] (-10,-10) rectangle (15,15);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeVisible();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const rail = frame.locator("[data-diagram-tools]");
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const button = (name: string) => strip.getByRole("button", { name, exact: true });
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        // Every control the strip shows is one that applies: nothing is greyed out, and the
+        // old launchers that hid the actions behind a second tap are gone.
+        const stripIsClean = async () => {
+          for (const control of await strip.getByRole("button").all()) {
+            await expect(control).toBeEnabled();
+          }
+          for (const name of ["Selection actions", "Curve actions", "More curve actions", "Point actions"]) {
+            await expect(frame.getByRole("button", { name, exact: true })).toHaveCount(0);
+          }
+        };
+
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        const rectangle = frame.locator('svg [data-source-id="path:2"]').first();
+        await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
+        await expect.poll(selection).toEqual(["path:2"]);
+        await expect(strip).toBeVisible();
+        await expect(strip.getByRole("button").first()).toHaveAccessibleName("Lock");
+        for (const name of ["Fill and stroke", "Transform", "Duplicate", "More"]) {
+          await expect(button(name)).toBeVisible();
+        }
+        for (const name of ["Align", "Distribute", "Edit points", "Simplify"]) {
+          await expect(button(name)).toHaveCount(0);
+        }
+        await stripIsClean();
+        await input.penStroke([await stableCenter(button("Transform"))]);
+        const transform = frame.getByRole("menu").last();
+        await expect(transform.getByRole("menuitem", { name: "Rotate Right 90°", exact: true })).toBeVisible();
+        await input.penStroke([await stableCenter(button("Transform"))]);
+        await expect(transform).toHaveCount(0);
+        await storyScreenshot(page, `selection-strip-shape-${tablet.name}`);
+
+        // An unlocked selection clears on a miss; a locked one survives it.
+        await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
+        await expect.poll(selection).toEqual([]);
+        await expect(strip).toHaveCount(0);
+
+        const curve = frame.locator('svg [data-source-id="path:4"]').first();
+        await input.penStroke([await strokePoint(page, curve, 0.3)]);
+        await expect.poll(selection).toEqual(["path:4"]);
+        await expect(strip.getByRole("button").first()).toHaveAccessibleName("Lock");
+        await expect(strip.getByText("Curve · 3 points", { exact: true })).toBeVisible();
+        for (const name of ["Edit points", "Simplify", "Duplicate", "More"]) {
+          await expect(button(name)).toBeVisible();
+        }
+        for (const name of ["Fill and stroke", "Transform", "Align"]) {
+          await expect(button(name)).toHaveCount(0);
+        }
+        await stripIsClean();
+        await input.penStroke([await stableCenter(button("Lock"))]);
+        await expect(button("Lock")).toHaveAttribute("aria-pressed", "true");
+        await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
+        await expect.poll(selection).toEqual(["path:4"]);
+        await input.penStroke([await stableCenter(button("Lock"))]);
+        await expect(button("Lock")).toHaveAttribute("aria-pressed", "false");
+
+        // Edit points enters point editing; the strip then names the points and offers only point commands.
+        await input.penStroke([await stableCenter(button("Edit points"))]);
+        await expect(button("Done")).toBeVisible();
+        const anchors = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:4"]');
+        await expect(anchors).toHaveCount(3);
+        const anchorAt = async (index: number) => {
+          const points = await anchors.evaluateAll((nodes) =>
+            nodes
+              .map((node) => {
+                const box = node.getBoundingClientRect();
+                return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+              })
+              .sort((a, b) => a.x - b.x),
+          );
+          return { x: frameBox.x + points[index].x, y: frameBox.y + points[index].y };
+        };
+        await input.penStroke([await anchorAt(1)]);
+        await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
+        for (const name of ["Smooth", "Corner", "Delete", "Done"]) {
+          await expect(button(name)).toBeVisible();
+        }
+        for (const name of ["Edit points", "Simplify", "Duplicate"]) {
+          await expect(button(name)).toHaveCount(0);
+        }
+        await stripIsClean();
+        await input.penStroke([await anchorAt(0)]);
+        await expect(strip.getByText("2 points selected", { exact: true })).toBeVisible();
+        await expect(button("Corner")).toHaveCount(0);
+        await storyScreenshot(page, `selection-strip-points-${tablet.name}`);
+        await input.penStroke([await stableCenter(button("Done"))]);
+        await expect(strip.getByText("Curve · 3 points", { exact: true })).toBeVisible();
+        await expect(button("Edit points")).toBeVisible();
+        assert.equal((await editorDebug(page)).handle, null, "Done leaves no point active");
+
+        // Two objects align but cannot be distributed; three can. Each lasso starts from an
+        // empty canvas: the strip of the previous selection may stand over the shapes.
+        await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
+        await expect.poll(selection).toEqual([]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true }))]);
+        await input.penStroke([at(0.5, 0.5), at(6.5, 0.5), at(6.5, 3.6), at(0.5, 3.6), at(0.5, 0.6)]);
+        await expect.poll(selection).toEqual(["path:2", "path:3"]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        await expect(strip.getByText("2 objects", { exact: true })).toBeVisible();
+        for (const name of ["Align", "Transform", "More"]) {
+          await expect(button(name)).toBeVisible();
+        }
+        for (const name of ["Distribute", "Lock", "Edit points", "Fill and stroke"]) {
+          await expect(button(name)).toHaveCount(0);
+        }
+        await stripIsClean();
+        await input.penStroke([await stableCenter(button("Align"))]);
+        const align = frame.getByRole("menu").last();
+        await input.penStroke([await stableCenter(align.getByRole("menuitem", { name: "Left", exact: true }))]);
+        const leftEdge = async (id: string) =>
+          (await frame.locator(`svg [data-source-id="${id}"]`).first().boundingBox())!.x;
+        await expect
+          .poll(async () => Math.abs((await leftEdge("path:2")) - (await leftEdge("path:3"))))
+          .toBeLessThan(1.5);
+
+        await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
+        await expect.poll(selection).toEqual([]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true }))]);
+        await input.penStroke([at(0.5, 0.5), at(13, 0.5), at(13, 10), at(0.5, 10), at(0.5, 0.6)]);
+        await expect.poll(selection).toEqual(["path:2", "path:3", "path:4"]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        await expect(strip.getByText("3 objects", { exact: true })).toBeVisible();
+        await expect(button("Distribute")).toBeVisible();
+        await stripIsClean();
+        await input.penStroke([await stableCenter(button("Distribute"))]);
         await expect(
-          frame.getByRole("button", { name: "Selection actions", exact: true }),
+          frame.getByRole("menu").last().getByRole("menuitem", { name: "Horizontal", exact: true }),
         ).toBeVisible();
-        await expect(frame.getByRole("button", { name: "Lock curve", exact: true })).toHaveCount(0);
-        await expect(frame.getByRole("button", { name: "Curve actions", exact: true })).toHaveCount(
-          0,
-        );
+        await storyScreenshot(page, `selection-strip-several-${tablet.name}`);
       },
     );
   }
@@ -5872,17 +6027,10 @@ describe("standalone workbench host boundary", function () {
           await tap({ x: frameBox.x + onCurve.x, y: frameBox.y + onCurve.y });
           await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
           await input.touch([
-            await stableCenter(frame.getByRole("button", { name: "Curve actions", exact: true })),
+            await stableCenter(frame.getByRole("button", { name: "Edit points", exact: true })),
           ]);
-          await expect(
-            frame.getByRole("button", { name: "Select multiple nodes", exact: true }),
-          ).toBeVisible();
+          await expect(frame.getByRole("button", { name: "Done", exact: true })).toBeVisible();
           await storyScreenshot(page, `curve-actions-${contact}-${tablet.name}`);
-          await input.touch([
-            await stableCenter(
-              frame.getByRole("button", { name: "Select multiple nodes", exact: true }),
-            ),
-          ]);
           const anchors = frame.locator(
             'rect[data-handle-kind="move-handle"][data-source-id="path:0"]',
           );
@@ -5899,10 +6047,10 @@ describe("standalone workbench host boundary", function () {
             await tap({ x: frameBox.x + point.x, y: frameBox.y + point.y });
           }
           await expect(
-            frame.getByRole("button", { name: "2 points selected", exact: true }),
+            frame.getByText("2 points selected", { exact: true }),
           ).toBeVisible();
           await input.touch([
-            await stableCenter(frame.getByRole("button", { name: "Delete points", exact: true })),
+            await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Delete", exact: true })),
           ]);
           await expect
             .poll(
@@ -5993,16 +6141,13 @@ describe("standalone workbench host boundary", function () {
           };
           await tap(await pointAt(1));
           await expect(
-            frame.getByRole("button", { name: "1 point selected", exact: true }),
+            frame.getByText("1 point selected", { exact: true }),
           ).toBeVisible();
-          for (const name of ["Make corner", "Smooth points", "Delete points", "Split here"]) {
-            await expect(frame.getByRole("button", { name, exact: true })).toBeVisible();
+          for (const name of ["Corner", "Smooth", "Delete", "Split"]) {
+            await expect(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name, exact: true })).toBeVisible();
           }
           const hint = (await frame.getByTestId("canvas-selection-hint").boundingBox())!;
-          const control = (await frame
-            .getByRole("button", { name: "Make corner", exact: true })
-            .locator("..")
-            .boundingBox())!;
+          const control = (await frame.getByRole("toolbar", { name: "Selection", exact: true }).boundingBox())!;
           assert.ok(
             Math.min(hint.x + hint.width, control.x + control.width) <=
               Math.max(hint.x, control.x) ||
@@ -6017,17 +6162,17 @@ describe("standalone workbench host boundary", function () {
           await input.longPress(await pointAt(1));
           await expect(frame.getByRole("menu")).toHaveCount(0);
           await expect(
-            frame.getByRole("button", { name: "Make corner", exact: true }),
+            frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Corner", exact: true }),
           ).toBeVisible();
           const before = (await editorDebug(page)).source;
           await input.touch([
-            await stableCenter(frame.getByRole("button", { name: "Make corner", exact: true })),
+            await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Corner", exact: true })),
           ]);
           await expect.poll(async () => (await editorDebug(page)).source).not.toBe(before);
           assert.match((await editorDebug(page)).source, /\(6,0\)/);
           await tap(await pointAt(1));
           await input.touch([
-            await stableCenter(frame.getByRole("button", { name: "Delete points", exact: true })),
+            await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Delete", exact: true })),
           ]);
           await expect.poll(async () => (await editorDebug(page)).source).not.toMatch(/\(6,0\)/);
         },
@@ -6088,18 +6233,29 @@ describe("standalone workbench host boundary", function () {
             ...new Set(nodes.map((node) => node.getAttribute("data-source-id"))),
           ]);
         assert.equal(drawn.length, 1);
+        // A lasso selects the whole curve: a tap on so dense a stroke lands on one of its points.
+        const box = (await frame.locator(`svg [data-source-id="${drawn[0]}"]`).first().boundingBox())!;
+        const pad = 24;
+        await input.touch([
+          await stableCenter(frame.getByRole("button", { name: "Lasso", exact: true })),
+        ]);
+        await input.penStroke([
+          { x: box.x - pad, y: box.y - pad },
+          { x: box.x + box.width + pad, y: box.y - pad },
+          { x: box.x + box.width + pad, y: box.y + box.height + pad },
+          { x: box.x - pad, y: box.y + box.height + pad },
+          { x: box.x - pad, y: box.y - pad + 1 },
+        ]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([drawn[0]]);
         await input.touch([
           await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
-        ]);
-        await input.touch([
-          await strokePoint(page, frame.locator(`svg [data-source-id="${drawn[0]}"]`).first(), 0.5),
         ]);
         const anchors = frame.locator(
           `rect[data-handle-kind="move-handle"][data-source-id="${drawn[0]}"]`,
         );
         await expect(anchors.first()).toBeVisible();
         const count = await anchors.count();
-        await expect(frame.getByText(`${count} points`, { exact: true })).toBeVisible();
+        await expect(frame.getByText(`Curve · ${count} points`, { exact: true })).toBeVisible();
         assert.equal(
           count,
           ((await editorDebug(page)).source.match(/--|\.\. controls/g) ?? []).length + 1,
@@ -6130,7 +6286,7 @@ describe("standalone workbench host boundary", function () {
           await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5),
         );
         await penTap(
-          await stableCenter(frame.getByRole("button", { name: "Selection actions", exact: true })),
+          await stableCenter(frame.getByRole("button", { name: "More", exact: true })),
         );
         const menu = frame.getByRole("menu").first();
         for (const name of ["Cut", "Copy", "Duplicate", "Delete"]) {
