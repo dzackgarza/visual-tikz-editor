@@ -8,14 +8,14 @@ The [product and interface guidance](docs/guidance/README.md) records the intend
 
 ## Run the standalone app
 
-Install [Bun](https://bun.sh/), [just](https://github.com/casey/just), and Zenity for the native Open and Save As dialogs. The test suite also uses Node.js. Native file workflows require Xvfb, D-Bus, xdotool, and ImageMagick. They run Chrome and the real Zenity chooser on a private display and session bus. Then run:
+Install [Bun](https://bun.sh/), [just](https://github.com/casey/just), Zenity for native file dialogs, and librsvg's `rsvg-convert` for PDF and PNG export. The test suite also uses Node.js. Native file workflows require Xvfb, D-Bus, xdotool, ImageMagick, and `pdfinfo`. They run Chrome and the real Zenity chooser on a private display and session bus. Then run:
 
 ```sh
 bun install --frozen-lockfile
 just run
 ```
 
-Open the local URL printed by `just run`. The New dialog offers `tikzpicture`, which opens the drawing canvas, and `tikzcd`, which opens Quiver. The **File** menu holds New, Open, Save, and Save As. **Save** or Ctrl+S opens a native Save As dialog for a new diagram. To open a file at launch, run `just run path/to/figure.tikz`. A disk change since the last load stops an ordinary save and reports a conflict. Image paths resolve from the file directory.
+Open the local URL printed by `just run`. The New dialog offers `tikzpicture`, which opens the drawing canvas, and `tikzcd`, which opens Quiver. The **File** menu holds New, Open, Save, and Save As. Edits to a file save automatically; an untitled diagram keeps a recovery draft until **Save** or Ctrl+S opens the native Save As dialog. The workbench restores the active diagram after a restart. To open a file at launch, run `just run path/to/figure.tikz`. A disk change stops the file save, keeps a recovery draft, and reports a conflict. Image paths resolve from the file directory. **Export** writes one PDF page per figure or separate numbered SVG/PNG files for each figure. Export reads the current source and leaves it editable.
 
 ## Draw with pen or touch
 

@@ -14,6 +14,14 @@
           <button v-if="nativeWindow" type="button" @click="requestExit">Exit</button>
         </div>
       </details>
+      <details class="file-menu export-menu" aria-label="Export" @click="closeFileMenu">
+        <summary>Export</summary>
+        <div class="file-menu-items">
+          <button type="button" :disabled="document === null" @click="exportDiagram('pdf')">PDF</button>
+          <button type="button" :disabled="document === null" @click="exportDiagram('svg')">SVG</button>
+          <button type="button" :disabled="document === null" @click="exportDiagram('png')">PNG</button>
+        </div>
+      </details>
       <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
       <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
     </header>
@@ -481,6 +489,24 @@ async function save(): Promise<boolean> {
   }
 }
 
+async function exportDiagram(format: "pdf" | "svg" | "png"): Promise<void> {
+  try {
+    await documentWrite;
+    const opened = document.value;
+    if (opened === null) return;
+    const response = await fetch(`/api/export?format=${format}`, {
+      method: "POST",
+      headers: { "x-document-id": opened.id },
+      body: await currentSource(),
+    });
+    if (response.status === 204) return;
+    await responseText(response);
+    hostError.value = "";
+  } catch (error) {
+    host.reportError("Could not export the diagram", error);
+  }
+}
+
 function onKeydown(event: KeyboardEvent): void {
   if ((event.ctrlKey || event.metaKey) && !event.altKey &&
       (event.key === "-" || event.key === "=" || event.key === "+" || event.key === "0")) {
@@ -692,6 +718,10 @@ body,
 
 .file-menu {
   margin-left: auto;
+}
+
+.export-menu {
+  margin-left: 0;
 }
 
 .new-kind-backdrop {

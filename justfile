@@ -80,7 +80,7 @@ _ci-environment:
     sudo apt-get update
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         xvfb dbus-x11 zenity xdotool imagemagick \
-        pdf2svg texlive-latex-base texlive-pictures texlive-latex-extra
+        pdf2svg librsvg2-bin poppler-utils texlive-latex-base texlive-pictures texlive-latex-extra
     mkdir -p "$HOME/.pandoc"
     cp -R test/fixtures/tikz-data/filters test/fixtures/tikz-data/templates "$HOME/.pandoc/"
     kpsewhich standalone.cls tikz.sty tikz-cd.sty amsmath.sty amssymb.sty import.sty graphicx.sty >/dev/null

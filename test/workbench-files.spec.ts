@@ -382,6 +382,12 @@ describe("standalone native file workflow", function () {
         if (format === "SVG") assert.match(bytes.toString(), /<svg[\s\S]*<\/svg>/);
         if (format === "PNG") assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
       }
+      if (format === "PDF") {
+        const { stdout } = await execute("pdfinfo", [diagramPath]);
+        assert.match(stdout, /^Pages:\s+2$/m);
+      } else {
+        assert.notDeepEqual(await readFile(outputs[0]), await readFile(outputs[1]));
+      }
     }
     assert.equal(await page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n")), authored);
     await page.locator(".cm-content").fill(authored.replace("(3,2)", "(4,2)"));

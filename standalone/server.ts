@@ -63,6 +63,7 @@ let recoveryRecord: RecoveryRecord | null = existsSync(recoveryPath)
   ? RecoveryRecord.parse(JSON.parse(await readFile(recoveryPath, "utf8")))
   : null;
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".svg"]);
+const EXPORT_FORMATS = new Set(["pdf", "svg", "png"]);
 const untitledPath = (): string => path.join(home, `Untitled${untitledExtension}`);
 
 async function persistRecovery(record: RecoveryRecord): Promise<void> {
@@ -232,6 +233,76 @@ async function handleRender(request: Request): Promise<Response> {
   );
 }
 
+function authoredFigures(source: string): string[] {
+  const figure = /\\begin\{(tikzpicture|tikzcd)\}[\s\S]*?\\end\{\1\}/gu;
+  const matches = [...source.matchAll(figure)];
+  if (matches.length === 0) {
+    if (/^\s*\\input\s*\{[^}]+\.tikz(?:cd)?\}\s*$/u.test(source)) return [source.trim()];
+    throw new Error("Export requires a complete tikzpicture or tikzcd figure");
+  }
+  const remainder = source.replace(figure, "").replace(/^\s*%[^\n]*(?:\n|$)/gmu, "").trim();
+  if (remainder !== "") throw new Error("Export source contains text outside its figures");
+  return matches.map((match) => match[0]);
+}
+
+async function convertSvg(paths: string[], format: "pdf" | "png"): Promise<Uint8Array> {
+  const args = ["rsvg-convert", "--format", format];
+  if (format === "png") args.push("--dpi-x", "300", "--dpi-y", "300");
+  const conversion = Bun.spawn([...args, ...paths], { stdout: "pipe", stderr: "pipe" });
+  const [status, bytes, error] = await Promise.all([
+    conversion.exited,
+    new Response(conversion.stdout).arrayBuffer(),
+    new Response(conversion.stderr).text(),
+  ]);
+  if (status !== 0) throw new Error(`Image conversion failed: ${error.trim()}`);
+  return new Uint8Array(bytes);
+}
+
+async function handleExport(request: Request): Promise<Response> {
+  const format = new URL(request.url).searchParams.get("format");
+  if (format === null || !EXPORT_FORMATS.has(format)) return new Response("Choose PDF, SVG, or PNG", { status: 400 });
+  if (request.headers.get("x-document-id") !== documentId)
+    return new Response("Document session changed", { status: 409 });
+  const source = await request.text();
+  const config = {
+    tikzAssetDir: resolveTikzDataDir("", home),
+    templatePath: resolveTikzTemplatePath(home),
+    cacheDir: path.join(cacheHome, "visual-tikz-editor"),
+    env: process.env,
+  };
+  const figures = authoredFigures(source);
+  const renders = await Promise.all(figures.map(async (figure) => {
+    const result = await renderTikz({ kind: "raw", language: figure.startsWith("\\begin{tikzcd}") ? "tikzcd" : "tikz", source: figure, docPath: documentPath ?? untitledPath() }, config);
+    if (!result.ok) throw new Error(`Could not render export figure: ${JSON.stringify(result)}`);
+    return result;
+  }));
+  const initialPath = path.join(path.dirname(documentPath ?? untitledPath()),
+    `${path.parse(documentPath ?? untitledPath()).name}.${format}`);
+  const dialog = Bun.spawn(["zenity", "--file-selection", "--save", `--filename=${initialPath}`],
+    { stdout: "pipe", stderr: "pipe" });
+  const [status, output, error] = await Promise.all([
+    dialog.exited, new Response(dialog.stdout).text(), new Response(dialog.stderr).text(),
+  ]);
+  if (status === 1) return new Response(null, { status: 204 });
+  if (status !== 0) throw new Error(`File dialog failed: ${error.trim()}`);
+  const selected = output.trim();
+  if (path.extname(selected).toLowerCase() !== `.${format}`) throw new Error(`Choose a .${format} file`);
+  const outputPaths = format === "pdf" || renders.length === 1 ? [selected] :
+    renders.map((_, index) => path.join(path.dirname(selected), `${path.parse(selected).name}-${index + 1}.${format}`));
+  if (outputPaths.some((outputPath) => existsSync(outputPath))) {
+    const question = Bun.spawn(["zenity", "--question", "--text=Replace existing exported files?"],
+      { stdout: "ignore", stderr: "pipe" });
+    const answer = await question.exited;
+    if (answer === 1) return new Response(null, { status: 204 });
+    if (answer !== 0) throw new Error("Replace confirmation failed");
+  }
+  const bytes = format === "pdf" ? [await convertSvg(renders.map((render) => render.svgPath), "pdf")] :
+    format === "svg" ? renders.map((render) => new TextEncoder().encode(render.svg)) :
+    await Promise.all(renders.map((render) => convertSvg([render.svgPath], "png")));
+  await Promise.all(outputPaths.map((outputPath, index) => writeFile(outputPath, bytes[index])));
+  return Response.json({ paths: outputPaths });
+}
+
 async function handleQuiverMacros(): Promise<Response> {
   // A standalone figure has no host document or project macro definitions.
   return Response.json({ macros: {}, unsupported: [] });
@@ -258,6 +329,7 @@ const server = Bun.serve({
   async fetch(request) {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/document") return await handleDocument(request);
+    if (pathname === "/api/export" && request.method === "POST") return await handleExport(request);
     if (pathname === "/api/preferences" && request.method === "GET") return Response.json(preferences);
     if (pathname === "/api/preferences" && request.method === "PUT") {
       const entry = await request.json() as { key: string; value: string };
