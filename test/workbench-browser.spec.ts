@@ -4090,14 +4090,16 @@ describe("standalone workbench host boundary", function () {
           const text = await rail.getByRole("button", { name: label, exact: true }).innerText();
           assert.ok(text.includes(label), `${label} has no readable label`);
         }
-        const backgrounds = await Promise.all([
-          frame.locator('[data-canvas-viewport="true"]').evaluate((element) => getComputedStyle(element).backgroundColor),
-          frame.locator('[class*="svgLayer"]').first().evaluate((element) => getComputedStyle(element).backgroundColor),
-        ]);
-        for (const background of backgrounds) {
-          const channels = background.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
-          assert.ok(channels.length === 3 && Math.max(...channels) < 90, `Canvas surface is light: ${background}`);
-        }
+        await expect.poll(async () => {
+          const backgrounds = await Promise.all([
+            frame.locator('[data-canvas-viewport="true"]').evaluate((element) => getComputedStyle(element).backgroundColor),
+            frame.locator('[class*="svgLayer"]').first().evaluate((element) => getComputedStyle(element).backgroundColor),
+          ]);
+          return backgrounds.map((background) => {
+            const channels = background.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+            return channels.length === 3 && Math.max(...channels) < 90 ? "dark" : background;
+          });
+        }).toEqual(["dark", "dark"]);
         const drawn = await frame.locator('svg [data-source-id^="path:"]').first().evaluate((element) => getComputedStyle(element).stroke);
         const strokeChannels = drawn.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
         assert.ok(strokeChannels.length === 3 && Math.min(...strokeChannels) > 180, `A black stroke is not legible: ${drawn}, attribute ${await frame.locator('svg [data-source-id^="path:"]').first().getAttribute("stroke")}`);
