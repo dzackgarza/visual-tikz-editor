@@ -427,9 +427,6 @@ describe("standalone native file workflow", function () {
     await startServer();
     await page.goto(url);
     await expect(page.locator(".document-bar strong")).toHaveText("layered.tikz");
-    await fileMenu().click();
-    await page.getByRole("button", { name: "Open…", exact: true }).click();
-    await chooseFile("open");
     await editorReady(page);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(authored);
