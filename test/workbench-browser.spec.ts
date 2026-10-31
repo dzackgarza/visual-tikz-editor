@@ -6020,8 +6020,8 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke([{ x: anchorBox.x + anchorBox.width / 2, y: anchorBox.y + anchorBox.height / 2 }]);
         await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
         await page.keyboard.press("Escape");
-        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toBeVisible();
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toBeVisible();
         await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit points", exact: true }))]);
         await expect(strip.getByRole("button", { name: "Done", exact: true })).toBeVisible();
         assert.equal((await editorDebug(page)).source, authored);
