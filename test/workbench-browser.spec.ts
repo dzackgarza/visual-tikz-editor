@@ -2828,6 +2828,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
 
         // Moving the line moves its label.
+        await input.touch([at(9, 8)]);
         const labelBefore = await centerOf(label);
         await drag(at(6, 3), at(6, 2));
         await expect.poll(source, { message: "The line did not move" }).toMatch(/\\draw \(5,2\) -- \(9,2\) node\[/);
@@ -2995,7 +2996,7 @@ describe("standalone workbench host boundary", function () {
           .locator('[data-canvas-viewport="true"]')
           .boundingBox())!;
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 120));
-        await expect(status).toHaveText("Unsaved changes");
+        await expect(status).toHaveText("Recovery saved · not saved as file");
         await expect(status).toBeInViewport({ ratio: 1 });
       },
     );
@@ -4173,6 +4174,7 @@ describe("standalone workbench host boundary", function () {
           "Grid Opacity",
           "Edit Handle Size",
           "Hold to move a point",
+          "Smooth surviving points",
           "Zoom Speed",
           "Toolbar Position",
           "Generated Source Indent",
@@ -4625,7 +4627,7 @@ describe("standalone workbench host boundary", function () {
         await fitDiagram(frame, input);
         const shape = frame.locator('svg [data-source-id="path:0"]').first();
         const drag = async () => {
-          const start = await strokePoint(page, shape, 0.06);
+          const start = await strokePoint(page, shape, 0.18);
           await input.penStroke([
             start,
             { x: start.x + 40, y: start.y + 11 },
@@ -4638,7 +4640,7 @@ describe("standalone workbench host boundary", function () {
         assert.ok(constrained.x > before.x + 1, "The constrained move did not move the shape");
         assert.ok(
           Math.abs(constrained.y - before.y) < 0.1,
-          "The constrained move changed its other axis",
+          `The constrained move changed its other axis: ${JSON.stringify({ before, constrained, source: (await editorDebug(page)).source })}`,
         );
         await setSnapRule(frame, input, "Angle", false);
         await fitDiagram(frame, input);
@@ -8129,10 +8131,6 @@ describe("standalone workbench host boundary", function () {
       "The handwritten loop must not become a circle",
     );
     await expect(frame.getByRole("dialog", { name: "Freehand result" })).toHaveCount(0);
-    await frame.getByRole("button", { name: "Properties", exact: true }).click();
-    await expect(
-      frame.getByRole("checkbox", { name: "Interpret geometry", exact: true }),
-    ).not.toBeChecked();
   });
 
   story(

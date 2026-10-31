@@ -6960,7 +6960,7 @@ index cf4cf2cf..f9ecfae9 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..0fd219e1 100644
+index 4e22ccfa..f8c8c14d 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -7176,8 +7176,8 @@ index 4e22ccfa..0fd219e1 100644
 +  const draft = { ...offer.draft, points: smoothFreehandPoints(offer.draft.points, smoothing) };
 +  const toleranceWorld = toleranceUnits * PT_PER_CM;
 +  const ends = offer.originalStroke?.ends;
-+  if (!offer.curve) return interpretFreehandToolSource(draft, 1, { strokeColor: offer.strokeColor, toleranceWorld, ends });
-+  const fit = interpretFreehandToolSource(draft, 1, { preserveCurve: true, toleranceWorld, ends });
++  if (!offer.curve) return interpretFreehandToolSource(draft, offer.zoom, { strokeColor: offer.strokeColor, toleranceWorld, ends });
++  const fit = interpretFreehandToolSource(draft, offer.zoom, { preserveCurve: true, toleranceWorld, ends });
 +  if (!fit) return null;
 +  const source = fit.source.replace(/^\\draw(?:\[[^\]]*\])?/u, offer.curve.prefix);
 +  return { ...fit, source: offer.curve.autoSmooth ? smoothAuthoredCurveJoints(source) : source };
@@ -8155,7 +8155,7 @@ index 4e22ccfa..0fd219e1 100644
 +    const geometricPoints = withSnappedEnds(sourceSamples.map((sample) => makeWorldPoint(pt(sample.x), pt(sample.y))),
 +      applyMatrix(inverse, draft.points[0]), applyMatrix(inverse, draft.points[draft.points.length - 1]));
 +    const sourceDraft: FreehandToolDraft = { ...draft, points: geometricPoints, minSampleDistanceWorld: 0 };
-+    const fitted = intent === "geometry" ? interpretFreehandToolSource({ ...sourceDraft, points: smoothFreehandPoints(sourceDraft.points, smoothingUnits) }, 1, {
++    const fitted = intent === "geometry" ? interpretFreehandToolSource({ ...sourceDraft, points: smoothFreehandPoints(sourceDraft.points, smoothingUnits) }, canvasTransform.scale, {
 +      strokeColor: creationStrokeColor, toleranceWorld: simplificationUnits * PT_PER_CM, ends: original.ends
 +    }) : null;
 +    const strokeId = original.key;
@@ -10535,7 +10535,7 @@ index 00000000..316de820
 +  return strokes;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-index a7b0a7e2..32ed65ad 100644
+index a7b0a7e2..41260bb1 100644
 --- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
 @@ -2,18 +2,23 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
@@ -10623,7 +10623,7 @@ index a7b0a7e2..32ed65ad 100644
  
    if (previewPoints.length < FREEHAND_MIN_POINTS) {
      const previewSegments: Array<{ kind: "line"; from: WorldPoint; to: WorldPoint }> = [];
-@@ -133,37 +149,295 @@ export function resolveFreehandPreviewSegments(
+@@ -133,37 +149,309 @@ export function resolveFreehandPreviewSegments(
    return previewSegments;
  }
  
@@ -10804,6 +10804,20 @@ index a7b0a7e2..32ed65ad 100644
 +    path.remove();
 +    return { source: rawSource, rawSource, kind: "raw" };
 +  }
++  // Paper.js PathFitter may restore several anchors at a slow pen lift even
++  // after input spacing. Keep the two ends and remove fitted anchors closer
++  // than one pen hit diameter in the current view.
++  const minimumGapSquared = (12 / Math.max(zoom, 0.01)) ** 2;
++  for (let index = path.segments.length - 1; index > 0 && path.segments.length > 2;) {
++    const before = path.segments[index - 1].point;
++    const after = path.segments[index].point;
++    if ((before.x - after.x) ** 2 + (before.y - after.y) ** 2 < minimumGapSquared) {
++      path.removeSegment(index === path.segments.length - 1 ? index - 1 : index);
++      index = Math.min(index, path.segments.length - 1);
++    } else {
++      index -= 1;
++    }
++  }
 +  const parts: string[] = [formatEnd(worldPoint(pt(path.curves[0].point1.x), pt(path.curves[0].point1.y)), options.ends?.start)];
 +  for (const [index, curve] of path.curves.entries()) {
 +    const control1 = curve.point1.add(curve.handle1);
@@ -10932,7 +10946,7 @@ index a7b0a7e2..32ed65ad 100644
  function polylineLength(points: readonly WorldPoint[]): number {
    let length = 0;
    for (let i = 1; i < points.length; i += 1) {
-@@ -176,16 +450,156 @@ function formatPointCm(point: WorldPoint): string {
+@@ -176,16 +464,156 @@ function formatPointCm(point: WorldPoint): string {
    return `(${formatNumber(point.x * CM_PER_PT)},${formatNumber(point.y * CM_PER_PT)})`;
  }
  
@@ -10961,9 +10975,11 @@ index a7b0a7e2..32ed65ad 100644
 +  const commands: ScenePath["commands"] = [{ kind: "M", to: coordinates[0] }];
 +  for (let index = 1; index < coordinates.length; index += 3) {
 +    commands.push({ kind: "C", c1: coordinates[index], c2: coordinates[index + 1], to: coordinates[index + 2] });
-+  }
+   }
+-  const rounded = Math.round(value);
+-  return Math.max(FREEHAND_SMOOTHING_MIN_PX, Math.min(FREEHAND_SMOOTHING_MAX_PX, rounded));
 +  return { ...path, commands, transform: undefined };
-+}
+ }
 +
 +const authoredCubicSegmentPattern = /\s+\.\.\s+controls\s+(\([^)]+\))\s+and\s+(\([^)]+\))\s+\.\.\s+(\([^)]+\))/gu;
 +
@@ -11060,9 +11076,7 @@ index a7b0a7e2..32ed65ad 100644
 +    if (size < 1e-9) continue;
 +    handles[joint - 1][1] = { x: node.x - ux / size * inLength, y: node.y - uy / size * inLength };
 +    handles[joint][0] = { x: node.x + ux / size * outLength, y: node.y + uy / size * outLength };
-   }
--  const rounded = Math.round(value);
--  return Math.max(FREEHAND_SMOOTHING_MIN_PX, Math.min(FREEHAND_SMOOTHING_MAX_PX, rounded));
++  }
 +  let index = 0;
 +  return source.replace(authoredCubicSegmentPattern, (segment: string) => {
 +    const current = index++;
@@ -11075,7 +11089,7 @@ index a7b0a7e2..32ed65ad 100644
 +
 +function localInkPoints(stroke: OriginalStroke, inverse: WorldTransform): WorldPoint[] {
 +  return stroke.samples.map((sample) => applyMatrix(inverse, worldPoint(pt(sample.x), pt(sample.y))));
- }
++}
 +
 +/** A recorded stroke as drawn, in the figure's frame: its sample polyline, or its outline under the frame's inverse. Host and canvas share it. */
 +export function originalInkDrawing(stroke: OriginalStroke, inverse: WorldTransform): string {
@@ -18096,6 +18110,34 @@ index 00000000..8b3e1132
 +  const alone = source.slice(lineStart, span.from).trim().length === 0 && source.slice(span.to, end).trim().length === 0;
 +  return alone && lineStart > 0 ? { from: lineStart - 1, to: end } : span;
 +}
+diff --git a/packages/core/src/edit/actions/move-arrange-actions.ts b/packages/core/src/edit/actions/move-arrange-actions.ts
+index f0f6a02c..b5ea3b0b 100644
+--- a/packages/core/src/edit/actions/move-arrange-actions.ts
++++ b/packages/core/src/edit/actions/move-arrange-actions.ts
+@@ -5,7 +5,7 @@ import type { OptionEntry } from "../../options/types.js";
+ import { evaluateTikzFigure } from "../../semantic/evaluate.js";
+ import { worldPoint } from "../../coords/points.js";
+ import type { WorldPoint } from "../../coords/points.js";
+-import type { EditHandle } from "../../semantic/types.js";
++import { isFrameLocalCoordinateEditHandle, type EditHandle } from "../../semantic/types.js";
+ import type { ScenePathShapeHint } from "../../semantic/types.js";
+ import { parseCoordinateLike, parseLength } from "../../semantic/coords/parse-length.js";
+ import { collectSourceWorldBounds } from "../snapping/index.js";
+@@ -298,7 +298,13 @@ function applyMoveElementsUsingHandleRewrites(
+     }
+ 
+     const newWorld: WorldPoint = worldPoint(pt(handle.world.x + delta.x), pt(handle.world.y + delta.y));
+-    const text = rewriteCoordinate(newWorld, handle, source);
++    const oldLocal = isFrameLocalCoordinateEditHandle(handle) ? worldToLocal(handle.world, handle.frame) : null;
++    const newLocal = isFrameLocalCoordinateEditHandle(handle) ? worldToLocal(newWorld, handle.frame) : null;
++    const unchangedLocalAxes = oldLocal && newLocal ? {
++      x: Math.abs(newLocal.x - oldLocal.x) < ARRANGE_EPSILON,
++      y: Math.abs(newLocal.y - oldLocal.y) < ARRANGE_EPSILON
++    } : undefined;
++    const text = rewriteCoordinate(newWorld, handle, source, unchangedLocalAxes);
+     if (text != null) {
+       pending.push({ span: handle.sourceRef.sourceSpan, text });
+     } else {
 diff --git a/packages/core/src/edit/actions/named-style-actions.ts b/packages/core/src/edit/actions/named-style-actions.ts
 new file mode 100644
 index 00000000..bf6c9c1f
@@ -19758,6 +19800,51 @@ index 6bf34090..eddc93f0 100644
  function formatInspectorLength(value: number): string {
    const rounded = Math.round(value * 100) / 100;
    const normalized = Math.abs(rounded) < 1e-9 ? 0 : rounded;
+diff --git a/packages/core/src/edit/rewrite.ts b/packages/core/src/edit/rewrite.ts
+index 33cb53f0..440303be 100644
+--- a/packages/core/src/edit/rewrite.ts
++++ b/packages/core/src/edit/rewrite.ts
+@@ -20,7 +20,8 @@ import { formatCoordinate, formatPolarCoordinate } from "./style.js";
+ export function rewriteCoordinate(
+   newWorld: WorldPoint,
+   handle: EditHandle,
+-  source: string
++  source: string,
++  unchangedLocalAxes?: { x: boolean; y: boolean }
+ ): string | null {
+   if (handle.rewriteMode === "positioning") {
+     return rewritePositioning(newWorld, handle);
+@@ -36,7 +37,7 @@ export function rewriteCoordinate(
+ 
+   switch (handle.coordinateForm) {
+     case "cartesian":
+-      return rewriteCartesian(newWorld, handle, source);
++      return rewriteCartesian(newWorld, handle, source, unchangedLocalAxes);
+     case "polar":
+       return rewritePolar(newWorld, handle, source);
+     case "xyz":
+@@ -87,7 +88,8 @@ function rewriteUnsupportedCoordinate(
+ function rewriteCartesian(
+   newWorld: WorldPoint,
+   handle: EditHandle,
+-  source: string
++  source: string,
++  unchangedLocalAxes?: { x: boolean; y: boolean }
+ ): string | null {
+   if (!isFrameLocalCoordinateEditHandle(handle)) {
+     return null;
+@@ -98,7 +100,10 @@ function rewriteCartesian(
+   }
+   const cm = localToSourceUnits(local);
+   const oldRaw = source.slice(handle.sourceRef.sourceSpan.from, handle.sourceRef.sourceSpan.to);
+-  const coordinate = formatCoordinate(oldRaw, formatNumber(cm.x), formatNumber(cm.y));
++  const oldCartesian = oldRaw.match(/^\(\s*(?:\[[^\]]*\]\s*)?([^,)]*),\s*([^)]*)\)$/su);
++  const x = unchangedLocalAxes?.x && oldCartesian ? oldCartesian[1].trim() : formatNumber(cm.x);
++  const y = unchangedLocalAxes?.y && oldCartesian ? oldCartesian[2].trim() : formatNumber(cm.y);
++  const coordinate = formatCoordinate(oldRaw, x, y);
+   return applyInsertionSyntax(source, handle, coordinate);
+ }
+ 
 diff --git a/packages/core/src/edit/snapping/context.ts b/packages/core/src/edit/snapping/context.ts
 index 2f522fd2..3ba9c0da 100644
 --- a/packages/core/src/edit/snapping/context.ts
