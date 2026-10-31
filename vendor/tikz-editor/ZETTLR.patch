@@ -6960,7 +6960,7 @@ index cf4cf2cf..f9ecfae9 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..62a5982d 100644
+index 4e22ccfa..0fd219e1 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -8998,7 +8998,7 @@ index 4e22ccfa..62a5982d 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4898,245 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4898,260 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -9172,7 +9172,7 @@ index 4e22ccfa..62a5982d 100644
 +    ];
 +    // The hint is pinned to the canvas bottom, so a control in its columns ends above it.
 +    const hint = selectionHintElement?.getBoundingClientRect();
-+    const floorAt = (left: number) => hint && hint.left < left + width && hint.right > left ? Math.min(bottomEdge, hint.top - 8) : bottomEdge;
++    const floorAt = (left: number, controlWidth = width) => hint && hint.left < left + controlWidth && hint.right > left ? Math.min(bottomEdge, hint.top - 8) : bottomEdge;
 +    const fitting = candidates.filter((place) => place.left >= leftEdge && place.left + width <= rightEdge &&
 +      place.top >= topEdge && place.top + height <= floorAt(place.left));
 +    const others = [...sourceBoundsSvg].filter(([id]) => !selectedElementIds.has(id)).map(([, item]) => ({
@@ -9181,6 +9181,21 @@ index 4e22ccfa..62a5982d 100644
 +    const clearOfOthers = fitting.find((place) => others.every((item) => item.right <= place.left || item.left >= place.left + width ||
 +      item.bottom <= place.top || item.top >= place.top + height));
 +    const place = clearOfOthers ?? fitting[0];
++    if (clearOfOthers) return { left: place.left, top: place.top, width, maxHeight: Math.max(0, floorAt(place.left) - place.top) };
++    // A source pane can leave room beside a selection for a narrow, scrollable strip
++    // even when every full-width position covers another drawable object.
++    const narrowPlaces = [
++      { left: box.left - Math.min(200, box.left - leftEdge), width: Math.min(200, box.left - leftEdge) },
++      { left: box.right, width: Math.min(200, rightEdge - box.right) }
++    ];
++    for (const narrow of narrowPlaces) {
++      if (narrow.width < 160) continue;
++      const top = clamp(box.top, topEdge, Math.max(topEdge, floorAt(narrow.left, narrow.width) - height));
++      if (narrow.left < leftEdge || narrow.left + narrow.width > rightEdge || top + height > floorAt(narrow.left, narrow.width)) continue;
++      if (others.some((item) => item.right > narrow.left && item.left < narrow.left + narrow.width &&
++        item.bottom > top && item.top < top + height)) continue;
++      return { left: narrow.left, top, width: narrow.width, maxHeight: Math.max(0, floorAt(narrow.left, narrow.width) - top) };
++    }
 +    if (place) return { left: place.left, top: place.top, width, maxHeight: Math.max(0, floorAt(place.left) - place.top) };
 +    // Nothing holds the whole control: take the roomier side above or below the
 +    // selection, still clear of it, and let the control scroll within that side.
@@ -9244,7 +9259,7 @@ index 4e22ccfa..62a5982d 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5156,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5171,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -9267,7 +9282,7 @@ index 4e22ccfa..62a5982d 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5187,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5202,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -9283,7 +9298,7 @@ index 4e22ccfa..62a5982d 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +5213,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5228,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -9317,7 +9332,7 @@ index 4e22ccfa..62a5982d 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5245,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5260,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -9327,7 +9342,7 @@ index 4e22ccfa..62a5982d 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5258,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5273,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -9362,7 +9377,7 @@ index 4e22ccfa..62a5982d 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5312,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5327,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -9370,7 +9385,7 @@ index 4e22ccfa..62a5982d 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5321,61 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5336,61 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -9792,7 +9807,7 @@ index f0ff59f8..7e221135 100644
            ) : null}
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
-index 00000000..d39638b9
+index 00000000..ccd0bb61
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 @@ -0,0 +1,121 @@
@@ -9913,7 +9928,7 @@ index 00000000..d39638b9
 +.lockToggle[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 +
 +/* The selection strip: the scope line, then one row of lock, primary actions, and More. */
-+.strip { width: auto; min-width: 220px; }
++.strip { width: auto; min-width: 160px; }
 +.scope { color: var(--text-muted); font-size: 13px; }
 +.stripRow { display: flex; flex-wrap: wrap; gap: 6px; }
 +.stripRow button { flex: 1 1 auto; padding: 4px 10px; }
