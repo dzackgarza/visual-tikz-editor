@@ -5999,6 +5999,7 @@ describe("standalone workbench host boundary", function () {
         await expect
           .poll(codeSelection, { message: "pen tap on the line" })
           .toBe(String.raw`\draw (2,8) -- (12,14);`);
+        assert.equal((await editorDebug(page)).source, authored);
         await code.click();
         await expect(page.locator(".cm-content")).toBeHidden();
         await input.touch([
