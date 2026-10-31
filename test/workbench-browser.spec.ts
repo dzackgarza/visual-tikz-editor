@@ -3497,6 +3497,55 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `saves and applies an authored style by name after reopening in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\draw[red,line width=2pt] (0,0) -- (4,0);
+\draw (0,2) -- (4,2);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        await fitDiagram(frame, input);
+        await tap(frame.getByRole("button", { name: "Select", exact: true }));
+        const first = frame.locator('svg [data-source-id="path:0"]').first();
+        await input.penStroke([await strokePoint(page, first, 0.3)]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        await tap(strip.getByRole("button", { name: "Style", exact: true }));
+        const dialog = frame.getByRole("dialog", { name: "Style" });
+        await dialog.getByLabel("Style name").fill("accent line");
+        await tap(dialog.getByRole("button", { name: "Save style" }));
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/accent line\/\.style=\{red,\s*line width=2pt\}/);
+        const saved = (await editorDebug(page)).source;
+        assert.match(saved, /\\draw\[accent line\] \(0,0\) -- \(4,0\)/);
+        const second = frame.locator('svg [data-source-id="path:1"]').first();
+        await input.penStroke([await strokePoint(page, second, 0.3)]);
+        await tap(strip.getByRole("button", { name: "Style", exact: true }));
+        await tap(frame.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" }));
+        const source = (await editorDebug(page)).source;
+        assert.match(source, /\\draw\[accent line\] \(0,2\) -- \(4,2\)/);
+        await page.request.post(`${url}api/new`, { data: source });
+        await page.reload();
+        await editorReady(page);
+        const reopened = editorFrame(page);
+        await expect(reopened.locator('svg [data-source-id="path:0"]').first()).toBeVisible();
+        await expect(reopened.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
+        await tap(reopened.getByRole("button", { name: "Select", exact: true }));
+        await input.penStroke([await strokePoint(page, reopened.locator('svg [data-source-id="path:1"]').first(), 0.3)]);
+        await tap(reopened.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Style", exact: true }));
+        await expect(reopened.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" })).toBeVisible();
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `applies one color control to selected stroke, selected fill, bucket, and new strokes in ${tablet.name}`,
       async function () {
         await editorReady(page);
