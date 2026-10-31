@@ -2250,6 +2250,52 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `names the selected object and new-stroke scope in Properties after placing a line in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Line", exact: true }));
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        await expect(panel.getByText("Line", { exact: true })).toBeVisible();
+        await expect(panel.getByText("New strokes", { exact: true })).toBeVisible();
+        await tap(panel.getByRole("button", { name: "Creation stroke color" }));
+        await tap(panel.getByRole("button", { name: "Choose green" }));
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        const y = viewport.y + viewport.height * 0.35;
+        await input.penStroke([
+          { x: viewport.x + viewport.width * 0.3, y },
+          { x: viewport.x + viewport.width * 0.6, y },
+        ]);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*green/);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await expect(panel.getByText("Line", { exact: true })).toBeVisible();
+        await expect(panel.getByText("Selected line", { exact: true })).toBeVisible();
+        await tap(panel.getByRole("button", { name: "Stroke color" }));
+        await tap(panel.getByRole("button", { name: "Choose red" }));
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*red/);
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Line", exact: true }));
+        await expect(panel.getByText("New strokes", { exact: true })).toBeVisible();
+        await input.penStroke([
+          { x: viewport.x + viewport.width * 0.3, y: y + 55 },
+          { x: viewport.x + viewport.width * 0.6, y: y + 55 },
+        ]);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*red[^\]]*\][^;]*;[\s\S]*\\draw\[[^\]]*green/);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `states the freehand tool's properties without pixels in ${tablet.name}`,
       async function () {
         await editorReady(page);
