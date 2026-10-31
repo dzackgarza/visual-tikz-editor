@@ -4269,10 +4269,24 @@ describe("standalone workbench host boundary", function () {
         await settings.getByLabel("Grid Opacity").fill("42");
         await settings.getByLabel("Edit Handle Size").selectOption("11");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
+        await setSnapRule(frame, input, "Lattice", false);
+        await setSnapRule(frame, input, "Objects", false);
+        await setSnapRule(frame, input, "Alignment", false);
+        await setSnapRule(frame, input, "Angle", true);
+        await page.getByRole("button", { name: "Dark theme", exact: true }).click();
         await page.reload();
         await editorReady(page);
+        await expect(page.getByRole("button", { name: "Light theme", exact: true })).toBeVisible();
         const reopened = editorFrame(page);
         const reopenedRail = reopened.locator("[data-diagram-tools]");
+        await expect(reopenedRail.getByRole("button", { name: "Snap: angle" })).toBeVisible();
+        await tap(reopenedRail.getByRole("button", { name: "Snap: angle" }));
+        const snapPopup = reopened.getByRole("dialog", { name: "Tool options" });
+        for (const rule of ["Lattice", "Objects", "Alignment"]) {
+          await expect(snapPopup.getByRole("button", { name: rule, exact: true })).toHaveAttribute("aria-pressed", "false");
+        }
+        await expect(snapPopup.getByRole("button", { name: "Angle", exact: true })).toHaveAttribute("aria-pressed", "true");
+        await tap(reopenedRail.getByRole("button", { name: "Snap: angle" }));
         await tap(reopenedRail.getByRole("button", { name: "Zoom and display", exact: true }));
         const reopenedPopup = reopened.getByRole("dialog", { name: "Tool options" });
         for (const aid of ["Grid", "Rulers", "Ruler guides"]) {
