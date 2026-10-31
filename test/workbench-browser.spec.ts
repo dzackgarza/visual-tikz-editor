@@ -1214,7 +1214,7 @@ describe("standalone workbench host boundary", function () {
           }
           await expect(rail).toHaveAttribute("data-dock", placement.dock);
           clear(`the ${placement.dock} rail`, (await rail.boundingBox())!);
-          for (const name of ["Geometry", "Label", /^Drawing color/, "Zoom and display"] as const) {
+          for (const name of ["Geometry", "Label", /^Color: New strokes:/, "Zoom and display"] as const) {
             const button =
               typeof name === "string"
                 ? rail.getByRole("button", { name, exact: true })
@@ -3466,7 +3466,7 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await expect(rail.getByRole("button", { name: /^Color: Selected stroke:/ })).toBeVisible();
         await tap(rail.getByRole("button", { name: "Use red" }));
-        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/draw=red/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*\bred\b/);
         await tap(rail.getByRole("button", { name: /^Color: Selected stroke:/ }));
         const popup = frame.getByRole("dialog", { name: "Tool options" });
         await tap(popup.getByRole("button", { name: "Selected fill" }));
@@ -3482,22 +3482,31 @@ describe("standalone workbench host boundary", function () {
         await popup.getByLabel("Exact xcolor").fill("orange!35!black");
         await tap(popup.getByRole("button", { name: "Apply exact color" }));
         await expect(rail.getByRole("button", { name: "Color: Fill: orange!35!black" })).toBeVisible();
+        if (!(await popup.isVisible())) {
+          await tap(rail.getByRole("button", { name: "Color: Fill: orange!35!black" }));
+        }
+        await popup.getByLabel("Exact xcolor").fill("red!20");
+        await popup.getByLabel("Exact xcolor").press("Escape");
+        await expect(popup).toHaveCount(0);
+        await tap(rail.getByRole("button", { name: "Color: Fill: orange!35!black" }));
+        await expect(popup.getByLabel("Exact xcolor")).toHaveValue("");
+        await tap(rail.getByRole("button", { name: "Color: Fill: orange!35!black" }));
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
-        await input.penStroke([await stableCenter(frame.locator('[data-canvas-viewport="true"]'))]);
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await expect(rail.getByRole("button", { name: /^Color: New strokes:/ })).toBeVisible();
         await tap(rail.getByRole("button", { name: "Use violet" }));
         const unchanged = (await editorDebug(page)).source;
-        assert.match(unchanged, /draw=red/);
+        assert.match(unchanged, /\\draw\[[^\]]*\bred\b/);
         assert.match(unchanged, /fill=blue/);
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(frame.getByRole("option", { name: "Line", exact: true }));
-        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.penStroke([
           { x: viewport.x + viewport.width * 0.35, y: viewport.y + viewport.height * 0.4 },
           { x: viewport.x + viewport.width * 0.65, y: viewport.y + viewport.height * 0.4 },
         ]);
-        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/draw=violet/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*\bviolet\b/);
       },
     );
   }
@@ -3512,14 +3521,14 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: /^Drawing color/ })),
+          await stableCenter(rail.getByRole("button", { name: /^Color: New strokes:/ })),
         ]);
         const popup = frame.getByRole("dialog", { name: "Tool options" });
         await expect(popup).toBeVisible();
         // The platform colour control delivers its value as an input event, as a tablet's colour sheet does.
         await popup.getByLabel("Choose color").fill("#ff0000");
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: /^Drawing color/ })),
+          await stableCenter(rail.getByRole("button", { name: /^Color: New strokes:/ })),
         ]);
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
@@ -3566,7 +3575,7 @@ describe("standalone workbench host boundary", function () {
             buttons.map((button) => button.getAttribute("aria-label")!.slice(4)),
           );
         await input.touch([
-          await stableCenter(rail.getByRole("button", { name: /^Drawing color/ })),
+          await stableCenter(rail.getByRole("button", { name: /^Color: New strokes:/ })),
         ]);
         const popup = frame.getByRole("dialog", { name: "Tool options" });
         await expect(popup).toBeVisible();
@@ -3602,7 +3611,7 @@ describe("standalone workbench host boundary", function () {
         // Picking a swatch by finger sets the drawing colour.
         await input.touch([await stableCenter(swatches.nth(2))]);
         await expect(
-          rail.getByRole("button", { name: `Drawing color: ${saved[2]}` }),
+          rail.getByRole("button", { name: `Color: New strokes: ${saved[2]}` }),
         ).toBeVisible();
       },
     );
@@ -3716,7 +3725,7 @@ describe("standalone workbench host boundary", function () {
         }
         // The active colour is marked, and only it.
         await tap(rail.getByRole("button", { name: "Use red", exact: true }));
-        await expect(rail.getByRole("button", { name: "Drawing color: red" })).toBeVisible();
+        await expect(rail.getByRole("button", { name: "Color: New strokes: red" })).toBeVisible();
         assert.deepEqual(
           await swatches.evaluateAll((buttons) =>
             buttons.flatMap((button, index) =>
@@ -3727,7 +3736,7 @@ describe("standalone workbench host boundary", function () {
         );
         // The last saved colour is reached by scrolling the strip, and picking it moves the mark.
         await tap(swatches.last());
-        await expect(rail.getByRole("button", { name: "Drawing color: black" })).toBeVisible();
+        await expect(rail.getByRole("button", { name: "Color: New strokes: black" })).toBeVisible();
         assert.deepEqual(
           await swatches.evaluateAll((buttons) =>
             buttons.flatMap((button, index) =>
@@ -3909,7 +3918,7 @@ describe("standalone workbench host boundary", function () {
               ratio: 1,
             });
           }
-          await expect(rail.getByRole("button", { name: /^Drawing color: / })).toBeInViewport({
+          await expect(rail.getByRole("button", { name: /^Color: New strokes:/ })).toBeInViewport({
             ratio: 1,
           });
           const swatches = rail.getByRole("button", { name: /^Use / });

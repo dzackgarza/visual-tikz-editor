@@ -5267,10 +5267,49 @@ index 4fba726b..16c1c9f8 100644
            disabled={!writable}
            onChange={(value) => { onPropertyChange(declaration, property, value); }}
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..aee735f3 100644
+index 0ddde08e..7f8176e2 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
-@@ -144,6 +144,43 @@
+@@ -96,38 +96,6 @@
+   border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
+ }
+ 
+-/* ── Split Button (for Bucket) ────────────────────────────────────────────── */
+-
+-.splitButton {
+-  display: inline-flex;
+-  align-items: stretch;
+-  border-radius: 6px;
+-}
+-
+-.splitButtonMain {
+-  border-top-right-radius: 0;
+-  border-bottom-right-radius: 0;
+-  padding: 4px 2px 4px 6px;
+-  min-width: 28px;
+-  flex-direction: column;
+-  gap: 2px;
+-}
+-
+-.splitButtonCaret {
+-  border-top-left-radius: 0;
+-  border-bottom-left-radius: 0;
+-  padding: 4px 3px 4px 1px;
+-  min-width: 10px;
+-}
+-
+-/* Bucket color indicator bar */
+-.bucketColorIndicator {
+-  width: 16px;
+-  height: 3px;
+-  border-radius: 1px;
+-  flex-shrink: 0;
+-}
+-
+ /* ── Legacy classes (keep for compatibility) ─────────────────────────────── */
+ 
+ .icon {
+@@ -144,6 +112,50 @@
    flex: 1;
  }
  
@@ -5308,13 +5347,20 @@ index 0ddde08e..aee735f3 100644
 +  opacity: .68;
 +}
 +.colorSwatch { width: 22px; height: 22px; display: block; border: 1px solid var(--border); border-radius: 5px; }
++.colorButton { display: flex; align-items: center; gap: 4px; padding-inline: 5px; }
++.colorTargetLabel { font-size: calc(var(--app-ui-scale, 1) * 10px); white-space: nowrap; }
++.colorTargets { display: flex; gap: 6px; }
++.colorTargets button, .exactColorForm button, .exactColorForm input { min-height: 44px; }
++.exactColorForm { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: end; }
++.exactColorForm label { display: flex; flex: 1 1 150px; flex-direction: column; gap: 4px; }
++.exactColorForm input { min-width: 0; width: 100%; box-sizing: border-box; }
 +.palette { display: flex; gap: 3px; flex-wrap: wrap; max-width: 48px; }
 +.paletteSwatch { width: 17px; height: 17px; padding: 0; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
 +
  .updateChip {
    display: inline-flex;
    align-items: center;
-@@ -224,3 +261,40 @@
+@@ -224,3 +236,40 @@
      padding: 8px;
    }
  }
@@ -5356,7 +5402,7 @@ index 0ddde08e..aee735f3 100644
 +[data-dock="bottom"] .stepLane { bottom: calc(100% + 8px); left: 0; }
 +.stepText { padding: 4px 8px; font-size: 13px; line-height: 1.3; color: var(--text); }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..12c9328a 100644
+index a3293df2..355736f9 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,7 @@
@@ -5368,14 +5414,14 @@ index a3293df2..12c9328a 100644
  import { RiDownloadCloudLine } from "@remixicon/react";
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
-@@ -8,17 +11,26 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
+@@ -8,17 +11,25 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
  import { getToolCapabilityStatus } from "./capabilities";
  import { RenderedTooltip } from "./RenderedTooltip";
  import {
 -  resolveToolbarToolMode,
    TOOL_BUTTONS,
 -  TOOL_COLOR_OPTIONS,
-   CaretDownIcon,
+-  CaretDownIcon,
 +  EquationIcon,
 +  GEOMETRY_FAMILIES,
 +  geometryChoiceFor,
@@ -5398,7 +5444,7 @@ index a3293df2..12c9328a 100644
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    id: option.value,
-@@ -26,26 +38,65 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,27 +37,92 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -5431,6 +5477,8 @@ index a3293df2..12c9328a 100644
 +  const constructionHasFinish = useSelector(canvasSession, constructionFinishes);
    const bucketFillColor = useEditorStore((s) => s.bucketFillColor);
 +  const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
++  const selectedElementIds = useEditorStore((s) => s.selectedElementIds);
++  const snapshot = useEditorStore((s) => s.snapshot);
    const selectedAddShape = useEditorStore((s) => s.selectedAddShape);
    const selectedAddMatrixRows = useEditorStore((s) => s.selectedAddMatrixRows);
    const selectedAddMatrixColumns = useEditorStore((s) => s.selectedAddMatrixColumns);
@@ -5443,9 +5491,35 @@ index a3293df2..12c9328a 100644
      [projectNamedColorSwatches]
    );
 -  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | null>(null);
+-  const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
 +  const settings = useSettingsStore((s) => s.settings);
 +  const updateToolbarSettings = useSettingsStore((s) => s.updateToolbarSettings);
 +  const [openPopupMode, setOpenPopupMode] = useState<ToolMode | "color" | "geometry" | "label" | null>(null);
++  const [selectedColorProperty, setSelectedColorProperty] = useState<"draw" | "fill">("draw");
++  const [exactColor, setExactColor] = useState("");
++  const closeColorPopup = () => { setOpenPopupMode(null); setExactColor(""); };
++  const selectedColorTarget = toolMode !== "addBucket" && selectedElementIds.size > 0;
++  const colorTarget = toolMode === "addBucket" ? "Fill" : selectedColorTarget
++    ? selectedColorProperty === "draw" ? "Selected stroke" : "Selected fill"
++    : "New strokes";
++  const selectedColorElement = snapshot.scene?.elements.find((element) => selectedElementIds.has(element.sourceRef.sourceId));
++  const colorValue = toolMode === "addBucket" ? bucketFillColor : selectedColorTarget
++    ? (selectedColorProperty === "draw" ? selectedColorElement?.style.stroke : selectedColorElement?.style.fill) ?? "none"
++    : creationStrokeColor;
++  const applyColor = (value: string) => {
++    if (toolMode === "addBucket") {
++      dispatch({ type: "SET_BUCKET_FILL_COLOR", value });
++    } else if (selectedColorTarget) {
++      const historyMergeKey = `color:${Date.now()}`;
++      for (const elementId of selectedElementIds) {
++        dispatch({ type: "APPLY_EDIT_ACTION", historyMergeKey, action: {
++          kind: "setProperty", elementId, level: "command", key: selectedColorProperty, value
++        } });
++      }
++    } else {
++      dispatch({ type: "SET_CREATION_STROKE_COLOR", value });
++    }
++  };
 +  const [geometryPage, setGeometryPage] = useState<"families" | "shape" | "matrix">("families");
 +  // The dock's Geometry control keeps the icon and name of the last chosen construction while another tool is active.
 +  const geometryVariant = { circle: settings.toolbar.circleConstruction, arc: settings.toolbar.arcConstruction };
@@ -5463,10 +5537,10 @@ index a3293df2..12c9328a 100644
 +  const suppressDragClick = useRef(false);
 +  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 +  const suppressToolClick = useRef(false);
-   const [bucketPopupClosePending, setBucketPopupClosePending] = useState(false);
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
-@@ -56,10 +107,143 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+   const matrixPreviewColumns = matrixHoverSize?.columns ?? selectedAddMatrixColumns;
+@@ -56,63 +132,153 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -5492,8 +5566,11 @@ index a3293df2..12c9328a 100644
 +    const next = { x: dragPointer.current.x + dragOffset.current.x, y: dragPointer.current.y + dragOffset.current.y };
 +    if (Math.abs(next.x - dragPoint.x) > 0.5 || Math.abs(next.y - dragPoint.y) > 0.5) setDragPoint(next);
 +  }, [dragPoint]);
-+
-+  useEffect(() => {
+ 
+-  // Close popup when tool mode changes (unless it's a popup that can be used independently)
+   useEffect(() => {
+-    if (openPopupMode && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== toolMode) {
+-      setOpenPopupMode(null);
 +    if (!embedded) return;
 +    let viewport: HTMLElement | null = null;
 +    function measureCanvas() {
@@ -5503,7 +5580,12 @@ index a3293df2..12c9328a 100644
 +      if (bounds.width <= 16 || bounds.height <= 16) return;
 +      const next = { left: bounds.left + 8, right: bounds.right - 8, top: bounds.top + 8, bottom: bounds.bottom - 8 };
 +      setSafeRect((current) => current?.left === next.left && current.right === next.right && current.top === next.top && current.bottom === next.bottom ? current : next);
-+    }
+     }
+-  }, [openPopupMode, toolMode]);
+-
+-  useEffect(() => {
+-    if (openPopupMode !== "addBucket" && bucketPopupClosePending) {
+-      setBucketPopupClosePending(false);
 +    const observer = new ResizeObserver(measureCanvas);
 +    function attachViewport() {
 +      if (viewport?.isConnected) return;
@@ -5513,7 +5595,8 @@ index a3293df2..12c9328a 100644
 +      observer.observe(viewport);
 +      if (viewport.parentElement) observer.observe(viewport.parentElement);
 +      measureCanvas();
-+    }
+     }
+-  }, [bucketPopupClosePending, openPopupMode]);
 +    // FlexLayout/Suspense can mount the canvas after the toolbar's own effects.
 +    const mounts = new MutationObserver(attachViewport);
 +    mounts.observe(document.getElementById("root") ?? document.body, { childList: true, subtree: true });
@@ -5521,7 +5604,9 @@ index a3293df2..12c9328a 100644
 +    window.addEventListener("resize", measureCanvas);
 +    return () => { mounts.disconnect(); observer.disconnect(); window.removeEventListener("resize", measureCanvas); };
 +  }, [embedded]);
-+
+ 
+-  useEffect(() => {
+-    if (openPopupMode !== "addBucket" || !bucketPopupClosePending) {
 +  useLayoutEffect(() => {
 +    // Show the destination before release, as in Visual Studio's docking guide:
 +    // https://learn.microsoft.com/en-us/visualstudio/ide/customizing-window-layouts-in-visual-studio
@@ -5529,8 +5614,8 @@ index a3293df2..12c9328a 100644
 +    if (!toolbar || !dockPreview || dockPreview.dock === "floating") {
 +      dockGhost.current?.remove();
 +      dockGhost.current = null;
-+      return;
-+    }
+       return;
+     }
 +    if (!dockGhost.current) {
 +      const ghost = toolbar.cloneNode(true) as HTMLElement;
 +      ghost.setAttribute("data-toolbar-preview", "");
@@ -5560,7 +5645,10 @@ index a3293df2..12c9328a 100644
 +      dockGhost.current = null;
 +    };
 +  }, [dockPreview]);
-+
+ 
+-    function onPointerUp(): void {
+-      setBucketPopupClosePending(false);
+-      setOpenPopupMode(null);
 +  useLayoutEffect(() => {
 +    if (!embedded || dragPoint || !safeRect) return;
 +    const toolbar = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
@@ -5572,14 +5660,17 @@ index a3293df2..12c9328a 100644
 +      const y = Math.max((safeRect!.top + bounds.height / 2) / window.innerHeight,
 +        Math.min((safeRect!.bottom - bounds.height / 2) / window.innerHeight, settings.toolbar.y));
 +      if (Math.abs(x - settings.toolbar.x) > 0.001 || Math.abs(y - settings.toolbar.y) > 0.001) updateToolbarSettings({ x, y });
-+    }
+     }
 +    keepToolbarVisible();
 +    const observer = new ResizeObserver(keepToolbarVisible);
 +    observer.observe(toolbar);
 +    window.addEventListener("resize", keepToolbarVisible);
 +    return () => { observer.disconnect(); window.removeEventListener("resize", keepToolbarVisible); };
 +  }, [embedded, dragPoint, safeRect, settings.toolbar, updateToolbarSettings]);
-+
+ 
+-    window.addEventListener("pointerup", onPointerUp);
+-    return () => { window.removeEventListener("pointerup", onPointerUp); };
+-  }, [bucketPopupClosePending, openPopupMode]);
 +  const publishInsets = useCallback(() => {
 +    const toolbar = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
 +    if (!embedded || !toolbar) return;
@@ -5604,30 +5695,37 @@ index a3293df2..12c9328a 100644
 +    return () => { observer.disconnect(); window.removeEventListener("resize", publishInsets); };
 +  }, [publishInsets]);
  
-   // Close popup when tool mode changes (unless it's a popup that can be used independently)
-   useEffect(() => {
--    if (openPopupMode && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== toolMode) {
+-  const closeBucketPopup = () => {
+-    setBucketPopupClosePending(false);
+-    setOpenPopupMode(null);
+-  };
++  // Close popup when tool mode changes (unless it's a popup that can be used independently)
++  useEffect(() => {
 +    if (openPopupMode && openPopupMode !== "color" && openPopupMode !== "geometry" && openPopupMode !== "label" && openPopupMode !== "lasso" && openPopupMode !== "addShape" && openPopupMode !== "addBucket" && openPopupMode !== "addMatrix" && openPopupMode !== "addLine" && openPopupMode !== toolMode) {
-       setOpenPopupMode(null);
-     }
-   }, [openPopupMode, toolMode]);
-@@ -92,12 +276,12 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
++      setOpenPopupMode(null);
++    }
++  }, [openPopupMode, toolMode]);
+ 
    const renderPopup = (popupKind: ToolPopupKind) => {
-     if (popupKind === "bucket-color") {
-       return (
+-    if (popupKind === "bucket-color") {
+-      return (
 -        <ToolbarPopupSection title="Bucket Color">
-+        <ToolbarPopupSection title="Fill color">
-           <ColorPicker
-             ariaLabel="Bucket fill color"
-             value={bucketFillColor}
-             syntaxValue={bucketFillColor}
+-          <ColorPicker
+-            ariaLabel="Bucket fill color"
+-            value={bucketFillColor}
+-            syntaxValue={bucketFillColor}
 -            options={TOOL_COLOR_OPTIONS}
-+            allowNone
-             namedColorSwatches={projectNamedColorSwatches}
-             onChange={(nextValue) => {
-               dispatch({ type: "SET_BUCKET_FILL_COLOR", value: nextValue });
-@@ -111,8 +295,9 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
-     }
+-            namedColorSwatches={projectNamedColorSwatches}
+-            onChange={(nextValue) => {
+-              dispatch({ type: "SET_BUCKET_FILL_COLOR", value: nextValue });
+-              // Auto-activate bucket tool after selecting a color
+-              dispatch({ type: "SET_TOOL_MODE", mode: "addBucket" });
+-              setBucketPopupClosePending(true);
+-            }}
+-          />
+-        </ToolbarPopupSection>
+-      );
+-    }
      if (popupKind === "shape-picker") {
        return (
 -        <ToolbarPopupSection title="Shape">
@@ -5637,7 +5735,7 @@ index a3293df2..12c9328a 100644
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
              onSelect={(id) => {
-@@ -126,15 +311,29 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,15 +292,29 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -5668,7 +5766,7 @@ index a3293df2..12c9328a 100644
              data-testid="toolbar-matrix-picker-grid"
              onMouseLeave={() => { setMatrixHoverSize(null); }}
            >
-@@ -144,6 +343,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -144,6 +324,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                    <button
                      key={`${row}-${column}`}
                      type="button"
@@ -5676,10 +5774,18 @@ index a3293df2..12c9328a 100644
                      className={[
                        popupCss.matrixPickerCell,
                        isSelected(row, column) ? popupCss.matrixPickerCellSelected : ""
-@@ -170,6 +370,212 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,69 +351,224 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
+-  const renderBucketButton = () => {
+-    const mode = "addBucket" as const;
+-    const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
+-    const capability = getToolCapabilityStatus(mode);
+-    const unsupported = capability.status === "unsupported";
+-    const buttonTitle = unsupported
+-      ? `${toolDef.title}\n${capability.reason}`
+-      : toolDef.title;
 +  const groupedToolClick = (popupMode: ToolMode, modes: ToolMode[], defaultMode: ToolMode) => {
 +    if (suppressToolClick.current) {
 +      suppressToolClick.current = false;
@@ -5705,12 +5811,13 @@ index a3293df2..12c9328a 100644
 +    onPointerCancel: () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }
 +  });
 +
-+  const renderGroupedEmbeddedButton = (id: "line" | "shape" | "addMatrix" | "addBucket" | "lasso") => {
++  const renderGroupedEmbeddedButton = (id: "line" | "shape" | "addMatrix" | "lasso") => {
 +    const popupMode: ToolMode = id === "line" ? "addLine" : id === "shape" ? "addShape" : id;
 +    const modes: ToolMode[] = id === "line" ? ["addLine", "addArrow", "addPath"]
 +      : id === "shape" ? ["addShape", "addRect", "addEllipse", "addCircle"] : [popupMode];
 +    const toolDef = TOOL_BUTTONS.find((button) => button.mode === popupMode)!;
-+    const Icon = toolDef.icon;
+     const Icon = toolDef.icon;
+-    const isActive = toolMode === mode;
 +    const popup = id === "lasso"
 +      ? <ToolbarPopupSection title="Lasso selection"><ToolbarPopupChoiceList
 +          choices={[{ id: "freehand", label: "Freehand" }, { id: "ellipse", label: "Ellipse" }, { id: "rectangle", label: "Rectangle" }]}
@@ -5721,7 +5828,7 @@ index a3293df2..12c9328a 100644
 +            setOpenPopupMode(null);
 +          }}
 +        /></ToolbarPopupSection>
-+      : renderPopup(id === "line" ? "line-picker" : id === "shape" ? "shape-picker" : id === "addMatrix" ? "matrix-picker" : "bucket-color");
++      : renderPopup(id === "line" ? "line-picker" : id === "shape" ? "shape-picker" : "matrix-picker");
 +    return <ToolbarToolPopup key={id} open={openPopupMode === popupMode} onClose={() => setOpenPopupMode(null)} popup={popup}>
 +      <RenderedTooltip content={`${toolDef.label} · press again or hold for options`}>
 +        <button type="button" className={[css.btn, modes.includes(toolMode) ? css.btnActive : ""].filter(Boolean).join(" ")}
@@ -5733,7 +5840,8 @@ index a3293df2..12c9328a 100644
 +      </RenderedTooltip>
 +    </ToolbarToolPopup>;
 +  };
-+
+ 
+-    const bucketFillColorCss = cssColorForToken(bucketFillColor, namedColorLookup) ?? "transparent";
 +  const renderEmbeddedTool = (id: ToolbarToolId) => {
 +    if (id === "undo" || id === "redo") {
 +      const undo = id === "undo";
@@ -5741,26 +5849,86 @@ index a3293df2..12c9328a 100644
 +        aria-label={undo ? "Undo" : "Redo"} disabled={undo ? historyIndex < 0 : historyIndex >= historyLength - 1}
 +        onClick={() => dispatch({ type: undo ? "UNDO" : "REDO" })}>{undo ? "↶" : "↷"}</button></RenderedTooltip>;
 +    }
-+    if (id === "line" || id === "shape" || id === "addMatrix" || id === "addBucket" || id === "lasso") return renderGroupedEmbeddedButton(id);
-+    if (id === "color") return <ToolbarToolPopup key={id} open={openPopupMode === "color"} onClose={() => setOpenPopupMode(null)}
-+      popup={<><ToolbarPopupSection title="Drawing color"><ColorPicker ariaLabel="Drawing color" value={creationStrokeColor}
-+        syntaxValue={creationStrokeColor} allowNone={false} namedColorSwatches={projectNamedColorSwatches}
-+        onChange={(value) => dispatch({ type: "SET_CREATION_STROKE_COLOR", value })} /></ToolbarPopupSection>
++    if (id === "line" || id === "shape" || id === "addMatrix" || id === "lasso") return renderGroupedEmbeddedButton(id);
++    if (id === "addBucket") return renderStandardButton(TOOL_BUTTONS.find((button) => button.mode === id)!);
++    if (id === "color") return <ToolbarToolPopup key={id} open={openPopupMode === "color"} onClose={closeColorPopup}
++      popup={<><ToolbarPopupSection title={colorTarget}>
++        {selectedColorTarget ? <div className={css.colorTargets} role="group" aria-label="Color target">
++          <button type="button" aria-pressed={selectedColorProperty === "draw"} onClick={() => { setSelectedColorProperty("draw"); setExactColor(""); }}>Selected stroke</button>
++          <button type="button" aria-pressed={selectedColorProperty === "fill"} onClick={() => { setSelectedColorProperty("fill"); setExactColor(""); }}>Selected fill</button>
++        </div> : null}
++        <ColorPicker ariaLabel={colorTarget} value={colorValue}
++          syntaxValue={colorValue} allowNone={colorTarget !== "New strokes"} namedColorSwatches={projectNamedColorSwatches}
++          onChange={applyColor} />
++        <form className={css.exactColorForm} onSubmit={(event) => { event.preventDefault(); if (exactColor.trim()) { applyColor(exactColor.trim()); setExactColor(""); } }}>
++          <label>Exact xcolor <input type="text" value={exactColor} onChange={(event) => setExactColor(event.currentTarget.value)} /></label>
++          <button type="submit">Apply exact color</button>
++        </form>
++      </ToolbarPopupSection>
 +        </>}>
-+      <button type="button" className={css.btn} aria-label={`Drawing color: ${creationStrokeColor}`} aria-haspopup="dialog"
-+        aria-expanded={openPopupMode === "color"} onClick={() => setOpenPopupMode((current) => current === "color" ? null : "color")}>
-+        <span className={css.colorSwatch} style={{ background: cssColorForToken(creationStrokeColor, namedColorLookup) ?? creationStrokeColor }} />
++      <button type="button" className={`${css.btn} ${css.colorButton}`} aria-label={`Color: ${colorTarget}: ${colorValue}`} aria-haspopup="dialog"
++        aria-expanded={openPopupMode === "color"} onClick={() => { if (openPopupMode === "color") closeColorPopup(); else setOpenPopupMode("color"); }}>
++        <span className={css.colorSwatch} style={{ background: cssColorForToken(colorValue, namedColorLookup) ?? "transparent" }} />
++        <span className={css.colorTargetLabel}>{colorTarget}</span>
 +      </button>
 +    </ToolbarToolPopup>;
 +    if (id === "palette") return <div key={id} className={css.palette} aria-label="Color palette">
 +      {activePalette(settings.colorPicker).map((color, index) => <button key={index} type="button" className={css.paletteSwatch}
-+        aria-label={`Use ${color}`} aria-pressed={color === creationStrokeColor} title={color} style={{ background: cssColorForToken(color, namedColorLookup) ?? color }}
-+        onClick={() => dispatch({ type: "SET_CREATION_STROKE_COLOR", value: color })} />)}
++        aria-label={`Use ${color}`} aria-pressed={color === colorValue} title={color} style={{ background: cssColorForToken(color, namedColorLookup) ?? color }}
++        onClick={() => applyColor(color)} />)}
 +    </div>;
 +    const toolDef = TOOL_BUTTONS.find((button) => button.mode === id);
 +    return toolDef ? renderStandardButton(toolDef) : null;
 +  };
-+
+ 
+-    return (
+-      <ToolbarToolPopup
+-        key={mode}
+-        open={openPopupMode === mode}
+-        onClose={closeBucketPopup}
+-        popup={renderPopup("bucket-color")}
+-        popupTestId="toolbar-tool-popup-addBucket"
+-        popupClassName={popupCss.bucketColorPopup}
+-      >
+-        <div className={css.splitButton}>
+-          <RenderedTooltip content={buttonTitle}>
+-            <button
+-              type="button"
+-              className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
+-              aria-label={toolDef.label}
+-              disabled={unsupported}
+-              onClick={() => {
+-                dispatch({ type: "SET_TOOL_MODE", mode: isActive ? "select" : mode });
+-                closeBucketPopup();
+-              }}
+-            >
+-              <Icon size={18} />
+-              <div
+-                className={css.bucketColorIndicator}
+-                style={{ backgroundColor: bucketFillColorCss }}
+-              />
+-            </button>
+-          </RenderedTooltip>
+-          <RenderedTooltip content="Choose bucket color">
+-            <button
+-              type="button"
+-              className={[css.btn, css.splitButtonCaret, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
+-              aria-label="Choose bucket color"
+-              aria-haspopup="dialog"
+-              aria-expanded={openPopupMode === mode}
+-              disabled={unsupported}
+-              data-testid="toolbar-bucket-color-caret"
+-              onClick={(e) => {
+-                e.stopPropagation();
+-                setOpenPopupMode((current) => (current === mode ? null : mode));
+-              }}
+-            >
+-              <CaretDownIcon size={8} />
+-            </button>
+-          </RenderedTooltip>
+-        </div>
+-      </ToolbarToolPopup>
+-    );
 +  // The Geometry picker names each choice as the step line will, so a reader follows one name from the picker to the stage.
 +  const geometryChoiceLabel = (choice: GeometryChoice) => constructionName(choice.mode, geometryChoiceVariant(choice, geometryVariant));
 +  const chooseGeometry = (choice: GeometryChoice) => {
@@ -5853,8 +6021,8 @@ index a3293df2..12c9328a 100644
 +    const centerX = Math.max((safeRect?.left ?? 0) + width / 2, Math.min((safeRect?.right ?? window.innerWidth) - width / 2, requestedX));
 +    const centerY = Math.max((safeRect?.top ?? 0) + height / 2, Math.min((safeRect?.bottom ?? window.innerHeight) - height / 2, requestedY));
 +    updateToolbarSettings({ dock, x: Math.max(0, Math.min(1, centerX / window.innerWidth)), y: Math.max(0, Math.min(1, centerY / window.innerHeight)) });
-+  };
-+
+   };
+ 
 +  const toolbarElement = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
 +  const bounds = toolbarElement?.getBoundingClientRect();
 +  const parentBounds = toolbarElement?.offsetParent?.getBoundingClientRect();
@@ -5886,22 +6054,10 @@ index a3293df2..12c9328a 100644
 +    ? { maxHeight: Math.max(44, safeRect.bottom - safeRect.top - 56) }
 +    : { maxWidth: Math.max(44, safeRect.right - safeRect.left - 56) }) : undefined;
 +
-   const renderBucketButton = () => {
-     const mode = "addBucket" as const;
+   const renderShapeButton = () => {
+     const mode = "addShape" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -198,9 +604,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
-               type="button"
-               className={[css.btn, css.splitButtonMain, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
-               aria-label={toolDef.label}
-+              aria-pressed={isActive}
-               disabled={unsupported}
-               onClick={() => {
--                dispatch({ type: "SET_TOOL_MODE", mode: isActive ? "select" : mode });
-+                dispatch({ type: "SET_TOOL_MODE", mode });
-                 closeBucketPopup();
-               }}
-             >
-@@ -257,6 +664,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +593,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -5909,7 +6065,7 @@ index a3293df2..12c9328a 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +707,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +636,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -5917,7 +6073,7 @@ index a3293df2..12c9328a 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +723,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +652,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -5939,7 +6095,7 @@ index a3293df2..12c9328a 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +745,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +674,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -5947,7 +6103,7 @@ index a3293df2..12c9328a 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +753,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +682,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -5959,7 +6115,7 @@ index a3293df2..12c9328a 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +766,77 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +695,77 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -6039,7 +6195,7 @@ index a3293df2..12c9328a 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,7 +847,13 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,16 +776,22 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -6053,7 +6209,10 @@ index a3293df2..12c9328a 100644
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
-@@ -364,6 +863,8 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+-          if (toolDef.mode === "addBucket") {
+-            button = renderBucketButton();
+-          } else if (toolDef.mode === "addMatrix") {
++          if (toolDef.mode === "addMatrix") {
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
@@ -6062,17 +6221,17 @@ index a3293df2..12c9328a 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +888,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +815,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
 +  return toolbar;
  }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.module.css b/packages/app/src/ui/ToolbarToolPopup.module.css
-index b12fedb2..56b927f9 100644
+index b12fedb2..c9cb6a8c 100644
 --- a/packages/app/src/ui/ToolbarToolPopup.module.css
 +++ b/packages/app/src/ui/ToolbarToolPopup.module.css
-@@ -7,11 +7,12 @@
+@@ -7,21 +7,16 @@
    position: absolute;
    top: calc(100% + 4px);
    left: 0;
@@ -6087,7 +6246,17 @@ index b12fedb2..56b927f9 100644
    background: var(--bg-pane);
    box-shadow: 0 6px 16px color-mix(in srgb, black 24%, transparent);
  }
-@@ -35,10 +36,10 @@
+ 
+-.bucketColorPopup {
+-  width: 274px;
+-  max-width: min(274px, calc(100vw - 24px));
+-  box-sizing: border-box;
+-}
+-
+ .matrixPicker {
+   display: flex;
+   flex-direction: column;
+@@ -35,10 +30,10 @@
  }
  
  .matrixPickerCell {
@@ -6101,7 +6270,7 @@ index b12fedb2..56b927f9 100644
    background: color-mix(in srgb, var(--bg-pane) 82%, var(--bg-app));
    cursor: pointer;
    padding: 0;
-@@ -63,7 +64,7 @@
+@@ -63,7 +58,7 @@
  }
  
  .sectionTitle {
@@ -6110,7 +6279,7 @@ index b12fedb2..56b927f9 100644
    color: var(--text-faint);
  }
  
-@@ -75,15 +76,15 @@
+@@ -75,15 +70,15 @@
  
  .choiceButton {
    width: 100%;
@@ -6129,7 +6298,7 @@ index b12fedb2..56b927f9 100644
    text-align: left;
    cursor: pointer;
    padding: 2px 6px;
-@@ -159,7 +160,68 @@
+@@ -159,7 +154,66 @@
  }
  
  .visualChoiceLabel {
@@ -6196,8 +6365,6 @@ index b12fedb2..56b927f9 100644
 +}
 +
 +.popup { max-width: calc(100vw - 24px); max-height: calc(100vh - 100px); overflow: auto; }
-+.bucketColorPopup { width: 370px; max-width: calc(100vw - 24px); }
-+
 +.matrixPickerCell { flex: 0 0 44px; min-width: 44px; }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
 index 8aeb4133..6b8de202 100644
@@ -16769,7 +16936,7 @@ index 4e8f0b66..f93430fd 100644
  function clamp(v: number, lo: number, hi: number) {
    return Math.min(hi, Math.max(lo, v));
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870b..a0ad58d0 100644
+index 0101870b..edb0f1cc 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
 @@ -1,6 +1,7 @@
@@ -16807,12 +16974,15 @@ index 0101870b..a0ad58d0 100644
  function MatrixIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" strokeLinecap="round" strokeLinejoin="round">
-@@ -135,6 +148,84 @@ function CircleIcon({ size = 20 }: { size?: number }) {
+@@ -135,23 +148,91 @@ function CircleIcon({ size = 20 }: { size?: number }) {
    );
  }
  
+-function BucketIcon({ size = 20 }: { size?: number }) {
 +function ArcIcon({ size = 20 }: { size?: number }) {
-+  return (
+   return (
+-    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
+-      <path d="M19.2277 18.7323L20.9955 16.9645L22.7632 18.7323C23.7395 19.7086 23.7395 21.2915 22.7632 22.2678C21.7869 23.2441 20.204 23.2441 19.2277 22.2678C18.2514 21.2915 18.2514 19.7086 19.2277 18.7323ZM8.87861 1.07971L20.1923 12.3934C20.5828 12.7839 20.5828 13.4171 20.1923 13.8076L11.707 22.2929C11.3165 22.6834 10.6833 22.6834 10.2928 22.2929L1.80754 13.8076C1.41702 13.4171 1.41702 12.7839 1.80754 12.3934L9.58572 4.61525L7.4644 2.49393L8.87861 1.07971ZM10.9999 6.02946L3.92886 13.1005H18.071L10.9999 6.02946Z" />
 +    <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
 +      <path d="M3 16a7 7 0 0 1 14 0" />
 +      <circle cx="10" cy="16" r="1" fill="currentColor" stroke="none" />
@@ -16862,21 +17032,25 @@ index 0101870b..a0ad58d0 100644
 +      <circle cx="10" cy="16" r="1.3" fill="currentColor" stroke="none" />
 +      <circle cx="3" cy="16" r="1.3" fill="currentColor" stroke="none" />
 +      <circle cx="17" cy="16" r="1.3" fill="currentColor" stroke="none" />
-+    </svg>
-+  );
-+}
-+
+     </svg>
+   );
+ }
+ 
+-function CaretDownIcon({ size = 8 }: { size?: number }) {
 +function ArcThreePointsIcon({ size = 20 }: { size?: number }) {
-+  return (
+   return (
+-    <svg viewBox="0 0 8 8" width={size} height={size} fill="currentColor">
+-      <path d="M1 2.5L4 5.5L7 2.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
 +    <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
 +      <path d="M3 16a7 7 0 0 1 14 0" />
 +      <circle cx="3" cy="16" r="1.3" fill="currentColor" stroke="none" />
 +      <circle cx="10" cy="9" r="1.3" fill="currentColor" stroke="none" />
 +      <circle cx="17" cy="16" r="1.3" fill="currentColor" stroke="none" />
-+    </svg>
-+  );
-+}
-+
+     </svg>
+   );
+ }
+ 
+-export { CaretDownIcon };
 +function EquationIcon({ size = 20 }: { size?: number }) {
 +  return (
 +    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor">
@@ -16889,10 +17063,17 @@ index 0101870b..a0ad58d0 100644
 +
 +export { EquationIcon, NodeIcon };
 +
- function BucketIcon({ size = 20 }: { size?: number }) {
-   return (
-     <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-@@ -159,33 +250,36 @@ export type ToolButtonDef = {
++function BucketIcon({ size = 20 }: { size?: number }) {
++  return (
++    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
++      <path d="M19.2277 18.7323L20.9955 16.9645L22.7632 18.7323C23.7395 19.7086 23.7395 21.2915 22.7632 22.2678C21.7869 23.2441 20.204 23.2441 19.2277 22.2678C18.2514 21.2915 18.2514 19.7086 19.2277 18.7323ZM8.87861 1.07971L20.1923 12.3934C20.5828 12.7839 20.5828 13.4171 20.1923 13.8076L11.707 22.2929C11.3165 22.6834 10.6833 22.6834 10.2928 22.2929L1.80754 13.8076C1.41702 13.4171 1.41702 12.7839 1.80754 12.3934L9.58572 4.61525L7.4644 2.49393L8.87861 1.07971ZM10.9999 6.02946L3.92886 13.1005H18.071L10.9999 6.02946Z" />
++    </svg>
++  );
++}
+ 
+ type ToolIconType = ({ size }: { size?: number }) => React.ReactElement;
+ 
+@@ -159,34 +240,37 @@ export type ToolButtonDef = {
    mode: ToolMode;
    label: string;
    title: string;
@@ -16904,7 +17085,7 @@ index 0101870b..a0ad58d0 100644
  };
  
 -export type ToolPopupKind = "bucket-color" | "shape-picker" | "matrix-picker";
-+export type ToolPopupKind = "bucket-color" | "shape-picker" | "matrix-picker" | "line-picker";
++export type ToolPopupKind = "shape-picker" | "matrix-picker" | "line-picker";
  
 -export const TOOL_COLOR_OPTIONS = BASIC_PICKER_COLORS;
  
@@ -16937,14 +17118,16 @@ index 0101870b..a0ad58d0 100644
 -  { mode: "addRect",    label: "Rect",     title: "Rectangle (R)", shortcut: "r", icon: RectIcon },
 -  { mode: "addEllipse", label: "Ellipse",  title: "Ellipse (E)",  shortcut: "e", icon: EllipseIcon },
 -  { mode: "addCircle",  label: "Circle",   title: "Circle (C)",   shortcut: "c", icon: CircleIcon },
+-  { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
 +  { mode: "addRect",    label: "Rect",     title: "Rectangle", icon: RectIcon },
 +  { mode: "addEllipse", label: "Ellipse",  title: "Ellipse", icon: EllipseIcon },
 +  { mode: "addCircle",  label: "Circle",   title: "Circle", icon: CircleIcon },
 +  { mode: "addArc",     label: "Arc",      title: "Arc",                       icon: ArcIcon },
-   { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   popupKind: "bucket-color", separatorBefore: true },
++  { mode: "addBucket",  label: "Bucket",   title: "Bucket",                      icon: BucketIcon,   separatorBefore: true },
  ];
  
-@@ -204,26 +298,12 @@ export const TOOL_CREATE_MODES = [
+ export const TOOL_CREATE_MODES = [
+@@ -204,26 +288,12 @@ export const TOOL_CREATE_MODES = [
  
  export type ToolCreateMode = (typeof TOOL_CREATE_MODES)[number];
  
@@ -16971,7 +17154,7 @@ index 0101870b..a0ad58d0 100644
  export function toolModePopupKind(mode: ToolMode): ToolPopupKind | null {
    return TOOL_POPUP_KIND_MAP.get(mode) ?? null;
  }
-@@ -256,28 +336,79 @@ export function shouldConstrainToolCreateToSquare(mode: ToolCreateMode): boolean
+@@ -256,28 +326,79 @@ export function shouldConstrainToolCreateToSquare(mode: ToolCreateMode): boolean
    return mode === "addGrid" || mode === "addRect" || mode === "addEllipse";
  }
  
