@@ -3502,7 +3502,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw[red,line width=2pt] (0,0) -- (4,0);
+\draw[red,line width=2pt,xshift=1cm] (0,0) -- (4,0);
 \draw (0,2) -- (4,2);
 \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -3521,24 +3521,59 @@ describe("standalone workbench host boundary", function () {
         await tap(dialog.getByRole("button", { name: "Save style" }));
         await expect.poll(async () => (await editorDebug(page)).source).toMatch(/accent line\/\.style=\{red,\s*line width=2pt\}/);
         const saved = (await editorDebug(page)).source;
-        assert.match(saved, /\\draw\[accent line\] \(0,0\) -- \(4,0\)/);
+        assert.match(saved, /\\draw\[xshift=1cm,\s*accent line\] \(0,0\) -- \(4,0\)/);
         const second = frame.locator('svg [data-source-id="path:1"]').first();
         await input.penStroke([await strokePoint(page, second, 0.3)]);
         await tap(strip.getByRole("button", { name: "Style", exact: true }));
         await tap(frame.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" }));
         const source = (await editorDebug(page)).source;
         assert.match(source, /\\draw\[accent line\] \(0,2\) -- \(4,2\)/);
-        await page.request.post(`${url}api/new`, { data: source });
         await page.reload();
         await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(source);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await editorReady(page);
         const reopened = editorFrame(page);
-        await expect(reopened.locator('svg [data-source-id="path:0"]').first()).toBeVisible();
-        await expect(reopened.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
+        await expect(reopened.locator('svg [data-source-id="path:0"]').first()).toHaveAttribute("stroke", "#ff0000");
+        await expect(reopened.locator('svg [data-source-id="path:1"]').first()).toHaveAttribute("stroke", "#ff0000");
         await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
+        await fitDiagram(reopened, input);
         await tap(reopened.getByRole("button", { name: "Select", exact: true }));
         await input.penStroke([await strokePoint(page, reopened.locator('svg [data-source-id="path:1"]').first(), 0.3)]);
         await tap(reopened.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Style", exact: true }));
         await expect(reopened.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" })).toBeVisible();
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `lists named styles from the preamble, figure, and picture body in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\tikzset{outer/.style={blue}}
+\begin{tikzpicture}[middle/.style={red}]
+\tikzset{inner/.style={green}}
+\draw (0,0) -- (4,0);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        await input.touch([await stableCenter(frame.getByRole("button", { name: "Select", exact: true }))]);
+        const path = frame.locator('svg [data-source-id^="path:"]').first();
+        await input.penStroke([await strokePoint(page, path, 0.3)]);
+        await input.touch([await stableCenter(frame.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Style" }))]);
+        const dialog = frame.getByRole("dialog", { name: "Style" });
+        for (const name of ["outer", "middle", "inner"]) {
+          await expect(dialog.getByRole("button", { name: `Apply ${name}` })).toBeVisible();
+        }
+        await input.touch([await stableCenter(dialog.getByRole("button", { name: "Apply outer" }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[outer\]/);
+        await expect(path).toHaveAttribute("stroke", "#0000ff");
       },
     );
   }

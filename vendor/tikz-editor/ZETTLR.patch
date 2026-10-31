@@ -6882,7 +6882,7 @@ index cf4cf2cf..a1e10f63 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..5b3a2a44 100644
+index 4e22ccfa..62a5982d 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -6910,7 +6910,7 @@ index 4e22ccfa..5b3a2a44 100644
  } from "react";
  import { clientPoint as makeClientPoint,svgPoint as makeSvgPoint,worldPoint as makeWorldPoint,pt,px,svgBounds,viewportPoint } from "tikz-editor/coords/index";
  import {
-@@ -25,14 +31,23 @@ preflightPositionNodeRelativeToAction,
+@@ -25,14 +31,24 @@ preflightPositionNodeRelativeToAction,
  type EditAction,
  type EditActionResult
  } from "tikz-editor/edit/actions";
@@ -6919,6 +6919,7 @@ index 4e22ccfa..5b3a2a44 100644
 +import { ensurePointHasName } from "tikz-editor/edit/point-naming";
 +import { resolvePropertyTarget } from "tikz-editor/edit/property-target";
 +import { parseTikzForEdit } from "tikz-editor/edit/parse-options";
++import { collectNamedStyleNames } from "tikz-editor/edit/actions/named-style-actions";
 +import { applyMatrix, inverseMatrix } from "tikz-editor/semantic/transform";
 +import { normalizeColor } from "tikz-editor/semantic/style/colors";
  import { PT_PER_CM,formatNumber } from "tikz-editor/edit/format";
@@ -6935,7 +6936,7 @@ index 4e22ccfa..5b3a2a44 100644
  EditHandlePositioningContext,
  NodeAnchorTarget,
  SceneElement
-@@ -46,7 +61,7 @@ getKnuthPlassLineRangeFromPoint
+@@ -46,7 +62,7 @@ getKnuthPlassLineRangeFromPoint
  import { createMathJaxNodeTextEngine,getActiveMathJaxOutputJax } from "tikz-editor/text/mathjax-engine";
  import type { NodeTextEngine,NodeTextLayoutKind } from "tikz-editor/text/types";
  import { useShallow } from "zustand/react/shallow";
@@ -6944,7 +6945,7 @@ index 4e22ccfa..5b3a2a44 100644
  import { buildCanvasContextMenuDefinition } from "../../context-menu";
  import { getSharedEditAnalysisSession,getSharedEditAnalysisView } from "../../edit-analysis-manager";
  import { getActiveEditorPlatform } from "../../platform/current";
-@@ -54,6 +69,10 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
+@@ -54,6 +70,10 @@ import { GRID_SIZE_MINOR_TARGET_PX } from "../../settings/types";
  import { useSettingsStore } from "../../settings/useSettingsStore";
  import { buildSnapshotEditSourceFingerprint } from "../../source-identity";
  import { useEditorStore } from "../../store/store";
@@ -6955,7 +6956,7 @@ index 4e22ccfa..5b3a2a44 100644
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
  import { resolveBucketFillEdit } from "./bucket-fill";
  import { recordDragPatchModeFullReason } from "./drag-patch-mode-debug";
-@@ -67,11 +86,30 @@ import { CanvasPanelView } from "./CanvasPanelView";
+@@ -67,11 +87,30 @@ import { CanvasPanelView } from "./CanvasPanelView";
  import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
  import {
  appendFreehandToolPoint,
@@ -6987,7 +6988,7 @@ index 4e22ccfa..5b3a2a44 100644
  viewportToSvgPoint,
  viewportToWorldPoint,
  worldToSvgPoint
-@@ -103,7 +141,7 @@ pathToolHasDrawableSegments,
+@@ -103,7 +142,7 @@ pathToolHasDrawableSegments,
  undoLastPathToolSegment,
  type PathToolGestureSegment
  } from "./path-tool";
@@ -6996,7 +6997,7 @@ index 4e22ccfa..5b3a2a44 100644
  import type { resolveResizeFrameForSource } from "./resize-frames";
  import { isSvgPointWithinScopeBounds } from "./scope-overlay";
  import {
-@@ -119,11 +157,15 @@ type SnapDebugPoint
+@@ -119,11 +158,15 @@ type SnapDebugPoint
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -7012,7 +7013,7 @@ index 4e22ccfa..5b3a2a44 100644
  FreehandToolDraft,
  GuideDragState,
  GuidePreview,
-@@ -131,9 +173,7 @@ GuidesState,
+@@ -131,9 +174,7 @@ GuidesState,
  MagnifierState,
  NodeAnchorOverlayState,
  NodePositionLinkDisplay,
@@ -7022,7 +7023,7 @@ index 4e22ccfa..5b3a2a44 100644
  PendingTouchViewport,
  SnapDebugLogInput,
  SourceBoundsMap,
-@@ -155,7 +195,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
+@@ -155,7 +196,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
  import { useCanvasViewportPersistence } from "./useCanvasViewportPersistence";
  import { useBucketFillPreview,type BucketPreviewSession } from "./useBucketFillPreview";
  import type { ClientPoint,SvgBounds,ViewportPoint,WorldPoint } from "../coords/types";
@@ -7031,7 +7032,7 @@ index 4e22ccfa..5b3a2a44 100644
  import {
  formatEquationText,
  type EquationNodeTarget
-@@ -210,6 +250,29 @@ type SnapDebugOverlayDragState =
+@@ -210,6 +251,29 @@ type SnapDebugOverlayDragState =
  
  const RULER_SIZE = 24;
  const MIN_SCALE = 0.05;
@@ -7061,7 +7062,7 @@ index 4e22ccfa..5b3a2a44 100644
  const MAX_SCALE = 20;
  const NUDGE_STEP_PT = 0.05 * PT_PER_CM;
  const NUDGE_STEP_SHIFT_PT = 0.25 * PT_PER_CM;
-@@ -668,6 +731,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
+@@ -668,6 +732,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
    return "single-line";
  }
  
@@ -7077,7 +7078,7 @@ index 4e22ccfa..5b3a2a44 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,10 +829,74 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +830,74 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -7154,7 +7155,7 @@ index 4e22ccfa..5b3a2a44 100644
  }) {
    const platform = getActiveEditorPlatform();
    const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
-@@ -774,6 +910,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +911,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -7163,7 +7164,7 @@ index 4e22ccfa..5b3a2a44 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -791,8 +929,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -791,8 +930,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestValue,
      showGrid,
      showTransparencyGrid,
@@ -7172,7 +7173,7 @@ index 4e22ccfa..5b3a2a44 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +950,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +951,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -7181,7 +7182,7 @@ index 4e22ccfa..5b3a2a44 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -831,8 +969,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -831,8 +970,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestValue: s.zoomScaleRequestValue,
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
@@ -7190,7 +7191,7 @@ index 4e22ccfa..5b3a2a44 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +981,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +982,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -7204,7 +7205,16 @@ index 4e22ccfa..5b3a2a44 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,14 +1029,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -857,6 +998,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+   const baseSvgResult = snapshot.svg;
+   const baseSvgModel = snapshot.svgModel;
+   const [warning, setWarning] = useState<string | null>(null);
++  const [styleDialogId, setStyleDialogId] = useState<string | null>(null);
++  const [styleNameDraft, setStyleNameDraft] = useState("");
+   const [dragTooltip, setDragTooltip] = useState<DragTooltipState | null>(null);
+   const dragTooltipBoundaryRef = useRef<{ left: number; top: number; right: number; bottom: number } | null>(null);
+   const [dragCursorLock, setDragCursorLock] = useState<string | null>(null);
+@@ -889,14 +1032,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -7221,7 +7231,7 @@ index 4e22ccfa..5b3a2a44 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -911,12 +1051,115 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -911,12 +1054,119 @@ export const CanvasPanel = memo(function CanvasPanel({
    }, [baseSvgModel, svgResult]);
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
@@ -7267,6 +7277,10 @@ index 4e22ccfa..5b3a2a44 100644
 +      analysisSession: getSharedEditAnalysisSession()
 +    }),
 +    [activeDocumentId, activeFigureId, snapshot, source, sourceRevision]
++  );
++  const namedStyleNames = useMemo(
++    () => styleDialogId === null ? [] : collectNamedStyleNames(source, editParseOptions),
++    [editParseOptions, source, styleDialogId]
 +  );
 +
 +  const selectedCurve = useMemo(() => {
@@ -7340,7 +7354,7 @@ index 4e22ccfa..5b3a2a44 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,26 +1176,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,26 +1183,13 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -7368,7 +7382,7 @@ index 4e22ccfa..5b3a2a44 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1276,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1283,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -7391,7 +7405,7 @@ index 4e22ccfa..5b3a2a44 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,9 +1346,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,9 +1353,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -7404,7 +7418,7 @@ index 4e22ccfa..5b3a2a44 100644
  
    const dispatchCanvasTransform = useCallback(
      (transform: CanvasTransform) => {
-@@ -1156,16 +1373,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1156,16 +1380,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const interactionSvgRef = useRef<SVGSVGElement | null>(null);
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
@@ -7435,7 +7449,7 @@ index 4e22ccfa..5b3a2a44 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1265,10 +1494,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1265,10 +1501,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      [setActiveCanvasDragKind]
    );
  
@@ -7446,7 +7460,7 @@ index 4e22ccfa..5b3a2a44 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1300,7 +1525,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1532,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -7454,7 +7468,7 @@ index 4e22ccfa..5b3a2a44 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1545,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1552,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -7465,7 +7479,7 @@ index 4e22ccfa..5b3a2a44 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1729,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1736,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -7489,7 +7503,7 @@ index 4e22ccfa..5b3a2a44 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1744,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1751,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -7503,7 +7517,7 @@ index 4e22ccfa..5b3a2a44 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1761,11 +1962,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1761,11 +1969,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
      const handleKeyDown = (event: KeyboardEvent) => {
@@ -7516,7 +7530,7 @@ index 4e22ccfa..5b3a2a44 100644
        if (event.key !== "Escape" && !isUndo) {
          return;
        }
-@@ -1810,19 +2007,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +2014,37 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -7556,7 +7570,7 @@ index 4e22ccfa..5b3a2a44 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,10 +2053,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,10 +2060,14 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -7572,7 +7586,7 @@ index 4e22ccfa..5b3a2a44 100644
      gridMinorTargetPx,
      canvasTransform,
      svgResult,
-@@ -1857,44 +2076,50 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2083,50 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -7633,7 +7647,7 @@ index 4e22ccfa..5b3a2a44 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1921,15 +2146,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1921,15 +2153,19 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const applyActionWithFeedback = useCallback(
@@ -7662,7 +7676,7 @@ index 4e22ccfa..5b3a2a44 100644
          evaluateOptions: { sourceFingerprint, textEngine: textEngineRef.current },
          parseOptions: { ...editParseOptions, propertyWriteMode: "drag-frame", sourceFingerprint }
        });
-@@ -1940,13 +2169,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1940,13 +2176,14 @@ export const CanvasPanel = memo(function CanvasPanel({
            setWarning(`${result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
          }
  
@@ -7678,7 +7692,7 @@ index 4e22ccfa..5b3a2a44 100644
              precomputedResult: result
            });
          }
-@@ -1975,6 +2205,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2212,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -7922,7 +7936,7 @@ index 4e22ccfa..5b3a2a44 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,69 +2522,280 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,69 +2529,280 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -8239,7 +8253,7 @@ index 4e22ccfa..5b3a2a44 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2810,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2817,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -8247,7 +8261,7 @@ index 4e22ccfa..5b3a2a44 100644
          return;
        }
  
-@@ -2141,7 +2818,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2825,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -8255,7 +8269,7 @@ index 4e22ccfa..5b3a2a44 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2834,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2841,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -8263,7 +8277,7 @@ index 4e22ccfa..5b3a2a44 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2848,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2855,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -8293,7 +8307,7 @@ index 4e22ccfa..5b3a2a44 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3703,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3710,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -8301,7 +8315,7 @@ index 4e22ccfa..5b3a2a44 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3064,9 +3757,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3764,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -8311,7 +8325,7 @@ index 4e22ccfa..5b3a2a44 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3767,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3774,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -8319,7 +8333,7 @@ index 4e22ccfa..5b3a2a44 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3838,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3845,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -8330,7 +8344,7 @@ index 4e22ccfa..5b3a2a44 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3864,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3871,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -8340,7 +8354,7 @@ index 4e22ccfa..5b3a2a44 100644
      ]
    );
  
-@@ -3192,6 +3886,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3893,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -8419,7 +8433,7 @@ index 4e22ccfa..5b3a2a44 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3986,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3993,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -8438,7 +8452,7 @@ index 4e22ccfa..5b3a2a44 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +4020,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4027,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -8449,7 +8463,7 @@ index 4e22ccfa..5b3a2a44 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4043,312 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4050,312 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -8764,7 +8778,7 @@ index 4e22ccfa..5b3a2a44 100644
    const {
      onViewportKeyDown,
      onViewportPaste,
-@@ -3306,6 +4376,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4383,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -8772,7 +8786,7 @@ index 4e22ccfa..5b3a2a44 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4401,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4408,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -8797,7 +8811,7 @@ index 4e22ccfa..5b3a2a44 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4519,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4526,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -8832,7 +8846,7 @@ index 4e22ccfa..5b3a2a44 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4540,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4547,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -8840,7 +8854,7 @@ index 4e22ccfa..5b3a2a44 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4554,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4561,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -8848,7 +8862,7 @@ index 4e22ccfa..5b3a2a44 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4630,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4637,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -8857,7 +8871,7 @@ index 4e22ccfa..5b3a2a44 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4675,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4682,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -8866,7 +8880,7 @@ index 4e22ccfa..5b3a2a44 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4754,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4761,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -8890,7 +8904,7 @@ index 4e22ccfa..5b3a2a44 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4867,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4874,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -8898,7 +8912,7 @@ index 4e22ccfa..5b3a2a44 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4880,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4887,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -8906,7 +8920,7 @@ index 4e22ccfa..5b3a2a44 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4891,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4898,245 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -8940,6 +8954,7 @@ index 4e22ccfa..5b3a2a44 100644
 +        scope: elementKindLabel(snapshot.scene?.elements.find((element) => element.sourceRef.sourceId === selectedId)), lock,
 +        actions: [
 +          { label: "Fill and stroke", run: () => getDockLayoutHandle()?.showPanel("inspector") },
++          { label: "Style", run: () => { setStyleNameDraft(""); setStyleDialogId(selectedId); } },
 +          ...commandAction("Duplicate", APP_MENU_COMMAND_IDS.DUPLICATE), ...originalStrokeActions
 +        ],
 +        menus: [{ label: "Transform", items: TRANSFORM_ITEMS }]
@@ -8953,6 +8968,7 @@ index 4e22ccfa..5b3a2a44 100644
 +        actions: [
 +          { label: "Edit points", run: () => setTouchNodeSelection(true) },
 +          ...(selectedPathForFit ? [{ label: "Simplify", run: simplifySelectedPath }] : []),
++          { label: "Style", run: () => { setStyleNameDraft(""); setStyleDialogId(selectedId); } },
 +          ...commandAction("Duplicate", APP_MENU_COMMAND_IDS.DUPLICATE), ...originalStrokeActions
 +        ],
 +        menus: []
@@ -9150,7 +9166,7 @@ index 4e22ccfa..5b3a2a44 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5147,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5156,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -9173,7 +9189,7 @@ index 4e22ccfa..5b3a2a44 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5178,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5187,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -9189,7 +9205,7 @@ index 4e22ccfa..5b3a2a44 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +5204,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5213,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -9223,7 +9239,7 @@ index 4e22ccfa..5b3a2a44 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5236,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5245,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -9233,7 +9249,7 @@ index 4e22ccfa..5b3a2a44 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5249,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5258,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -9268,7 +9284,7 @@ index 4e22ccfa..5b3a2a44 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5303,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5312,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -9276,7 +9292,7 @@ index 4e22ccfa..5b3a2a44 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5312,41 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5321,61 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -9284,6 +9300,26 @@ index 4e22ccfa..5b3a2a44 100644
 +      {selectionStrip ? (
 +        <SelectionStrip {...selectionStrip} bindings={commandRuntime.bindings} onCommandRun={commandRuntime.runCommand}
 +          onMore={selectionCommandsApplicable ? openSelectionCommands : null} measureRef={measureSelectionControl} style={selectionPopupStyle} />
++      ) : null}
++      {styleDialogId ? (
++        <div role="dialog" aria-label="Style" className={freehandPopupCss.popup}
++          style={{ left: Math.max(12, (window.innerWidth - 300) / 2), top: Math.max(80, (window.innerHeight - 240) / 2) }}
++          onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setStyleDialogId(null); }}>
++          <strong>Style</strong>
++          <form className={freehandPopupCss.actions} onSubmit={(event) => {
++            event.preventDefault();
++            if (applyActionWithFeedback({ kind: "saveNamedStyle", elementId: styleDialogId, name: styleNameDraft }).sourceChanged) setStyleDialogId(null);
++          }}>
++            <label>Style name <input type="text" value={styleNameDraft} onChange={(event) => setStyleNameDraft(event.currentTarget.value)} /></label>
++            <button type="submit" disabled={!styleNameDraft.trim()}>Save style</button>
++          </form>
++          <div className={freehandPopupCss.actions}>
++            {namedStyleNames.map((name) => <button key={name} type="button" onClick={() => {
++              if (applyActionWithFeedback({ kind: "applyNamedStyle", elementId: styleDialogId, name }).sourceChanged) setStyleDialogId(null);
++            }}>Apply {name}</button>)}
++            <button type="button" onClick={() => setStyleDialogId(null)}>Cancel</button>
++          </div>
++        </div>
 +      ) : null}
 +      {freehandResultOffer ? (
 +        <div ref={measureFreehandPopup} style={freehandPopupPosition} className={freehandPopupCss.popup}
@@ -17561,7 +17597,7 @@ index ee4f9c27..1af5f913 100644
    "path_patterns",
    "path_operators_basic",
 diff --git a/packages/core/src/edit/actions.ts b/packages/core/src/edit/actions.ts
-index 29413180..04c00be9 100644
+index 29413180..bfb09b81 100644
 --- a/packages/core/src/edit/actions.ts
 +++ b/packages/core/src/edit/actions.ts
 @@ -1,9 +1,11 @@
@@ -17601,7 +17637,23 @@ index 29413180..04c00be9 100644
  import { applyRepeatElementsAction } from "./actions/repeat.js";
  import {
    applyAddTreeChildAction,
-@@ -120,6 +125,7 @@ export type EditAction =
+@@ -89,6 +94,7 @@ import { patchesMatchSourceTransition } from "./source-patches.js";
+ import type { SemanticPropertyId } from "./property-registry.js";
+ import { flattenForeachInSource, type FlattenForeachTarget } from "../foreach/flatten.js";
+ import { applySetFigureBoundsAction, type SetFigureBoundsAction } from "./figure-bounds.js";
++import { applyNamedStyleAction, type NamedStyleAction } from "./actions/named-style-actions.js";
+ 
+ export type ResizeRole =
+   | "top-left"
+@@ -108,6 +114,7 @@ export { PATH_ATTACHED_NODE_EDIT_NOOP_REASON } from "./actions/path-attached-nod
+ export { PROPERTY_WRITE_CLEANUP_NOOP_REASON };
+ 
+ export type EditAction =
++  | NamedStyleAction
+   | { kind: "moveElement"; elementId: string; delta: WorldPoint; formatPrecision?: DragFormatPrecision }
+   | { kind: "moveElements"; elementIds: string[]; delta: WorldPoint; formatPrecision?: DragFormatPrecision }
+   | { kind: "alignElements"; elementIds: string[]; mode: AlignMode }
+@@ -120,6 +127,7 @@ export type EditAction =
    | { kind: "toggleClosedPath"; elementId: string; closed: boolean }
    | { kind: "deletePathPoint"; elementId: string; handleId: string }
    | { kind: "setPathPointKind"; elementId: string; handleId: string; pointKind: PathPointKind }
@@ -17609,7 +17661,7 @@ index 29413180..04c00be9 100644
    | { kind: "appendToPath"; elementId: string; end: "start" | "end"; segmentSource: string }
    | { kind: "insertPathPoint"; elementId: string; segmentIndex: number; point: WorldPoint }
    | {
-@@ -159,6 +165,8 @@ export type EditAction =
+@@ -159,6 +167,8 @@ export type EditAction =
    | ConvertNodePositionToAbsoluteAction
    | { kind: "reorderElements"; elementIds: string[]; direction: ReorderDirection }
    | { kind: "groupElements"; elementIds: string[] }
@@ -17618,7 +17670,7 @@ index 29413180..04c00be9 100644
    | { kind: "ungroupElements"; elementIds: string[] }
    | {
        kind: "repeatElements";
-@@ -209,7 +217,6 @@ export type EditActionResult =
+@@ -209,7 +219,6 @@ export type EditActionResult =
    | { kind: "error"; message: string };
  
  const DEFAULT_DUPLICATE_OFFSET_PT = 0.25 * PT_PER_CM;
@@ -17626,7 +17678,7 @@ index 29413180..04c00be9 100644
  
  export type EditActionApplyOptions = {
    evaluateOptions?: EvaluateOptions;
-@@ -270,6 +277,8 @@ export function applyEditAction(
+@@ -270,6 +279,8 @@ export function applyEditAction(
          return applyAppendToPathAction(source, action, parseOptions);
        case "insertPathPoint":
          return applyInsertPathPointAction(source, editHandles, action, parseOptions);
@@ -17635,7 +17687,17 @@ index 29413180..04c00be9 100644
        case "moveElement":
          return applyMoveElements(source, editHandles, [action.elementId], action.delta, parseOptions, action.formatPrecision);
        case "moveElements":
-@@ -316,6 +325,10 @@ export function applyEditAction(
+@@ -280,6 +291,9 @@ export function applyEditAction(
+         return applyDistributeElements(source, action, parseOptions);
+       case "setProperty":
+         return applySetProperty(source, action, parseOptions);
++      case "saveNamedStyle":
++      case "applyNamedStyle":
++        return applyNamedStyleAction(source, action, parseOptions);
+       case "rotateElement":
+         return applyRotateElementAction(source, action, evaluateOptions, parseOptions);
+       case "updateNodeText":
+@@ -316,6 +330,10 @@ export function applyEditAction(
          return applyReorderElementsAction(source, action.elementIds, action.direction, parseOptions);
        case "groupElements":
          return applyGroupElements(source, action, parseOptions);
@@ -17646,7 +17708,7 @@ index 29413180..04c00be9 100644
        case "ungroupElements":
          return applyUngroupElements(source, action, parseOptions);
        case "repeatElements":
-@@ -644,107 +657,6 @@ function resolveAnchorNodeName(
+@@ -644,107 +662,6 @@ function resolveAnchorNodeName(
    };
  }
  
@@ -17754,7 +17816,7 @@ index 29413180..04c00be9 100644
  function shiftSpan(span: Span, insertedSpan: Span | undefined, insertedLength: number): Span {
    if (!insertedSpan || insertedLength === 0 || insertedSpan.from > span.from) {
      return span;
-@@ -1100,7 +1012,11 @@ function applyAddElement(
+@@ -1100,7 +1017,11 @@ function applyAddElement(
  ): EditActionResult {
    const beforeStatements = parseStatementSnapshot(source, parseOptions);
    const resolved = resolveElementTemplateAnchorNames(source, template, parseOptions);
@@ -17767,7 +17829,7 @@ index 29413180..04c00be9 100644
    const parsedForInsertion = parseTikzForEdit(resolved.source, parseOptions);
  
    const newSource = insertElementIntoSource(resolved.source, snippet, parsedForInsertion.figure.span);
-@@ -1150,3 +1066,22 @@ function computeReplacementPatch(oldSource: string, newSource: string): SourcePa
+@@ -1150,3 +1071,22 @@ function computeReplacementPatch(oldSource: string, newSource: string): SourcePa
      replacement: newSource.slice(prefix, newSuffix)
    };
  }
@@ -17936,6 +17998,104 @@ index 00000000..8b3e1132
 +  const end = lineEnd < 0 ? source.length : lineEnd;
 +  const alone = source.slice(lineStart, span.from).trim().length === 0 && source.slice(span.to, end).trim().length === 0;
 +  return alone && lineStart > 0 ? { from: lineStart - 1, to: end } : span;
++}
+diff --git a/packages/core/src/edit/actions/named-style-actions.ts b/packages/core/src/edit/actions/named-style-actions.ts
+new file mode 100644
+index 00000000..bf6c9c1f
+--- /dev/null
++++ b/packages/core/src/edit/actions/named-style-actions.ts
+@@ -0,0 +1,92 @@
++import type { OptionEntry, OptionListAst } from "../../options/types.js";
++import { parseOptionListRaw } from "../../options/parse.js";
++import { walkStatements } from "../../ast/walk.js";
++import { NON_STYLE_OPTION_FLAGS, NON_STYLE_OPTION_KEYS } from "../../semantic/style/constants.js";
++import { normalizeCustomStyleName, parseCustomStyleDefinition } from "../../semantic/style/custom-styles.js";
++import { collectContextDefinitions } from "../../transform/cst-to-ast.js";
++import { applyOptionMutationsToTarget, normalizeOptionKey, type OptionMutation } from "../option-mutations.js";
++import { parseTikzForEdit, type EditParseOptions } from "../parse-options.js";
++import { resolvePropertyTarget, TIKZPICTURE_GLOBAL_TARGET_ID } from "../property-target.js";
++import type { EditActionResultLike } from "../result-types.js";
++
++export type NamedStyleAction =
++  | { kind: "saveNamedStyle"; elementId: string; name: string }
++  | { kind: "applyNamedStyle"; elementId: string; name: string };
++
++const TRANSFORM_OPTION_KEYS = new Set([
++  "rotate", "rotate around", "scale", "scale around", "xscale", "yscale",
++  "shift", "xshift", "yshift", "cm", "transform canvas", "xslant", "yslant"
++]);
++
++export function collectNamedStyleNames(source: string, parseOptions: EditParseOptions = {}): string[] {
++  const parsed = parseTikzForEdit(source, parseOptions);
++  const names = new Set<string>();
++  const collectOptions = (options: OptionListAst | undefined) => {
++    for (const entry of options?.entries ?? []) {
++      if (entry.kind !== "kv") continue;
++      const definition = parseCustomStyleDefinition(entry.key);
++      if (definition) names.add(definition.name);
++    }
++  };
++  collectOptions(parsed.figure.options);
++  const statements = [
++    ...collectContextDefinitions(source.slice(0, parsed.figure.span.from)),
++    ...parsed.figure.body
++  ];
++  walkStatements(statements, { onStatement: (statement) => {
++    if (statement.kind === "TikzStyle") {
++      names.add(normalizeCustomStyleName(statement.styleNameRaw));
++    } else if (statement.kind === "TikzSet" || statement.kind === "Pgfkeys") {
++      collectOptions(statement.optionList);
++    }
++  } });
++  return [...names].filter(Boolean).sort((left, right) => left.localeCompare(right));
++}
++
++export function applyNamedStyleAction(source: string, action: NamedStyleAction, parseOptions: EditParseOptions = {}): EditActionResultLike {
++  const name = normalizeCustomStyleName(action.name);
++  const parsedName = parseOptionListRaw(`[${name}/.style={draw}]`).entries;
++  if (parsedName.length !== 1 || parsedName[0]?.kind !== "kv" || parseCustomStyleDefinition(parsedName[0].key)?.name !== name) {
++    return { kind: "unsupported", reason: "Enter one TikZ style name without option separators." };
++  }
++  const existing = collectNamedStyleNames(source, parseOptions);
++  if (action.kind === "saveNamedStyle" && existing.includes(name)) {
++    return { kind: "unsupported", reason: `The style ${name} already exists.` };
++  }
++  if (action.kind === "applyNamedStyle" && !existing.includes(name)) {
++    return { kind: "unsupported", reason: `The style ${name} is not defined in this figure.` };
++  }
++  const resolved = resolvePropertyTarget(source, action.elementId, parseOptions);
++  if (resolved.kind === "not-found") return { kind: "unsupported", reason: resolved.reason };
++  if (resolved.target.kind !== "path-statement" && resolved.target.kind !== "node-item") {
++    return { kind: "unsupported", reason: "This object has no command appearance options." };
++  }
++  const appearance = (resolved.target.options?.entries ?? []).filter(isAppearanceOption);
++  if (action.kind === "saveNamedStyle" && appearance.length === 0) {
++    return { kind: "unsupported", reason: "This object has no appearance options to save." };
++  }
++  const mutations = new Map<string, OptionMutation>();
++  for (const entry of appearance) {
++    mutations.set(normalizeOptionKey(entry.key), { kind: "remove" });
++  }
++  mutations.set(name, { kind: "set", value: "" });
++  const styled = applyOptionMutationsToTarget(source, resolved.target, mutations);
++  if (!styled) return { kind: "unsupported", reason: "The selected object already uses this style." };
++  if (action.kind === "applyNamedStyle") {
++    return { kind: "success", newSource: styled.source, patches: [styled.patch], changedSourceIds: [action.elementId] };
++  }
++  const figure = resolvePropertyTarget(styled.source, TIKZPICTURE_GLOBAL_TARGET_ID, parseOptions);
++  if (figure.kind === "not-found") return { kind: "unsupported", reason: figure.reason };
++  const definition = appearance.map((entry) => entry.raw.trim()).join(", ");
++  const declared = applyOptionMutationsToTarget(styled.source, figure.target,
++    new Map([[`${name}/.style`, { kind: "set", value: `{${definition}}` }]]));
++  if (!declared) return { kind: "error", message: `Could not write the style ${name}.` };
++  return { kind: "success", newSource: declared.source, patches: [], changedSourceIds: [action.elementId] };
++}
++
++function isAppearanceOption(entry: OptionEntry): entry is Extract<OptionEntry, { kind: "kv" | "flag" }> {
++  if (entry.kind === "unknown") return false;
++  const key = normalizeOptionKey(entry.key);
++  if (TRANSFORM_OPTION_KEYS.has(key.replace(/^\/tikz\//, ""))) return false;
++  return entry.kind === "kv" ? !NON_STYLE_OPTION_KEYS.has(key) : !NON_STYLE_OPTION_FLAGS.has(key);
 +}
 diff --git a/packages/core/src/edit/actions/path-editing-actions.ts b/packages/core/src/edit/actions/path-editing-actions.ts
 index 23a8fe28..fdb60df9 100644
