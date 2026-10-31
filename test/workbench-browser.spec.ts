@@ -5125,6 +5125,65 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `reopens named layers and visibility with session-local locks in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\coordinate (anchor) at (0,0);
+\draw (anchor) -- (4,0);
+\draw (0,2) -- (4,2);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => {
+          await locator.scrollIntoViewIfNeeded();
+          await input.touch([await stableCenter(locator)]);
+        };
+        await tap(frame.getByRole("button", { name: "Layers", exact: true }));
+        const panel = frame.getByRole("complementary", { name: "Diagram properties" }).getByRole("tabpanel");
+        await tap(panel.getByRole("button", { name: "New layer", exact: true }));
+        await tap(panel.getByRole("button", { name: "New layer", exact: true }));
+        await fitDiagram(frame, input);
+        await tap(frame.getByRole("button", { name: "Select", exact: true }));
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id^="path:"]').first(), 0.3)]);
+        await tap(panel.getByRole("button", { name: "Move selection to Layer 1", exact: true }));
+        await panel.getByRole("button", { name: "Line", exact: true }).last().click();
+        await tap(panel.getByRole("button", { name: "Move selection to Layer 2", exact: true }));
+        await tap(panel.getByRole("button", { name: "Hide Layer 2", exact: true }));
+        if (await panel.getByRole("button", { name: "Raise Layer 1", exact: true }).count() === 0) {
+          await tap(frame.getByRole("button", { name: "Layers", exact: true }));
+        }
+        assert.ok(await panel.getByRole("button", { name: "Raise Layer 1", exact: true }).count(), `Layer 1 missing after hide: ${(await editorDebug(page)).source}`);
+        await tap(panel.getByRole("button", { name: "Raise Layer 1", exact: true }));
+        if (await panel.getByRole("button", { name: "Lock Layer 1", exact: true }).count() === 0) {
+          await tap(frame.getByRole("button", { name: "Layers", exact: true }));
+        }
+        await tap(panel.getByRole("button", { name: "Lock Layer 1", exact: true }));
+        const source = (await editorDebug(page)).source;
+        assert.match(source, /\[name=Layer 2, transparent\][^]*\[name=Layer 1\]/);
+        assert.match(source, /\[name=Layer 2, transparent\]\s*\\draw[^]*\[name=Layer 1\]\s*\\draw/);
+        assert.match(source, /\\coordinate \(anchor\)[^]*\\draw \(anchor\)/);
+        await page.reload();
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(source);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const reopened = editorFrame(page);
+        await tap(reopened.getByRole("button", { name: "Layers", exact: true }));
+        const reopenedPanel = reopened.getByRole("complementary", { name: "Diagram properties" }).getByRole("tabpanel");
+        await expect.poll(async () => reopenedPanel.getByRole("group", { name: / layer$/ }).evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")))).toEqual(["Layer 1 layer", "Layer 2 layer"]);
+        await expect(reopenedPanel.getByRole("button", { name: "Show Layer 2", exact: true })).toBeVisible();
+        await expect(reopenedPanel.getByRole("button", { name: "Lock Layer 1", exact: true })).toHaveAttribute("aria-pressed", "false");
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `keeps selection actions usable beside Layers when the selection fills the canvas in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
