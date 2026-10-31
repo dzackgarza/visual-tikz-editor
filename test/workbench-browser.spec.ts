@@ -1750,6 +1750,60 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `undoes a handle rotation, then a quarter-turn and a flip, and keeps transforming in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const authored = String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,5);\end{tikzpicture}`;
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const rail = frame.locator("[data-diagram-tools]");
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const selected = async () => (await editorDebug(page)).selection;
+        const source = async () => (await editorDebug(page)).source;
+        const undo = async () => {
+          await input.penStroke([await stableCenter(rail.getByRole("button", { name: "Undo", exact: true }))]);
+          await expect.poll(source).toBe(authored);
+          await editorReady(page);
+          await expect.poll(selected).toEqual(["path:0"]);
+        };
+        await expect.poll(selected).toEqual(["path:0"]);
+        const handle = await settledCenter(frame.getByTestId("canvas-rotate-handle"));
+        const centre = await settledCenter(rectangle);
+        const radius = Math.hypot(handle.x - centre.x, handle.y - centre.y);
+        const start = Math.atan2(centre.y - handle.y, handle.x - centre.x);
+        const path = Array.from({ length: 10 }, (_, index) => {
+          const angle = start + Math.PI * index / 18;
+          return { x: centre.x + radius * Math.cos(angle), y: centre.y - radius * Math.sin(angle) };
+        });
+        await input.penDown(path[0]);
+        for (const point of path.slice(1)) await input.penMove(point);
+        await input.penUp(path.at(-1)!);
+        await expect.poll(source).toMatch(/rotate/);
+        await undo();
+
+        const command = async (name: string) => {
+          await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Transform", exact: true }))]);
+          await input.penStroke([await stableCenter(frame.getByRole("menu").last().getByRole("menuitem", { name, exact: true }))]);
+          await expect.poll(source).not.toBe(authored);
+          await undo();
+        };
+        await command("Rotate Right 90°");
+        await command("Flip Horizontally");
+        await command("Flip Vertically");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `scales a lasso-selected pair by 2 from a corner of their frame in ${tablet.name}`,
       async function () {
         await editorReady(page);
