@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -287,6 +287,34 @@ describe("standalone native file workflow", function () {
       await page.keyboard.press("Control+s");
       await expect.poll(() => readFile(diagramPath, "utf8")).toBe(later);
     }
+  });
+
+  it("keeps both sources intact when an existing file changes on disk before Save", async function () {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-save-conflict-")), "conflict.tikz");
+    await page.request.post(`${url}api/new`, { data: "tikzpicture" });
+    await page.goto(url);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    const original = String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`;
+    await page.locator(".cm-content").fill(original);
+    await fileMenu().click();
+    await page.getByRole("button", { name: "Save As…", exact: true }).click();
+    await chooseFile("save");
+    await expect.poll(() => existsSync(diagramPath)).toBe(true);
+    await expect.poll(() => readFile(diagramPath, "utf8")).toBe(original);
+    await expect(page.locator(".tikz-standalone-status")).toContainText("Saved");
+
+    const external = original.replace("(1,1)", "(2,2)");
+    const edited = original.replace("(1,1)", "(3,3)");
+    await writeFile(diagramPath, external, "utf8");
+    await page.locator(".cm-content").fill(edited);
+    await fileMenu().click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".tikz-standalone-status")).toContainText("The file changed on disk");
+    assert.equal(await readFile(diagramPath, "utf8"), external);
+    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(edited);
+    await expect(page.locator(".tikz-standalone-status")).toContainText("Unsaved changes");
   });
 
   for (const tablet of TABLET_VIEWPORTS) {
