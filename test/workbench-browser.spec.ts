@@ -8498,4 +8498,31 @@ describe("standalone workbench host boundary", function () {
       },
     );
   }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `recovers an untitled authored diagram after a server interruption in ${tablet.name}`,
+      async function () {
+        const authored = String.raw`\begin{tikzpicture}
+% retain authored source through an interruption
+\draw (1,2) -- (4,5);
+\end{tikzpicture}`;
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(authored);
+        await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
+        const persistentHome = workbench.configHome;
+        await page.goto("about:blank");
+        await workbench.stop();
+        workbench = await startWorkbench(process.env, persistentHome);
+        url = workbench.url;
+        await page.goto(url);
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(authored);
+        await expect(page.frameLocator('iframe[title="TikZ visual editor"]').locator("path[data-source-id]")).toHaveCount(1);
+        await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
+      },
+    );
+  }
 });
