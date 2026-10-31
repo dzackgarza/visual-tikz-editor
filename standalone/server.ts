@@ -6,11 +6,12 @@
  * Usage: bun run standalone/server.ts [file.tikz|file.tikzcd]
  */
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { z } from "zod";
 import {
   renderTikz,
   resolveTikzDataDir,
@@ -28,7 +29,10 @@ if (input !== undefined && input !== "" && !DIAGRAM_EXTENSIONS.has(path.extname(
 
 let documentPath = input === undefined || input === "" ? null : await realpath(input);
 let untitledSource = "";
-let untitledExtension = ".tikz";
+let untitledExtension: ".tikz" | ".tikzcd" = ".tikz";
+let documentId: string = randomUUID();
+let conflictSource: string | null = null;
+let conflictRevision: string | null = null;
 const packageRoot = process.env.TIKZ_WORKBENCH_ASSETS ?? path.resolve(import.meta.dir, "..");
 const pageRoot = path.join(packageRoot, "standalone", "dist");
 const home = os.homedir();
@@ -44,8 +48,51 @@ if (preferences === null || Array.isArray(preferences) || typeof preferences !==
 let preferenceWrite = Promise.resolve();
 const cacheHome = process.env.XDG_CACHE_HOME || path.join(home, ".cache");
 if (!path.isAbsolute(cacheHome)) throw new Error("XDG_CACHE_HOME must be an absolute path");
+const stateHome = process.env.XDG_STATE_HOME || path.join(home, ".local", "state");
+if (!path.isAbsolute(stateHome)) throw new Error("XDG_STATE_HOME must be an absolute path");
+const recoveryPath = path.join(stateHome, "visual-tikz-editor", "recovery.json");
+const RecoveryRecord = z.object({
+  documentId: z.string().uuid(),
+  path: z.string().nullable(),
+  extension: z.enum([".tikz", ".tikzcd"]),
+  source: z.string(),
+  revision: z.string(),
+});
+type RecoveryRecord = z.infer<typeof RecoveryRecord>;
+let recoveryRecord: RecoveryRecord | null = existsSync(recoveryPath)
+  ? RecoveryRecord.parse(JSON.parse(await readFile(recoveryPath, "utf8")))
+  : null;
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".svg"]);
 const untitledPath = (): string => path.join(home, `Untitled${untitledExtension}`);
+
+async function persistRecovery(record: RecoveryRecord): Promise<void> {
+  await mkdir(path.dirname(recoveryPath), { recursive: true });
+  await writeFile(`${recoveryPath}.pending`, JSON.stringify(record), "utf8");
+  await rename(`${recoveryPath}.pending`, recoveryPath);
+  recoveryRecord = record;
+}
+
+if (recoveryRecord !== null && (documentPath === null || recoveryRecord.path === documentPath)) {
+  documentId = recoveryRecord.documentId;
+  untitledExtension = recoveryRecord.extension;
+  if (recoveryRecord.path === null || !existsSync(recoveryRecord.path)) {
+    documentPath = null;
+    untitledSource = recoveryRecord.source;
+  } else {
+    documentPath = await realpath(recoveryRecord.path);
+    const disk = await readFile(documentPath, "utf8");
+    const diskRevision = revisionOf(disk);
+    if (disk !== recoveryRecord.source && diskRevision === recoveryRecord.revision) {
+      await writeFile(documentPath, recoveryRecord.source, "utf8");
+      await persistRecovery({ ...recoveryRecord, revision: revisionOf(recoveryRecord.source) });
+    } else if (disk !== recoveryRecord.source) {
+      conflictSource = recoveryRecord.source;
+      conflictRevision = recoveryRecord.revision;
+    } else if (diskRevision !== recoveryRecord.revision) {
+      await persistRecovery({ ...recoveryRecord, revision: diskRevision });
+    }
+  }
+}
 
 if (!existsSync(path.join(pageRoot, "index.html"))) {
   throw new Error(`Build the standalone page before launch: ${pageRoot}`);
@@ -71,16 +118,19 @@ async function serveUnder(root: string, relative: string): Promise<Response> {
 }
 
 async function currentSource(): Promise<string> {
-  return documentPath === null ? untitledSource : await readFile(documentPath, "utf8");
+  return documentPath === null ? untitledSource : conflictSource ?? await readFile(documentPath, "utf8");
 }
 
 function documentResponse(source: string): Response {
   return new Response(source, {
     headers: {
       "content-type": "text/plain; charset=utf-8",
-      etag: revisionOf(source),
+      etag: conflictRevision ?? revisionOf(source),
       "x-document-path": documentPath ?? untitledPath(),
       "x-document-saved": String(documentPath !== null),
+      "x-document-id": documentId,
+      "x-document-recovery": conflictSource !== null ? "conflict" : documentPath === null &&
+        source !== "" && source !== NEW_TIKZ && source !== NEW_TIKZCD ? "draft" : "none",
     },
   });
 }
@@ -88,14 +138,30 @@ function documentResponse(source: string): Response {
 async function handleDocument(request: Request): Promise<Response> {
   if (request.method === "GET") return documentResponse(await currentSource());
   if (request.method !== "PUT") return new Response("Method not allowed", { status: 405 });
-  if (documentPath === null) return new Response("Save the new diagram as a file", { status: 409 });
-  const current = await currentSource();
+  if (request.headers.get("x-document-id") !== documentId)
+    return new Response("Document session changed", { status: 409 });
   const expected = request.headers.get("if-match");
   if (expected === null) return new Response("File revision required", { status: 428 });
-  if (expected !== revisionOf(current))
-    return new Response("The file changed on disk", { status: 412 });
   const next = await request.text();
+  if (documentPath === null) {
+    if (expected !== revisionOf(untitledSource))
+      return new Response("The recovery draft changed", { status: 412 });
+    await persistRecovery({ documentId, path: null, extension: untitledExtension, source: next, revision: revisionOf(next) });
+    untitledSource = next;
+    return new Response(null, { status: 204, headers: { etag: revisionOf(next) } });
+  }
+  const disk = await readFile(documentPath, "utf8");
+  if (expected !== revisionOf(disk)) {
+    await persistRecovery({ documentId, path: documentPath, extension: path.extname(documentPath) as ".tikz" | ".tikzcd", source: next, revision: expected });
+    conflictSource = next;
+    conflictRevision = expected;
+    return new Response("The file changed on disk; recovery draft saved", { status: 412 });
+  }
+  await persistRecovery({ documentId, path: documentPath, extension: path.extname(documentPath) as ".tikz" | ".tikzcd", source: next, revision: expected });
   await writeFile(documentPath, next, "utf8");
+  await persistRecovery({ documentId, path: documentPath, extension: path.extname(documentPath) as ".tikz" | ".tikzcd", source: next, revision: revisionOf(next) });
+  conflictSource = null;
+  conflictRevision = null;
   return new Response(null, { status: 204, headers: { etag: revisionOf(next) } });
 }
 
@@ -124,6 +190,10 @@ async function handleOpen(): Promise<Response> {
   const resolved = await realpath(selected);
   const source = await readFile(resolved, "utf8");
   documentPath = resolved;
+  documentId = randomUUID();
+  conflictSource = null;
+  conflictRevision = null;
+  await persistRecovery({ documentId, path: resolved, extension: path.extname(resolved) as ".tikz" | ".tikzcd", source, revision: revisionOf(source) });
   return documentResponse(source);
 }
 
@@ -142,6 +212,9 @@ async function handleSaveAs(request: Request): Promise<Response> {
   const next = await request.text();
   await writeFile(selected, next, "utf8");
   documentPath = await realpath(selected);
+  conflictSource = null;
+  conflictRevision = null;
+  await persistRecovery({ documentId, path: documentPath, extension: path.extname(documentPath) as ".tikz" | ".tikzcd", source: next, revision: revisionOf(next) });
   return documentResponse(next);
 }
 
@@ -208,8 +281,12 @@ const server = Bun.serve({
       const kind = await request.text();
       if (kind !== "tikzpicture" && kind !== "tikzcd") return new Response("Choose tikzpicture or tikzcd", { status: 400 });
       documentPath = null;
+      documentId = randomUUID();
+      conflictSource = null;
+      conflictRevision = null;
       untitledExtension = kind === "tikzcd" ? ".tikzcd" : ".tikz";
       untitledSource = kind === "tikzcd" ? NEW_TIKZCD : NEW_TIKZ;
+      await persistRecovery({ documentId, path: null, extension: untitledExtension as ".tikz" | ".tikzcd", source: untitledSource, revision: revisionOf(untitledSource) });
       return documentResponse(untitledSource);
     }
     if (pathname === "/api/open" && request.method === "POST") return await handleOpen();

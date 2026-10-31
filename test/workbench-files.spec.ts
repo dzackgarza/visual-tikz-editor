@@ -25,11 +25,12 @@ describe("standalone native file workflow", function () {
   let browser: Browser;
   let page: Page;
   let desktopEnv: Record<string, string>;
+  let persistentHome: string;
   let diagramPath: string;
   let url: string;
 
   async function startServer(): Promise<void> {
-    workbench = await startWorkbench(desktopEnv);
+    workbench = await startWorkbench(desktopEnv, persistentHome);
     url = workbench.url;
   }
 
@@ -102,6 +103,7 @@ describe("standalone native file workflow", function () {
       sessionBus.stdout!.once("data", (data) => resolve(String(data).trim()));
     });
     diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-native-")), "authored.tikz");
+    persistentHome = await mkdtemp(join(tmpdir(), "workbench-native-state-"));
     await mkdir("test-results/workbench", { recursive: true });
     await buildWorkbench();
     await startServer();
@@ -145,11 +147,6 @@ describe("standalone native file workflow", function () {
     await workbench.stop();
     await startServer();
     await page.goto(url);
-    await expect(page.getByRole("button", { name: "Open existing…", exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
-    await page.getByRole("button", { name: "Open existing…", exact: true }).click();
-    await chooseFile("open");
     await expect(page.locator(".document-bar strong")).toHaveText("authored.tikz");
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     assert.equal(
@@ -161,6 +158,7 @@ describe("standalone native file workflow", function () {
     await expect(
       page.frameLocator('iframe[title="TikZ visual editor"]').locator("path[data-source-id]"),
     ).toHaveCount(1);
+    await editorReady(page);
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
     const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(bounds.x + bounds.width * 0.35, bounds.y + bounds.height * 0.65);
@@ -313,7 +311,45 @@ describe("standalone native file workflow", function () {
     assert.equal(await readFile(diagramPath, "utf8"), external);
     await page.getByRole("button", { name: "Copy source", exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(edited);
-    await expect(page.locator(".tikz-standalone-status")).toContainText("Unsaved changes");
+    await expect(page.locator(".tikz-standalone-status")).toContainText("The file changed on disk");
+    await page.goto("about:blank");
+    await workbench.stop();
+    await startServer();
+    await page.goto(url);
+    await expect(page.locator(".document-bar strong")).toHaveText("conflict.tikz");
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(edited);
+    await expect(page.locator(".tikz-standalone-status")).toContainText("The file changed on disk");
+    assert.equal(await readFile(diagramPath, "utf8"), external);
+  });
+
+  it("autosaves an existing file and reopens its source and picture after interruption", async function () {
+    diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-autosave-")), "autosaved.tikz");
+    await page.request.post(`${url}api/new`, { data: "tikzpicture" });
+    await page.goto(url);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    const original = String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`;
+    const edited = original.replace("(1,1)", "(4,5)");
+    await page.locator(".cm-content").fill(original);
+    await fileMenu().click();
+    await page.getByRole("button", { name: "Save As…", exact: true }).click();
+    await chooseFile("save");
+    await expect.poll(() => existsSync(diagramPath)).toBe(true);
+    await expect.poll(() => readFile(diagramPath, "utf8")).toBe(original);
+    await expect(page.locator(".tikz-standalone-status")).toContainText("Saved");
+    await page.locator(".cm-content").fill(edited);
+    await expect.poll(() => readFile(diagramPath, "utf8")).toBe(edited);
+    await expect(page.locator(".tikz-standalone-status")).toHaveText("Saved");
+
+    await page.goto("about:blank");
+    await workbench.stop();
+    await startServer();
+    await page.goto(url);
+    await expect(page.locator(".document-bar strong")).toHaveText("autosaved.tikz");
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(edited);
+    await expect(page.frameLocator('iframe[title="TikZ visual editor"]').locator("path[data-source-id]")).toHaveCount(1);
+    await expect(page.locator(".tikz-standalone-status")).toHaveText("Saved");
   });
 
   for (const tablet of TABLET_VIEWPORTS) {
@@ -348,7 +384,9 @@ describe("standalone native file workflow", function () {
     await workbench.stop();
     await startServer();
     await page.goto(url);
-    await page.getByRole("button", { name: "Open existing…", exact: true }).click();
+    await expect(page.locator(".document-bar strong")).toHaveText("layered.tikz");
+    await fileMenu().click();
+    await page.getByRole("button", { name: "Open…", exact: true }).click();
     await chooseFile("open");
     await editorReady(page);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();

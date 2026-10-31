@@ -86,7 +86,7 @@
  * serves the pinned editor pages.
  */
 
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -103,6 +103,8 @@ interface StandaloneDocument {
   path: string;
   revision: string;
   saved: boolean;
+  id: string;
+  recovery: "none" | "draft" | "conflict";
 }
 
 const document = shallowRef<StandaloneDocument | null>(null);
@@ -226,22 +228,29 @@ async function currentSource(): Promise<string> {
   return editor ? await editor.currentSource(new AbortController().signal) : source.value;
 }
 const savedSource = ref("");
+const recoveredSource = ref("");
+const recoverySaved = ref(false);
+let applyingDocument = false;
+let documentWrite = Promise.resolve();
 const loadError = ref("");
 const hostError = ref("");
 const theme = ref<TikzWorkbenchTheme>(
   window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
 );
 
-const dirty = computed(() => document.value !== null && source.value !== savedSource.value);
+const dirty = computed(() => document.value !== null && (source.value !== savedSource.value ||
+  document.value.recovery === "conflict" || (!document.value.saved && recoverySaved.value)));
 const fileName = computed(() => document.value?.path.split("/").pop() ?? "TikZ workbench");
 const status = computed(() => {
   if (hostError.value !== "") return hostError.value;
   if (document.value === null) return loadError.value === "" ? "Loading…" : "Load failed";
-  if (!document.value.saved)
+  if (!document.value.saved) {
+    if (recoverySaved.value && source.value === recoveredSource.value) return "Recovery saved · not saved as file";
     return source.value === savedSource.value
       ? `New ${document.value.path.endsWith(".tikzcd") ? "tikzcd" : "tikzpicture"} · not saved`
-      : "Unsaved changes";
-  return dirty.value ? "Unsaved changes" : "Saved";
+      : "Saving recovery…";
+  }
+  return dirty.value ? "Saving…" : "Saved";
 });
 
 const target = computed<TikzLivePreviewTarget | null>(() => {
@@ -308,18 +317,46 @@ function metadata(response: Response): StandaloneDocument {
   const revision = response.headers.get("etag");
   const path = response.headers.get("x-document-path");
   const saved = response.headers.get("x-document-saved");
-  if (revision === null || path === null || (saved !== "true" && saved !== "false")) {
+  const id = response.headers.get("x-document-id");
+  const recovery = response.headers.get("x-document-recovery");
+  if (revision === null || path === null || id === null ||
+      (saved !== "true" && saved !== "false") ||
+      (recovery !== "none" && recovery !== "draft" && recovery !== "conflict")) {
     throw new Error("The server answered without document metadata");
   }
-  return { path, revision, saved: saved === "true" };
+  return { path, revision, saved: saved === "true", id, recovery };
 }
+
+watch(source, (text) => {
+  const opened = document.value;
+  if (applyingDocument || opened === null) return;
+  documentWrite = documentWrite.then(async () => {
+    const current = document.value;
+    if (current === null || current.id !== opened.id) return;
+    const response = await fetch("/api/document", {
+      method: "PUT",
+      headers: { "if-match": current.revision, "x-document-id": current.id },
+      body: text,
+    });
+    await responseText(response);
+    const revision = response.headers.get("etag");
+    if (revision === null) throw new Error("The server stored the source without a new revision");
+    document.value = { ...current, revision, recovery: "none" };
+    if (current.saved) savedSource.value = text;
+    else { recoveredSource.value = text; recoverySaved.value = true; }
+    hostError.value = "";
+  }).catch((error) => host.reportError("Could not autosave the diagram", error));
+}, { flush: "sync" });
 
 async function applyDocument(response: Response): Promise<void> {
   if (response.status === 204) return;
   const text = await responseText(response);
+  applyingDocument = true;
   document.value = metadata(response);
   source.value = text;
   savedSource.value = text;
+  recoverySaved.value = document.value.recovery === "draft";
+  recoveredSource.value = recoverySaved.value ? text : "";
   sourceSelection.value = null;
   documentKey.value++;
   newKindOpen.value = !document.value.saved && text === "";
@@ -331,7 +368,8 @@ async function applyDocument(response: Response): Promise<void> {
   editorStatuses.preview = "";
   editorStatuses.canvas = "";
   editorStatuses.quiver = "";
-  hostError.value = "";
+  hostError.value = document.value.recovery === "conflict" ? "The file changed on disk; recovery draft saved" : "";
+  applyingDocument = false;
 }
 
 async function load(): Promise<void> {
@@ -355,6 +393,7 @@ function resolveUnsaved(choice: "save" | "discard" | "cancel"): void {
 }
 
 async function mayLeaveDocument(action: "closing" | "continuing"): Promise<boolean> {
+  await documentWrite;
   if (!dirty.value) return true;
   if (unsavedPrompt.value !== null) return false;
   const choice = await new Promise<"save" | "discard" | "cancel">((resolve) => {
@@ -399,12 +438,15 @@ async function openDocument(): Promise<void> {
 
 async function saveAs(): Promise<boolean> {
   try {
+    await documentWrite;
     const text = await currentSource();
     const response = await fetch("/api/save-as", { method: "POST", body: text });
     if (response.status === 204) return false;
     await responseText(response);
     document.value = metadata(response);
     savedSource.value = text;
+    recoverySaved.value = false;
+    recoveredSource.value = "";
     hostError.value = "";
     return true;
   } catch (error) {
@@ -414,20 +456,22 @@ async function saveAs(): Promise<boolean> {
 }
 
 async function save(): Promise<boolean> {
+  await documentWrite;
   const current = document.value;
   if (current === null) return false;
   if (!current.saved) return await saveAs();
   try {
     const text = await currentSource();
+    if (text === savedSource.value && current.recovery !== "conflict") return true;
     const response = await fetch("/api/document", {
       method: "PUT",
-      headers: { "if-match": current.revision },
+      headers: { "if-match": current.revision, "x-document-id": current.id },
       body: text,
     });
     await responseText(response);
     const revision = response.headers.get("etag");
     if (revision === null) throw new Error("The server saved the file without a new revision");
-    document.value = { ...current, revision };
+    document.value = { ...current, revision, recovery: "none" };
     savedSource.value = text;
     hostError.value = "";
     return true;
@@ -471,7 +515,6 @@ async function copySource(): Promise<void> {
     const text = await currentSource();
     if (host.clipboard) await host.clipboard.writeText(text);
     else await navigator.clipboard.writeText(text);
-    hostError.value = "";
   } catch (error) {
     host.reportError("Could not copy source", error);
   }
