@@ -5126,12 +5126,12 @@ index e849b257..7c282a29 100644
  
 diff --git a/packages/app/src/ui/SnapControl.module.css b/packages/app/src/ui/SnapControl.module.css
 new file mode 100644
-index 00000000..b73f27ab
+index 00000000..17044992
 --- /dev/null
 +++ b/packages/app/src/ui/SnapControl.module.css
 @@ -0,0 +1,10 @@
 +.trigger { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; line-height: 1; }
-+.triggerIcon { font-size: 15px; }
++.triggerIcon { font-size: 10px; font-weight: 600; }
 +.triggerRule { font-size: 9px; letter-spacing: -0.01em; }
 +
 +.rules { display: grid; gap: 6px; width: 250px; max-width: calc(100vw - 40px); }
@@ -5142,7 +5142,7 @@ index 00000000..b73f27ab
 +.latticeStep { margin: 8px 0 0; font-size: 12px; opacity: 0.85; }
 diff --git a/packages/app/src/ui/SnapControl.tsx b/packages/app/src/ui/SnapControl.tsx
 new file mode 100644
-index 00000000..12d29ac0
+index 00000000..dbc9595f
 --- /dev/null
 +++ b/packages/app/src/ui/SnapControl.tsx
 @@ -0,0 +1,61 @@
@@ -5201,7 +5201,7 @@ index 00000000..12d29ac0
 +      </ToolbarPopupSection>}>
 +      <button type="button" className={`${triggerClassName} ${css.trigger}`} aria-label={`Snap: ${ruleName}`}
 +        aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-+        <span className={css.triggerIcon} aria-hidden="true">⌗</span>
++        <span className={css.triggerIcon} aria-hidden="true">Snap</span>
 +        <span className={css.triggerRule} aria-hidden="true">{ruleName}</span>
 +      </button>
 +    </ToolbarToolPopup>
@@ -5391,7 +5391,7 @@ index 4fba726b..16c1c9f8 100644
            disabled={!writable}
            onChange={(value) => { onPropertyChange(declaration, property, value); }}
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..7f8176e2 100644
+index 0ddde08e..45f657c9 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
 @@ -96,38 +96,6 @@
@@ -5484,12 +5484,16 @@ index 0ddde08e..7f8176e2 100644
  .updateChip {
    display: inline-flex;
    align-items: center;
-@@ -224,3 +236,40 @@
+@@ -224,3 +236,44 @@
      padding: 8px;
    }
  }
 +
 +.embeddedTools .btn { min-width: 44px; height: 44px; padding: 8px; }
++.embeddedTools .panelButton { width: 64px; padding: 4px; font-size: 11px; line-height: 1.1; white-space: normal; }
++[data-dock="left"] .embeddedTools .panelButton, [data-dock="right"] .embeddedTools .panelButton { width: 44px; font-size: 9px; overflow-wrap: anywhere; }
++.embeddedTools .toolLabel { font-size: 10px; line-height: 1; }
++.embeddedTools .lassoButton { flex-direction: column; gap: 1px; padding: 3px; }
 +.embeddedTools .zoomTrigger { width: 44px; padding: 0; font-size: 12px; }
 +.toolbarGrip { min-width: 44px; min-height: 44px; flex-shrink: 0; }
 +.paletteSwatch { width: 44px; height: 44px; }
@@ -5501,7 +5505,7 @@ index 0ddde08e..7f8176e2 100644
 +.embeddedTools { display: flex; gap: 2px; align-items: flex-start; }
 +[data-dock="top"] .embeddedTools, [data-dock="bottom"] .embeddedTools, [data-dock="floating"] .embeddedTools { flex-wrap: wrap; align-items: center; }
 +[data-dock="top"] .toolGrid, [data-dock="bottom"] .toolGrid, [data-dock="floating"] .toolGrid { display: contents; }
-+[data-dock="top"] .paletteLane, [data-dock="bottom"] .paletteLane, [data-dock="floating"] .paletteLane { flex: 1 1 136px; min-width: 136px; max-width: 100%; }
++[data-dock="top"] .paletteLane, [data-dock="bottom"] .paletteLane, [data-dock="floating"] .paletteLane { flex: 0 0 min(366px, 100%); min-width: 0; max-width: 100%; }
 +.toolGrid { display: grid; gap: 2px; justify-items: center; align-items: center; }
 +.toolGrid .panelButtons { display: contents; }
 +[data-dock="left"] .toolGrid, [data-dock="right"] .toolGrid {
@@ -5526,12 +5530,12 @@ index 0ddde08e..7f8176e2 100644
 +[data-dock="bottom"] .stepLane { bottom: calc(100% + 8px); left: 0; }
 +.stepText { padding: 4px 8px; font-size: 13px; line-height: 1.3; color: var(--text); }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..355736f9 100644
+index a3293df2..6958f34e 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,7 @@
 -import { useEffect, useMemo, useState } from "react";
-+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 +import { ZoomDisplayControl } from "./ZoomDisplayControl";
 +import { SnapControl } from "./SnapControl";
 +import { createPortal } from "react-dom";
@@ -5898,7 +5902,7 @@ index a3293df2..355736f9 100644
                      className={[
                        popupCss.matrixPickerCell,
                        isSelected(row, column) ? popupCss.matrixPickerCellSelected : ""
-@@ -170,69 +351,224 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,69 +351,225 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -5955,11 +5959,12 @@ index a3293df2..355736f9 100644
 +      : renderPopup(id === "line" ? "line-picker" : id === "shape" ? "shape-picker" : "matrix-picker");
 +    return <ToolbarToolPopup key={id} open={openPopupMode === popupMode} onClose={() => setOpenPopupMode(null)} popup={popup}>
 +      <RenderedTooltip content={`${toolDef.label} · press again or hold for options`}>
-+        <button type="button" className={[css.btn, modes.includes(toolMode) ? css.btnActive : ""].filter(Boolean).join(" ")}
++        <button type="button" className={[css.btn, id === "lasso" ? css.lassoButton : "", modes.includes(toolMode) ? css.btnActive : ""].filter(Boolean).join(" ")}
 +          aria-label={toolDef.label} aria-haspopup="dialog" aria-expanded={openPopupMode === popupMode}
 +          onClick={() => groupedToolClick(popupMode, modes, id === "shape" ? "addRect" : popupMode)}
 +          {...longPressHandlers(popupMode)}>
-+          <Icon size={18} />
++          <Icon size={id === "lasso" ? 16 : 18} />
++          {id === "lasso" ? <span className={css.toolLabel}>Lasso</span> : null}
 +        </button>
 +      </RenderedTooltip>
 +    </ToolbarToolPopup>;
@@ -6181,7 +6186,7 @@ index a3293df2..355736f9 100644
    const renderShapeButton = () => {
      const mode = "addShape" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -257,6 +593,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +594,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -6189,7 +6194,7 @@ index a3293df2..355736f9 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +636,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +637,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -6197,7 +6202,7 @@ index a3293df2..355736f9 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -314,6 +652,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -314,6 +653,21 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -6219,7 +6224,7 @@ index a3293df2..355736f9 100644
    const renderStandardButton = (toolDef: (typeof TOOL_BUTTONS)[number]) => {
      const { mode, label, title, icon: Icon } = toolDef;
      const capability = getToolCapabilityStatus(mode);
-@@ -321,7 +674,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +675,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -6227,7 +6232,7 @@ index a3293df2..355736f9 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +682,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +683,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -6239,7 +6244,7 @@ index a3293df2..355736f9 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +695,77 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +696,78 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -6282,18 +6287,19 @@ index a3293df2..355736f9 100644
 +    </button>
 +    <div ref={toolbarRef} className={css.embeddedTools}>
 +      <div className={css.toolGrid} style={toolStripSize}>
-+      <div className={css.panelButtons}>
-+        <button type="button" className={css.btn} aria-label="Layers" onClick={onToggleLayers}>▤</button>
-+        <button type="button" className={css.btn} aria-label="Properties" onClick={onToggleProperties}>⚙</button>
-+        <button type="button" className={css.btn} aria-label="Settings" onClick={onOpenSettings}>☰</button>
-+        <ZoomDisplayControl triggerClassName={`${css.btn} ${css.zoomTrigger}`} />
-+      </div>
-+      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("erase")}
-+      {renderEmbeddedTool("addFreehand")}{renderGeometryButton()}{renderLabelButton()}
-+      {(["color", "addBucket", "undo", "redo"] as const).map((id) => <Fragment key={id}>{renderEmbeddedTool(id)}</Fragment>)}
-+      <SnapControl triggerClassName={css.btn} />
-+      </div>
++      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("addFreehand")}
++      {renderEmbeddedTool("erase")}{renderGeometryButton()}{renderLabelButton()}
++      {renderEmbeddedTool("addBucket")}{renderEmbeddedTool("color")}
 +      <div className={css.paletteLane} style={toolStripSize}>{renderEmbeddedTool("palette")}</div>
++      {renderEmbeddedTool("undo")}{renderEmbeddedTool("redo")}
++      <SnapControl triggerClassName={css.btn} />
++      <ZoomDisplayControl triggerClassName={`${css.btn} ${css.zoomTrigger}`} />
++      <div className={css.panelButtons}>
++        <button type="button" className={`${css.btn} ${css.panelButton}`} aria-label="Layers" onClick={onToggleLayers}>Layers</button>
++        <button type="button" className={`${css.btn} ${css.panelButton}`} aria-label="Properties" onClick={onToggleProperties}>Properties</button>
++        <button type="button" className={`${css.btn} ${css.panelButton}`} aria-label="Settings" onClick={onOpenSettings}>Settings</button>
++      </div>
++      </div>
 +      {constructionStepText ? <div className={css.stepLane}>
 +        <div role="status" aria-label="Current step" className={css.stepText}>{constructionStepText}</div>
 +        {constructionHasFinish ? <button type="button" className={css.btn} onClick={() => canvasSession.send({ type: "construction.finish" })}>Finish</button> : null}
@@ -6319,7 +6325,7 @@ index a3293df2..355736f9 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,16 +776,22 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,16 +778,22 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -6345,7 +6351,7 @@ index a3293df2..355736f9 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +815,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +817,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -6707,7 +6713,7 @@ index 00000000..e45afbd7
 +  );
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-index cf4cf2cf..a1e10f63 100644
+index cf4cf2cf..f9ecfae9 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 @@ -38,6 +38,16 @@
@@ -6745,28 +6751,42 @@ index cf4cf2cf..a1e10f63 100644
    vector-effect: non-scaling-stroke;
  }
  
-@@ -122,10 +132,7 @@
-   overflow: hidden;
+@@ -123,9 +133,6 @@
    touch-action: none;
    outline: none;
--  background-color: var(--bg-canvas-area);
+   background-color: var(--bg-canvas-area);
 -  background-image:
 -    radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.16), transparent 45%),
 -    radial-gradient(circle at 90% 90%, rgba(255, 255, 255, 0.1), transparent 40%);
-+  background-color: #fff;
  }
  
  .viewportTool {
-@@ -163,7 +170,7 @@
+@@ -162,8 +169,8 @@
+ .svgLayer {
    position: absolute;
    inset: 0;
-   background: #fff;
+-  background: #fff;
 -  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
++  background: var(--bg-canvas-area);
 +  box-shadow: none;
    pointer-events: none;
    -webkit-user-select: none;
    user-select: none;
-@@ -192,6 +199,14 @@
+@@ -179,7 +186,7 @@
+ }
+ 
+ .svgLayerTransparencyGrid {
+-  background-color: #fff;
++  background-color: var(--bg-canvas-area);
+   background-image:
+     linear-gradient(45deg, rgba(0, 0, 0, 0.08) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.08) 75%, rgba(0, 0, 0, 0.08)),
+     linear-gradient(45deg, rgba(0, 0, 0, 0.08) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.08) 75%, rgba(0, 0, 0, 0.08));
+@@ -188,10 +195,18 @@
+ }
+ 
+ .svgLayerNoDocumentBounds {
+-  background-color: #fff;
++  background-color: var(--bg-canvas-area);
    box-shadow: none;
  }
  
@@ -6781,7 +6801,46 @@ index cf4cf2cf..a1e10f63 100644
  :global([data-canvas-invert]) .svgLayer {
    background: #e8e8e8;
    filter: invert(1) hue-rotate(180deg);
-@@ -323,59 +338,34 @@
+@@ -205,6 +220,38 @@
+   background-image: none;
+ }
+ 
++:global([data-color-scheme="dark"]) .svgLayer :global([stroke="#000000"]),
++:global([data-color-scheme="dark"]) .svgLayer :global([stroke="black"]) {
++  stroke: #eeeeee;
++}
++
++:global([data-color-scheme="dark"]) .svgLayer :global([fill="#000000"]),
++:global([data-color-scheme="dark"]) .svgLayer :global([fill="black"]) {
++  fill: #eeeeee;
++}
++
++:global([data-color-scheme="dark"]) .rulerTickMinor,
++:global([data-color-scheme="dark"]) .gridMinor {
++  stroke: rgba(165, 180, 198, 0.36);
++}
++
++:global([data-color-scheme="dark"]) .rulerTickMajor,
++:global([data-color-scheme="dark"]) .gridMajor {
++  stroke: rgba(195, 208, 225, 0.56);
++}
++
++:global([data-color-scheme="dark"]) .rulerLabel {
++  fill: var(--text-muted);
++}
++
++:global([data-color-scheme="dark"]) .gridAxis {
++  stroke: #82b6ff;
++}
++
++:global([data-color-scheme="dark"]) .gridAxisLabel {
++  fill: #82b6ff;
++}
++
+ .svgLayer :global(svg) {
+   display: block;
+   width: 100%;
+@@ -323,59 +370,34 @@
  }
  
  .gridMinor {
@@ -6851,7 +6910,7 @@ index cf4cf2cf..a1e10f63 100644
  }
  
  .hitRegions {
-@@ -390,6 +380,16 @@
+@@ -390,6 +412,16 @@
    fill: transparent;
  }
  
@@ -6868,7 +6927,7 @@ index cf4cf2cf..a1e10f63 100644
  .selectionOverlay {
    pointer-events: none;
  }
-@@ -568,6 +568,14 @@
+@@ -568,6 +600,14 @@
    vector-effect: non-scaling-stroke;
  }
  
@@ -6883,7 +6942,7 @@ index cf4cf2cf..a1e10f63 100644
  .marqueeRect {
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
-@@ -935,3 +943,16 @@
+@@ -935,3 +975,16 @@
      print-color-adjust: exact;
    }
  }
@@ -17202,19 +17261,19 @@ index 4e8f0b66..f93430fd 100644
  function clamp(v: number, lo: number, hi: number) {
    return Math.min(hi, Math.max(lo, v));
 diff --git a/packages/app/src/ui/tool-config.tsx b/packages/app/src/ui/tool-config.tsx
-index 0101870b..edb0f1cc 100644
+index 0101870b..4252e1e7 100644
 --- a/packages/app/src/ui/tool-config.tsx
 +++ b/packages/app/src/ui/tool-config.tsx
 @@ -1,6 +1,7 @@
  import React from "react";
 -import { BASIC_PICKER_COLORS } from "../colors/color-palette";
-+import { RiEraserLine } from "@remixicon/react";
++import { RiDragDropLine, RiEraserLine } from "@remixicon/react";
  import type { SnapToolPointerKind } from "tikz-editor/edit/snapping";
 +import type { ArcConstruction, CircleConstruction } from "../settings/types";
  import type { ToolMode } from "../store/types";
  
  // ── Custom Tool Icons ─────────────────────────────────────────────────────────
-@@ -14,6 +15,10 @@ function SelectIcon({ size = 20 }: { size?: number }) {
+@@ -14,6 +15,14 @@ function SelectIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -17222,10 +17281,14 @@ index 0101870b..edb0f1cc 100644
 +  return <RiEraserLine size={size} />;
 +}
 +
++function LassoIcon({ size = 20 }: { size?: number }) {
++  return <RiDragDropLine size={size} />;
++}
++
  function MagnifyIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-@@ -32,6 +37,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
+@@ -32,6 +41,14 @@ function NodeIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -17240,7 +17303,7 @@ index 0101870b..edb0f1cc 100644
  function MatrixIcon({ size = 20 }: { size?: number }) {
    return (
      <svg viewBox="0 0 20 20" width={size} height={size} fill="none" strokeLinecap="round" strokeLinejoin="round">
-@@ -135,23 +148,91 @@ function CircleIcon({ size = 20 }: { size?: number }) {
+@@ -135,23 +152,91 @@ function CircleIcon({ size = 20 }: { size?: number }) {
    );
  }
  
@@ -17339,7 +17402,7 @@ index 0101870b..edb0f1cc 100644
  
  type ToolIconType = ({ size }: { size?: number }) => React.ReactElement;
  
-@@ -159,34 +240,37 @@ export type ToolButtonDef = {
+@@ -159,34 +244,37 @@ export type ToolButtonDef = {
    mode: ToolMode;
    label: string;
    title: string;
@@ -17362,7 +17425,7 @@ index 0101870b..edb0f1cc 100644
 -  { mode: "addNode",    label: "Node",     title: "Node (N)",     shortcut: "n", icon: NodeIcon,     separatorBefore: true },
 -  { mode: "addShape",   label: "Shape",    title: "Shape (S)",    shortcut: "s", icon: ShapeIcon,    popupKind: "shape-picker" },
 +  { mode: "select",     label: "Select",   title: "Select", icon: SelectIcon },
-+  { mode: "lasso",      label: "Lasso",    title: "Lasso selection",       icon: PathIcon },
++  { mode: "lasso",      label: "Lasso",    title: "Lasso selection",       icon: LassoIcon },
 +  { mode: "erase",      label: "Eraser",   title: "Erase every stroke you sweep across",      icon: EraserIcon },
 +  { mode: "magnify",    label: "Magnify",  title: "Magnify", icon: MagnifyIcon },
 +  { mode: "addNode",    label: "Node",     title: "Node", icon: NodeIcon,     separatorBefore: true },
@@ -17393,7 +17456,7 @@ index 0101870b..edb0f1cc 100644
  ];
  
  export const TOOL_CREATE_MODES = [
-@@ -204,26 +288,12 @@ export const TOOL_CREATE_MODES = [
+@@ -204,26 +292,12 @@ export const TOOL_CREATE_MODES = [
  
  export type ToolCreateMode = (typeof TOOL_CREATE_MODES)[number];
  
@@ -17420,7 +17483,7 @@ index 0101870b..edb0f1cc 100644
  export function toolModePopupKind(mode: ToolMode): ToolPopupKind | null {
    return TOOL_POPUP_KIND_MAP.get(mode) ?? null;
  }
-@@ -256,28 +326,79 @@ export function shouldConstrainToolCreateToSquare(mode: ToolCreateMode): boolean
+@@ -256,28 +330,79 @@ export function shouldConstrainToolCreateToSquare(mode: ToolCreateMode): boolean
    return mode === "addGrid" || mode === "addRect" || mode === "addEllipse";
  }
  

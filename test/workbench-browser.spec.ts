@@ -4069,6 +4069,9 @@ describe("standalone workbench host boundary", function () {
       `orders and labels the dock over a dark canvas in ${tablet.name}`,
       async function () {
         await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}\draw (0,0) -- (4,0);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.getByRole("button", { name: "Dark theme", exact: true }).click();
         const frame = editorFrame(page);
         const rail = frame.locator("[data-diagram-tools]");
@@ -4094,6 +4097,9 @@ describe("standalone workbench host boundary", function () {
           const channels = background.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
           assert.ok(channels.length === 3 && Math.max(...channels) < 90, `Canvas surface is light: ${background}`);
         }
+        const drawn = await frame.locator('svg [data-source-id^="path:"]').first().evaluate((element) => getComputedStyle(element).stroke);
+        const strokeChannels = drawn.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+        assert.ok(strokeChannels.length === 3 && Math.min(...strokeChannels) > 180, `A black stroke is not legible: ${drawn}, attribute ${await frame.locator('svg [data-source-id^="path:"]').first().getAttribute("stroke")}`);
         await storyScreenshot(page, `dark-dock-${tablet.name}`);
       },
     );
