@@ -6147,6 +6147,64 @@ describe("standalone workbench host boundary", function () {
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `aligns and distributes three selected objects as separate undo steps in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const authored = String.raw`\begin{tikzpicture}
+\draw (2,2) circle (1);
+\draw (5,4) circle (1);
+\draw (10,3) circle (1);
+\end{tikzpicture}`;
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const rail = frame.locator("[data-diagram-tools]");
+        const boxes = await Promise.all([0, 1, 2].map((index) => frame.locator(`svg [data-source-id="path:${index}"]`).first().boundingBox()));
+        const left = Math.min(...boxes.map((box) => box!.x)) - 12;
+        const right = Math.max(...boxes.map((box) => box!.x + box!.width)) + 12;
+        const top = Math.min(...boxes.map((box) => box!.y)) - 12;
+        const bottom = Math.max(...boxes.map((box) => box!.y + box!.height)) + 12;
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true }))]);
+        await input.penStroke([{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }, { x: left, y: top + 1 }]);
+        const selected = async () => [...(await editorDebug(page)).selection].sort();
+        await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const source = async () => (await editorDebug(page)).source;
+        const command = async (group: string, name: string) => {
+          await input.penStroke([await stableCenter(strip.getByRole("button", { name: group, exact: true }))]);
+          await input.penStroke([await stableCenter(frame.getByRole("menu").last().getByRole("menuitem", { name, exact: true }))]);
+          await expect.poll(source).not.toBe(authored);
+          await input.penStroke([await stableCenter(rail.getByRole("button", { name: "Undo", exact: true }))]);
+          await expect.poll(source).toBe(authored);
+          await editorReady(page);
+          await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
+        };
+        await command("Align", "Left");
+        await command("Distribute", "Horizontal");
+        await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
+        await expect.poll(selected).toEqual([]);
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.15)]);
+        await expect.poll(selected).toEqual(["path:0"]);
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "More", exact: true }))]);
+        await input.penStroke([await stableCenter(frame.getByRole("menuitem", { name: /^Reorder/ }))]);
+        await input.penStroke([await stableCenter(frame.getByRole("menuitem", { name: "Bring to Front", exact: true }))]);
+        await expect.poll(source).not.toBe(authored);
+        const ordered = await source();
+        assert.ok(ordered.indexOf("(2,2) circle") > ordered.indexOf("(10,3) circle"), ordered);
+        await input.penStroke([await stableCenter(rail.getByRole("button", { name: "Undo", exact: true }))]);
+        await expect.poll(source).toBe(authored);
+        await editorReady(page);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
     for (const contact of ["touch", "pen"] as const) {
       story(
         { viewport: tablet },
