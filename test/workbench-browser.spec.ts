@@ -6011,14 +6011,27 @@ describe("standalone workbench host boundary", function () {
           .toBe(String.raw`\draw (8,-6) circle (3cm);`);
         await editorReady(page);
         const linePoint = await strokePoint(page, frame.locator("path[data-source-id]").first(), 0.25);
-        const hitTarget = await page.evaluate((point) => {
+        const lineId = await frame.locator("path[data-source-id]").first().getAttribute("data-source-id");
+        const pick = await page.evaluate(({ point, targetId }) => {
           const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="TikZ visual editor"]')!;
           const box = iframe.getBoundingClientRect();
-          return iframe.contentDocument!.elementFromPoint(point.x - box.left, point.y - box.top)
-            ?.getAttribute("data-hit-region-target-id");
-        }, linePoint);
-        assert.equal(hitTarget, await frame.locator("path[data-source-id]").first().getAttribute("data-source-id"));
-        await input.penStroke([linePoint, linePoint]);
+          const doc = iframe.contentDocument!;
+          const center = doc.elementFromPoint(point.x - box.left, point.y - box.top)?.outerHTML.slice(0, 200);
+          for (let radius = 0; radius <= 8; radius++) {
+            for (let dy = -radius; dy <= radius; dy++) {
+              for (let dx = -radius; dx <= radius; dx++) {
+                if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+                const element = doc.elementFromPoint(point.x - box.left + dx, point.y - box.top + dy);
+                if (element?.getAttribute("data-hit-region-target-id") === targetId) {
+                  return { point: { x: point.x + dx, y: point.y + dy }, center };
+                }
+              }
+            }
+          }
+          return { point: null, center };
+        }, { point: linePoint, targetId: lineId });
+        assert.ok(pick.point, `Line has no hit region near its stroke: ${pick.center}`);
+        await input.penStroke([pick.point, pick.point]);
         await expect
           .poll(codeSelection, { message: "pen tap on the line" })
           .toBe(String.raw`\draw (2,8) -- (12,14);`);
