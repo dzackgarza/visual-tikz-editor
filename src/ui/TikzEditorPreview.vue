@@ -337,6 +337,7 @@ function onMessage(event: MessageEvent): void {
       }
       loaded.value = true;
       errorMessage.value = "";
+      sendTheme();
       reportKeyboard(true);
       break;
     case "change": {

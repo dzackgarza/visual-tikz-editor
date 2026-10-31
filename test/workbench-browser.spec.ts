@@ -4088,6 +4088,7 @@ describe("standalone workbench host boundary", function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}\draw (0,0) -- (4,0);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await editorReady(page);
         await page.getByRole("button", { name: "Dark theme", exact: true }).click();
         const frame = editorFrame(page);
         const rail = frame.locator("[data-diagram-tools]");
@@ -6010,6 +6011,13 @@ describe("standalone workbench host boundary", function () {
           .toBe(String.raw`\draw (8,-6) circle (3cm);`);
         await editorReady(page);
         const linePoint = await strokePoint(page, frame.locator("path[data-source-id]").first(), 0.25);
+        const hitTarget = await page.evaluate((point) => {
+          const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="TikZ visual editor"]')!;
+          const box = iframe.getBoundingClientRect();
+          return iframe.contentDocument!.elementFromPoint(point.x - box.left, point.y - box.top)
+            ?.getAttribute("data-hit-region-target-id");
+        }, linePoint);
+        assert.equal(hitTarget, await frame.locator("path[data-source-id]").first().getAttribute("data-source-id"));
         await input.penStroke([linePoint, linePoint]);
         await expect
           .poll(codeSelection, { message: "pen tap on the line" })
