@@ -51,7 +51,9 @@ describe("launch options of a host application", function () {
       server.once("exit", (code) => reject(new Error(`Standalone server exited: ${code}`)));
       server.stdout!.on("data", (chunk) => {
         const match = /TikZ workbench: (http:\/\/127\.0\.0\.1:\d+\/)/.exec(String(chunk));
-        if (match !== null) resolve(match[1]);
+        if (match !== null) {
+          resolve(match[1]);
+        }
       });
     });
     server.removeAllListeners("exit");
