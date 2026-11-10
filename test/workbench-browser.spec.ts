@@ -6053,6 +6053,69 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `keeps the selection strip off a neighbouring line when no place holds all its actions in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        // The line's bounds reach down beside the circle, so only a short place beside the circle is free.
+        const authored = String.raw`\begin{tikzpicture}
+\draw (2,-4) -- (12,14);
+\draw (8,-6) circle (3cm);
+\end{tikzpicture}`;
+        await page.locator(".cm-content").fill(authored);
+        const frame = editorFrame(page);
+        await expect(frame.locator("[data-source-id]")).toHaveCount(2);
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        await input.touch([
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
+        ]);
+        const circle = frame.locator("circle[data-source-id]").first();
+        const line = frame.locator("path[data-source-id]").first();
+        const circleId = await circle.getAttribute("data-source-id");
+        const lineId = await line.getAttribute("data-source-id");
+        await input.touch([await strokePoint(page, circle, 0.5)]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([circleId]);
+        await editorReady(page);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const stripBox = (await strip.boundingBox())!;
+        const covered = [];
+        for (const fraction of [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]) {
+          const point = await strokePoint(page, line, fraction);
+          if (
+            point.x >= stripBox.x &&
+            point.x <= stripBox.x + stripBox.width &&
+            point.y >= stripBox.y &&
+            point.y <= stripBox.y + stripBox.height
+          ) {
+            covered.push(fraction);
+          }
+        }
+        await page.screenshot({
+          path: `test-results/workbench/selection-strip-beside-neighbour-${tablet.name}.png`,
+        });
+        assert.deepEqual(covered, [], "The selection strip covers these fractions of the line");
+        // The strip still offers the selection's actions: the lock is in view and works.
+        const lock = strip.getByRole("button", { name: "Lock", exact: true });
+        await expect(lock).toBeInViewport({ ratio: 1 });
+        await input.touch([await stableCenter(lock)]);
+        await expect(lock).toHaveAttribute("aria-pressed", "true");
+        await input.touch([await stableCenter(lock)]);
+        await expect(lock).toHaveAttribute("aria-pressed", "false");
+        // The pen picks the neighbour directly, without clearing the selection first.
+        await input.penStroke([
+          await strokePoint(page, line, 0.25),
+          await strokePoint(page, line, 0.25),
+        ]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([lineId]);
+        assert.equal((await editorDebug(page)).source, authored);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `places a selected curve's control outside the curve and clear of the rail in ${tablet.name}`,
       async function () {
         await editorReady(page);
