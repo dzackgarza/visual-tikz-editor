@@ -3,7 +3,12 @@
  * then serves the page, pinned editor pages, document commands, optional TeX
  * compilation and the Quiver macro projection on 127.0.0.1.
  *
- * Usage: bun run standalone/server.ts [file.tikz|file.tikzcd]
+ * Usage: bun run standalone/server.ts [--macros <file>] [--resources <dir>] [file.tikz|file.tikzcd]
+ *
+ * A host application that keeps a diagram inside a larger document starts the
+ * editor on a copy of that diagram. `--macros` names the MathJax macro file of
+ * the document (a JSON `tex.macros` map) for Quiver. `--resources` names the
+ * directory of the document: relative image and TeX input paths resolve there.
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -11,7 +16,10 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { parseArgs } from "node:util";
 import { z } from "zod";
+import { parseMathJaxMacros } from "../src/mathjax-config";
+import { projectQuiverMacros } from "../src/quiver-macros";
 import {
   renderTikz,
   resolveTikzDataDir,
@@ -19,12 +27,23 @@ import {
   type TikzRenderRequest,
 } from "../src/tikz-render";
 
-const input = Bun.argv[2];
+const USAGE =
+  "Usage: bun run standalone/server.ts [--macros <file>] [--resources <dir>] [file.tikz|file.tikzcd]";
+const launch = parseArgs({
+  args: Bun.argv.slice(2),
+  options: { macros: { type: "string" }, resources: { type: "string" } },
+  allowPositionals: true,
+});
+if (launch.positionals.length > 1) throw new Error(USAGE);
+const input = launch.positionals[0];
+const macrosPath = launch.values.macros;
+const resourceRoot =
+  launch.values.resources === undefined ? null : await realpath(launch.values.resources);
 const DIAGRAM_EXTENSIONS = new Set([".tikz", ".tikzcd"]);
 const NEW_TIKZ = "\\begin{tikzpicture}\n\n\\end{tikzpicture}\n";
 const NEW_TIKZCD = "\\begin{tikzcd}\n\n\\end{tikzcd}\n";
 if (input !== undefined && input !== "" && !DIAGRAM_EXTENSIONS.has(path.extname(input))) {
-  throw new Error("Usage: bun run standalone/server.ts [file.tikz|file.tikzcd]");
+  throw new Error(USAGE);
 }
 
 let documentPath = input === undefined || input === "" ? null : await realpath(input);
@@ -65,6 +84,11 @@ let recoveryRecord: RecoveryRecord | null = existsSync(recoveryPath)
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".svg"]);
 const EXPORT_FORMATS = new Set(["pdf", "svg", "png"]);
 const untitledPath = (): string => path.join(home, `Untitled${untitledExtension}`);
+/** The path from which relative image and TeX input paths of the diagram resolve. */
+function resourcePath(): string {
+  const file = documentPath ?? untitledPath();
+  return resourceRoot === null ? file : path.join(resourceRoot, path.basename(file));
+}
 
 async function persistRecovery(record: RecoveryRecord): Promise<void> {
   await mkdir(path.dirname(recoveryPath), { recursive: true });
@@ -228,9 +252,7 @@ async function handleRender(request: Request): Promise<Response> {
     env: process.env,
   };
   // The page edits exactly one diagram: relative inputs resolve from its location.
-  return Response.json(
-    await renderTikz({ ...body, docPath: documentPath ?? untitledPath() }, config),
-  );
+  return Response.json(await renderTikz({ ...body, docPath: resourcePath() }, config));
 }
 
 function authoredFigures(source: string): string[] {
@@ -272,7 +294,7 @@ async function handleExport(request: Request): Promise<Response> {
   };
   const figures = authoredFigures(source);
   const renders = await Promise.all(figures.map(async (figure) => {
-    const result = await renderTikz({ kind: "raw", language: figure.startsWith("\\begin{tikzcd}") ? "tikzcd" : "tikz", source: figure, docPath: documentPath ?? untitledPath() }, config);
+    const result = await renderTikz({ kind: "raw", language: figure.startsWith("\\begin{tikzcd}") ? "tikzcd" : "tikz", source: figure, docPath: resourcePath() }, config);
     if (!result.ok) throw new Error(`Could not render export figure: ${JSON.stringify(result)}`);
     return result;
   }));
@@ -304,15 +326,17 @@ async function handleExport(request: Request): Promise<Response> {
 }
 
 async function handleQuiverMacros(): Promise<Response> {
-  // A standalone figure has no host document or project macro definitions.
-  return Response.json({ macros: {}, unsupported: [] });
+  // A figure that no host application launched has no document macro definitions.
+  if (macrosPath === undefined) return Response.json({ macros: {}, unsupported: [] });
+  const macros = parseMathJaxMacros(JSON.parse(await readFile(macrosPath, "utf8")));
+  return Response.json(projectQuiverMacros(macros, resolveTikzTemplatePath(home)));
 }
 
 async function handleImage(relative: string): Promise<Response> {
   if (!IMAGE_EXTENSIONS.has(path.extname(relative).toLowerCase())) {
     return new Response("Unsupported image format", { status: 415 });
   }
-  return await serveUnder(path.dirname(documentPath ?? untitledPath()), relative);
+  return await serveUnder(path.dirname(resourcePath()), relative);
 }
 
 const server = Bun.serve({

@@ -20,6 +20,9 @@ fi
 app_dir="$data_home/visual-tikz-editor"
 desktop_file="$data_home/applications/visual-tikz-editor.desktop"
 icon_file="$data_home/icons/hicolor/512x512/apps/visual-tikz-editor.png"
+# The XDG Base Directory Specification places user executables in ~/.local/bin.
+# https://specifications.freedesktop.org/basedir-spec/latest/
+command_link="$HOME/.local/bin/visual-tikz-editor"
 marker="$app_dir/.managed-by-visual-tikz-editor"
 if [[ -L $app_dir || ( -e $app_dir && ! -f $marker ) ]]; then
   printf 'Preserving unmanaged application directory: %s\n' "$app_dir" >&2
@@ -31,6 +34,10 @@ if [[ -L $desktop_file ]] || { [[ -e $desktop_file ]] && ! grep -Fqx "Exec=\"$ap
 fi
 if [[ -L $icon_file || ( -e $icon_file && ! -f $marker ) ]]; then
   printf 'Preserving unmanaged icon: %s\n' "$icon_file" >&2
+  exit 1
+fi
+if [[ -e $command_link || -L $command_link ]] && [[ $(readlink -- "$command_link") != "$app_dir/bin/visual-tikz-editor" ]]; then
+  printf 'Preserving unmanaged command: %s\n' "$command_link" >&2
   exit 1
 fi
 
@@ -57,4 +64,6 @@ fi
 install -m 0644 "$staging/package/usr/share/icons/hicolor/512x512/apps/visual-tikz-editor.png" "$icon_file"
 install -m 0644 "$staging/visual-tikz-editor.desktop" "$desktop_file"
 update-desktop-database "$(dirname -- "$desktop_file")"
+install -d "$(dirname -- "$command_link")"
+ln -sfn "$app_dir/bin/visual-tikz-editor" "$command_link"
 printf 'Installed Visual TikZ Editor: %s\n' "$desktop_file"

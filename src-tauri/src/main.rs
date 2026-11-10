@@ -10,15 +10,13 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let assets = app.path().resource_dir()?;
-            let file = std::env::args().nth(1);
-            let mut command = app
+            // The file host owns the command line: a diagram file and the launch options.
+            let (mut events, child) = app
                 .shell()
                 .sidecar("workbench-host")?
-                .env("TIKZ_WORKBENCH_ASSETS", assets);
-            if let Some(file) = file {
-                command = command.args([file]);
-            }
-            let (mut events, child) = command.spawn()?;
+                .env("TIKZ_WORKBENCH_ASSETS", assets)
+                .args(std::env::args().skip(1))
+                .spawn()?;
             app.manage(Host(Mutex::new(Some(child))));
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
