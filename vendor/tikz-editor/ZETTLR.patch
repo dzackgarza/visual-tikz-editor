@@ -6960,7 +6960,7 @@ index cf4cf2cf..f9ecfae9 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..279427a3 100644
+index 4e22ccfa..11f1e6df 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -7034,7 +7034,7 @@ index 4e22ccfa..279427a3 100644
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
  import { resolveBucketFillEdit } from "./bucket-fill";
  import { recordDragPatchModeFullReason } from "./drag-patch-mode-debug";
-@@ -67,11 +87,30 @@ import { CanvasPanelView } from "./CanvasPanelView";
+@@ -67,11 +87,31 @@ import { CanvasPanelView } from "./CanvasPanelView";
  import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
  import {
  appendFreehandToolPoint,
@@ -7057,6 +7057,7 @@ index 4e22ccfa..279427a3 100644
 +import { isFingerContact, POINT_HOLD_SLOP_PX, POINT_TARGET_RADIUS_PX, resolvePointTarget, type PointTargetMark } from "./point-target";
 +import freehandPopupCss from "./FreehandResultPopup.module.css";
 +import { SelectionStrip, type StripAction, type StripMenu } from "./SelectionStrip";
++import { placeSelectionStrip, strokeSamples, type StripBlocker } from "./selection-strip-place";
 +import { ALIGN_ITEMS, DISTRIBUTE_ITEMS, TRANSFORM_ITEMS } from "../../context-menu/canvas-context-menu";
 +import { getDockLayoutHandle } from "../DockLayout";
  import {
@@ -7066,7 +7067,7 @@ index 4e22ccfa..279427a3 100644
  viewportToSvgPoint,
  viewportToWorldPoint,
  worldToSvgPoint
-@@ -103,7 +142,7 @@ pathToolHasDrawableSegments,
+@@ -103,7 +143,7 @@ pathToolHasDrawableSegments,
  undoLastPathToolSegment,
  type PathToolGestureSegment
  } from "./path-tool";
@@ -7075,7 +7076,7 @@ index 4e22ccfa..279427a3 100644
  import type { resolveResizeFrameForSource } from "./resize-frames";
  import { isSvgPointWithinScopeBounds } from "./scope-overlay";
  import {
-@@ -119,11 +158,15 @@ type SnapDebugPoint
+@@ -119,11 +159,15 @@ type SnapDebugPoint
  import { createSourceRenderOffsetMap } from "./text-offset-map";
  import { applyTextMeasureFont,collectLogicalLineRanges,createVisualTextLayout,resolveVisualLineLeft } from "./text-visual-layout";
  import type {
@@ -7091,7 +7092,7 @@ index 4e22ccfa..279427a3 100644
  FreehandToolDraft,
  GuideDragState,
  GuidePreview,
-@@ -131,9 +174,7 @@ GuidesState,
+@@ -131,9 +175,7 @@ GuidesState,
  MagnifierState,
  NodeAnchorOverlayState,
  NodePositionLinkDisplay,
@@ -7101,7 +7102,7 @@ index 4e22ccfa..279427a3 100644
  PendingTouchViewport,
  SnapDebugLogInput,
  SourceBoundsMap,
-@@ -155,7 +196,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
+@@ -155,7 +197,7 @@ import { useCanvasViewportEffects } from "./useCanvasViewportEffects";
  import { useCanvasViewportPersistence } from "./useCanvasViewportPersistence";
  import { useBucketFillPreview,type BucketPreviewSession } from "./useBucketFillPreview";
  import type { ClientPoint,SvgBounds,ViewportPoint,WorldPoint } from "../coords/types";
@@ -7110,7 +7111,7 @@ index 4e22ccfa..279427a3 100644
  import {
  formatEquationText,
  type EquationNodeTarget
-@@ -210,6 +251,29 @@ type SnapDebugOverlayDragState =
+@@ -210,6 +252,29 @@ type SnapDebugOverlayDragState =
  
  const RULER_SIZE = 24;
  const MIN_SCALE = 0.05;
@@ -7140,7 +7141,7 @@ index 4e22ccfa..279427a3 100644
  const MAX_SCALE = 20;
  const NUDGE_STEP_PT = 0.05 * PT_PER_CM;
  const NUDGE_STEP_SHIFT_PT = 0.25 * PT_PER_CM;
-@@ -668,6 +732,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
+@@ -668,6 +733,15 @@ function resolveFallbackTextLayoutKind(text: string, hasFixedWidth: boolean | un
    return "single-line";
  }
  
@@ -7156,7 +7157,7 @@ index 4e22ccfa..279427a3 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,10 +830,76 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +831,76 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -7235,7 +7236,7 @@ index 4e22ccfa..279427a3 100644
  }) {
    const platform = getActiveEditorPlatform();
    const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
-@@ -774,6 +913,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +914,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -7244,7 +7245,7 @@ index 4e22ccfa..279427a3 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -791,8 +932,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -791,8 +933,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestValue,
      showGrid,
      showTransparencyGrid,
@@ -7253,7 +7254,7 @@ index 4e22ccfa..279427a3 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +953,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +954,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -7262,7 +7263,7 @@ index 4e22ccfa..279427a3 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -831,8 +972,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -831,8 +973,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestValue: s.zoomScaleRequestValue,
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
@@ -7271,7 +7272,7 @@ index 4e22ccfa..279427a3 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +984,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +985,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -7285,7 +7286,7 @@ index 4e22ccfa..279427a3 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -857,6 +1000,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -857,6 +1001,8 @@ export const CanvasPanel = memo(function CanvasPanel({
    const baseSvgResult = snapshot.svg;
    const baseSvgModel = snapshot.svgModel;
    const [warning, setWarning] = useState<string | null>(null);
@@ -7294,7 +7295,7 @@ index 4e22ccfa..279427a3 100644
    const [dragTooltip, setDragTooltip] = useState<DragTooltipState | null>(null);
    const dragTooltipBoundaryRef = useRef<{ left: number; top: number; right: number; bottom: number } | null>(null);
    const [dragCursorLock, setDragCursorLock] = useState<string | null>(null);
-@@ -889,14 +1034,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +1035,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -7311,7 +7312,7 @@ index 4e22ccfa..279427a3 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -911,12 +1056,119 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -911,12 +1057,119 @@ export const CanvasPanel = memo(function CanvasPanel({
    }, [baseSvgModel, svgResult]);
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
@@ -7434,7 +7435,7 @@ index 4e22ccfa..279427a3 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,26 +1185,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,26 +1186,13 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -7462,7 +7463,7 @@ index 4e22ccfa..279427a3 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1285,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1286,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -7485,7 +7486,7 @@ index 4e22ccfa..279427a3 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,9 +1355,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,9 +1356,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -7498,7 +7499,7 @@ index 4e22ccfa..279427a3 100644
  
    const dispatchCanvasTransform = useCallback(
      (transform: CanvasTransform) => {
-@@ -1156,16 +1382,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1156,16 +1383,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const interactionSvgRef = useRef<SVGSVGElement | null>(null);
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
@@ -7529,7 +7530,7 @@ index 4e22ccfa..279427a3 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1265,10 +1503,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1265,10 +1504,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      [setActiveCanvasDragKind]
    );
  
@@ -7540,7 +7541,7 @@ index 4e22ccfa..279427a3 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1300,7 +1534,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1535,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -7548,7 +7549,7 @@ index 4e22ccfa..279427a3 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1554,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1555,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -7559,7 +7560,7 @@ index 4e22ccfa..279427a3 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1738,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1739,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -7583,7 +7584,7 @@ index 4e22ccfa..279427a3 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1753,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1754,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -7597,7 +7598,7 @@ index 4e22ccfa..279427a3 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1761,11 +1971,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1761,11 +1972,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
      const handleKeyDown = (event: KeyboardEvent) => {
@@ -7610,7 +7611,7 @@ index 4e22ccfa..279427a3 100644
        if (event.key !== "Escape" && !isUndo) {
          return;
        }
-@@ -1810,19 +2016,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +2017,37 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -7650,7 +7651,7 @@ index 4e22ccfa..279427a3 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,10 +2062,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,10 +2063,14 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -7666,7 +7667,7 @@ index 4e22ccfa..279427a3 100644
      gridMinorTargetPx,
      canvasTransform,
      svgResult,
-@@ -1857,44 +2085,50 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2086,50 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -7727,7 +7728,7 @@ index 4e22ccfa..279427a3 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1921,15 +2155,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1921,15 +2156,19 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const applyActionWithFeedback = useCallback(
@@ -7756,7 +7757,7 @@ index 4e22ccfa..279427a3 100644
          evaluateOptions: { sourceFingerprint, textEngine: textEngineRef.current },
          parseOptions: { ...editParseOptions, propertyWriteMode: "drag-frame", sourceFingerprint }
        });
-@@ -1940,13 +2178,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1940,13 +2179,14 @@ export const CanvasPanel = memo(function CanvasPanel({
            setWarning(`${result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
          }
  
@@ -7772,7 +7773,7 @@ index 4e22ccfa..279427a3 100644
              precomputedResult: result
            });
          }
-@@ -1975,6 +2214,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2215,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -8016,7 +8017,7 @@ index 4e22ccfa..279427a3 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,69 +2531,281 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,69 +2532,281 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -8334,7 +8335,7 @@ index 4e22ccfa..279427a3 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2820,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2821,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -8342,7 +8343,7 @@ index 4e22ccfa..279427a3 100644
          return;
        }
  
-@@ -2141,7 +2828,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2829,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -8350,7 +8351,7 @@ index 4e22ccfa..279427a3 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2844,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2845,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -8358,7 +8359,7 @@ index 4e22ccfa..279427a3 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2858,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2859,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -8388,7 +8389,7 @@ index 4e22ccfa..279427a3 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3713,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3714,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -8396,7 +8397,7 @@ index 4e22ccfa..279427a3 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3064,9 +3767,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3768,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -8406,7 +8407,7 @@ index 4e22ccfa..279427a3 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3777,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3778,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -8414,7 +8415,7 @@ index 4e22ccfa..279427a3 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3848,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3849,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -8425,7 +8426,7 @@ index 4e22ccfa..279427a3 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3874,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3875,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -8435,7 +8436,7 @@ index 4e22ccfa..279427a3 100644
      ]
    );
  
-@@ -3192,6 +3896,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3897,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -8514,7 +8515,7 @@ index 4e22ccfa..279427a3 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3996,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3997,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -8533,7 +8534,7 @@ index 4e22ccfa..279427a3 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +4030,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4031,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -8544,7 +8545,7 @@ index 4e22ccfa..279427a3 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4053,312 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4054,312 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -8859,7 +8860,7 @@ index 4e22ccfa..279427a3 100644
    const {
      onViewportKeyDown,
      onViewportPaste,
-@@ -3306,6 +4386,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4387,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -8867,7 +8868,7 @@ index 4e22ccfa..279427a3 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4411,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4412,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -8892,7 +8893,7 @@ index 4e22ccfa..279427a3 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4529,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4530,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -8927,7 +8928,7 @@ index 4e22ccfa..279427a3 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4550,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4551,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -8935,7 +8936,7 @@ index 4e22ccfa..279427a3 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4564,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4565,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -8943,7 +8944,7 @@ index 4e22ccfa..279427a3 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4640,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4641,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -8952,7 +8953,7 @@ index 4e22ccfa..279427a3 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4685,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4686,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -8961,7 +8962,7 @@ index 4e22ccfa..279427a3 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4764,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4765,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -8985,7 +8986,7 @@ index 4e22ccfa..279427a3 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4877,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4878,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -8993,7 +8994,7 @@ index 4e22ccfa..279427a3 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4890,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4891,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -9001,7 +9002,7 @@ index 4e22ccfa..279427a3 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4901,260 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4902,250 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -9103,19 +9104,39 @@ index 4e22ccfa..279427a3 100644
 +      candidate.left + width <= stroke.left || candidate.left >= stroke.right || candidate.top + height <= stroke.top || candidate.top >= stroke.bottom) ?? corners[0];
 +    return { ...corner, maxHeight };
 +  })();
-+  // The selection control's own content height, measured, so placement can keep all of it on screen.
-+  const [selectionControlHeight, setSelectionControlHeight] = useState(112);
-+  const selectionControlObserver = useRef<MutationObserver | null>(null);
++  // The selection control's own content height at each width it has had, measured, so
++  // placement can keep all of it on screen. Its actions wrap, so a narrower control is taller.
++  const [selectionControlHeights, setSelectionControlHeights] = useState<ReadonlyMap<number, number>>(new Map());
++  const selectionControlObservers = useRef<{ content: MutationObserver; size: ResizeObserver } | null>(null);
 +  const measureSelectionControl = useCallback((element: HTMLDivElement | null) => {
-+    selectionControlObserver.current?.disconnect();
-+    selectionControlObserver.current = null;
++    selectionControlObservers.current?.content.disconnect();
++    selectionControlObservers.current?.size.disconnect();
++    selectionControlObservers.current = null;
 +    if (!element) return;
-+    const measure = () => setSelectionControlHeight(element.scrollHeight);
-+    const observer = new MutationObserver(measure);
-+    observer.observe(element, { childList: true, subtree: true, characterData: true });
-+    selectionControlObserver.current = observer;
-+    measure();
++    const measure = (known: ReadonlyMap<number, number>) => {
++      const width = parseFloat(element.style.width);
++      return known.get(width) === element.scrollHeight ? known : new Map(known).set(width, element.scrollHeight);
++    };
++    // New content makes every measured height stale; a new width only adds one.
++    const content = new MutationObserver(() => setSelectionControlHeights(measure(new Map())));
++    content.observe(element, { childList: true, subtree: true, characterData: true });
++    const size = new ResizeObserver(() => setSelectionControlHeights(measure));
++    size.observe(element);
++    selectionControlObservers.current = { content, size };
++    setSelectionControlHeights(measure(new Map()));
 +  }, []);
++  // What the pen can pick besides the selection, in SVG coordinates: the control stays off it.
++  const stripBlockerStrokes = useMemo(() => {
++    const strokes = new Map<string, Array<{ x: number; y: number }> | null>();
++    if (selectedElementIds.size === 0) return strokes;
++    for (const region of hitRegions) {
++      if (selectedElementIds.has(region.sourceId)) continue;
++      const known = strokes.get(region.sourceId);
++      const samples = known === null ? null : strokeSamples(region, canvasTransform.scale);
++      strokes.set(region.sourceId, samples && known !== null ? [...(known ?? []), ...samples] : null);
++    }
++    return strokes;
++  }, [canvasTransform.scale, hitRegions, selectedElementIds]);
 +  // The point is found when the delay ends, in the scene current then: a pen can go down while the scene still recomputes.
 +  const pointHoldActionsRef = useRef({ pointTargetAt, startHandleDrag });
 +  pointHoldActionsRef.current = { pointTargetAt, startHandleDrag };
@@ -9154,7 +9175,6 @@ index 4e22ccfa..279427a3 100644
 +    const topEdge = Math.max((viewport?.top ?? 0), insets.top) + 8;
 +    const bottomEdge = Math.min((viewport?.bottom ?? window.innerHeight), window.innerHeight - insets.bottom) - 8;
 +    const width = Math.max(0, Math.min(300, rightEdge - leftEdge));
-+    const height = Math.min(selectionControlHeight, Math.max(0, bottomEdge - topEdge));
 +    const bounds = [...selectedElementIds].flatMap((id) => {
 +      const box = sourceBoundsSvg.get(id) ?? scopeOverlay.boundsByScopeId.get(id);
 +      return box ? [box] : [];
@@ -9167,52 +9187,23 @@ index 4e22ccfa..279427a3 100644
 +      // The rotate handle stands above the selection; the control keeps clear of it too.
 +      top: toClientY(Math.min(...bounds.map((item) => item.minY))) - 8 - ROTATE_HANDLE_OFFSET_PX - 12, bottom: toClientY(Math.max(...bounds.map((item) => item.maxY))) + 8
 +    };
-+    const alongX = clamp(box.left, leftEdge, Math.max(leftEdge, rightEdge - width));
-+    const alongY = clamp(box.top, topEdge, Math.max(topEdge, bottomEdge - height));
-+    const candidates = [
-+      { left: alongX, top: box.bottom }, { left: alongX, top: box.top - height },
-+      { left: box.right, top: alongY }, { left: box.left - width, top: alongY }
-+    ];
 +    // The hint is pinned to the canvas bottom, so a control in its columns ends above it.
 +    const hint = selectionHintElement?.getBoundingClientRect();
-+    const floorAt = (left: number, controlWidth = width) => hint && hint.left < left + controlWidth && hint.right > left ? Math.min(bottomEdge, hint.top - 8) : bottomEdge;
-+    const fitting = candidates.filter((place) => place.left >= leftEdge && place.left + width <= rightEdge &&
-+      place.top >= topEdge && place.top + height <= floorAt(place.left));
-+    const others = [...sourceBoundsSvg].filter(([id]) => !selectedElementIds.has(id)).map(([, item]) => ({
-+      left: toClientX(item.minX), right: toClientX(item.maxX), top: toClientY(item.minY), bottom: toClientY(item.maxY)
++    const floorAt = (left: number, controlWidth: number) => hint && hint.left < left + controlWidth && hint.right > left ? Math.min(bottomEdge, hint.top - 8) : bottomEdge;
++    const others: StripBlocker[] = [...sourceBoundsSvg].filter(([id]) => !selectedElementIds.has(id)).map(([id, item]) => ({
++      bounds: { left: toClientX(item.minX), right: toClientX(item.maxX), top: toClientY(item.minY), bottom: toClientY(item.maxY) },
++      stroke: stripBlockerStrokes.get(id)?.map((point) => ({ x: toClientX(point.x), y: toClientY(point.y) })) ?? null
 +    }));
-+    const clearOfOthers = fitting.find((place) => others.every((item) => item.right <= place.left || item.left >= place.left + width ||
-+      item.bottom <= place.top || item.top >= place.top + height));
-+    const place = clearOfOthers ?? fitting[0];
-+    if (clearOfOthers) return { left: place.left, top: place.top, width, maxHeight: Math.max(0, floorAt(place.left) - place.top) };
-+    // A source pane can leave room beside a selection for a narrow, scrollable strip
-+    // even when every full-width position covers another drawable object.
-+    const narrowPlaces = [
-+      { left: box.left - Math.min(200, box.left - leftEdge), width: Math.min(200, box.left - leftEdge) },
-+      { left: box.right, width: Math.min(200, rightEdge - box.right) }
-+    ];
-+    for (const narrow of narrowPlaces) {
-+      if (narrow.width < 160) continue;
-+      const top = clamp(box.top, topEdge, Math.max(topEdge, floorAt(narrow.left, narrow.width) - height));
-+      if (narrow.left < leftEdge || narrow.left + narrow.width > rightEdge || top + height > floorAt(narrow.left, narrow.width)) continue;
-+      if (others.some((item) => item.right > narrow.left && item.left < narrow.left + narrow.width &&
-+        item.bottom > top && item.top < top + height)) continue;
-+      return { left: narrow.left, top, width: narrow.width, maxHeight: Math.max(0, floorAt(narrow.left, narrow.width) - top) };
-+    }
-+    if (place) return { left: place.left, top: place.top, width, maxHeight: Math.max(0, floorAt(place.left) - place.top) };
-+    // Nothing holds the whole control: take the roomier side above or below the
-+    // selection, still clear of it, and let the control scroll within that side.
-+    const roomBelow = floorAt(alongX) - Math.max(box.bottom, topEdge);
-+    const roomAbove = Math.min(box.top, floorAt(alongX)) - topEdge;
-+    // If the selection fills the view there is no side to use. Keep the
-+    // actions reachable in the canvas area left of the floating panel.
-+    // A zero-height scroll box still paints its padding and hides its actions.
-+    if (Math.max(roomBelow, roomAbove) < 62) return {
-+      left: leftEdge, top: topEdge, width, maxHeight: Math.max(0, bottomEdge - topEdge)
-+    };
-+    return roomBelow >= roomAbove
-+      ? { left: alongX, top: Math.max(box.bottom, topEdge), width, maxHeight: Math.max(0, roomBelow) }
-+      : { left: alongX, top: topEdge + Math.max(0, roomAbove - height), width, maxHeight: Math.max(0, roomAbove) };
++    // A width not yet measured takes a measured height until its own arrives.
++    const anyHeight: number = selectionControlHeights.values().next().value ?? 112;
++    const place = (blockers: readonly StripBlocker[]) => placeSelectionStrip({
++      area: { left: leftEdge, top: topEdge, right: rightEdge, bottom: bottomEdge }, floorAt, subject: box, blockers, width,
++      heightAt: (controlWidth) => Math.min(selectionControlHeights.get(controlWidth) ?? anyHeight, Math.max(0, bottomEdge - topEdge))
++    });
++    // With no place clear of the other objects, the control may cover one. If the
++    // selection fills the view there is no side to use: the actions stay reachable
++    // in the corner of the canvas area the rail leaves free.
++    return place(others) ?? place([]) ?? { left: leftEdge, top: topEdge, width, maxHeight: Math.max(0, bottomEdge - topEdge) };
 +  })();
 +
 +  // When the rail, the properties panel, or the keyboard takes more of the canvas,
@@ -9262,7 +9253,7 @@ index 4e22ccfa..279427a3 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5174,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5165,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -9285,7 +9276,7 @@ index 4e22ccfa..279427a3 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5205,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5196,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -9301,7 +9292,7 @@ index 4e22ccfa..279427a3 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +5231,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5222,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -9335,7 +9326,7 @@ index 4e22ccfa..279427a3 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5263,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5254,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -9345,7 +9336,7 @@ index 4e22ccfa..279427a3 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5276,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5267,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -9380,7 +9371,7 @@ index 4e22ccfa..279427a3 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5330,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5321,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -9388,7 +9379,7 @@ index 4e22ccfa..279427a3 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5339,61 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5330,61 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -9937,11 +9928,11 @@ index 00000000..ccd0bb61
 +.stripRow button { flex: 1 1 auto; padding: 4px 10px; }
 diff --git a/packages/app/src/ui/canvas-panel/SelectionStrip.tsx b/packages/app/src/ui/canvas-panel/SelectionStrip.tsx
 new file mode 100644
-index 00000000..7a32a8e1
+index 00000000..f63283aa
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/SelectionStrip.tsx
-@@ -0,0 +1,52 @@
-+import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type Ref } from "react";
+@@ -0,0 +1,62 @@
++import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type Ref } from "react";
 +import type { AppMenuCommandId, AppMenuItem } from "../../app-menu";
 +import type { CommandBindings, CommandOrigin } from "../editor-command-runtime";
 +import { ContextMenuPopup, applicableContextItems } from "../CanvasContextMenu";
@@ -9973,11 +9964,21 @@ index 00000000..7a32a8e1
 +  const [openMenu, setOpenMenu] = useState<string | null>(null);
 +  const shownMenus = menus.filter((menu) => applicableContextItems(menu.items, bindings).length > 0);
 +  const expanded = shownMenus.find((menu) => menu.label === openMenu) ?? null;
++  // A place too short for the whole strip shows the actions, not the scope line:
++  // the strip starts scrolled to its first row, and the author can scroll back.
++  const rowRef = useRef<HTMLDivElement>(null);
++  useLayoutEffect(() => {
++    const row = rowRef.current;
++    const strip = row?.parentElement;
++    if (!row || !strip) return;
++    const padding = parseFloat(getComputedStyle(strip).paddingTop);
++    strip.scrollTop = strip.scrollHeight > strip.clientHeight ? row.offsetTop - padding : 0;
++  }, [scope, style.maxHeight, style.width]);
 +  return (
 +    <div ref={measureRef} role="toolbar" aria-label="Selection" className={`${css.rangeControls} ${css.strip}`} style={style}
 +      onPointerDown={(event) => event.stopPropagation()}>
 +      <span className={css.scope}>{scope}</span>
-+      <div className={css.stripRow}>
++      <div ref={rowRef} className={css.stripRow}>
 +        {lock ? <button type="button" className={css.lockToggle} aria-pressed={lock.locked} onClick={lock.toggle}>
 +          <span aria-hidden="true">{lock.locked ? "🔒" : "🔓"}</span>Lock
 +        </button> : null}
@@ -12313,6 +12314,147 @@ index 0766ca92..e319bfa7 100644
        continue;
      }
      const ancestors = scopeOverlay.ancestorScopeIdsBySourceId.get(sourceId) ?? [];
+diff --git a/packages/app/src/ui/canvas-panel/selection-strip-place.ts b/packages/app/src/ui/canvas-panel/selection-strip-place.ts
+new file mode 100644
+index 00000000..009c058d
+--- /dev/null
++++ b/packages/app/src/ui/canvas-panel/selection-strip-place.ts
+@@ -0,0 +1,135 @@
++import type paper from "paper";
++import type { HitRegion } from "./hit-regions";
++import { geometryScope } from "./paper-scope";
++
++type Point = { x: number; y: number };
++type Box = { left: number; top: number; right: number; bottom: number };
++
++/** Another object the pen can pick: its bounds, and its stroke when only the stroke takes the pen. */
++export type StripBlocker = { bounds: Box; stroke: readonly Point[] | null };
++export type StripPlace = { left: number; top: number; width: number; maxHeight: number };
++
++/** The strip beside a selection is this wide when its full width does not fit there; its actions wrap. */
++export const NARROW_STRIP_WIDTH = 160;
++/** The scope line and one row of actions: a shorter place is no place. */
++const MIN_STRIP_HEIGHT = 62;
++/** How far from a stroke the pen still picks it; the strip keeps this far away. */
++const PICK_REACH_PX = 12;
++/** Stroke samples lie at most this far apart on screen, well inside the pick reach. */
++const SAMPLE_STEP_PX = 6;
++
++/**
++ * Points along the stroke of a region that takes the pen on its stroke only, in the
++ * region's SVG coordinates; null for a region that takes the pen anywhere inside it.
++ */
++export function strokeSamples(region: HitRegion, scale: number): Point[] | null {
++  if (region.pointerMode !== "stroke") return null;
++  const step = SAMPLE_STEP_PX / Math.max(scale, 1e-3);
++  if (region.shape === "circle" || region.shape === "ellipse") {
++    const rx = region.shape === "circle" ? region.r : region.rx;
++    const ry = region.shape === "circle" ? region.r : region.ry;
++    const turn = region.shape === "ellipse" ? (-region.rotation * Math.PI) / 180 : 0;
++    const count = Math.max(8, Math.ceil((2 * Math.PI * Math.max(rx, ry)) / step));
++    return Array.from({ length: count }, (_, index) => {
++      const angle = (2 * Math.PI * index) / count;
++      const x = rx * Math.cos(angle), y = ry * Math.sin(angle);
++      return { x: region.cx + x * Math.cos(turn) - y * Math.sin(turn), y: region.cy + x * Math.sin(turn) + y * Math.cos(turn) };
++    });
++  }
++  if (region.shape !== "path") return null;
++  const scope = geometryScope();
++  const item = new scope.CompoundPath({ pathData: region.d, insert: false });
++  if (region.transform) {
++    const { a, b, c, d, e, f } = region.transform;
++    item.transform(new scope.Matrix(a, b, c, d, e, f));
++  }
++  const points: Point[] = [];
++  for (const path of item.children as paper.Path[]) {
++    // The segment points bound the walk: getPointAt gives null for an offset that
++    // rounding puts past the end, and for every offset on a path of no length.
++    for (const segment of path.segments) points.push({ x: segment.point.x, y: segment.point.y });
++    const count = Math.ceil(path.length / step);
++    for (let index = 1; index < count; index++) {
++      const point = path.getPointAt((path.length * index) / count);
++      points.push({ x: point.x, y: point.y });
++    }
++  }
++  item.remove();
++  return points;
++}
++
++/** The rows a blocker takes within the columns from `left` to `right`, or null when it takes none there. */
++function rowsIn(blocker: StripBlocker, left: number, right: number): [number, number] | null {
++  if (blocker.bounds.right <= left || blocker.bounds.left >= right) return null;
++  if (!blocker.stroke) return [blocker.bounds.top, blocker.bounds.bottom];
++  const rows = blocker.stroke.filter((point) => point.x > left - PICK_REACH_PX && point.x < right + PICK_REACH_PX).map((point) => point.y);
++  return rows.length === 0 ? null : [Math.min(...rows) - PICK_REACH_PX, Math.max(...rows) + PICK_REACH_PX];
++}
++
++/**
++ * The place for the selection strip: below, above, right of, or left of the selection,
++ * inside `area`, clear of the selection and of every blocker. The first place that holds
++ * the whole strip wins. If none does, the strip takes the tallest clear place and scrolls
++ * there. The result is null when no clear place holds even one row of actions.
++ */
++export function placeSelectionStrip({ area, floorAt, subject, blockers, width, heightAt }: {
++  /** The canvas area the strip may use. */
++  area: Box;
++  /** The lowest edge a strip in the given columns may reach. */
++  floorAt: (left: number, width: number) => number;
++  /** The selection with its handles. */
++  subject: Box;
++  blockers: readonly StripBlocker[];
++  /** The strip's full width. */
++  width: number;
++  /** The height the strip's actions take at a width. */
++  heightAt: (width: number) => number;
++}): StripPlace | null {
++  const places: Array<StripPlace & { needed: number }> = [];
++  const taken = (left: number, columnWidth: number) => blockers.flatMap((blocker) => {
++    const rows = rowsIn(blocker, left, left + columnWidth);
++    return rows ? [rows] : [];
++  });
++
++  const stackedLeft = Math.min(Math.max(subject.left, area.left), Math.max(area.left, area.right - width));
++  const stackedRows = taken(stackedLeft, width);
++  const stackedFloor = floorAt(stackedLeft, width);
++  const stackedHeight = heightAt(width);
++  const belowTop = Math.max(subject.bottom, area.top);
++  const belowEnd = Math.min(stackedFloor, ...stackedRows.filter(([, bottom]) => bottom > belowTop).map(([top]) => top));
++  places.push({ left: stackedLeft, top: belowTop, width, maxHeight: belowEnd - belowTop, needed: stackedHeight });
++  const aboveEnd = Math.min(subject.top, stackedFloor);
++  const aboveStart = Math.max(area.top, ...stackedRows.filter(([top]) => top < aboveEnd).map(([, bottom]) => bottom));
++  const aboveTop = Math.max(aboveStart, aboveEnd - stackedHeight);
++  places.push({ left: stackedLeft, top: aboveTop, width, maxHeight: aboveEnd - aboveTop, needed: stackedHeight });
++
++  for (const side of ["right", "left"] as const) {
++    const room = side === "right" ? area.right - subject.right : subject.left - area.left;
++    const sideWidth = room >= width ? width : NARROW_STRIP_WIDTH;
++    if (room < sideWidth || width < sideWidth) continue;
++    const left = side === "right" ? subject.right : subject.left - sideWidth;
++    const needed = heightAt(sideWidth);
++    const floor = floorAt(left, sideWidth);
++    // The clear spans of the column, top to bottom.
++    const spans: Array<[number, number]> = [];
++    let spanTop = area.top;
++    for (const [top, bottom] of taken(left, sideWidth).sort((a, b) => a[0] - b[0])) {
++      if (top > spanTop) spans.push([spanTop, Math.min(top, floor)]);
++      spanTop = Math.max(spanTop, bottom);
++    }
++    if (floor > spanTop) spans.push([spanTop, floor]);
++    const inSpan = spans.map(([top, bottom]) => {
++      const placed = Math.min(Math.max(subject.top, top), Math.max(top, bottom - needed));
++      return { left, top: placed, width: sideWidth, maxHeight: bottom - placed, needed };
++    });
++    const whole = inSpan.filter((place) => place.maxHeight >= needed)
++      .sort((a, b) => Math.abs(a.top - subject.top) - Math.abs(b.top - subject.top))[0];
++    const tallest = [...inSpan].sort((a, b) => b.maxHeight - a.maxHeight)[0];
++    const best = whole ?? tallest;
++    if (best) places.push(best);
++  }
++
++  const chosen = places.find((place) => place.maxHeight >= place.needed) ??
++    places.filter((place) => place.maxHeight >= MIN_STRIP_HEIGHT).sort((a, b) => b.maxHeight - a.maxHeight)[0];
++  return chosen ? { left: chosen.left, top: chosen.top, width: chosen.width, maxHeight: chosen.maxHeight } : null;
++}
 diff --git a/packages/app/src/ui/canvas-panel/semantic-curve-edit.ts b/packages/app/src/ui/canvas-panel/semantic-curve-edit.ts
 new file mode 100644
 index 00000000..61a7b3a6
