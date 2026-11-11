@@ -6493,6 +6493,162 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `erases only the swept part of a circle, an ellipse, an arc path, and a rectangle, each sweep one undo step, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const authored = String.raw`\begin{tikzpicture}
+\draw (-4,0) circle (2);
+\draw (2,0) ellipse (3 and 1.5);
+\draw (-6,-6) -- (-3,-6) arc[start angle=180, end angle=0, radius=2] -- (4,-6);
+\draw (-6,3) rectangle (-2,5);
+\end{tikzpicture}`;
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator("[data-source-id]")).toHaveCount(4);
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        await input.touch([
+          await stableCenter(frame.getByRole("button", { name: "Eraser", exact: true })),
+        ]);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const statements = async () =>
+          (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ?? ([] as string[]);
+        // Each shape's top point is the top centre of its box; a short vertical sweep crosses only that point.
+        const sweepTop = async (statement: string) => {
+          await editorReady(page);
+          const index = (await statements()).indexOf(statement);
+          const box = await frame
+            .locator("[data-source-id]")
+            .nth(index)
+            .evaluate((node) => {
+              const rect = node.getBoundingClientRect();
+              return { x: rect.x + rect.width / 2, y: rect.y };
+            });
+          const x = frameBox.x + box.x,
+            top = frameBox.y + box.y;
+          await input.penStroke(
+            Array.from({ length: 11 }, (_, i) => ({ x, y: top - 25 + i * 5 })),
+          );
+        };
+        const number = String.raw`(-?\d+(?:\.\d+)?)`;
+        const arcOf = (statement: string) => {
+          const match = new RegExp(
+            String.raw`\(${number},\s*${number}\)\s*arc\s*\[start angle=${number},\s*end angle=${number},\s*(?:radius=${number}|x radius=${number},\s*y radius=${number})\]`,
+          ).exec(statement);
+          assert.ok(match, `No arc in ${statement}`);
+          const [x, y, start, end, radius, xRadius, yRadius] = match.slice(1).map(Number);
+          return { x, y, start, end, rx: match[5] ? radius : xRadius, ry: match[5] ? radius : yRadius };
+        };
+        const radians = (degrees: number) => (degrees * Math.PI) / 180;
+        // The remaining arc of a closed curve centred at `centre`: its radii, its start on the curve, and a small gap around the top.
+        const assertOpenedAtTop = (
+          statement: string,
+          centre: { x: number; y: number },
+          rx: number,
+          ry: number,
+        ) => {
+          const arc = arcOf(statement);
+          assert.ok(
+            Math.abs(arc.rx - rx) < 0.01 && Math.abs(arc.ry - ry) < 0.01,
+            `Radii changed: ${statement}`,
+          );
+          assert.ok(
+            Math.abs(arc.x - (centre.x + rx * Math.cos(radians(arc.start)))) < 0.02 &&
+              Math.abs(arc.y - (centre.y + ry * Math.sin(radians(arc.start)))) < 0.02,
+            `The arc does not start on the authored curve: ${statement}`,
+          );
+          const gap = 360 - Math.abs(arc.end - arc.start);
+          assert.ok(gap > 2 && gap < 40, `The erased gap is ${gap} degrees: ${statement}`);
+          assert.ok(
+            Math.sin(radians((arc.start + arc.end) / 2)) < -0.99,
+            `The gap is not at the top: ${statement}`,
+          );
+        };
+
+        const [circle, ellipse, arcPath, rectangle] = await statements();
+        await sweepTop(circle);
+        await expect
+          .poll(async () => (await statements()).includes(circle), {
+            message: "The sweep left the circle unchanged",
+          })
+          .toBe(false);
+        let drawn = await statements();
+        assert.equal(drawn.length, 4, `The circle is not one remaining arc: ${drawn.join(" ")}`);
+        assertOpenedAtTop(drawn[0], { x: -4, y: 0 }, 2, 2);
+        assert.deepEqual(drawn.slice(1), [ellipse, arcPath, rectangle]);
+
+        await sweepTop(ellipse);
+        await expect.poll(async () => (await statements()).includes(ellipse)).toBe(false);
+        drawn = await statements();
+        assert.equal(drawn.length, 4, `The ellipse is not one remaining arc: ${drawn.join(" ")}`);
+        assertOpenedAtTop(drawn[1], { x: 2, y: 0 }, 3, 1.5);
+
+        await sweepTop(arcPath);
+        await expect.poll(async () => (await statements()).includes(arcPath)).toBe(false);
+        drawn = await statements();
+        assert.equal(drawn.length, 5, `The arc path is not two pieces: ${drawn.join(" ")}`);
+        const [before, after] = drawn.slice(2, 4);
+        assert.match(
+          before,
+          /^\\draw \(-6,-6\) -- \(-3,-6\) arc\s*\[start angle=180, end angle=[\d.]+, radius=2\];$/,
+        );
+        const beforeArc = arcOf(before);
+        assert.ok(beforeArc.end > 91 && beforeArc.end < 110, `The first piece ends at ${beforeArc.end}`);
+        assert.match(after, /arc\s*\[start angle=[\d.]+, end angle=0, radius=2\] -- \(4,-6\);$/);
+        const afterArc = arcOf(after);
+        assert.ok(afterArc.start > 70 && afterArc.start < 89, `The second piece starts at ${afterArc.start}`);
+        assert.ok(
+          Math.abs(afterArc.x - (-1 + 2 * Math.cos(radians(afterArc.start)))) < 0.02 &&
+            Math.abs(afterArc.y - (-6 + 2 * Math.sin(radians(afterArc.start)))) < 0.02,
+          `The second piece does not start on the authored arc: ${after}`,
+        );
+
+        const beforeRectangleSweep = (await editorDebug(page)).source;
+        await sweepTop(rectangle);
+        await expect.poll(async () => (await statements()).includes(rectangle)).toBe(false);
+        drawn = await statements();
+        assert.equal(drawn.length, 5, `The rectangle is not one open outline: ${drawn.join(" ")}`);
+        const outline = [...drawn[4].matchAll(new RegExp(String.raw`\(${number},\s*${number}\)`, "g"))].map(
+          (match) => ({ x: Number(match[1]), y: Number(match[2]) }),
+        );
+        assert.doesNotMatch(drawn[4], /rectangle|cycle|controls|arc/);
+        assert.equal(outline.length, 6, `The outline is ${drawn[4]}`);
+        const ends = [outline[0], outline[5]].sort((a, b) => a.x - b.x);
+        assert.ok(
+          ends.every((point) => Math.abs(point.y - 5) < 0.01) &&
+            ends[0].x > -5 &&
+            ends[0].x < -4 &&
+            ends[1].x > -4 &&
+            ends[1].x < -3,
+          `The outline does not open around the top centre: ${drawn[4]}`,
+        );
+        assert.deepEqual(
+          outline
+            .slice(1, 5)
+            .map((point) => `${point.x},${point.y}`)
+            .sort(),
+          ["-2,3", "-2,5", "-6,3", "-6,5"],
+        );
+        // One sweep is one undo step.
+        await input.touch([
+          await stableCenter(
+            frame
+              .locator("[data-diagram-tools]")
+              .getByRole("button", { name: "Undo", exact: true }),
+          ),
+        ]);
+        await expect
+          .poll(async () => (await editorDebug(page)).source)
+          .toBe(beforeRectangleSweep);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `shows a tapped element's source in the code pane, even one opened afterward, in ${tablet.name}`,
       async function () {
         await editorReady(page);
