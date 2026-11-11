@@ -43,10 +43,7 @@ describe("standalone workbench host boundary", function () {
   let page: Page;
   let url: string;
 
-  type StorySetup = {
-    viewport?: { width: number; height: number };
-    initialPage?: "blank";
-  };
+  type StorySetup = { viewport?: { width: number; height: number }; initialPage?: "blank" };
   const storySetups = new Map<string, StorySetup>();
   function story(setup: StorySetup, title: string, run: Mocha.AsyncFunc): void {
     storySetups.set(title, setup);
@@ -62,9 +59,7 @@ describe("standalone workbench host boundary", function () {
     rule: SnapRule,
     on: boolean,
   ): Promise<void> {
-    const trigger = frame
-      .locator("[data-diagram-tools]")
-      .getByRole("button", { name: /^Snap: / });
+    const trigger = frame.locator("[data-diagram-tools]").getByRole("button", { name: /^Snap: / });
     await input.touch([await stableCenter(trigger)]);
     const popup = frame.getByRole("dialog", { name: "Tool options" });
     const toggle = popup.getByRole("button", { name: rule, exact: true });
@@ -78,9 +73,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   async function snapshotResult(): Promise<EditorSnapshotResult> {
-    return snapshotResultSchema.parse(
-      JSON.parse(await page.locator("#result").innerText()),
-    );
+    return snapshotResultSchema.parse(JSON.parse(await page.locator("#result").innerText()));
   }
 
   async function readySnapshot(): Promise<EditorSnapshot> {
@@ -94,12 +87,9 @@ describe("standalone workbench host boundary", function () {
   async function hostSnapshot(): Promise<EditorSnapshot> {
     for (let attempt = 0; attempt < 3; attempt++) {
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText(
-        /Snapshot ready|Snapshot failed/,
-        {
-          timeout: 12000,
-        },
-      );
+      await expect(page.locator("#status")).toHaveText(/Snapshot ready|Snapshot failed/, {
+        timeout: 12000,
+      });
       const result = await snapshotResult();
       if (result.status === "ready") {
         return result;
@@ -107,13 +97,9 @@ describe("standalone workbench host boundary", function () {
       if (result.error !== "source-changed") {
         throw new Error(`Snapshot failed: ${result.error}`);
       }
-      await page
-        .getByRole("button", { name: "Copy current source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
     }
-    throw new Error(
-      "Source changed during three consecutive snapshot requests",
-    );
+    throw new Error("Source changed during three consecutive snapshot requests");
   }
 
   async function paintedGeometry(svg: string): Promise<string[][]> {
@@ -126,18 +112,9 @@ describe("standalone workbench host boundary", function () {
               "path[data-source-id],circle[data-source-id],ellipse[data-source-id],rect[data-source-id]",
             ),
         ].map((element) =>
-          [
-            "d",
-            "cx",
-            "cy",
-            "r",
-            "x",
-            "y",
-            "width",
-            "height",
-            "stroke",
-            "fill",
-          ].map((attribute) => element.getAttribute(attribute) ?? ""),
+          ["d", "cx", "cy", "r", "x", "y", "width", "height", "stroke", "fill"].map(
+            (attribute) => element.getAttribute(attribute) ?? "",
+          ),
         ),
       svg,
     );
@@ -154,11 +131,7 @@ describe("standalone workbench host boundary", function () {
     const setup = storySetups.get(this.currentTest!.title);
     const viewport = setup?.viewport;
     context = await browser.newContext(viewport ? { viewport } : {});
-    await context.tracing.start({
-      screenshots: true,
-      snapshots: true,
-      sources: true,
-    });
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
     await startPageCoverage(page);
     await page.request.post(`${url}api/new`, { data: "tikzpicture" });
@@ -167,12 +140,8 @@ describe("standalone workbench host boundary", function () {
     }
     await page.goto(url);
     if (!viewport) {
-      await page
-        .getByRole("button", { name: "Code: left sidebar", exact: true })
-        .click();
-      await expect(page.locator(".cm-content")).toBeVisible({
-        timeout: 30_000,
-      });
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+      await expect(page.locator(".cm-content")).toBeVisible({ timeout: 30_000 });
     }
     await editorReady(page);
   });
@@ -181,9 +150,7 @@ describe("standalone workbench host boundary", function () {
     const name = this.currentTest!.title.replace(/[^a-z0-9]+/gi, "-");
     try {
       await storyScreenshot(page, name);
-      await context.tracing.stop({
-        path: `test-results/workbench/${name}.zip`,
-      });
+      await context.tracing.stop({ path: `test-results/workbench/${name}.zip` });
       await stopPageCoverage(page);
       // A rerun overwrites the trace above, so a failure also keeps its own copy for intermittent failures.
       if (this.currentTest!.state === "failed") {
@@ -210,50 +177,27 @@ describe("standalone workbench host boundary", function () {
     "keeps authored source through a render error and recovers in the dark tablet workspace",
     async function () {
       await editorReady(page);
-      await page
-        .getByRole("button", { name: "Code: left sidebar", exact: true })
-        .click();
-      await page
-        .getByRole("button", { name: "Dark theme", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+      await page.getByRole("button", { name: "Dark theme", exact: true }).click();
       const valid = String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (1cm);\end{tikzpicture}`;
       await page.locator(".cm-content").fill(valid);
-      await page
-        .getByRole("button", { name: "Preview: right sidebar", exact: true })
-        .click();
-      await expect(page.locator(".tikz-view-status")).toContainText(
-        "Up to date",
-        {
-          timeout: 40000,
-        },
-      );
-      const invalid = valid.replace(
-        "\\draw",
-        "\\thisCommandDoesNotExist\\draw",
-      );
-      await page.locator(".cm-content").fill(invalid);
-      await expect(page.locator(".tikz-compiler-preview-error")).toBeVisible({
+      await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+      await expect(page.locator(".tikz-view-status")).toContainText("Up to date", {
         timeout: 40000,
       });
+      const invalid = valid.replace("\\draw", "\\thisCommandDoesNotExist\\draw");
+      await page.locator(".cm-content").fill(invalid);
+      await expect(page.locator(".tikz-compiler-preview-error")).toBeVisible({ timeout: 40000 });
       assert.equal(await page.locator(".cm-content").innerText(), invalid);
-      await page.screenshot({
-        path: "test-results/workbench/dark-tablet-render-error.png",
-      });
+      await page.screenshot({ path: "test-results/workbench/dark-tablet-render-error.png" });
       await page.locator(".cm-content").fill(valid);
-      await expect(page.locator(".tikz-view-status")).toContainText(
-        "Up to date",
-        {
-          timeout: 40000,
-        },
-      );
+      await expect(page.locator(".tikz-view-status")).toContainText("Up to date", {
+        timeout: 40000,
+      });
       await expect(page.locator(".tikz-compiler-preview-error")).toHaveCount(0);
-      await page
-        .getByRole("button", { name: "Canvas: right sidebar", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Canvas: right sidebar", exact: true }).click();
       await expect(
-        page
-          .frameLocator('iframe[title="TikZ visual editor"]')
-          .locator("circle[data-source-id]"),
+        page.frameLocator('iframe[title="TikZ visual editor"]').locator("circle[data-source-id]"),
       ).toBeInViewport();
       assert.equal(await page.locator(".cm-content").innerText(), valid);
     },
@@ -266,29 +210,24 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('[data-canvas-viewport="true"]'),
-        ).toBeVisible();
+        await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
         const input = await TabletInput.attach(page);
         const tap = async (locator: ReturnType<typeof frame.getByRole>) => {
           await expect(locator).toBeInViewport({ ratio: 1 });
           const box = (await locator.boundingBox())!;
-          await input.touch([
-            { x: box.x + box.width / 2, y: box.y + box.height / 2 },
-          ]);
+          await input.touch([{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]);
         };
         const before = await editorDebug(page);
-        await tap(
-          frame.getByRole("button", { name: "Zoom and display", exact: true }),
-        );
+        await tap(frame.getByRole("button", { name: "Zoom and display", exact: true }));
         await tap(frame.getByRole("button", { name: "Rulers", exact: true }));
         await tap(frame.getByRole("button", { name: "200%", exact: true }));
         const after = await editorDebug(page);
         assert.equal(after.canvasAids.rulers, !before.canvasAids.rulers);
         assert.notEqual(after.viewport.scale, before.viewport.scale);
-        await expect(
-          frame.getByRole("button", { name: "200%", exact: true }),
-        ).toHaveAttribute("aria-pressed", "true");
+        await expect(frame.getByRole("button", { name: "200%", exact: true })).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        );
       },
     );
   }
@@ -299,25 +238,17 @@ describe("standalone workbench host boundary", function () {
       `lands drawn points on the lattice by default, under a lock toggle on the rail, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -326,18 +257,12 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
         const rail = frame.locator("[data-diagram-tools]");
         const drawLine = async () => {
-          const [[origin, xTen], [, yTen]] = [
-            await ends("path:0"),
-            await ends("path:1"),
-          ];
+          const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
           // Screen position of lattice coordinates (x, y), from the two reference segments of length 10.
           const at = (x: number, y: number) => ({
             x:
@@ -352,27 +277,15 @@ describe("standalone workbench host boundary", function () {
               ((yTen.y - origin.y) * y) / 10,
           });
           await input.touch([
-            await stableCenter(
-              rail.getByRole("button", { name: "Geometry", exact: true }),
-            ),
+            await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
           ]);
           await input.touch([
-            await stableCenter(
-              frame.getByRole("option", { name: "Line", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
           ]);
           const [from, to] = [at(3.5, 2.5), at(6.5, 4.5)];
-          await input.penStroke([
-            from,
-            { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
-            to,
-          ]);
+          await input.penStroke([from, { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }, to]);
           await expect
-            .poll(
-              async () =>
-                ((await editorDebug(page)).source.match(/\\draw/g) ?? [])
-                  .length,
-            )
+            .poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length)
             .toBeGreaterThan(2);
           const lines = (await editorDebug(page)).source
             .split("\n")
@@ -380,21 +293,13 @@ describe("standalone workbench host boundary", function () {
             .filter((line) => line.startsWith("\\draw"));
           const added = lines[lines.length - 1];
           await input.touch([
-            await stableCenter(
-              rail.getByRole("button", { name: "Undo", exact: true }),
-            ),
+            await stableCenter(rail.getByRole("button", { name: "Undo", exact: true })),
           ]);
           // The next line must not be read back from this one: wait for the undo to land.
           await expect
-            .poll(
-              async () =>
-                ((await editorDebug(page)).source.match(/\\draw/g) ?? [])
-                  .length,
-            )
+            .poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length)
             .toBe(2);
-          return [...added.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) =>
-            Number(match[0]),
-          );
+          return [...added.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
         };
         const locked = await drawLine();
         assert.ok(
@@ -406,15 +311,10 @@ describe("standalone workbench host boundary", function () {
         await setSnapRule(frame, input, "Lattice", false);
         await expect(snap).toHaveAccessibleName("Snap: objects");
         // Zoomed out, a lattice cell is a few pixels wide: points still move freely.
-        const zoom = rail.getByRole("button", {
-          name: "Zoom and display",
-          exact: true,
-        });
+        const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
         await input.touch([await stableCenter(zoom)]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "5%", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "5%", exact: true })),
         ]);
         await input.touch([await stableCenter(zoom)]);
         await expect(zoom).toHaveText("5%");
@@ -433,23 +333,18 @@ describe("standalone workbench host boundary", function () {
       `shows one snap control naming the active rule, with lattice, object, alignment and angle snapping behind it, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \node[draw] (A) at (5,5) {A};
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const node = frame.locator('svg [data-source-id="path:2"]').first();
         await expect(node).toBeAttached();
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         await fitDiagram(frame, input);
         const rail = frame.locator("[data-diagram-tools]");
         const popup = frame.getByRole("dialog", { name: "Tool options" });
@@ -463,25 +358,17 @@ describe("standalone workbench host boundary", function () {
           rail.getByRole("button", { name: "Constrain geometry", exact: true }),
         ).toHaveCount(0);
         // The zoom popup keeps the view settings only.
-        const zoom = rail.getByRole("button", {
-          name: "Zoom and display",
-          exact: true,
-        });
+        const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
         await tap(zoom);
-        await expect(
-          popup.getByRole("button", { name: "Grid", exact: true }),
-        ).toBeVisible();
+        await expect(popup.getByRole("button", { name: "Grid", exact: true })).toBeVisible();
         for (const name of ["Lattice", "Objects", "Alignment", "Angle"]) {
-          await expect(
-            popup.getByRole("button", { name, exact: true }),
-          ).toHaveCount(0);
+          await expect(popup.getByRole("button", { name, exact: true })).toHaveCount(0);
         }
         await tap(zoom);
         await expect(popup).toHaveCount(0);
         // The snap control shows every rule with its state.
         await tap(snap);
-        const rule = (name: SnapRule) =>
-          popup.getByRole("button", { name, exact: true });
+        const rule = (name: SnapRule) => popup.getByRole("button", { name, exact: true });
         for (const [name, pressed] of [
           ["Lattice", "true"],
           ["Objects", "true"],
@@ -508,12 +395,7 @@ describe("standalone workbench host boundary", function () {
             snapAlignment: canvas.snapAlignment,
             constrainGeometry: canvas.constrainGeometry,
           },
-          {
-            latticeLock: false,
-            snapObjects: false,
-            snapAlignment: false,
-            constrainGeometry: true,
-          },
+          { latticeLock: false, snapObjects: false, snapAlignment: false, constrainGeometry: true },
         );
         await tap(rule("Angle"));
         await tap(rule("Objects"));
@@ -523,9 +405,7 @@ describe("standalone workbench host boundary", function () {
         // Object snapping: a line started at the node's edge is attached to the node in the source.
         const drawFromNodeEdge = async () => {
           const box = (await node.boundingBox())!;
-          await tap(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          );
+          await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
           await tap(frame.getByRole("option", { name: "Line", exact: true }));
           const from = { x: box.x + box.width, y: box.y + box.height / 2 };
           await input.penStroke([
@@ -571,9 +451,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         // Axes of length 10; a line off the lattice; two crossing lines; a circle; a circle whose
         // left edge x = 2.4 competes with the endpoint (2.3,1.4) as an alignment guide.
-        const figure = (
-          options: string,
-        ) => String.raw`\begin{tikzpicture}${options}
+        const figure = (options: string) => String.raw`\begin{tikzpicture}${options}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \draw (2.3,1.4) -- (5.3,3.4);
@@ -583,27 +461,18 @@ describe("standalone workbench host boundary", function () {
 \draw (3,9.6) circle (0.6);
 \end{tikzpicture}`;
         const load = async (source: string) => {
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await page.locator(".cm-content").fill(source);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
-          await expect
-            .poll(async () => (await editorDebug(page)).source.trim())
-            .toBe(source);
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await expect.poll(async () => (await editorDebug(page)).source.trim()).toBe(source);
           await editorReady(page);
         };
         await load(figure(""));
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -612,18 +481,12 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
         // Screen position of lattice coordinates (x, y), from the two axes of length 10.
         const lattice = async () => {
-          const [[origin, xTen], [, yTen]] = [
-            await ends("path:0"),
-            await ends("path:1"),
-          ];
+          const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
           return (x: number, y: number) => ({
             x:
               frameBox.x +
@@ -638,8 +501,7 @@ describe("standalone workbench host boundary", function () {
           });
         };
         const target = frame.locator("[data-snap-target]").first();
-        const draws = async () =>
-          ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
         // Hovers a pen at `start`, checks the named target, draws a line to `end` whose target is
         // named too, and returns the committed line's coordinates after undoing it.
         const draw = async (
@@ -648,17 +510,12 @@ describe("standalone workbench host boundary", function () {
           end: { x: number; y: number },
           endTarget: string,
         ) => {
-          await tap(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          );
+          await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
           await tap(frame.getByRole("option", { name: "Line", exact: true }));
           await input.penHover(start);
           await expect(target).toHaveAttribute("data-snap-target", startTarget);
           await input.penDown(start);
-          await input.penMove({
-            x: (start.x + end.x) / 2,
-            y: (start.y + end.y) / 2,
-          });
+          await input.penMove({ x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 });
           await input.penMove(end);
           await expect(target).toHaveAttribute("data-snap-target", endTarget);
           await input.penUp(end);
@@ -670,9 +527,7 @@ describe("standalone workbench host boundary", function () {
             .at(-1)!;
           await tap(rail.getByRole("button", { name: "Undo", exact: true }));
           await expect.poll(draws).toBe(7);
-          return [...added.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) =>
-            Number(match[0]),
-          );
+          return [...added.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
         };
         await fitDiagram(frame, input);
         let at = await lattice();
@@ -715,10 +570,7 @@ describe("standalone workbench host boundary", function () {
         // The same figure on a lattice of 2 cm steps, at a zoom preset other than the fit.
         await load(figure("[x=2cm,y=2cm]"));
         await fitDiagram(frame, input);
-        const zoom = rail.getByRole("button", {
-          name: "Zoom and display",
-          exact: true,
-        });
+        const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
         const fitZoom = await zoom.innerText();
         await tap(zoom);
         await tap(frame.getByRole("button", { name: "15%", exact: true }));
@@ -747,9 +599,7 @@ describe("standalone workbench host boundary", function () {
       `constrains an arrow's angle, a square, and an axis move, aligns to a bottom and a side, takes circle and arc radii from the centre, and ends an arc on a common angle or a lattice point of its ray, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
@@ -758,24 +608,15 @@ describe("standalone workbench host boundary", function () {
 \draw (-3,4.5) -- (-1,4.5);
 \path[use as bounding box] (-6,-6) rectangle (14,14);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        const rectangle = frame
-          .locator('svg [data-source-id="path:3"]')
-          .first();
-        await expect(
-          frame.locator('svg [data-source-id="path:4"]').first(),
-        ).toBeAttached();
+        const rectangle = frame.locator('svg [data-source-id="path:3"]').first();
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -784,40 +625,23 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         // The screen point `dx`, `dy` lattice units away from `from`.
-        const offset = (
-          from: { x: number; y: number },
-          dx: number,
-          dy: number,
-        ) => ({
+        const offset = (from: { x: number; y: number }, dx: number, dy: number) => ({
           x: from.x + at(dx, dy).x - at(0, 0).x,
           y: from.y + at(dx, dy).y - at(0, 0).y,
         });
         const target = frame.locator("[data-snap-target]").first();
-        const draws = async () =>
-          ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
         const lastDraw = async () =>
           (await editorDebug(page)).source
             .split("\n")
@@ -825,9 +649,7 @@ describe("standalone workbench host boundary", function () {
             .filter((line) => line.startsWith("\\draw"))
             .at(-1)!;
         const numbers = (text: string) =>
-          [...text.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) =>
-            Number(match[0]),
-          );
+          [...text.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
         // A tool tap on a diagram whose geometry is still recomputing is dropped, so an undo waits for the editor to settle.
         const undo = async () => {
           await tap(rail.getByRole("button", { name: "Undo", exact: true }));
@@ -835,22 +657,13 @@ describe("standalone workbench host boundary", function () {
           await editorReady(page);
         };
         const pick = async (choice: string) => {
-          await tap(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          );
+          await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
           await tap(frame.getByRole("option", { name: choice, exact: true }));
         };
         // Drags a pen from `from` to `to` in two moves, checks the target the last move names, and lifts.
-        const drag = async (
-          from: { x: number; y: number },
-          to: { x: number; y: number },
-          named: string,
-        ) => {
+        const drag = async (from: { x: number; y: number }, to: { x: number; y: number }, named: string) => {
           await input.penDown(from);
-          await input.penMove({
-            x: (from.x + to.x) / 2,
-            y: (from.y + to.y) / 2,
-          });
+          await input.penMove({ x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 });
           await input.penMove(to);
           await expect(target).toHaveAttribute("data-snap-target", named);
           await input.penUp(to);
@@ -860,8 +673,7 @@ describe("standalone workbench host boundary", function () {
         const angle = (raw: string) => {
           const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
           return pair
-            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI +
-                Number(pair[3] ?? 0)
+            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + Number(pair[3] ?? 0)
             : Number(raw.replace(/[{}]/g, ""));
         };
         const arcAngles = (arc: string) => ({
@@ -878,18 +690,14 @@ describe("standalone workbench host boundary", function () {
         assert.match(arrow, /^\\draw\[->\]/, arrow);
         const [x0, y0, x1, y1] = numbers(arrow.replace(/^\\draw\[->\]/, ""));
         const arrowAngle = (Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI;
-        assert.ok(
-          Math.abs(arrowAngle - 15) < 0.1,
-          `The arrow is at ${arrowAngle} degrees: ${arrow}`,
-        );
+        assert.ok(Math.abs(arrowAngle - 15) < 0.1, `The arrow is at ${arrowAngle} degrees: ${arrow}`);
         await undo();
         // The rectangle tool draws a square and names the constraint.
         await pick("Rectangle");
         const square = await drag(at(1, -3), at(4, -1.5), "Square");
         const [sx0, sy0, sx1, sy1] = numbers(square);
         assert.ok(
-          Math.abs(sx1 - sx0) > 1 &&
-            Math.abs(Math.abs(sx1 - sx0) - Math.abs(sy1 - sy0)) < 0.05,
+          Math.abs(sx1 - sx0) > 1 && Math.abs(Math.abs(sx1 - sx0) - Math.abs(sy1 - sy0)) < 0.05,
           `The constrained rectangle is ${sx1 - sx0} by ${sy1 - sy0}: ${square}`,
         );
         await undo();
@@ -905,9 +713,7 @@ describe("standalone workbench host boundary", function () {
           .poll(async () => (await editorDebug(page)).source)
           .toMatch(/\((-?[\d.]+),-3\) rectangle \((-?[\d.]+),-1\)/);
         const moved = numbers(
-          /\((-?[\d.]+),-3\) rectangle \((-?[\d.]+),-1\)/.exec(
-            (await editorDebug(page)).source,
-          )![0],
+          /\((-?[\d.]+),-3\) rectangle \((-?[\d.]+),-1\)/.exec((await editorDebug(page)).source)![0],
         );
         assert.ok(
           Math.abs(moved[0]) < 0.1 && Math.abs(moved[2] - 2) < 0.1,
@@ -922,12 +728,7 @@ describe("standalone workbench host boundary", function () {
         await setSnapRule(frame, input, "Angle", false);
         await setSnapRule(frame, input, "Alignment", true);
         // `dx`, `dy` move the rectangle's centre from (-2,-2) in lattice units.
-        const slide = async (
-          dx: number,
-          dy: number,
-          named: string,
-          expected: RegExp,
-        ) => {
+        const slide = async (dx: number, dy: number, named: string, expected: RegExp) => {
           const from = await strokePoint(page, rectangle, 0.06);
           const to = offset(from, dx, dy);
           await input.penDown(from);
@@ -939,9 +740,7 @@ describe("standalone workbench host boundary", function () {
           }
           await expect(target).toHaveAttribute("data-snap-target", named);
           await input.penUp(to);
-          await expect
-            .poll(async () => (await editorDebug(page)).source)
-            .toMatch(expected);
+          await expect.poll(async () => (await editorDebug(page)).source).toMatch(expected);
           await tap(rail.getByRole("button", { name: "Undo", exact: true }));
           await expect
             .poll(async () => (await editorDebug(page)).source)
@@ -949,18 +748,8 @@ describe("standalone workbench host boundary", function () {
           await editorReady(page);
         };
         // The rectangle's bottom meets the circle's bottom at y=5; its left side then meets the circle's right side at x=11.
-        await slide(
-          0.5,
-          8.15,
-          "Aligned with bottom",
-          /\(-2\.\d+,5\) rectangle \(-0\.\d+,7\)/,
-        );
-        await slide(
-          13.95,
-          2.5,
-          "Aligned with right",
-          /\(11,-0\.\d+\) rectangle \(13,1\.\d+\)/,
-        );
+        await slide(0.5, 8.15, "Aligned with bottom", /\(-2\.\d+,5\) rectangle \(-0\.\d+,7\)/);
+        await slide(13.95, 2.5, "Aligned with right", /\(11,-0\.\d+\) rectangle \(13,1\.\d+\)/);
 
         // The circle and arc tools take the radius from the centre; the written radius is the lattice distance.
         await setSnapRule(frame, input, "Alignment", false);
@@ -970,20 +759,14 @@ describe("standalone workbench host boundary", function () {
         assert.match(circle, /\(2,-4\) circle \(\{3cm\}\)/, circle);
         await undo();
         await pick("Arc");
-        const ray = (
-          centre: { x: number; y: number },
-          radius: number,
-          degrees: number,
-        ) =>
+        const ray = (centre: { x: number; y: number }, radius: number, degrees: number) =>
           at(
             centre.x + radius * Math.cos((degrees * Math.PI) / 180),
             centre.y + radius * Math.sin((degrees * Math.PI) / 180),
           );
         // Centre (10,-3), radius point (12,-1): the half circle ends on the lattice point (8,-5) of that ray.
-        for (const point of [at(10, -3), at(12, -1)])
-          await input.penStroke([point]);
-        for (const degrees of [90, 135, 180])
-          await input.penHover(ray({ x: 10, y: -3 }, Math.SQRT2 * 2, degrees));
+        for (const point of [at(10, -3), at(12, -1)]) await input.penStroke([point]);
+        for (const degrees of [90, 135, 180]) await input.penHover(ray({ x: 10, y: -3 }, Math.SQRT2 * 2, degrees));
         const halfEnd = ray({ x: 10, y: -3 }, Math.SQRT2 * 2, 227);
         await input.penHover(halfEnd);
         await expect(target).toHaveAttribute("data-snap-target", "Lattice");
@@ -994,22 +777,15 @@ describe("standalone workbench host boundary", function () {
         assert.match(half, /radius=\{sqrt\(8\)\*1cm\}/, half);
         const halfAngles = arcAngles(half);
         assert.ok(
-          Math.abs(halfAngles.end - halfAngles.start - 180) < 1e-6 &&
-            Math.abs((((halfAngles.end % 360) + 360) % 360) - 225) < 1e-6,
+          Math.abs(halfAngles.end - halfAngles.start - 180) < 1e-6 && Math.abs(((halfAngles.end % 360) + 360) % 360 - 225) < 1e-6,
           `The half circle runs from ${halfAngles.start} to ${halfAngles.end}: ${half}`,
         );
         await undo();
         // Radius 3 has no lattice point near 31 degrees, so the common angle 30 takes the end.
-        assert.equal(
-          (await editorDebug(page)).tool,
-          "addArc",
-          "the Arc tool stays active across a commit and an undo",
-        );
-        for (const point of [at(10, -3), at(13, -3)])
-          await input.penStroke([point]);
+        assert.equal((await editorDebug(page)).tool, "addArc", "the Arc tool stays active across a commit and an undo");
+        for (const point of [at(10, -3), at(13, -3)]) await input.penStroke([point]);
         const thirtyEnd = ray({ x: 10, y: -3 }, 3, 31);
-        for (const degrees of [8, 20])
-          await input.penHover(ray({ x: 10, y: -3 }, 3, degrees));
+        for (const degrees of [8, 20]) await input.penHover(ray({ x: 10, y: -3 }, 3, degrees));
         await input.penHover(thirtyEnd);
         await expect(target).toHaveAttribute("data-snap-target", "Angle");
         await input.penStroke([thirtyEnd]);
@@ -1018,21 +794,16 @@ describe("standalone workbench host boundary", function () {
         assert.match(thirty, /radius=\{3cm\}/, thirty);
         const thirtyAngles = arcAngles(thirty);
         assert.ok(
-          Math.abs(thirtyAngles.end - 30) < 1e-6 &&
-            Math.abs(thirtyAngles.start) < 1e-6,
+          Math.abs(thirtyAngles.end - 30) < 1e-6 && Math.abs(thirtyAngles.start) < 1e-6,
           `The arc runs from ${thirtyAngles.start} to ${thirtyAngles.end}: ${thirty}`,
         );
         await undo();
         // A centre on an object point off the lattice still takes an arc; its end lands on the common angle 90.
         await input.penHover(at(-1, 4.5));
         await expect(target).toHaveAttribute("data-snap-target", "Endpoint");
-        for (const point of [at(-1, 4.5), at(1, 5)])
-          await input.penStroke([point]);
+        for (const point of [at(-1, 4.5), at(1, 5)]) await input.penStroke([point]);
         const upEnd = ray({ x: -1, y: 4.5 }, Math.sqrt(4.25), 91);
-        for (const degrees of [40, 70])
-          await input.penHover(
-            ray({ x: -1, y: 4.5 }, Math.sqrt(4.25), degrees),
-          );
+        for (const degrees of [40, 70]) await input.penHover(ray({ x: -1, y: 4.5 }, Math.sqrt(4.25), degrees));
         await input.penHover(upEnd);
         await expect(target).toHaveAttribute("data-snap-target", "Angle");
         await input.penStroke([upEnd]);
@@ -1040,10 +811,7 @@ describe("standalone workbench host boundary", function () {
         const up = await lastDraw();
         assert.match(up, /^\\draw \(1,5\) arc\[/, up);
         const upAngles = arcAngles(up);
-        assert.ok(
-          Math.abs(upAngles.end - 90) < 1e-6,
-          `The arc ends at ${upAngles.end}: ${up}`,
-        );
+        assert.ok(Math.abs(upAngles.end - 90) < 1e-6, `The arc ends at ${upAngles.end}: ${up}`);
         await storyScreenshot(page, `constrained-constructions-${tablet.name}`);
       },
     );
@@ -1055,25 +823,17 @@ describe("standalone workbench host boundary", function () {
       `commits the locked curve its preview shows, with lattice control points, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -1082,41 +842,25 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        await expect(
-          rail.getByRole("button", { name: /^Snap: / }),
-        ).toHaveAccessibleName("Snap: lattice");
+        await expect(rail.getByRole("button", { name: /^Snap: / })).toHaveAccessibleName(
+          "Snap: lattice",
+        );
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("option", { name: "Curve", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("option", { name: "Curve", exact: true })),
         ]);
         assert.equal((await editorDebug(page)).tool, "addBezier");
         await input.penStroke([at(2, 1), at(5, 1), at(8, 1)]);
@@ -1130,9 +874,7 @@ describe("standalone workbench host boundary", function () {
           [...d.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
         const previewed = numbers((await preview.getAttribute("d"))!);
         await input.penUp(at(5.1, 2.1));
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/\.\. controls/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\.\. controls/);
         const curve = (await editorDebug(page)).source
           .split("\n")
           .map((line) => line.trim())
@@ -1142,10 +884,7 @@ describe("standalone workbench host boundary", function () {
           `A locked curve has off-lattice points: ${curve}`,
         );
         const committed = numbers(
-          (await frame
-            .locator('svg [data-source-id="path:2"]')
-            .first()
-            .getAttribute("d"))!,
+          (await frame.locator('svg [data-source-id="path:2"]').first().getAttribute("d"))!,
         );
         assert.equal(
           committed.length,
@@ -1153,9 +892,7 @@ describe("standalone workbench host boundary", function () {
           `preview ${previewed} vs committed ${committed}`,
         );
         assert.ok(
-          committed.every(
-            (value, index) => Math.abs(value - previewed[index]) < 0.05,
-          ),
+          committed.every((value, index) => Math.abs(value - previewed[index]) < 0.05),
           `The preview showed ${previewed}; the editor committed ${committed}`,
         );
       },
@@ -1168,27 +905,19 @@ describe("standalone workbench host boundary", function () {
       `shows an alignment guide when a dragged square meets a circle's top, locked and free, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \draw (0,0) circle (2);
 \draw (4,-6) rectangle (6,-4);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:3"]').first(),
-        ).toBeVisible();
+        await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -1197,37 +926,21 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
-        const guides = frame.locator(
-          '[class*="snapOverlay"] [class*="snapLine"]',
-        );
+        const guides = frame.locator('[class*="snapOverlay"] [class*="snapLine"]');
         for (const locked of [true, false]) {
           await setSnapRule(frame, input, "Lattice", locked);
           // Grab the square's left edge and lift its top edge from y = -4 to the circle's top, y = 2.
@@ -1240,10 +953,8 @@ describe("standalone workbench host boundary", function () {
           await expect
             .poll(async () =>
               Math.abs(
-                (await frame
-                  .locator('svg [data-source-id="path:3"]')
-                  .first()
-                  .boundingBox())!.y - at(0, 2).y,
+                (await frame.locator('svg [data-source-id="path:3"]').first().boundingBox())!.y -
+                  at(0, 2).y,
               ),
             )
             .toBeLessThan(3);
@@ -1270,13 +981,9 @@ describe("standalone workbench host boundary", function () {
             `alignment-guide-${locked ? "locked" : "free"}-${tablet.name}`,
           );
           await input.penUp(at(4, 1));
-          await expect
-            .poll(async () => (await editorDebug(page)).source)
-            .toMatch(/rectangle/);
+          await expect.poll(async () => (await editorDebug(page)).source).toMatch(/rectangle/);
           await input.touch([
-            await stableCenter(
-              rail.getByRole("button", { name: "Undo", exact: true }),
-            ),
+            await stableCenter(rail.getByRole("button", { name: "Undo", exact: true })),
           ]);
           await expect
             .poll(async () => (await editorDebug(page)).source)
@@ -1291,22 +998,16 @@ describe("standalone workbench host boundary", function () {
         await expect
           .poll(async () =>
             Math.abs(
-              (await frame
-                .locator('svg [data-source-id="path:3"]')
-                .first()
-                .boundingBox())!.y - at(0, 2).y,
+              (await frame.locator('svg [data-source-id="path:3"]').first().boundingBox())!.y -
+                at(0, 2).y,
             ),
           )
           .toBeLessThan(3);
         await expect(guides).toHaveCount(0);
         await input.penUp(at(4, 1));
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/rectangle/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/rectangle/);
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Undo", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Undo", exact: true })),
         ]);
         await expect
           .poll(async () => (await editorDebug(page)).source)
@@ -1321,16 +1022,11 @@ describe("standalone workbench host boundary", function () {
       `labels the rulers in lattice steps when the figure scales its lattice in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await page.locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
 \draw (0,0) -- (10,0);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const axis = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(axis).toBeAttached();
@@ -1343,10 +1039,7 @@ describe("standalone workbench host boundary", function () {
             const start = path.getPointAtLength(0);
             const end = path.getPointAtLength(path.getTotalLength());
             const origin = start.x * m.a + start.y * m.c + m.e;
-            return {
-              origin,
-              unit: (end.x * m.a + end.y * m.c + m.e - origin) / 10,
-            };
+            return { origin, unit: (end.x * m.a + end.y * m.c + m.e - origin) / 10 };
           });
         // Each label with its tick's screen x: the label's group is translated to the tick.
         const labels = () =>
@@ -1362,10 +1055,7 @@ describe("standalone workbench host boundary", function () {
         // Every ruler label sits at its own lattice coordinate once the fitted view has rendered its labels.
         await expect
           .poll(async () => {
-            const [{ origin, unit }, entries] = await Promise.all([
-              lattice(),
-              labels(),
-            ]);
+            const [{ origin, unit }, entries] = await Promise.all([lattice(), labels()]);
             const misplaced = entries.filter(
               (entry) => Math.abs(entry.x - (origin + entry.label * unit)) > 2,
             );
@@ -1391,49 +1081,28 @@ describe("standalone workbench host boundary", function () {
         const look = (line: typeof axis) =>
           line.evaluate((element) => {
             let opacity = 1;
-            for (
-              let node: Element | null = element;
-              node;
-              node = node.parentElement
-            ) {
+            for (let node: Element | null = element; node; node = node.parentElement) {
               opacity *= Number(getComputedStyle(node).opacity);
             }
             const rgb = getComputedStyle(element)
               .stroke.match(/[\d.]+/g)!
               .slice(0, 3)
               .map(Number);
-            return {
-              rgb,
-              opacity,
-              width: Number(element.getAttribute("stroke-width")),
-            };
+            return { rgb, opacity, width: Number(element.getAttribute("stroke-width")) };
           });
         for (const theme of ["light", "dark"] as const) {
           if (theme === "dark") {
-            await page
-              .getByRole("button", { name: "Dark theme", exact: true })
-              .click();
-            await expect(frame.locator("html")).toHaveAttribute(
-              "data-color-scheme",
-              "dark",
-            );
+            await page.getByRole("button", { name: "Dark theme", exact: true }).click();
+            await expect(frame.locator("html")).toHaveAttribute("data-color-scheme", "dark");
           }
           const [a, m] = [await look(axis), await look(major)];
-          const distance = Math.hypot(
-            ...a.rgb.map((value, index) => value - m.rgb[index]),
-          );
+          const distance = Math.hypot(...a.rgb.map((value, index) => value - m.rgb[index]));
           assert.ok(
             distance > 60,
             `${theme}: axis ${a.rgb} and major line ${m.rgb} share a colour`,
           );
-          assert.ok(
-            a.opacity >= 0.95,
-            `${theme}: the axis is dimmed to ${a.opacity}`,
-          );
-          assert.ok(
-            a.width >= m.width + 0.5,
-            `${theme}: axis width ${a.width}, major ${m.width}`,
-          );
+          assert.ok(a.opacity >= 0.95, `${theme}: the axis is dimmed to ${a.opacity}`);
+          assert.ok(a.width >= m.width + 0.5, `${theme}: axis width ${a.width}, major ${m.width}`);
         }
       },
     );
@@ -1446,28 +1115,17 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
-        const zoom = frame.getByRole("button", {
-          name: "Zoom and display",
-          exact: true,
-        });
+        const zoom = frame.getByRole("button", { name: "Zoom and display", exact: true });
         await expect(zoom).toBeVisible();
         const readout = (await zoom.innerText()).trim();
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         // Measure the view the author sees once startup layout has settled.
-        await settledCenter(
-          frame.locator("text", { hasText: "(0,0)" }).first(),
-        );
+        await settledCenter(frame.locator("text", { hasText: "(0,0)" }).first());
         // Ruler labels are drawn rotated, so read the range from the axes and the scale: one lattice unit is one cm here.
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const [vertical, horizontal] = await frame
           .locator('line[class*="gridAxis"]')
-          .evaluateAll((lines) =>
-            lines.map((line) => line.getBoundingClientRect()),
-          );
+          .evaluateAll((lines) => lines.map((line) => line.getBoundingClientRect()));
         const unitPx = (await editorDebug(page)).viewport.scale * 28.4527559055;
         const originX = frameBox.x + vertical.x + vertical.width / 2;
         const originY = frameBox.y + horizontal.y + horizontal.height / 2;
@@ -1479,34 +1137,22 @@ describe("standalone workbench host boundary", function () {
           min: -(viewport.y + viewport.height - originY) / unitPx,
           max: (originY - viewport.y) / unitPx,
         };
-        assert.ok(
-          x.min <= -20 && x.max >= 20,
-          `x range ${x.min.toFixed(1)}..${x.max.toFixed(1)}`,
-        );
-        assert.ok(
-          y.min <= -20 && y.max >= 20,
-          `y range ${y.min.toFixed(1)}..${y.max.toFixed(1)}`,
-        );
+        assert.ok(x.min <= -20 && x.max >= 20, `x range ${x.min.toFixed(1)}..${x.max.toFixed(1)}`);
+        assert.ok(y.min <= -20 && y.max >= 20, `y range ${y.min.toFixed(1)}..${y.max.toFixed(1)}`);
         const input = await TabletInput.attach(page);
         // The popup lists the current zoom beside its presets, so move away first: the startup zoom must still be offered.
         await input.touch([await stableCenter(zoom)]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "50%", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "50%", exact: true })),
         ]);
         await expect(zoom).toHaveText("50%");
-        const presets = await frame
-          .getByRole("button", { name: /^\d+%$/ })
-          .allInnerTexts();
+        const presets = await frame.getByRole("button", { name: /^\d+%$/ }).allInnerTexts();
         assert.ok(
           presets.includes(readout),
           `startup zoom ${readout} is not among the presets ${presets}`,
         );
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: readout, exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: readout, exact: true })),
         ]);
         await expect(zoom).toHaveText(readout);
         await input.touch([await stableCenter(zoom)]);
@@ -1524,9 +1170,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
         await expect(rail).toBeVisible();
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const rulers = await Promise.all(
           ["canvas-top-ruler", "canvas-left-ruler"].map(async (id) => ({
             id,
@@ -1545,10 +1189,7 @@ describe("standalone workbench host boundary", function () {
             const overlapY =
               Math.min(box.y + box.height, ruler.box.y + ruler.box.height) -
               Math.max(box.y, ruler.box.y);
-            assert.ok(
-              overlapX <= 0 || overlapY <= 0,
-              `${what} covers ${ruler.id}`,
-            );
+            assert.ok(overlapX <= 0 || overlapY <= 0, `${what} covers ${ruler.id}`);
           }
         };
         const drag = async (to: { x: number; y: number }) => {
@@ -1564,14 +1205,8 @@ describe("standalone workbench host boundary", function () {
         };
         const placements = [
           { dock: "bottom", to: null },
-          {
-            dock: "left",
-            to: { x: frameBox.x + 20, y: frameBox.y + frameBox.height / 2 },
-          },
-          {
-            dock: "floating",
-            to: { x: frameBox.x + 130, y: frameBox.y + 150 },
-          },
+          { dock: "left", to: { x: frameBox.x + 20, y: frameBox.y + frameBox.height / 2 } },
+          { dock: "floating", to: { x: frameBox.x + 130, y: frameBox.y + 150 } },
         ] as const;
         for (const placement of placements) {
           if (placement.to) {
@@ -1579,12 +1214,7 @@ describe("standalone workbench host boundary", function () {
           }
           await expect(rail).toHaveAttribute("data-dock", placement.dock);
           clear(`the ${placement.dock} rail`, (await rail.boundingBox())!);
-          for (const name of [
-            "Geometry",
-            "Label",
-            /^Color: New strokes:/,
-            "Zoom and display",
-          ] as const) {
+          for (const name of ["Geometry", "Label", /^Color: New strokes:/, "Zoom and display"] as const) {
             const button =
               typeof name === "string"
                 ? rail.getByRole("button", { name, exact: true })
@@ -1615,26 +1245,18 @@ describe("standalone workbench host boundary", function () {
       `snaps a free arc's end to the nearby common angle by pen in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -1643,48 +1265,30 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
         await setSnapRule(frame, input, "Lattice", false);
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("option", { name: "Arc", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("option", { name: "Arc", exact: true })),
         ]);
         assert.equal((await editorDebug(page)).tool, "addArc");
         // Centre, radius point, then an end 7 degrees short of the half circle and clear of the lattice pull.
         for (const point of [at(0, 0), at(6, 0), at(-5.955, 0.731)]) {
           await input.penStroke([point]);
         }
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/arc/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/arc/);
         const arc = (await editorDebug(page)).source
           .split("\n")
           .find((line) => line.includes("arc"))!;
@@ -1692,8 +1296,7 @@ describe("standalone workbench host boundary", function () {
         const angle = (raw: string) => {
           const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
           return pair
-            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI +
-                Number(pair[3] ?? 0)
+            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + Number(pair[3] ?? 0)
             : Number(raw.replace(/[{}]/g, ""));
         };
         const end = angle(/end angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
@@ -1711,26 +1314,18 @@ describe("standalone workbench host boundary", function () {
       `sweeps an arc the way the pen went round, past a half circle, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -1739,60 +1334,39 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("option", { name: "Arc", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("option", { name: "Arc", exact: true })),
         ]);
         await input.penStroke([at(0, 0)]);
         await input.penStroke([at(3, 0)]);
         // Hover counterclockwise through a quarter, a half, and five eighths of the circle, then tap at three quarters.
         for (let degrees = 10; degrees <= 260; degrees += 10) {
           const radians = (degrees * Math.PI) / 180;
-          await input.penHover(
-            at(3 * Math.cos(radians), 3 * Math.sin(radians)),
-          );
+          await input.penHover(at(3 * Math.cos(radians), 3 * Math.sin(radians)));
         }
         await input.penStroke([at(0, -3)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/arc/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/arc/);
         const arc = (await editorDebug(page)).source
           .split("\n")
           .find((line) => line.includes("arc"))!;
         const angle = (raw: string) => {
           const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
           return pair
-            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI +
-                Number(pair[3] ?? 0)
+            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + Number(pair[3] ?? 0)
             : Number(raw.replace(/[{}]/g, ""));
         };
         const start = angle(/start angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
@@ -1811,26 +1385,18 @@ describe("standalone workbench host boundary", function () {
       `builds circles on a diameter and through three points, and an arc through three points, by pen in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -1839,37 +1405,20 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        const construct = async (
-          choice: string,
-          taps: { x: number; y: number }[],
-        ) => {
+        const construct = async (choice: string, taps: { x: number; y: number }[]) => {
           await input.touch([
-            await stableCenter(
-              rail.getByRole("button", { name: "Geometry", exact: true }),
-            ),
+            await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
           ]);
           await input.touch([
             await stableCenter(
@@ -1878,18 +1427,12 @@ describe("standalone workbench host boundary", function () {
                 .getByRole("option", { name: choice, exact: true }),
             ),
           ]);
-          const before = (
-            (await editorDebug(page)).source.match(/\\draw/g) ?? []
-          ).length;
+          const before = ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
           for (const tap of taps) {
             await input.penStroke([tap]);
           }
           await expect
-            .poll(
-              async () =>
-                ((await editorDebug(page)).source.match(/\\draw/g) ?? [])
-                  .length,
-            )
+            .poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length)
             .toBe(before + 1);
           const lines = (await editorDebug(page)).source
             .split("\n")
@@ -1903,21 +1446,13 @@ describe("standalone workbench host boundary", function () {
           at(0, -3),
         ]);
         assert.match(three, /\(0,0\) circle \(\{3cm\}\)/, three);
-        const diameter = await construct("Circle on a diameter", [
-          at(-6, -2),
-          at(-2, -2),
-        ]);
+        const diameter = await construct("Circle on a diameter", [at(-6, -2), at(-2, -2)]);
         assert.match(diameter, /\(-4,-2\) circle \(\{2cm\}\)/, diameter);
-        const arc = await construct("Arc through three points", [
-          at(6, 0),
-          at(8, 2),
-          at(10, 0),
-        ]);
+        const arc = await construct("Arc through three points", [at(6, 0), at(8, 2), at(10, 0)]);
         const angle = (raw: string) => {
           const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
           return pair
-            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI +
-                Number(pair[3] ?? 0)
+            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + Number(pair[3] ?? 0)
             : Number(raw.replace(/[{}]/g, ""));
         };
         assert.match(arc, /\(6,0\) arc\[/, arc);
@@ -1939,28 +1474,19 @@ describe("standalone workbench host boundary", function () {
       `names the chosen construction and its next step until it finishes or is cancelled in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -1969,109 +1495,57 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        const draws = async () =>
-          ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
-        const step = rail.getByRole("status", {
-          name: "Current step",
-          exact: true,
-        });
+        const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        const step = rail.getByRole("status", { name: "Current step", exact: true });
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(
           frame
             .getByRole("dialog", { name: "Tool options" })
-            .getByRole("option", {
-              name: "Arc through three points",
-              exact: true,
-            }),
+            .getByRole("option", { name: "Arc through three points", exact: true }),
         );
-        await expect(
-          frame.getByRole("dialog", { name: "Tool options" }),
-        ).toHaveCount(0);
-        await expect(step).toHaveText(
-          "Arc through three points: place the first point",
-        );
+        await expect(frame.getByRole("dialog", { name: "Tool options" })).toHaveCount(0);
+        await expect(step).toHaveText("Arc through three points: place the first point");
         await input.penStroke([at(6, 0)]);
-        await expect(step).toHaveText(
-          "Arc through three points: place the second point",
-        );
+        await expect(step).toHaveText("Arc through three points: place the second point");
         await input.penStroke([at(8, 2)]);
-        await expect(step).toHaveText(
-          "Arc through three points: place the last point",
-        );
+        await expect(step).toHaveText("Arc through three points: place the last point");
         // Properties describes the same construction stage as the dock.
-        await tap(
-          rail.getByRole("button", { name: "Properties", exact: true }),
-        );
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
-        await expect(panel).toContainText(
-          "Arc through three points: place the last point",
-        );
-        await tap(
-          panel.getByRole("button", { name: "Close properties", exact: true }),
-        );
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        await expect(panel).toContainText("Arc through three points: place the last point");
+        await tap(panel.getByRole("button", { name: "Close properties", exact: true }));
         // Cancel removes only the provisional construction; the tool stays chosen.
-        await tap(
-          rail.getByRole("button", {
-            name: "Cancel construction",
-            exact: true,
-          }),
-        );
-        await expect(step).toHaveText(
-          "Arc through three points: place the first point",
-        );
+        await tap(rail.getByRole("button", { name: "Cancel construction", exact: true }));
+        await expect(step).toHaveText("Arc through three points: place the first point");
         assert.equal(await draws(), 2, "Cancel committed the provisional arc");
         for (const point of [at(6, 0), at(8, 2), at(10, 0)]) {
           await input.penStroke([point]);
         }
         await expect.poll(draws).toBe(3);
-        await expect(step).toHaveText(
-          "Arc through three points: place the first point",
-        );
+        await expect(step).toHaveText("Arc through three points: place the first point");
         // Another tool discards the provisional construction.
         await input.penStroke([at(-6, 0)]);
-        await expect(step).toHaveText(
-          "Arc through three points: place the second point",
-        );
+        await expect(step).toHaveText("Arc through three points: place the second point");
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await expect(step).toHaveCount(0);
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(
           frame
             .getByRole("dialog", { name: "Tool options" })
-            .getByRole("option", {
-              name: "Arc through three points",
-              exact: true,
-            }),
+            .getByRole("option", { name: "Arc through three points", exact: true }),
         );
-        await expect(step).toHaveText(
-          "Arc through three points: place the first point",
-        );
+        await expect(step).toHaveText("Arc through three points: place the first point");
         await storyScreenshot(page, `construction-step-${tablet.name}`);
       },
     );
@@ -2083,28 +1557,19 @@ describe("standalone workbench host boundary", function () {
       `finishes every geometry construction by reading only the picker and the stage instruction in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -2113,66 +1578,31 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        const geometry = rail.getByRole("button", {
-          name: "Geometry",
-          exact: true,
-        });
+        const geometry = rail.getByRole("button", { name: "Geometry", exact: true });
         const picker = frame.getByRole("dialog", { name: "Tool options" });
-        const step = rail.getByRole("status", {
-          name: "Current step",
-          exact: true,
-        });
+        const step = rail.getByRole("status", { name: "Current step", exact: true });
         const source = async () => (await editorDebug(page)).source;
         // The picker groups its illustrated choices by family; text belongs to the Label control.
         await tap(geometry);
         await storyScreenshot(page, `geometry-picker-${tablet.name}`);
-        const families = [
-          "Lines and arrows",
-          "Curves",
-          "Circles and arcs",
-          "Shapes",
-          "Diagrams",
-        ];
-        const choices: {
-          family: string;
-          label: string;
-          id: string;
-          opensMore: boolean;
-        }[] = [];
+        const families = ["Lines and arrows", "Curves", "Circles and arcs", "Shapes", "Diagrams"];
+        const choices: { family: string; label: string; id: string; opensMore: boolean }[] = [];
         for (const family of families) {
-          const group = picker.getByRole("group", {
-            name: family,
-            exact: true,
-          });
+          const group = picker.getByRole("group", { name: family, exact: true });
           for (const option of await group.getByRole("option").all()) {
             const label = (await option.getAttribute("title"))!;
-            assert.ok(
-              (await option.locator("svg").count()) > 0,
-              `${label} shows no drawing`,
-            );
+            assert.ok((await option.locator("svg").count()) > 0, `${label} shows no drawing`);
             choices.push({
               family,
               label,
@@ -2181,39 +1611,35 @@ describe("standalone workbench host boundary", function () {
             });
           }
         }
-        assert.equal(
-          await picker.getByRole("option").count(),
-          choices.length,
-          "Choices outside the families",
+        assert.equal(await picker.getByRole("option").count(), choices.length, "Choices outside the families");
+        assert.deepEqual(
+          choices.map((choice) => choice.label).sort(),
+          [
+            "Arc",
+            "Arc through three points",
+            "Arrow",
+            "Circle",
+            "Circle on a diameter",
+            "Circle through three points",
+            "Curve",
+            "Ellipse",
+            "Grid",
+            "Image",
+            "Line",
+            "Matrix",
+            "Node shape",
+            "Path",
+            "Point",
+            "Rectangle",
+          ],
         );
-        assert.deepEqual(choices.map((choice) => choice.label).sort(), [
-          "Arc",
-          "Arc through three points",
-          "Arrow",
-          "Circle",
-          "Circle on a diameter",
-          "Circle through three points",
-          "Curve",
-          "Ellipse",
-          "Grid",
-          "Image",
-          "Line",
-          "Matrix",
-          "Node shape",
-          "Path",
-          "Point",
-          "Rectangle",
-        ]);
         await tap(geometry);
         await expect(picker).toHaveCount(0);
         // Every construction finishes from the picker and the step line alone: the step names the
         // chosen construction, and its instruction says whether to place a point or to drag.
         const points = [at(2, 1), at(6, 1), at(6, 4), at(2, 4), at(4, 2)];
         const undo = rail.getByRole("button", { name: "Undo", exact: true });
-        const finish = rail.getByRole("button", {
-          name: "Finish",
-          exact: true,
-        });
+        const finish = rail.getByRole("button", { name: "Finish", exact: true });
         page.on("dialog", (dialog) => dialog.accept("figure.png"));
         for (const choice of choices) {
           const before = await source();
@@ -2232,10 +1658,7 @@ describe("standalone workbench host boundary", function () {
           let placed = 0;
           for (let turn = 0; turn < 6 && (await source()) === before; turn++) {
             const text = await step.innerText();
-            assert.ok(
-              text.startsWith(`${choice.label}: `),
-              `The step line reads "${text}"`,
-            );
+            assert.ok(text.startsWith(`${choice.label}: `), `The step line reads "${text}"`);
             const instruction = text.slice(choice.label.length + 2);
             if (placed >= 3 && (await finish.count()) > 0) {
               await tap(finish);
@@ -2249,28 +1672,16 @@ describe("standalone workbench host boundary", function () {
               assert.fail(`No gesture reads from "${text}"`);
             }
           }
-          assert.notEqual(
-            await source(),
-            before,
-            `${choice.label} left the source unchanged`,
-          );
+          assert.notEqual(await source(), before, `${choice.label} left the source unchanged`);
           await tap(undo);
-          await expect
-            .poll(source, {
-              message: `Undo did not remove the ${choice.label}`,
-            })
-            .toBe(before);
+          await expect.poll(source, { message: `Undo did not remove the ${choice.label}` }).toBe(before);
         }
         // Text and equations are labels, under their own dock control.
         const label = rail.getByRole("button", { name: "Label", exact: true });
         const before = await source();
         await tap(label);
         assert.deepEqual(
-          await Promise.all(
-            (await picker.getByRole("option").all()).map((option) =>
-              option.getAttribute("title"),
-            ),
-          ),
+          await Promise.all((await picker.getByRole("option").all()).map((option) => option.getAttribute("title"))),
           ["Text", "Equation"],
         );
         await tap(picker.getByRole("option", { name: "Text", exact: true }));
@@ -2281,13 +1692,8 @@ describe("standalone workbench host boundary", function () {
         await tap(undo);
         await expect.poll(source).toBe(before);
         await tap(label);
-        await tap(
-          picker.getByRole("option", { name: "Equation", exact: true }),
-        );
-        const closeEquation = frame.getByRole("button", {
-          name: "Close equation editor",
-          exact: true,
-        });
+        await tap(picker.getByRole("option", { name: "Equation", exact: true }));
+        const closeEquation = frame.getByRole("button", { name: "Close equation editor", exact: true });
         await expect(closeEquation).toBeVisible();
         await tap(closeEquation);
         await expect(closeEquation).toHaveCount(0);
@@ -2301,53 +1707,36 @@ describe("standalone workbench host boundary", function () {
       `rotates a square 45 degrees by its handle with the pen in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,6);\end{tikzpicture}`,
-          );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+          .fill(String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,6);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const square = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(square).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.penStroke([await strokePoint(page, square, 0.1)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
-        const handle = await settledCenter(
-          frame.getByTestId("canvas-rotate-handle"),
-        );
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        const handle = await settledCenter(frame.getByTestId("canvas-rotate-handle"));
         const centre = await settledCenter(square);
         // Turn the handle 45 degrees counterclockwise about the square's centre (screen y grows downward).
         const radius = Math.hypot(handle.x - centre.x, handle.y - centre.y);
         const from = Math.atan2(centre.y - handle.y, handle.x - centre.x);
         const path = Array.from({ length: 10 }, (_, i) => {
           const angle = from + ((Math.PI / 4) * i) / 9;
-          return {
-            x: centre.x + radius * Math.cos(angle),
-            y: centre.y - radius * Math.sin(angle),
-          };
+          return { x: centre.x + radius * Math.cos(angle), y: centre.y - radius * Math.sin(angle) };
         });
         await input.penDown(path[0]);
         for (const point of path.slice(1)) {
           await input.penMove(point);
         }
         await input.penUp(path[path.length - 1]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/rotate/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/rotate/);
         const source = (await editorDebug(page)).source;
         assert.match(
           source,
@@ -2364,56 +1753,34 @@ describe("standalone workbench host boundary", function () {
       `undoes a handle rotation, then a quarter-turn and a flip, and keeps transforming in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,5);\end{tikzpicture}`;
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        const rectangle = frame
-          .locator('svg [data-source-id="path:0"]')
-          .first();
+        const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         const rail = frame.locator("[data-diagram-tools]");
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
-        ]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
         await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const selected = async () => (await editorDebug(page)).selection;
         const source = async () => (await editorDebug(page)).source;
         const undo = async () => {
-          await input.penStroke([
-            await stableCenter(
-              rail.getByRole("button", { name: "Undo", exact: true }),
-            ),
-          ]);
+          await input.penStroke([await stableCenter(rail.getByRole("button", { name: "Undo", exact: true }))]);
           await expect.poll(source).toBe(authored);
           await editorReady(page);
           await expect.poll(selected).toEqual(["path:0"]);
         };
         await expect.poll(selected).toEqual(["path:0"]);
-        const handle = await settledCenter(
-          frame.getByTestId("canvas-rotate-handle"),
-        );
+        const handle = await settledCenter(frame.getByTestId("canvas-rotate-handle"));
         const centre = await settledCenter(rectangle);
         const radius = Math.hypot(handle.x - centre.x, handle.y - centre.y);
         const start = Math.atan2(centre.y - handle.y, handle.x - centre.x);
         const path = Array.from({ length: 10 }, (_, index) => {
-          const angle = start + (Math.PI * index) / 18;
-          return {
-            x: centre.x + radius * Math.cos(angle),
-            y: centre.y - radius * Math.sin(angle),
-          };
+          const angle = start + Math.PI * index / 18;
+          return { x: centre.x + radius * Math.cos(angle), y: centre.y - radius * Math.sin(angle) };
         });
         await input.penDown(path[0]);
         for (const point of path.slice(1)) await input.penMove(point);
@@ -2422,19 +1789,8 @@ describe("standalone workbench host boundary", function () {
         await undo();
 
         const command = async (name: string) => {
-          await input.penStroke([
-            await stableCenter(
-              strip.getByRole("button", { name: "Transform", exact: true }),
-            ),
-          ]);
-          await input.penStroke([
-            await stableCenter(
-              frame
-                .getByRole("menu")
-                .last()
-                .getByRole("menuitem", { name, exact: true }),
-            ),
-          ]);
+          await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Transform", exact: true }))]);
+          await input.penStroke([await stableCenter(frame.getByRole("menu").last().getByRole("menuitem", { name, exact: true }))]);
           await expect.poll(source).not.toBe(authored);
           await undo();
         };
@@ -2451,9 +1807,7 @@ describe("standalone workbench host boundary", function () {
       `scales a lasso-selected pair by 2 from a corner of their frame in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
@@ -2462,18 +1816,12 @@ describe("standalone workbench host boundary", function () {
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`;
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:3"]').first(),
-        ).toBeVisible();
+        await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -2482,49 +1830,27 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Lasso", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true })),
         ]);
         // A loop round both circles and clear of the axes.
-        await input.penStroke([
-          at(0.5, 0.5),
-          at(8, 0.5),
-          at(8, 3.6),
-          at(0.5, 3.6),
-          at(0.5, 0.6),
-        ]);
+        await input.penStroke([at(0.5, 0.5), at(8, 0.5), at(8, 3.6), at(0.5, 3.6), at(0.5, 0.6)]);
         await expect
           .poll(async () => [...(await editorDebug(page)).selection].sort())
           .toEqual(["path:2", "path:3"]);
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         await expect
           .poll(async () => [...(await editorDebug(page)).selection].sort())
@@ -2543,19 +1869,14 @@ describe("standalone workbench host boundary", function () {
             }),
           );
         const nearest = handles
-          .map((entry) => ({
-            ...entry,
-            x: entry.x + frameBox.x,
-            y: entry.y + frameBox.y,
-          }))
+          .map((entry) => ({ ...entry, x: entry.x + frameBox.x, y: entry.y + frameBox.y }))
           .sort(
             (a, b) =>
               Math.hypot(a.x - corner.x, a.y - corner.y) -
               Math.hypot(b.x - corner.x, b.y - corner.y),
           )[0];
         assert.ok(
-          nearest !== undefined &&
-            Math.hypot(nearest.x - corner.x, nearest.y - corner.y) < 16,
+          nearest !== undefined && Math.hypot(nearest.x - corner.x, nearest.y - corner.y) < 16,
           `No frame corner handle at (7,3) for the pair: ${JSON.stringify(handles)}`,
         );
         const target = at(13, 5);
@@ -2568,20 +1889,10 @@ describe("standalone workbench host boundary", function () {
         }
         await input.penUp(target);
         // The rendered circles: centres at (3,3) and (11,3), each 4 units across.
-        const unit = Math.hypot(
-          at(1, 0).x - at(0, 0).x,
-          at(1, 0).y - at(0, 0).y,
-        );
+        const unit = Math.hypot(at(1, 0).x - at(0, 0).x, at(1, 0).y - at(0, 0).y);
         const circle = async (id: string) => {
-          const box = (await frame
-            .locator(`svg [data-source-id="${id}"]`)
-            .first()
-            .boundingBox())!;
-          return {
-            x: box.x + box.width / 2,
-            y: box.y + box.height / 2,
-            width: box.width,
-          };
+          const box = (await frame.locator(`svg [data-source-id="${id}"]`).first().boundingBox())!;
+          return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width };
         };
         for (const [id, x, y] of [
           ["path:2", 3, 3],
@@ -2589,8 +1900,7 @@ describe("standalone workbench host boundary", function () {
         ] as const) {
           await expect
             .poll(
-              async () =>
-                Math.round(((await circle(id)).width / unit) * 10) / 10,
+              async () => Math.round(((await circle(id)).width / unit) * 10) / 10,
               `${id} is not 4 units across`,
             )
             .toBe(4);
@@ -2601,18 +1911,10 @@ describe("standalone workbench host boundary", function () {
             `${id} centre at ${JSON.stringify(centre)}, expected (${x},${y}) at ${JSON.stringify(expected)}: ${(await editorDebug(page)).source}`,
           );
         }
-        await input.penStroke([
-          await stableCenter(
-            rail.getByRole("button", { name: "Undo", exact: true }),
-          ),
-        ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(authored);
+        await input.penStroke([await stableCenter(rail.getByRole("button", { name: "Undo", exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
         await editorReady(page);
-        await expect
-          .poll(async () => [...(await editorDebug(page)).selection].sort())
-          .toEqual(["path:2", "path:3"]);
+        await expect.poll(async () => [...(await editorDebug(page)).selection].sort()).toEqual(["path:2", "path:3"]);
       },
     );
   }
@@ -2623,26 +1925,20 @@ describe("standalone workbench host boundary", function () {
       `shears a square from its right edge after a second tap with the pen in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \draw (2,2) rectangle (6,6);
 \end{tikzpicture}`;
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const square = frame.locator('svg [data-source-id="path:2"]').first();
         await expect(square).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -2651,73 +1947,43 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const unit = Math.hypot(xTen.x - origin.x, xTen.y - origin.y) / 10;
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.penStroke([at(2, 4)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:2"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
         // A second tap on the selected square switches its frame to rotate-and-shear handles, as in Inkscape.
         await input.penStroke([at(2, 4.2)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:2"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
         // The switch waits out the double-tap window; the author sees the edge handles appear.
-        await expect(
-          frame.locator('[data-handle-kind="shear"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('[data-handle-kind="shear"]').first()).toBeAttached();
         const edge = at(6, 4);
-        const handles = await frame
-          .locator('[data-resize-role="right"]')
-          .evaluateAll((nodes) =>
-            nodes.map((node) => {
-              const box = node.getBoundingClientRect();
-              return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-            }),
-          );
+        const handles = await frame.locator('[data-resize-role="right"]').evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const box = node.getBoundingClientRect();
+            return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+          }),
+        );
         // Grab the handle at the right edge's midpoint if the frame shows one there, else the edge itself.
         const grip = [
-          ...handles.map((point) => ({
-            x: point.x + frameBox.x,
-            y: point.y + frameBox.y,
-          })),
+          ...handles.map((point) => ({ x: point.x + frameBox.x, y: point.y + frameBox.y })),
           edge,
-        ].filter(
-          (point) => Math.hypot(point.x - edge.x, point.y - edge.y) < 24,
-        )[0];
+        ].filter((point) => Math.hypot(point.x - edge.x, point.y - edge.y) < 24)[0];
         const target = { x: grip.x, y: grip.y - 2 * unit };
         await input.penDown(grip);
         for (let i = 1; i <= 10; i++) {
-          await input.penMove({
-            x: grip.x,
-            y: grip.y + ((target.y - grip.y) * i) / 10,
-          });
+          await input.penMove({ x: grip.x, y: grip.y + ((target.y - grip.y) * i) / 10 });
         }
         await input.penUp(target);
         // A shear that lifts the right edge by 2 keeps the width at 4 and makes the outline 6 tall.
@@ -2726,28 +1992,15 @@ describe("standalone workbench host boundary", function () {
           .poll(
             async () => {
               const box = (await square.boundingBox())!;
-              return (
-                Math.abs(box.width / unit - 4) < 0.3 &&
-                Math.abs(box.height / unit - 6) < 0.3
-              );
+              return Math.abs(box.width / unit - 4) < 0.3 && Math.abs(box.height / unit - 6) < 0.3;
             },
             { message: "The square is not 4 wide and 6 tall after the shear" },
           )
           .toBe(true);
-        await input.penStroke([
-          await stableCenter(
-            frame
-              .locator("[data-diagram-tools]")
-              .getByRole("button", { name: "Undo", exact: true }),
-          ),
-        ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(authored);
+        await input.penStroke([await stableCenter(frame.locator("[data-diagram-tools]").getByRole("button", { name: "Undo", exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
         await editorReady(page);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:2"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
       },
     );
   }
@@ -2758,25 +2011,17 @@ describe("standalone workbench host boundary", function () {
       `creates, hides, and deletes a ruler guide by finger from one Ruler guides control in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -2785,37 +2030,21 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
-        const ruler = (await frame
-          .getByTestId("canvas-top-ruler")
-          .boundingBox())!;
+        const ruler = (await frame.getByTestId("canvas-top-ruler").boundingBox())!;
         const guides = frame.locator('[class*="guideOverlay"] line');
         const guideAtThree = async () =>
           (
-            await guides.evaluateAll((lines) =>
-              lines.map((line) => line.getBoundingClientRect().y),
-            )
+            await guides.evaluateAll((lines) => lines.map((line) => line.getBoundingClientRect().y))
           ).some((y) => Math.abs(frameBox.y + y - at(3, 3).y) < 4);
         // A finger drags a guide down out of the top ruler to y = 3.
         // The ruler's box is already in page coordinates.
@@ -2828,20 +2057,12 @@ describe("standalone workbench host boundary", function () {
           })),
         );
         await expect
-          .poll(guideAtThree, {
-            message: "No guide at y = 3 after a finger drag from the ruler",
-          })
+          .poll(guideAtThree, { message: "No guide at y = 3 after a finger drag from the ruler" })
           .toBe(true);
         // One control owns ruler guides: turning it off hides them, turning it on restores them.
-        const zoom = frame.getByRole("button", {
-          name: "Zoom and display",
-          exact: true,
-        });
+        const zoom = frame.getByRole("button", { name: "Zoom and display", exact: true });
         await input.touch([await stableCenter(zoom)]);
-        const control = frame.getByRole("button", {
-          name: "Ruler guides",
-          exact: true,
-        });
+        const control = frame.getByRole("button", { name: "Ruler guides", exact: true });
         await expect(control).toHaveAttribute("aria-pressed", "true");
         await input.touch([await stableCenter(control)]);
         await expect.poll(guideAtThree).toBe(false);
@@ -2856,9 +2077,7 @@ describe("standalone workbench host boundary", function () {
           })),
         );
         await expect
-          .poll(guideAtThree, {
-            message: "The guide survives being dragged onto its ruler",
-          })
+          .poll(guideAtThree, { message: "The guide survives being dragged onto its ruler" })
           .toBe(false);
       },
     );
@@ -2870,26 +2089,17 @@ describe("standalone workbench host boundary", function () {
       `reads a drawn line's end in lattice units when the figure scales its lattice in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await page.locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
 \draw (0,0) -- (5,0);
 \draw (0,0) -- (0,5);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeAttached();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -2898,39 +2108,23 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xFive], [, yFive]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xFive], [, yFive]] = [await ends("path:0"), await ends("path:1")];
         // Screen position of lattice (x, y) in the x=2cm, y=2cm frame, from the two segments of length 5.
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xFive.x - origin.x) * x) / 5 +
-            ((yFive.x - origin.x) * y) / 5,
+            frameBox.x + origin.x + ((xFive.x - origin.x) * x) / 5 + ((yFive.x - origin.x) * y) / 5,
           y:
-            frameBox.y +
-            origin.y +
-            ((xFive.y - origin.y) * x) / 5 +
-            ((yFive.y - origin.y) * y) / 5,
+            frameBox.y + origin.y + ((xFive.y - origin.y) * x) / 5 + ((yFive.y - origin.y) * y) / 5,
         });
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("option", { name: "Line", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
         ]);
         const [from, to] = [at(1, 1), at(3, 2)];
         await input.penDown(from);
@@ -2955,11 +2149,7 @@ describe("standalone workbench host boundary", function () {
           /Height:\s*1 units/,
           `The drag readout does not state a height of 1 lattice unit: ${text}`,
         );
-        assert.doesNotMatch(
-          text,
-          /cm|px/,
-          `The drag readout states physical lengths: ${text}`,
-        );
+        assert.doesNotMatch(text, /cm|px/, `The drag readout states physical lengths: ${text}`);
       },
     );
   }
@@ -2970,9 +2160,7 @@ describe("standalone workbench host boundary", function () {
       `rotates a lasso-selected pair a quarter turn about their centre in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
@@ -2980,18 +2168,12 @@ describe("standalone workbench host boundary", function () {
 \draw (6,2) circle (1);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:3"]').first(),
-        ).toBeVisible();
+        await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -3000,62 +2182,38 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Lasso", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true })),
         ]);
-        await input.penStroke([
-          at(0.5, 0.5),
-          at(8, 0.5),
-          at(8, 3.6),
-          at(0.5, 3.6),
-          at(0.5, 0.6),
-        ]);
+        await input.penStroke([at(0.5, 0.5), at(8, 0.5), at(8, 3.6), at(0.5, 3.6), at(0.5, 0.6)]);
         await expect
           .poll(async () => [...(await editorDebug(page)).selection].sort())
           .toEqual(["path:2", "path:3"]);
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         await expect
           .poll(async () => [...(await editorDebug(page)).selection].sort())
           .toEqual(["path:2", "path:3"]);
         // Turn the frame's rotate handle (or, without one, the point above the pair's centre) a quarter turn counterclockwise.
         const centre = at(4, 2);
-        const handles = await frame
-          .getByTestId("canvas-rotate-handle")
-          .evaluateAll((nodes) =>
-            nodes.map((node) => {
-              const box = node.getBoundingClientRect();
-              return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-            }),
-          );
+        const handles = await frame.getByTestId("canvas-rotate-handle").evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const box = node.getBoundingClientRect();
+            return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+          }),
+        );
         const start =
           handles.length > 0
             ? { x: handles[0].x + frameBox.x, y: handles[0].y + frameBox.y }
@@ -3064,10 +2222,7 @@ describe("standalone workbench host boundary", function () {
         const from = Math.atan2(centre.y - start.y, start.x - centre.x);
         const path = Array.from({ length: 12 }, (_, i) => {
           const angle = from + ((Math.PI / 2) * i) / 11;
-          return {
-            x: centre.x + radius * Math.cos(angle),
-            y: centre.y - radius * Math.sin(angle),
-          };
+          return { x: centre.x + radius * Math.cos(angle), y: centre.y - radius * Math.sin(angle) };
         });
         await input.penDown(path[0]);
         for (const point of path.slice(1)) {
@@ -3076,21 +2231,15 @@ describe("standalone workbench host boundary", function () {
         await input.penUp(path[path.length - 1]);
         // About (4,2), (2,2) goes to (4,0) and (6,2) to (4,4).
         const centreOf = async (id: string) => {
-          const box = (await frame
-            .locator(`svg [data-source-id="${id}"]`)
-            .first()
-            .boundingBox())!;
+          const box = (await frame.locator(`svg [data-source-id="${id}"]`).first().boundingBox())!;
           return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
         };
-        const near = (
-          a: { x: number; y: number },
-          b: { x: number; y: number },
-        ) => Math.hypot(a.x - b.x, a.y - b.y) < 6;
+        const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+          Math.hypot(a.x - b.x, a.y - b.y) < 6;
         await expect
           .poll(
             async () =>
-              near(await centreOf("path:2"), at(4, 0)) &&
-              near(await centreOf("path:3"), at(4, 4)),
+              near(await centreOf("path:2"), at(4, 0)) && near(await centreOf("path:3"), at(4, 4)),
             { message: "The pair did not turn a quarter about (4,2)" },
           )
           .toBe(true);
@@ -3106,74 +2255,41 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(frame.getByRole("option", { name: "Line", exact: true }));
-        await tap(
-          rail.getByRole("button", { name: "Properties", exact: true }),
-        );
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         await expect(panel.getByText("Line", { exact: true })).toBeVisible();
-        await expect(
-          panel.getByText("New strokes", { exact: true }),
-        ).toBeVisible();
+        await expect(panel.getByText("New strokes", { exact: true })).toBeVisible();
         await tap(panel.getByRole("button", { name: "Creation stroke color" }));
         await tap(frame.getByRole("button", { name: "Choose green" }));
-        await expect(
-          rail.getByRole("button", { name: "Color: New strokes: green" }),
-        ).toBeVisible();
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        await expect(rail.getByRole("button", { name: "Color: New strokes: green" })).toBeVisible();
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const y = viewport.y + viewport.height * 0.35;
         await input.penStroke([
           { x: viewport.x + viewport.width * 0.3, y },
           { x: viewport.x + viewport.width * 0.6, y },
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/\\draw\[[^\]]*green/);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*green/);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await expect(panel.getByText("Line", { exact: true })).toBeVisible();
-        await expect(
-          panel.getByText("Selected line", { exact: true }),
-        ).toBeVisible();
-        await tap(
-          panel.getByRole("button", { name: "Color", exact: true }).first(),
-        );
+        await expect(panel.getByText("Selected line", { exact: true })).toBeVisible();
+        await tap(panel.getByRole("button", { name: "Color", exact: true }).first());
         await tap(frame.getByRole("button", { name: "Choose red" }));
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/\\draw\[[^\]]*red/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*red/);
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
-        await input.touch([
-          {
-            x: viewport.x + viewport.width - 12,
-            y: viewport.y + viewport.height - 12,
-          },
-        ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([]);
+        await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(frame.getByRole("option", { name: "Line", exact: true }));
-        await expect(
-          panel.getByText("New strokes", { exact: true }),
-        ).toBeVisible();
+        await expect(panel.getByText("New strokes", { exact: true })).toBeVisible();
         await input.penStroke([
           { x: viewport.x + viewport.width * 0.3, y: y + 55 },
           { x: viewport.x + viewport.width * 0.6, y: y + 55 },
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/\\draw\[[^\]]*red[^\]]*\][^;]*;[\s\S]*\\draw\[[^\]]*green/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*red[^\]]*\][^;]*;[\s\S]*\\draw\[[^\]]*green/);
       },
     );
   }
@@ -3188,24 +2304,15 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Freehand", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Freehand", exact: true })),
         ]);
         assert.equal((await editorDebug(page)).tool, "addFreehand");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Properties", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Properties", exact: true })),
         ]);
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         await expect(panel).toBeVisible();
-        await expect(
-          panel.getByText("Freehand", { exact: false }).first(),
-        ).toBeVisible();
+        await expect(panel.getByText("Freehand", { exact: false }).first()).toBeVisible();
         const text = await panel.innerText();
         assert.doesNotMatch(
           text,
@@ -3224,41 +2331,27 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         // The first stroke turns automatic fitting on for the strokes after it.
         await input.penStroke(waveAcross(viewport, 0.45, 0.3, 120));
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Defaults", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Defaults", exact: true })),
         ]);
         await input.touch([
           await stableCenter(
-            result.getByRole("checkbox", {
-              name: "Refine new strokes automatically",
-              exact: true,
-            }),
+            result.getByRole("checkbox", { name: "Refine new strokes automatically", exact: true }),
           ),
         ]);
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Cancel", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
-        const drawsBefore = (
-          (await editorDebug(page)).source.match(/\\draw/g) ?? []
-        ).length;
+        const drawsBefore = ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
         await input.penStroke(waveAcross(viewport, 0.45, 0.65, 120));
         await expect(result).toBeVisible();
         await expect
-          .poll(
-            async () =>
-              ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length,
-          )
+          .poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length)
           .toBe(drawsBefore + 1);
         const lastDraw = async () => {
           const draws = (await editorDebug(page)).source
@@ -3266,15 +2359,9 @@ describe("standalone workbench host boundary", function () {
             .filter((line) => line.trim().startsWith("\\draw"));
           return draws[draws.length - 1];
         };
-        assert.match(
-          await lastDraw(),
-          /\.\. controls/,
-          "The automatic fit did not apply",
-        );
+        assert.match(await lastDraw(), /\.\. controls/, "The automatic fit did not apply");
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Cancel", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
         // Cancel brings back the recorded stroke: a polyline of its samples, not the fit.
@@ -3282,10 +2369,7 @@ describe("standalone workbench host boundary", function () {
           .poll(
             async () => {
               const draw = await lastDraw();
-              return (
-                !/\.\. controls/.test(draw) &&
-                (draw.match(/--/g) ?? []).length > 5
-              );
+              return !/\.\. controls/.test(draw) && (draw.match(/--/g) ?? []).length > 5;
             },
             { message: "Cancel left the automatic fit in place" },
           )
@@ -3301,20 +2385,15 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
-        const draws = async () =>
-          ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
         // No stroke waits for the canvas to finish redrawing the one before it.
         await input.penStroke(waveAcross(viewport, 0.45, 0.2, 120));
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 120));
         await page.keyboard.press("Escape");
         await input.penStroke(waveAcross(viewport, 0.45, 0.6, 120));
         await expect
-          .poll(draws, {
-            message: "A stroke drawn while the canvas redrew was lost",
-          })
+          .poll(draws, { message: "A stroke drawn while the canvas redrew was lost" })
           .toBe(3);
         await input.touch([
           await stableCenter(
@@ -3331,9 +2410,7 @@ describe("standalone workbench host boundary", function () {
         );
         // The sweep crosses each wave once and cuts it in two.
         await expect
-          .poll(draws, {
-            message: "An eraser sweep right after a stroke did not erase",
-          })
+          .poll(draws, { message: "An eraser sweep right after a stroke did not erase" })
           .toBe(6);
       },
     );
@@ -3360,39 +2437,27 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`;
         await page.goto(url);
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         const source = async () => (await editorDebug(page)).source;
         const redLine = frame.locator('svg [data-source-id="path:1"]').first();
         await expect(redLine).toBeVisible();
         await expect.poll(source).toBe(authored);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const steps: string[] = [authored];
         const step = async (message: string) => {
           await expect.poll(source, { message }).not.toBe(last());
           steps.push(await source());
         };
         const last = () => steps[steps.length - 1];
-        const strokeRecords = (text: string) =>
-          (text.match(/^% workbench-ink:/gm) ?? []).length;
+        const strokeRecords = (text: string) => (text.match(/^% workbench-ink:/gm) ?? []).length;
         const fitShown = (text: string) => text.includes(".. controls");
-        const press = async (
-          name: "Undo" | "Redo",
-          message: string,
-          expected: string,
-        ) => {
+        const press = async (name: "Undo" | "Redo", message: string, expected: string) => {
           await tap(rail.getByRole("button", { name, exact: true }));
           await expect.poll(source, { message }).toBe(expected);
         };
@@ -3417,26 +2482,20 @@ describe("standalone workbench host boundary", function () {
           { x: lineFrom + 160, y: lineY },
         ]);
         await step("The constructed line is not in the source");
-        const lines = (text: string) =>
-          (text.match(/\\draw[^;]*--[^;]*;/g) ?? []).length;
+        const lines = (text: string) => (text.match(/\\draw[^;]*--[^;]*;/g) ?? []).length;
         assert.equal(lines(last()), 2);
 
         // The authored red line, picked with the pen and deleted from the selection strip's menu.
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await input.penStroke([await strokePoint(page, redLine, 0.5)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:1"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
         await tap(
           frame
             .getByRole("toolbar", { name: "Selection", exact: true })
             .getByRole("button", { name: "More", exact: true }),
         );
         await tap(
-          frame
-            .getByRole("menu")
-            .first()
-            .getByRole("menuitem", { name: "Delete", exact: true }),
+          frame.getByRole("menu").first().getByRole("menuitem", { name: "Delete", exact: true }),
         );
         await step("The deleted line is still in the source");
         assert.ok(!last().includes("\\draw[red]"), last());
@@ -3444,30 +2503,15 @@ describe("standalone workbench host boundary", function () {
         // An eraser sweep across the constructed line cuts it in two.
         await tap(rail.getByRole("button", { name: "Eraser", exact: true }));
         await input.penStroke(
-          Array.from({ length: 9 }, (_, i) => ({
-            x: lineFrom + 80,
-            y: lineY - 20 + i * 5,
-          })),
+          Array.from({ length: 9 }, (_, i) => ({ x: lineFrom + 80, y: lineY - 20 + i * 5 })),
         );
         await step("The eraser sweep did not change the source");
         const final = last();
-        assert.equal(
-          lines(final),
-          2,
-          `The swept line is not two lines:\n${final}`,
-        );
-        for (const kept of [
-          "% a comment the editor must keep",
-          "\\draw[blue] (0,0) rectangle (2,1);",
-        ]) {
-          assert.ok(
-            final.includes(kept),
-            `The session lost the authored line ${kept}:\n${final}`,
-          );
+        assert.equal(lines(final), 2, `The swept line is not two lines:\n${final}`);
+        for (const kept of ["% a comment the editor must keep", "\\draw[blue] (0,0) rectangle (2,1);"]) {
+          assert.ok(final.includes(kept), `The session lost the authored line ${kept}:\n${final}`);
         }
-        const finalPicture = await frame
-          .locator("svg [data-source-id]")
-          .count();
+        const finalPicture = await frame.locator("svg [data-source-id]").count();
 
         // Undo walks back through every step to the authored bytes; Redo walks forward to the final source.
         for (const earlier of steps.slice(1, -1).reverse()) {
@@ -3476,47 +2520,21 @@ describe("standalone workbench host boundary", function () {
         // Under the fit lies the stroke as drawn, then the authored source.
         await tap(rail.getByRole("button", { name: "Undo", exact: true }));
         await expect
-          .poll(
-            async () => [
-              strokeRecords(await source()),
-              fitShown(await source()),
-            ],
-            {
-              message: "Undo did not restore the stroke as drawn",
-            },
-          )
+          .poll(async () => [strokeRecords(await source()), fitShown(await source())], {
+            message: "Undo did not restore the stroke as drawn",
+          })
           .toEqual([1, false]);
         const asDrawn = await source();
-        await press(
-          "Undo",
-          "Undo did not restore the authored source",
-          authored,
-        );
-        await press(
-          "Redo",
-          "Redo did not restore the stroke as drawn",
-          asDrawn,
-        );
+        await press("Undo", "Undo did not restore the authored source", authored);
+        await press("Redo", "Redo did not restore the stroke as drawn", asDrawn);
         for (const later of steps.slice(1)) {
           await press("Redo", "Redo did not restore the step after", later);
         }
-        await expect(frame.locator("svg [data-source-id]")).toHaveCount(
-          finalPicture,
-        );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await page
-          .getByRole("button", { name: "Copy source", exact: true })
-          .click();
-        await expect
-          .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-          .toBe(final);
-        assert.deepEqual(
-          external,
-          [],
-          "The session asked for an external asset",
-        );
+        await expect(frame.locator("svg [data-source-id]")).toHaveCount(finalPicture);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.getByRole("button", { name: "Copy source", exact: true }).click();
+        await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(final);
+        assert.deepEqual(external, [], "The session asked for an external asset");
       },
     );
   }
@@ -3533,17 +2551,12 @@ describe("standalone workbench host boundary", function () {
 \draw (0,2) -- (4,2);
 \end{tikzpicture}`;
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         const source = async () => (await editorDebug(page)).source;
         const steps: string[] = [authored];
@@ -3555,23 +2568,14 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(source).toBe(authored);
         await fitDiagram(frame, input);
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const style = frame.getByRole("dialog", { name: "Style" });
 
         // The red line's appearance becomes a named style.
         await input.penStroke([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.3,
-          ),
+          await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.3),
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await tap(strip.getByRole("button", { name: "Style", exact: true }));
         await style.getByLabel("Style name").fill("accent line");
         await tap(style.getByRole("button", { name: "Save style" }));
@@ -3581,15 +2585,9 @@ describe("standalone workbench host boundary", function () {
 
         // The plain line takes the same style.
         await input.penStroke([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:1"]').first(),
-            0.3,
-          ),
+          await strokePoint(page, frame.locator('svg [data-source-id="path:1"]').first(), 0.3),
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:1"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
         await tap(strip.getByRole("button", { name: "Style", exact: true }));
         await tap(style.getByRole("button", { name: "Apply accent line" }));
         await step("The second line did not take the style");
@@ -3598,28 +2596,14 @@ describe("standalone workbench host boundary", function () {
         // A new layer takes the styled line, picked in the layer list, into its scope.
         await tap(rail.getByRole("button", { name: "Layers", exact: true }));
         const panel = frame
-          .getByRole("complementary", {
-            name: "Diagram properties",
-            exact: true,
-          })
+          .getByRole("complementary", { name: "Diagram properties", exact: true })
           .getByRole("tabpanel");
-        await tap(
-          panel.getByRole("button", { name: "New layer", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "New layer", exact: true }));
         await step("The layer is not in the source");
         assert.match(last(), /\\begin\{scope\}\[name=Layer 1\]/);
-        await tap(
-          panel.getByRole("button", { name: "Line", exact: true }).first(),
-        );
-        await expect
-          .poll(async () => (await editorDebug(page)).selection.length)
-          .toBe(1);
-        await tap(
-          panel.getByRole("button", {
-            name: "Move selection to Layer 1",
-            exact: true,
-          }),
-        );
+        await tap(panel.getByRole("button", { name: "Line", exact: true }).first());
+        await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+        await tap(panel.getByRole("button", { name: "Move selection to Layer 1", exact: true }));
         await step("The line did not move into the layer");
         const final = last();
         assert.match(
@@ -3627,40 +2611,22 @@ describe("standalone workbench host boundary", function () {
           /\\begin\{scope\}\[name=Layer 1\]\s*\\draw\[accent line\] \(0,2\) -- \(4,2\);\s*\\end\{scope\}/,
         );
         assert.ok(final.includes("% a comment the editor must keep"), final);
-        assert.equal(
-          final.match(/\\draw/g)!.length,
-          2,
-          `The session changed the number of lines:\n${final}`,
-        );
-        const finalPicture = await frame
-          .locator("svg [data-source-id]")
-          .count();
+        assert.equal(final.match(/\\draw/g)!.length, 2, `The session changed the number of lines:\n${final}`);
+        const finalPicture = await frame.locator("svg [data-source-id]").count();
 
         // Undo walks back through every step to the authored bytes; Redo walks forward to the final source.
         for (const earlier of steps.slice(0, -1).reverse()) {
           await tap(rail.getByRole("button", { name: "Undo", exact: true }));
-          await expect
-            .poll(source, { message: "Undo did not restore the step before" })
-            .toBe(earlier);
+          await expect.poll(source, { message: "Undo did not restore the step before" }).toBe(earlier);
         }
         for (const later of steps.slice(1)) {
           await tap(rail.getByRole("button", { name: "Redo", exact: true }));
-          await expect
-            .poll(source, { message: "Redo did not restore the step after" })
-            .toBe(later);
+          await expect.poll(source, { message: "Redo did not restore the step after" }).toBe(later);
         }
-        await expect(frame.locator("svg [data-source-id]")).toHaveCount(
-          finalPicture,
-        );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await page
-          .getByRole("button", { name: "Copy source", exact: true })
-          .click();
-        await expect
-          .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-          .toBe(final);
+        await expect(frame.locator("svg [data-source-id]")).toHaveCount(finalPicture);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.getByRole("button", { name: "Copy source", exact: true }).click();
+        await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(final);
       },
     );
   }
@@ -3818,9 +2784,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         const x0 = viewport.x + viewport.width * 0.2,
           y0 = viewport.y + viewport.height * 0.4,
@@ -3831,21 +2795,14 @@ describe("standalone workbench host boundary", function () {
           return { x: x0 + width * t, y: y0 + 60 * Math.sin(2 * Math.PI * t) };
         });
         const last = points.at(-1)!;
-        points.push(
-          { x: last.x + 2, y: last.y + 3 },
-          { x: last.x + 1, y: last.y + 5 },
-        );
+        points.push({ x: last.x + 2, y: last.y + 3 }, { x: last.x + 1, y: last.y + 5 });
         await input.penStroke(points);
         await expect(result).toBeVisible();
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Accept", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
-        const draw = (await editorDebug(page)).source
-          .match(/\\draw[^;]*;/g)!
-          .at(-1)!;
+        const draw = (await editorDebug(page)).source.match(/\\draw[^;]*;/g)!.at(-1)!;
         assert.match(draw, /\.\. controls/, "Accept did not apply a fit");
         const anchors = [...draw.matchAll(/\((-?[\d.]+),\s*(-?[\d.]+)\)/g)]
           .filter((_, i) => i % 3 === 0)
@@ -3860,9 +2817,7 @@ describe("standalone workbench host boundary", function () {
         const gaps = anchors
           .slice(1)
           .map(
-            (anchor, i) =>
-              Math.hypot(anchor.x - anchors[i].x, anchor.y - anchors[i].y) *
-              pxPerCm,
+            (anchor, i) => Math.hypot(anchor.x - anchors[i].x, anchor.y - anchors[i].y) * pxPerCm,
           );
         // Each anchor stays outside the reach in which a pen contact lands on its neighbour.
         assert.ok(
@@ -3880,21 +2835,14 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const draws = async () =>
-          (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ??
-          ([] as string[]);
+          (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ?? ([] as string[]);
         await input.penStroke(waveAcross(viewport, 0.3, 0.4, 120));
         await expect.poll(async () => (await draws()).length).toBe(1);
         await page.keyboard.press("Escape");
         const [first] = await draws();
-        const end = await strokePoint(
-          page,
-          frame.locator("svg [data-source-id]").first(),
-          1,
-        );
+        const end = await strokePoint(page, frame.locator("svg [data-source-id]").first(), 1);
         // The second stroke goes down a few pixels past the first one's end and continues away from it.
         await input.penStroke(
           Array.from({ length: 16 }, (_, i) => ({
@@ -3923,48 +2871,33 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         const fittedDraws = async () =>
           (await editorDebug(page)).source
             .split("\n")
-            .filter(
-              (line) =>
-                line.trim().startsWith("\\draw") && /\.\. controls/.test(line),
-            ).length;
+            .filter((line) => line.trim().startsWith("\\draw") && /\.\. controls/.test(line))
+            .length;
         await input.penStroke(waveAcross(viewport, 0.45, 0.2, 120));
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Defaults", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Defaults", exact: true })),
         ]);
         await input.touch([
           await stableCenter(
-            result.getByRole("checkbox", {
-              name: "Refine new strokes automatically",
-              exact: true,
-            }),
+            result.getByRole("checkbox", { name: "Refine new strokes automatically", exact: true }),
           ),
         ]);
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Cancel", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
         await input.penStroke(waveAcross(viewport, 0.45, 0.45, 120));
-        await expect
-          .poll(fittedDraws, { message: "The automatic fit did not apply" })
-          .toBe(1);
+        await expect.poll(fittedDraws, { message: "The automatic fit did not apply" }).toBe(1);
         // Drawing the next stroke on empty canvas continues the session: the earlier fit stays.
         const wave = waveAcross({ x: 0, y: 0, width: 0, height: 0 }, 0, 0, 120);
         await input.penStroke(await emptyCanvasGesture(frame, wave));
         await expect
-          .poll(fittedDraws, {
-            message: "Drawing again reverted the earlier automatic fit",
-          })
+          .poll(fittedDraws, { message: "Drawing again reverted the earlier automatic fit" })
           .toBe(2);
         const fitted = (await editorDebug(page)).source;
         await input.touch([
@@ -3974,9 +2907,7 @@ describe("standalone workbench host boundary", function () {
               .getByRole("button", { name: "Select", exact: true }),
           ),
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).tool)
-          .toBe("select");
+        await expect.poll(async () => (await editorDebug(page)).tool).toBe("select");
         await expect(result).toHaveCount(0);
         assert.equal(
           (await editorDebug(page)).source,
@@ -3986,9 +2917,7 @@ describe("standalone workbench host boundary", function () {
         // The fit is its own history step after the recorded stroke.
         await page.keyboard.press("Control+z");
         await expect
-          .poll(fittedDraws, {
-            message: "One Undo did not restore the last original",
-          })
+          .poll(fittedDraws, { message: "One Undo did not restore the last original" })
           .toBe(1);
       },
     );
@@ -4000,18 +2929,12 @@ describe("standalone workbench host boundary", function () {
       `draws from an existing point with the pen, and moves it under a held finger or a held pen, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         // Neither end is on the lattice, so a stroke that lands on one took the point, not the lattice.
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (0.37,0.61) -- (4.23,2.29);\end{tikzpicture}`,
-          );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+          .fill(String.raw`\begin{tikzpicture}\draw (0.37,0.61) -- (4.23,2.29);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => {
@@ -4022,25 +2945,22 @@ describe("standalone workbench host boundary", function () {
         await expect(line).toBeVisible();
         await fitDiagram(frame, input);
         const source = async () => (await editorDebug(page)).source;
-        const draws = async () =>
-          (await source()).match(/\\draw[^;]*;/g) ?? ([] as string[]);
+        const draws = async () => (await source()).match(/\\draw[^;]*;/g) ?? ([] as string[]);
         // The stroke is written against the point's name, so it follows the point (slice 3, item 5).
         const named = String.raw`\draw (0.37,0.61) coordinate (p1) -- (4.23,2.29);`;
         // The delay that turns a held pen into a move is a setting.
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));
         const settings = frame.getByTestId("settings-modal");
         await tap(settings.getByTestId("settings-category-canvas"));
-        await expect(
-          settings.getByRole("slider", { name: /^Hold to move a point/ }),
-        ).toHaveValue("450");
+        await expect(settings.getByRole("slider", { name: /^Hold to move a point/ })).toHaveValue(
+          "450",
+        );
         await tap(settings.getByRole("button", { name: "Close settings" }));
         await tap(rail.getByRole("button", { name: "Freehand", exact: true }));
         const start = await strokePoint(page, line, 0);
         // Hovering the pen over a point marks it as the stroke's attachment, before any contact.
         await input.penHover(start);
-        await expect(
-          frame.locator('[data-point-target="attach"]'),
-        ).toBeVisible();
+        await expect(frame.locator('[data-point-target="attach"]')).toBeVisible();
         // A stroke that starts on a point draws at once, from exactly that point.
         await input.penStroke(
           Array.from({ length: 12 }, (_, i) => ({
@@ -4058,11 +2978,7 @@ describe("standalone workbench host boundary", function () {
           /^\s*\\draw(?:\[[^\]]*\])?\s*\(p1\)/,
           "The stroke did not start at the point",
         );
-        assert.equal(
-          (await draws())[0].trim(),
-          named,
-          "Drawing from the point moved it",
-        );
+        assert.equal((await draws())[0].trim(), named, "Drawing from the point moved it");
         await page.keyboard.press("Escape");
         const drawn = await source();
         // With a finger of the other hand held down, a pen drag on a point moves the point.
@@ -4087,42 +3003,27 @@ describe("standalone workbench host boundary", function () {
             message: "The held finger did not make the pen move the point",
           })
           .not.toContain("(4.23,2.29)");
-        assert.match(
-          (await draws())[0],
-          /\(0\.37,0\.61\)/,
-          "Moving the end moved the start",
-        );
+        assert.match((await draws())[0], /\(0\.37,0\.61\)/, "Moving the end moved the start");
         // The move is one undo step.
         await tap(rail.getByRole("button", { name: "Undo", exact: true }));
         await expect.poll(source).toBe(drawn);
         // A pen held still on a point past the delay moves it, and the mark says so before the pen moves.
         const heldEnd = await endPoint();
         await input.penDown(heldEnd);
-        await expect(frame.locator('[data-point-target="move"]')).toBeVisible({
-          timeout: 2000,
-        });
+        await expect(frame.locator('[data-point-target="move"]')).toBeVisible({ timeout: 2000 });
         for (let step = 1; step <= 8; step++) {
-          await input.penMove({
-            x: heldEnd.x + step * 5,
-            y: heldEnd.y - step * 4,
-          });
+          await input.penMove({ x: heldEnd.x + step * 5, y: heldEnd.y - step * 4 });
         }
         await input.penUp({ x: heldEnd.x + 40, y: heldEnd.y - 32 });
         await expect
-          .poll(async () => (await draws())[0], {
-            message: "The held pen did not move the point",
-          })
+          .poll(async () => (await draws())[0], { message: "The held pen did not move the point" })
           .not.toContain("(4.23,2.29)");
         assert.equal((await draws()).length, 2, "The held pen drew a stroke");
         await tap(rail.getByRole("button", { name: "Undo", exact: true }));
         await expect.poll(source).toBe(drawn);
         // A double tap on a point never moves it.
         await input.doubleTap(await endPoint());
-        assert.equal(
-          (await draws())[0].trim(),
-          named,
-          "A double tap moved the point",
-        );
+        assert.equal((await draws())[0].trim(), named, "A double tap moved the point");
       },
     );
   }
@@ -4142,28 +3043,18 @@ describe("standalone workbench host boundary", function () {
 \draw (3.37,8.61) -- (7.23,9.29);
 \end{tikzpicture}`;
         const load = async (text: string) => {
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await page.locator(".cm-content").fill(text);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
-          await expect
-            .poll(async () => (await editorDebug(page)).source.trim())
-            .toBe(text);
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await expect.poll(async () => (await editorDebug(page)).source.trim()).toBe(text);
           await editorReady(page);
         };
         await load(figure);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:4"]').first(),
-        ).toBeVisible();
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeVisible();
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -4172,27 +3063,15 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const unit = Math.hypot(xTen.x - origin.x, xTen.y - origin.y) / 10;
         const rail = frame.locator("[data-diagram-tools]");
@@ -4205,19 +3084,12 @@ describe("standalone workbench host boundary", function () {
         const sourceIds = async () =>
           frame
             .locator("svg [data-source-id]")
-            .evaluateAll((elements) =>
-              elements.map(
-                (element) => element.getAttribute("data-source-id")!,
-              ),
-            );
+            .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-source-id")!));
         const newSourceId = async (before: string[]) =>
           (await sourceIds()).find((id) => !before.includes(id))!;
         // Rendered elements carry their source id; the node statement is path:2.
         const centerOf = async (id: string) => {
-          const box = (await frame
-            .locator(`svg [data-source-id="${id}"]`)
-            .first()
-            .boundingBox())!;
+          const box = (await frame.locator(`svg [data-source-id="${id}"]`).first().boundingBox())!;
           return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
         };
         const labelId = async () =>
@@ -4225,22 +3097,12 @@ describe("standalone workbench host boundary", function () {
             (element) => element.pathAttachment?.hostPathSourceId === "path:3",
           )!.sourceRef.sourceId;
         const target = frame.locator("[data-snap-target]");
-        const targetLabel = async () =>
-          target.first().getAttribute("data-snap-target");
+        const targetLabel = async () => target.first().getAttribute("data-snap-target");
         // The arrow ends on the node's border, so "at the node" means inside its drawn box (frame coordinates, as `ends` reports).
         const onNode = async (point: Point) => {
-          const box = (await frame
-            .locator('svg path[data-source-id="path:2"]')
-            .first()
-            .boundingBox())!;
-          const x = point.x + frameBox.x,
-            y = point.y + frameBox.y;
-          return (
-            x >= box.x - 2 &&
-            x <= box.x + box.width + 2 &&
-            y >= box.y - 2 &&
-            y <= box.y + box.height + 2
-          );
+          const box = (await frame.locator('svg path[data-source-id="path:2"]').first().boundingBox())!;
+          const x = point.x + frameBox.x, y = point.y + frameBox.y;
+          return x >= box.x - 2 && x <= box.x + box.width + 2 && y >= box.y - 2 && y <= box.y + box.height + 2;
         };
         const drag = async (from: Point, to: Point) => {
           await input.penDown(from);
@@ -4259,18 +3121,12 @@ describe("standalone workbench host boundary", function () {
         await expect(picker).toHaveCount(0);
         const nodeCenter = await centerOf("path:2");
         await input.penHover(nodeCenter);
-        await expect
-          .poll(targetLabel, { message: "Hovering the node did not name it" })
-          .toBe("A");
+        await expect.poll(targetLabel, { message: "Hovering the node did not name it" }).toBe("A");
         const before = await sourceIds();
         await drag(at(6, 6), nodeCenter);
         await expect
-          .poll(source, {
-            message: "The arrow end was not written against the node",
-          })
-          .toMatch(
-            /\\draw\[[^\]]*->[^\]]*\]\s*\(6,6\) -- \(A(?:\.[a-z ]+)?\);/,
-          );
+          .poll(source, { message: "The arrow end was not written against the node" })
+          .toMatch(/\\draw\[[^\]]*->[^\]]*\]\s*\(6,6\) -- \(A(?:\.[a-z ]+)?\);/);
         await editorReady(page);
         const arrowId = await newSourceId(before);
         await storyScreenshot(page, `attached-arrow-${tablet.name}`);
@@ -4280,21 +3136,15 @@ describe("standalone workbench host boundary", function () {
         await tap(picker.getByRole("option", { name: "Text", exact: true }));
         await expect(picker).toHaveCount(0);
         await input.penHover(at(7, 3));
-        await expect
-          .poll(targetLabel, { message: "Hovering the line did not name it" })
-          .toBe("On line");
+        await expect.poll(targetLabel, { message: "Hovering the line did not name it" }).toBe("On line");
         await input.penStroke([at(7, 3)]);
         await expect
           .poll(source, { message: "The label was not attached to the line" })
           .toMatch(/\\draw \(5,3\) -- \(9,3\) node\[midway[^\]]*\] \{[^}]*\};/);
         await editorReady(page);
-        await expect
-          .poll(labelId, { message: "The label is not a path-attached node" })
-          .toMatch(/./);
+        await expect.poll(labelId, { message: "The label is not a path-attached node" }).toMatch(/./);
         const label = await labelId();
-        await expect(
-          frame.locator(`svg [data-source-id="${label}"]`).first(),
-        ).toBeVisible();
+        await expect(frame.locator(`svg [data-source-id="${label}"]`).first()).toBeVisible();
         await storyScreenshot(page, `attached-label-${tablet.name}`);
 
         // A stroke that starts on a point is written against the point's name.
@@ -4302,9 +3152,7 @@ describe("standalone workbench host boundary", function () {
         const host = frame.locator('svg [data-source-id="path:4"]').first();
         const start = await strokePoint(page, host, 0);
         await input.penHover(start);
-        await expect(
-          frame.locator('[data-point-target="attach"]'),
-        ).toBeVisible();
+        await expect(frame.locator('[data-point-target="attach"]')).toBeVisible();
         const beforeStroke = await sourceIds();
         await input.penStroke(
           Array.from({ length: 12 }, (_, i) => ({
@@ -4314,14 +3162,8 @@ describe("standalone workbench host boundary", function () {
         );
         await expect
           .poll(source, { message: "The host point was not named" })
-          .toMatch(
-            /\\draw \(3\.37,8\.61\) coordinate \(p1\) -- \(7\.23,9\.29\);/,
-          );
-        assert.match(
-          await source(),
-          /\\draw(?:\[[^\]]*\])?\s*\(p1\)/,
-          "The stroke does not start at the named point",
-        );
+          .toMatch(/\\draw \(3\.37,8\.61\) coordinate \(p1\) -- \(7\.23,9\.29\);/);
+        assert.match(await source(), /\\draw(?:\[[^\]]*\])?\s*\(p1\)/, "The stroke does not start at the named point");
         await page.keyboard.press("Escape");
         await editorReady(page);
         const strokeId = await newSourceId(beforeStroke);
@@ -4331,52 +3173,34 @@ describe("standalone workbench host boundary", function () {
         // A press on the node's text edits the text, so the drag starts on the node's drawn border.
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         const arrowEndBefore = (await ends(arrowId))[1];
-        const grip = await strokePoint(
-          page,
-          frame.locator('svg path[data-source-id="path:2"]').first(),
-          0.5,
-        );
+        const grip = await strokePoint(page, frame.locator('svg path[data-source-id="path:2"]').first(), 0.5);
         const lift = { x: at(2, 8).x - at(2, 6).x, y: at(2, 8).y - at(2, 6).y };
         await drag(grip, { x: grip.x + lift.x, y: grip.y + lift.y });
-        await expect
-          .poll(source, { message: "The node did not move" })
-          .toMatch(/\\node\[draw\] \(A\) at \(2,8\) \{A\};/);
+        await expect.poll(source, { message: "The node did not move" }).toMatch(/\\node\[draw\] \(A\) at \(2,8\) \{A\};/);
         await editorReady(page);
         const arrowEndAfter = (await ends(arrowId))[1];
         assert.ok(
-          (await onNode(arrowEndAfter)) &&
-            arrowEndAfter.y < arrowEndBefore.y - unit,
+          (await onNode(arrowEndAfter)) && arrowEndAfter.y < arrowEndBefore.y - unit,
           `The arrow end did not follow the node: ${JSON.stringify({ arrowEndBefore, arrowEndAfter, unit })}`,
         );
-        assert.match(
-          await source(),
-          /\(6,6\) -- \(A(?:\.[a-z ]+)?\);/,
-          "Moving the node rewrote the arrow",
-        );
+        assert.match(await source(), /\(6,6\) -- \(A(?:\.[a-z ]+)?\);/, "Moving the node rewrote the arrow");
         await tap(undo);
-        await expect
-          .poll(source, { message: "One undo did not restore the node move" })
-          .toBe(attached);
+        await expect.poll(source, { message: "One undo did not restore the node move" }).toBe(attached);
         await editorReady(page);
 
         // Moving the line moves its label.
         await input.touch([at(9, 8)]);
         const labelBefore = await centerOf(label);
         await drag(at(6, 3), at(6, 2));
-        await expect
-          .poll(source, { message: "The line did not move" })
-          .toMatch(/\\draw \(5,2\) -- \(9,2\) node\[/);
+        await expect.poll(source, { message: "The line did not move" }).toMatch(/\\draw \(5,2\) -- \(9,2\) node\[/);
         await editorReady(page);
         const labelAfter = await centerOf(label);
         assert.ok(
-          Math.abs(labelAfter.y - (labelBefore.y + unit)) < 3 &&
-            Math.abs(labelAfter.x - labelBefore.x) < 3,
+          Math.abs(labelAfter.y - (labelBefore.y + unit)) < 3 && Math.abs(labelAfter.x - labelBefore.x) < 3,
           `The label did not follow the line: ${JSON.stringify({ labelBefore, labelAfter, unit })}`,
         );
         await tap(undo);
-        await expect
-          .poll(source, { message: "One undo did not restore the line move" })
-          .toBe(attached);
+        await expect.poll(source, { message: "One undo did not restore the line move" }).toBe(attached);
         await editorReady(page);
 
         // Moving the point under a held finger moves the stroke's start with it.
@@ -4387,49 +3211,30 @@ describe("standalone workbench host boundary", function () {
         await drag(point, { x: point.x - 30, y: point.y + 30 });
         await input.fingerUp();
         await expect
-          .poll(source, {
-            message: "The held finger did not make the pen move the point",
-          })
+          .poll(source, { message: "The held finger did not make the pen move the point" })
           .not.toContain("(3.37,8.61)");
         await editorReady(page);
-        assert.match(
-          await source(),
-          /coordinate \(p1\) -- \(7\.23,9\.29\);/,
-          "Moving the point lost its name",
-        );
+        assert.match(await source(), /coordinate \(p1\) -- \(7\.23,9\.29\);/, "Moving the point lost its name");
         const hostStart = (await ends("path:4"))[0];
         const strokeStart = (await ends(strokeId))[0];
         assert.ok(
-          Math.hypot(hostStart.x - strokeStart.x, hostStart.y - strokeStart.y) <
-            1.5,
+          Math.hypot(hostStart.x - strokeStart.x, hostStart.y - strokeStart.y) < 1.5,
           `The stroke did not follow the point: ${JSON.stringify({ hostStart, strokeStart })}`,
         );
         await tap(undo);
-        await expect
-          .poll(source, { message: "One undo did not restore the point move" })
-          .toBe(attached);
+        await expect.poll(source, { message: "One undo did not restore the point move" }).toBe(attached);
 
         // The attachments are authored references, so they survive save and reopen.
         await load(attached);
         await fitDiagram(frame, input);
         const arrowEnd = (await ends(arrowId))[1];
-        assert.ok(
-          await onNode(arrowEnd),
-          `After reopening, the arrow end is not at the node: ${JSON.stringify({ arrowEnd })}`,
-        );
+        assert.ok(await onNode(arrowEnd), `After reopening, the arrow end is not at the node: ${JSON.stringify({ arrowEnd })}`);
         // The reopened figure fits differently, so the line's own midpoint is the reference.
         const [lineStart, lineEnd] = await ends("path:3");
-        const lineMiddle = {
-          x: (lineStart.x + lineEnd.x) / 2 + frameBox.x,
-          y: (lineStart.y + lineEnd.y) / 2 + frameBox.y,
-        };
+        const lineMiddle = { x: (lineStart.x + lineEnd.x) / 2 + frameBox.x, y: (lineStart.y + lineEnd.y) / 2 + frameBox.y };
         const reopenedLabel = await centerOf(label);
         assert.ok(
-          Math.hypot(
-            reopenedLabel.x - lineMiddle.x,
-            reopenedLabel.y - lineMiddle.y,
-          ) <
-            Math.hypot(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y) / 4,
+          Math.hypot(reopenedLabel.x - lineMiddle.x, reopenedLabel.y - lineMiddle.y) < Math.hypot(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y) / 4,
           `After reopening, the label is not on the line: ${JSON.stringify({ reopenedLabel, lineMiddle })}`,
         );
       },
@@ -4443,22 +3248,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
-        const simplification = result.getByRole("slider", {
-          name: "Simplification",
-          exact: true,
-        });
-        const exact = result.getByRole("spinbutton", {
-          name: "Simplification value",
-          exact: true,
-        });
-        const defaults = result.getByRole("button", {
-          name: "Defaults",
-          exact: true,
-        });
+        const simplification = result.getByRole("slider", { name: "Simplification", exact: true });
+        const exact = result.getByRole("spinbutton", { name: "Simplification value", exact: true });
+        const defaults = result.getByRole("button", { name: "Defaults", exact: true });
         const saved = async () => (await editorDebug(page)).settings.canvas;
         const lastDraw = async () => {
           const draws = (await editorDebug(page)).source
@@ -4470,21 +3264,13 @@ describe("standalone workbench host boundary", function () {
         const initial = await saved();
         // The adjustment is primary: sliders with exact values, Accept and Cancel. Scope sits behind Defaults.
         await input.penStroke(waveAcross(viewport, 0.45, 0.2, 140));
+        await expect(result.getByRole("slider", { name: "Smoothing", exact: true })).toBeVisible();
         await expect(
-          result.getByRole("slider", { name: "Smoothing", exact: true }),
-        ).toBeVisible();
-        await expect(
-          result.getByRole("spinbutton", {
-            name: "Smoothing value",
-            exact: true,
-          }),
+          result.getByRole("spinbutton", { name: "Smoothing value", exact: true }),
         ).toBeVisible();
         await expect(defaults).toHaveAttribute("aria-expanded", "false");
         await expect(
-          result.getByRole("button", {
-            name: "Use for new strokes",
-            exact: true,
-          }),
+          result.getByRole("button", { name: "Use for new strokes", exact: true }),
         ).toHaveCount(0);
         // A fresh stroke has nothing to restore beyond what Cancel restores.
         await expect(
@@ -4493,74 +3279,46 @@ describe("standalone workbench host boundary", function () {
         await exact.fill("1.2");
         await exact.press("Enter");
         await expect(simplification).toHaveValue("1.2");
-        assert.deepEqual(
-          await saved(),
-          initial,
-          "Adjusting one stroke changed a saved default",
-        );
+        assert.deepEqual(await saved(), initial, "Adjusting one stroke changed a saved default");
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Cancel", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
         assert.equal(await fitted(), false, "Cancel kept the previewed fit");
         // Use for new strokes holds for this session; it saves nothing.
         await input.penStroke(waveAcross(viewport, 0.45, 0.35, 140));
-        await expect(simplification).toHaveValue(
-          String(initial.freehandSimplificationUnits),
-        );
+        await expect(simplification).toHaveValue(String(initial.freehandSimplificationUnits));
         await exact.fill("1.2");
         await exact.press("Enter");
         await input.touch([await stableCenter(defaults)]);
         await expect(defaults).toHaveAttribute("aria-expanded", "true");
         await input.touch([
           await stableCenter(
-            result.getByRole("button", {
-              name: "Use for new strokes",
-              exact: true,
-            }),
+            result.getByRole("button", { name: "Use for new strokes", exact: true }),
           ),
         ]);
         await input.touch([
           await stableCenter(
-            result.getByRole("checkbox", {
-              name: "Refine new strokes automatically",
-              exact: true,
-            }),
+            result.getByRole("checkbox", { name: "Refine new strokes automatically", exact: true }),
           ),
         ]);
-        assert.deepEqual(
-          await saved(),
-          initial,
-          "Use for new strokes saved a default",
-        );
+        assert.deepEqual(await saved(), initial, "Use for new strokes saved a default");
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Accept", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
-        await expect
-          .poll(fitted, { message: "Accept did not apply the fit" })
-          .toBe(true);
+        await expect.poll(fitted, { message: "Accept did not apply the fit" }).toBe(true);
         // The next stroke takes the session values and is refined automatically; Cancel reverts that fit.
         await input.penStroke(waveAcross(viewport, 0.45, 0.5, 140));
         await expect(simplification).toHaveValue("1.2");
         await expect
-          .poll(fitted, {
-            message: "The session did not refine the new stroke automatically",
-          })
+          .poll(fitted, { message: "The session did not refine the new stroke automatically" })
           .toBe(true);
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Cancel", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
-        await expect
-          .poll(fitted, { message: "Cancel kept the automatic fit" })
-          .toBe(false);
+        await expect.poll(fitted, { message: "Cancel kept the automatic fit" }).toBe(false);
         // Escape closes and keeps what is on the canvas: the automatic fit stays.
         await input.penStroke(waveAcross(viewport, 0.45, 0.65, 140));
         await expect.poll(fitted).toBe(true);
@@ -4571,21 +3329,13 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke(waveAcross(viewport, 0.45, 0.8, 140));
         await input.touch([await stableCenter(defaults)]);
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", {
-              name: "Save as default",
-              exact: true,
-            }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Save as default", exact: true })),
         ]);
         await expect
           .poll(
             async () => {
               const canvas = await saved();
-              return [
-                canvas.freehandSimplificationUnits,
-                canvas.freehandAutoApply,
-              ];
+              return [canvas.freehandSimplificationUnits, canvas.freehandAutoApply];
             },
             { message: "Save as default did not save the session values" },
           )
@@ -4621,17 +3371,10 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
-        const railBox = (await frame
-          .locator("[data-diagram-tools]")
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        const railBox = (await frame.locator("[data-diagram-tools]").boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
-        const clear = (
-          a: { x: number; y: number; width: number; height: number },
-          b: typeof a,
-        ) =>
+        const clear = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
           Math.min(a.x + a.width, b.x + b.width) <= Math.max(a.x, b.x) ||
           Math.min(a.y + a.height, b.y + b.height) <= Math.max(a.y, b.y);
         // The corners of the canvas the docked rail leaves free, in fractions of the viewport.
@@ -4660,13 +3403,9 @@ describe("standalone workbench host boundary", function () {
             frame
               .locator("svg [data-source-id]")
               .evaluateAll((nodes) => [
-                ...new Set(
-                  nodes.map((node) => node.getAttribute("data-source-id")!),
-                ),
+                ...new Set(nodes.map((node) => node.getAttribute("data-source-id")!)),
               ]);
-          await expect
-            .poll(async () => (await idsNow()).length)
-            .toBe(index + 1);
+          await expect.poll(async () => (await idsNow()).length).toBe(index + 1);
           const ids = await idsNow();
           const stroke = (await frame
             .locator(`svg [data-source-id="${ids[ids.length - 1]}"]`)
@@ -4678,10 +3417,7 @@ describe("standalone workbench host boundary", function () {
             `The freehand result covers a stroke drawn at (${fx.toFixed(2)}, ${fy.toFixed(2)})`,
           );
           assert.ok(
-            clear(
-              popup,
-              (await frame.locator("[data-diagram-tools]").boundingBox())!,
-            ),
+            clear(popup, (await frame.locator("[data-diagram-tools]").boundingBox())!),
             "The freehand result covers the rail",
           );
           await page.keyboard.press("Escape");
@@ -4689,14 +3425,8 @@ describe("standalone workbench host boundary", function () {
           // Escape closes the result without fitting: the recorded stroke stays as drawn.
           const source = (await editorDebug(page)).source;
           assert.notEqual(source, before, "Escape removed the stroke");
-          const draws = source
-            .split("\n")
-            .filter((line) => line.trim().startsWith("\\draw"));
-          assert.doesNotMatch(
-            draws[draws.length - 1],
-            /\.\. controls/,
-            "Escape applied the fit",
-          );
+          const draws = source.split("\n").filter((line) => line.trim().startsWith("\\draw"));
+          assert.doesNotMatch(draws[draws.length - 1], /\.\. controls/, "Escape applied the fit");
         }
       },
     );
@@ -4710,14 +3440,9 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const rail = frame.locator("[data-diagram-tools]");
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         type Box = { x: number; y: number; width: number; height: number };
         const clear = (a: Box, b: Box) =>
@@ -4755,14 +3480,8 @@ describe("standalone workbench host boundary", function () {
           return { x: left, y: top, width: right - left, height: bottom - top };
         };
         const dockTargets = {
-          bottom: {
-            x: viewport.x + viewport.width / 2,
-            y: viewport.y + viewport.height - 10,
-          },
-          right: {
-            x: viewport.x + viewport.width - 10,
-            y: viewport.y + viewport.height / 2,
-          },
+          bottom: { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height - 10 },
+          right: { x: viewport.x + viewport.width - 10, y: viewport.y + viewport.height / 2 },
           top: { x: viewport.x + viewport.width / 2, y: viewport.y + 10 },
           left: { x: viewport.x + 10, y: viewport.y + viewport.height / 2 },
         };
@@ -4780,9 +3499,7 @@ describe("standalone workbench host boundary", function () {
           for (const withPanel of [false, true]) {
             if (withPanel) {
               await input.touch([
-                await stableCenter(
-                  rail.getByRole("button", { name: "Properties", exact: true }),
-                ),
+                await stableCenter(rail.getByRole("button", { name: "Properties", exact: true })),
               ]);
               await expect(panel).toBeVisible();
             }
@@ -4800,27 +3517,14 @@ describe("standalone workbench host boundary", function () {
                 frame
                   .locator("svg [data-source-id]")
                   .evaluateAll((nodes) => [
-                    ...new Set(
-                      nodes.map((node) => node.getAttribute("data-source-id")!),
-                    ),
+                    ...new Set(nodes.map((node) => node.getAttribute("data-source-id")!)),
                   ]);
               const before = (await ids()).length;
-              const points = waveAcross(
-                free,
-                fx,
-                fy,
-                Math.min(110, free.width * 0.4),
-              );
+              const points = waveAcross(free, fx, fy, Math.min(110, free.width * 0.4));
               await input.penStroke(points);
-              await expect(
-                result,
-                `${label}: no freehand result`,
-              ).toBeVisible();
+              await expect(result, `${label}: no freehand result`).toBeVisible();
               await expect
-                .poll(
-                  async () => (await ids()).length,
-                  `${label}: the stroke did not render`,
-                )
+                .poll(async () => (await ids()).length, `${label}: the stroke did not render`)
                 .toBe(before + 1);
               // Where the pen went, in page coordinates like every box here.
               const xs = points.map((point) => point.x),
@@ -4832,10 +3536,7 @@ describe("standalone workbench host boundary", function () {
                 height: Math.max(...ys) - Math.min(...ys),
               };
               const popup = (await result.boundingBox())!;
-              assert.ok(
-                clear(popup, stroke),
-                `${label}: the freehand result covers its stroke`,
-              );
+              assert.ok(clear(popup, stroke), `${label}: the freehand result covers its stroke`);
               assert.ok(
                 clear(popup, (await rail.boundingBox())!),
                 `${label}: the freehand result covers the rail`,
@@ -4852,10 +3553,7 @@ describe("standalone workbench host boundary", function () {
             if (withPanel) {
               await input.touch([
                 await stableCenter(
-                  panel.getByRole("button", {
-                    name: "Close properties",
-                    exact: true,
-                  }),
+                  panel.getByRole("button", { name: "Close properties", exact: true }),
                 ),
               ]);
               await expect(panel).toHaveCount(0);
@@ -4874,9 +3572,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 160));
         await expect(result).toBeVisible();
@@ -4885,10 +3581,7 @@ describe("standalone workbench host boundary", function () {
           return {
             samples: Number(/(\d+) raw samples/.exec(text)![1]),
             anchors: Number(/(\d+) fitted anchors/.exec(text)![1]),
-            drawnSamples: await frame
-              .getByTestId("freehand-raw-samples")
-              .locator("circle")
-              .count(),
+            drawnSamples: await frame.getByTestId("freehand-raw-samples").locator("circle").count(),
             drawnAnchors: await frame
               .getByTestId("freehand-fitted-anchors")
               .locator("circle")
@@ -4900,16 +3593,9 @@ describe("standalone workbench host boundary", function () {
           .poll(
             async () => {
               const c = await counts();
-              return (
-                c.drawnSamples === c.samples &&
-                c.drawnAnchors === c.anchors &&
-                c.anchors > 1
-              );
+              return c.drawnSamples === c.samples && c.drawnAnchors === c.anchors && c.anchors > 1;
             },
-            {
-              message:
-                "The canvas does not show the samples and anchors the result counts",
-            },
+            { message: "The canvas does not show the samples and anchors the result counts" },
           )
           .toBe(true);
         await storyScreenshot(page, `freehand-samples-${tablet.name}`);
@@ -4920,9 +3606,7 @@ describe("standalone workbench host boundary", function () {
           .poll(
             async () => {
               const c = await counts();
-              return (
-                c.drawnSamples === c.samples && c.drawnAnchors === c.anchors
-              );
+              return c.drawnSamples === c.samples && c.drawnAnchors === c.anchors;
             },
             { message: "After refitting, the canvas and the counts disagree" },
           )
@@ -4937,36 +3621,24 @@ describe("standalone workbench host boundary", function () {
       `smooths only the neighbours of a deleted curve point in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) .. controls (1,2) and (2,2) .. (3,0) .. controls (4,-2) and (5,-2) .. (6,0) .. controls (7,2) and (8,2) .. (9,0) .. controls (10,-2) and (11,-2) .. (12,0);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.penStroke([await strokePoint(page, curve, 0.1)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const anchors = await frame
-          .locator(
-            'rect[data-handle-kind="move-handle"][data-source-id="path:0"]',
-          )
+          .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
           .evaluateAll((nodes) =>
             nodes
               .map((node) => {
@@ -4976,22 +3648,14 @@ describe("standalone workbench host boundary", function () {
               .sort((a, b) => a.x - b.x),
           );
         assert.equal(anchors.length, 5, `anchors: ${anchors.length}`);
-        await input.penStroke([
-          { x: frameBox.x + anchors[2].x, y: frameBox.y + anchors[2].y },
-        ]);
+        await input.penStroke([{ x: frameBox.x + anchors[2].x, y: frameBox.y + anchors[2].y }]);
         await expect(
           frame.getByText("1 point selected", { exact: true }),
         ).toBeVisible();
         await input.touch([
-          await stableCenter(
-            frame
-              .getByRole("toolbar", { name: "Selection", exact: true })
-              .getByRole("button", { name: "Delete", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Delete", exact: true })),
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .not.toMatch(/\(6,0\)/);
+        await expect.poll(async () => (await editorDebug(page)).source).not.toMatch(/\(6,0\)/);
         const source = (await editorDebug(page)).source;
         // The segments that did not touch the deleted point keep their outer control points.
         assert.match(
@@ -5017,56 +3681,37 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 160));
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Accept", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         // Start from an empty selection, then tap the fitted path.
         await input.touch([
-          {
-            x: viewport.x + viewport.width - 12,
-            y: viewport.y + viewport.height - 12,
-          },
+          { x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 },
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         const ids = await frame
           .locator('svg [data-source-id^="path:"]')
           .evaluateAll((nodes) => [
-            ...new Set(
-              nodes.map((node) => node.getAttribute("data-source-id")!),
-            ),
+            ...new Set(nodes.map((node) => node.getAttribute("data-source-id")!)),
           ]);
         const fitted = ids[ids.length - 1];
         await input.touch([
-          await strokePoint(
-            page,
-            frame.locator(`svg [data-source-id="${fitted}"]`).first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator(`svg [data-source-id="${fitted}"]`).first(), 0.5),
         ]);
         await expect
           .poll(async () => (await editorDebug(page)).selection, {
             message: "Tapping the fitted stroke selected its recovery envelope",
           })
           .toEqual([fitted]);
-        await expect(
-          frame.getByRole("button", { name: "Lock", exact: true }),
-        ).toBeVisible();
+        await expect(frame.getByRole("button", { name: "Lock", exact: true })).toBeVisible();
       },
     );
   }
@@ -5079,9 +3724,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         // A long wavy stroke, so a fit has many anchors to shed.
         const wave = Array.from({ length: 60 }, (_, i) => ({
@@ -5090,66 +3733,45 @@ describe("standalone workbench host boundary", function () {
         }));
         await input.penStroke(wave);
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Accept", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         // The fit is the path inside the stroke's envelope scope.
         const ids = await frame
           .locator('svg [data-source-id^="path:"]')
           .evaluateAll((nodes) => [
-            ...new Set(
-              nodes.map((node) => node.getAttribute("data-source-id")!),
-            ),
+            ...new Set(nodes.map((node) => node.getAttribute("data-source-id")!)),
           ]);
-        const curve = frame
-          .locator(`svg [data-source-id="${ids[ids.length - 1]}"]`)
-          .first();
+        const curve = frame.locator(`svg [data-source-id="${ids[ids.length - 1]}"]`).first();
         await input.touch([await strokePoint(page, curve, 0.3)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection.length)
-          .toBe(1);
+        await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
         // A tap that lands on an anchor selects that point; the curve's own actions are one tap away.
         const whole = frame.getByRole("button", { name: "Done", exact: true });
         if (await whole.isVisible()) {
           await input.touch([await stableCenter(whole)]);
         }
         const anchors = async () =>
-          ((await editorDebug(page)).source.match(/\.\. controls/g) ?? [])
-            .length + 1;
+          ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length + 1;
         const accepted = (await editorDebug(page)).source;
         const counts = [await anchors()];
-        const refinement = frame.getByRole("dialog", {
-          name: "Curve refinement",
-        });
+        const refinement = frame.getByRole("dialog", { name: "Curve refinement" });
         const openRefinement = async () => {
           await input.touch([
-            await stableCenter(
-              frame.getByRole("button", { name: "Simplify", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("button", { name: "Simplify", exact: true })),
           ]);
           await expect(refinement).toBeVisible();
         };
         // Simplify opens the same refinement on the curve, with its first pass previewed.
         await openRefinement();
         await expect(
-          refinement.getByRole("slider", {
-            name: "Simplification",
-            exact: true,
-          }),
+          refinement.getByRole("slider", { name: "Simplification", exact: true }),
         ).toBeVisible();
         await expect
-          .poll(anchors, {
-            timeout: 30_000,
-            message: "Simplify previewed no simpler curve",
-          })
+          .poll(anchors, { timeout: 30_000, message: "Simplify previewed no simpler curve" })
           .toBeLessThan(counts[0]);
         counts.push(await anchors());
         // Simplify again runs another pass on the preview, until the curve is final.
@@ -5157,17 +3779,13 @@ describe("standalone workbench host boundary", function () {
         for (let step = 0; step < 8 && !(await final.isVisible()); step++) {
           await input.touch([
             await stableCenter(
-              refinement.getByRole("button", {
-                name: "Simplify again",
-                exact: true,
-              }),
+              refinement.getByRole("button", { name: "Simplify again", exact: true }),
             ),
           ]);
           await expect
             .poll(
               async () =>
-                (await anchors()) !== counts[counts.length - 1] ||
-                (await final.isVisible()),
+                (await anchors()) !== counts[counts.length - 1] || (await final.isVisible()),
               {
                 timeout: 30_000,
                 message: `Simplify again step ${step + 1} neither changed the curve nor said it was final (anchors ${counts.join(" → ")})`,
@@ -5178,18 +3796,13 @@ describe("standalone workbench host boundary", function () {
             counts.push(await anchors());
           }
         }
-        await expect(
-          final,
-          `No final message after anchors ${counts.join(" → ")}`,
-        ).toBeVisible();
+        await expect(final, `No final message after anchors ${counts.join(" → ")}`).toBeVisible();
         assert.ok(
           counts.length >= 3,
           `Simplify could not be repeated: anchors ${counts.join(" → ")}`,
         );
         assert.ok(
-          counts.every(
-            (count, index) => index === 0 || count < counts[index - 1],
-          ),
+          counts.every((count, index) => index === 0 || count < counts[index - 1]),
           `anchors ${counts.join(" → ")}`,
         );
         assert.ok(
@@ -5198,9 +3811,7 @@ describe("standalone workbench host boundary", function () {
         );
         // Cancel returns the curve to the state before Simplify.
         await input.touch([
-          await stableCenter(
-            refinement.getByRole("button", { name: "Cancel", exact: true }),
-          ),
+          await stableCenter(refinement.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await expect(refinement).toHaveCount(0);
         await expect
@@ -5213,16 +3824,10 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(anchors, { timeout: 30_000 }).toBeLessThan(counts[0]);
         const previewed = await anchors();
         await input.touch([
-          await stableCenter(
-            refinement.getByRole("button", { name: "Accept", exact: true }),
-          ),
+          await stableCenter(refinement.getByRole("button", { name: "Accept", exact: true })),
         ]);
         await expect(refinement).toHaveCount(0);
-        assert.equal(
-          await anchors(),
-          previewed,
-          "Accept did not commit the previewed curve",
-        );
+        assert.equal(await anchors(), previewed, "Accept did not commit the previewed curve");
         await page.keyboard.press("Control+z");
         await expect
           .poll(async () => (await editorDebug(page)).source, {
@@ -5230,16 +3835,11 @@ describe("standalone workbench host boundary", function () {
           })
           .toBe(accepted);
         // The stroke kept its recorded original, so the refinement offers it.
-        await expect
-          .poll(async () => (await editorDebug(page)).selection.length)
-          .toBe(1);
+        await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
         await openRefinement();
         await input.touch([
           await stableCenter(
-            refinement.getByRole("button", {
-              name: "Restore original",
-              exact: true,
-            }),
+            refinement.getByRole("button", { name: "Restore original", exact: true }),
           ),
         ]);
         await expect(refinement).toHaveCount(0);
@@ -5247,15 +3847,9 @@ describe("standalone workbench host boundary", function () {
           .poll(
             async () => {
               const source = (await editorDebug(page)).source;
-              return (
-                !/\.\. controls/.test(source) &&
-                (source.match(/--/g) ?? []).length > 5
-              );
+              return !/\.\. controls/.test(source) && (source.match(/--/g) ?? []).length > 5;
             },
-            {
-              message:
-                "Restore original did not bring back the recorded stroke",
-            },
+            { message: "Restore original did not bring back the recorded stroke" },
           )
           .toBe(true);
       },
@@ -5268,94 +3862,49 @@ describe("standalone workbench host boundary", function () {
       `saves and applies an authored style by name after reopening in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw[red,line width=2pt,xshift=1cm] (0,0) -- (4,0);
 \draw (0,2) -- (4,2);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         await fitDiagram(frame, input);
         await tap(frame.getByRole("button", { name: "Select", exact: true }));
         const first = frame.locator('svg [data-source-id="path:0"]').first();
         await input.penStroke([await strokePoint(page, first, 0.3)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         await tap(strip.getByRole("button", { name: "Style", exact: true }));
         const dialog = frame.getByRole("dialog", { name: "Style" });
         await dialog.getByLabel("Style name").fill("accent line");
         await tap(dialog.getByRole("button", { name: "Save style" }));
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/accent line\/\.style=\{red,\s*line width=2pt\}/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/accent line\/\.style=\{red,\s*line width=2pt\}/);
         const saved = (await editorDebug(page)).source;
-        assert.match(
-          saved,
-          /\\draw\[xshift=1cm,\s*accent line\] \(0,0\) -- \(4,0\)/,
-        );
+        assert.match(saved, /\\draw\[xshift=1cm,\s*accent line\] \(0,0\) -- \(4,0\)/);
         const second = frame.locator('svg [data-source-id="path:1"]').first();
         await input.penStroke([await strokePoint(page, second, 0.3)]);
         await tap(strip.getByRole("button", { name: "Style", exact: true }));
-        await tap(
-          frame
-            .getByRole("dialog", { name: "Style" })
-            .getByRole("button", { name: "Apply accent line" }),
-        );
+        await tap(frame.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" }));
         const source = (await editorDebug(page)).source;
         assert.match(source, /\\draw\[accent line\] \(0,2\) -- \(4,2\)/);
         await page.reload();
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(source);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await editorReady(page);
         const reopened = editorFrame(page);
-        await expect(
-          reopened.locator('svg [data-source-id="path:0"]').first(),
-        ).toHaveAttribute("stroke", "#ff0000");
-        await expect(
-          reopened.locator('svg [data-source-id="path:1"]').first(),
-        ).toHaveAttribute("stroke", "#ff0000");
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(source);
+        await expect(reopened.locator('svg [data-source-id="path:0"]').first()).toHaveAttribute("stroke", "#ff0000");
+        await expect(reopened.locator('svg [data-source-id="path:1"]').first()).toHaveAttribute("stroke", "#ff0000");
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
         await fitDiagram(reopened, input);
-        await tap(
-          reopened.getByRole("button", { name: "Select", exact: true }),
-        );
-        await input.penStroke([
-          await strokePoint(
-            page,
-            reopened.locator('svg [data-source-id="path:1"]').first(),
-            0.3,
-          ),
-        ]);
-        await tap(
-          reopened
-            .getByRole("toolbar", { name: "Selection", exact: true })
-            .getByRole("button", { name: "Style", exact: true }),
-        );
-        await expect(
-          reopened
-            .getByRole("dialog", { name: "Style" })
-            .getByRole("button", { name: "Apply accent line" }),
-        ).toBeVisible();
+        await tap(reopened.getByRole("button", { name: "Select", exact: true }));
+        await input.penStroke([await strokePoint(page, reopened.locator('svg [data-source-id="path:1"]').first(), 0.3)]);
+        await tap(reopened.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Style", exact: true }));
+        await expect(reopened.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" })).toBeVisible();
       },
     );
   }
@@ -5366,50 +3915,70 @@ describe("standalone workbench host boundary", function () {
       `lists named styles from the preamble, figure, and picture body in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await page.locator(".cm-content")
-          .fill(String.raw`\tikzset{outer/.style={blue}}
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\tikzset{outer/.style={blue}}
 \begin{tikzpicture}[middle/.style={red}]
 \tikzset{inner/.style={green}}
 \draw (0,0) -- (4,0);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
-        ]);
+        await input.touch([await stableCenter(frame.getByRole("button", { name: "Select", exact: true }))]);
         const path = frame.locator('svg [data-source-id^="path:"]').first();
         await input.penStroke([await strokePoint(page, path, 0.3)]);
-        await input.touch([
-          await stableCenter(
-            frame
-              .getByRole("toolbar", { name: "Selection" })
-              .getByRole("button", { name: "Style" }),
-          ),
-        ]);
+        await input.touch([await stableCenter(frame.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Style" }))]);
         const dialog = frame.getByRole("dialog", { name: "Style" });
         for (const name of ["outer", "middle", "inner"]) {
-          await expect(
-            dialog.getByRole("button", { name: `Apply ${name}` }),
-          ).toBeVisible();
+          await expect(dialog.getByRole("button", { name: `Apply ${name}` })).toBeVisible();
         }
-        await input.touch([
-          await stableCenter(
-            dialog.getByRole("button", { name: "Apply outer" }),
-          ),
-        ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/\\draw\[outer\]/);
+        await input.touch([await stableCenter(dialog.getByRole("button", { name: "Apply outer" }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[outer\]/);
         await expect(path).toHaveAttribute("stroke", "#0000ff");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `fills a closed shape with one pen tap of the bucket, as one undo step, in ${tablet.name}`,
+      async function () {
+        const authored = String.raw`\begin{tikzpicture}
+\draw (2,2) rectangle (6,5);
+\draw (7,2) -- (9,2);
+\end{tikzpicture}`;
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        const source = async () => (await editorDebug(page)).source;
+        await expect.poll(source).toBe(authored);
+        await fitDiagram(frame, input);
+        await tap(rail.getByRole("button", { name: "Bucket", exact: true }));
+        await tap(rail.getByRole("button", { name: "Use blue" }));
+        const box = (await frame.locator('svg [data-source-id="path:0"]').first().boundingBox())!;
+        await input.penStroke([{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]);
+        const filled = String.raw`\begin{tikzpicture}
+\draw[fill=blue] (2,2) rectangle (6,5);
+\draw (7,2) -- (9,2);
+\end{tikzpicture}`;
+        await expect.poll(source, { message: "The tap did not fill the rectangle" }).toBe(filled);
+        // The fill is a committed mark: it stays when the pen leaves and when another tool is chosen.
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await input.penHover({ x: viewport.x + viewport.width - 30, y: viewport.y + viewport.height - 30 });
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await expect.poll(async () => (await editorDebug(page)).tool).toBe("select");
+        assert.equal(await source(), filled, "The fill left the source with the bucket");
+        await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+        await expect.poll(source).toBe(authored);
+        await tap(rail.getByRole("button", { name: "Redo", exact: true }));
+        await expect.poll(source).toBe(filled);
       },
     );
   }
@@ -5420,97 +3989,49 @@ describe("standalone workbench host boundary", function () {
       `applies one color control to selected stroke, selected fill, bucket, and new strokes in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await page
-          .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,5);\end{tikzpicture}`,
-          );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,5);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         await fitDiagram(frame, input);
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
-        await input.penStroke([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.1,
-          ),
-        ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
-        await expect(
-          rail.getByRole("button", { name: /^Color: Selected stroke:/ }),
-        ).toBeVisible();
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.1)]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await expect(rail.getByRole("button", { name: /^Color: Selected stroke:/ })).toBeVisible();
         await tap(rail.getByRole("button", { name: "Use red" }));
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/\\draw\[[^\]]*\bred\b/);
-        await tap(
-          rail.getByRole("button", { name: /^Color: Selected stroke:/ }),
-        );
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*\bred\b/);
+        await tap(rail.getByRole("button", { name: /^Color: Selected stroke:/ }));
         const popup = frame.getByRole("dialog", { name: "Tool options" });
         await tap(popup.getByRole("button", { name: "Selected fill" }));
         await tap(rail.getByRole("button", { name: "Use blue" }));
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/fill=blue/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/fill=blue/);
         await tap(rail.getByRole("button", { name: /^Color: Selected fill:/ }));
         await tap(rail.getByRole("button", { name: "Bucket", exact: true }));
-        await expect(
-          rail.getByRole("button", { name: /^Color: Fill:/ }),
-        ).toBeVisible();
-        await expect(
-          rail.getByTestId("toolbar-bucket-color-caret"),
-        ).toHaveCount(0);
+        await expect(rail.getByRole("button", { name: /^Color: Fill:/ })).toBeVisible();
+        await expect(rail.getByTestId("toolbar-bucket-color-caret")).toHaveCount(0);
         await tap(rail.getByRole("button", { name: "Use green" }));
         await tap(rail.getByRole("button", { name: /^Color: Fill:/ }));
         await expect(popup.getByLabel("Exact xcolor")).toBeVisible();
         await popup.getByLabel("Exact xcolor").fill("orange!35!black");
         await tap(popup.getByRole("button", { name: "Apply exact color" }));
-        await expect(
-          rail.getByRole("button", { name: "Color: Fill: orange!35!black" }),
-        ).toBeVisible();
+        await expect(rail.getByRole("button", { name: "Color: Fill: orange!35!black" })).toBeVisible();
         if (!(await popup.isVisible())) {
-          await tap(
-            rail.getByRole("button", { name: "Color: Fill: orange!35!black" }),
-          );
+          await tap(rail.getByRole("button", { name: "Color: Fill: orange!35!black" }));
         }
         await popup.getByLabel("Exact xcolor").fill("red!20");
         await popup.getByLabel("Exact xcolor").press("Escape");
         await expect(popup).toHaveCount(0);
-        await tap(
-          rail.getByRole("button", { name: "Color: Fill: orange!35!black" }),
-        );
+        await tap(rail.getByRole("button", { name: "Color: Fill: orange!35!black" }));
         await expect(popup.getByLabel("Exact xcolor")).toHaveValue("");
-        await tap(
-          rail.getByRole("button", { name: "Color: Fill: orange!35!black" }),
-        );
+        await tap(rail.getByRole("button", { name: "Color: Fill: orange!35!black" }));
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
-        await input.touch([
-          {
-            x: viewport.x + viewport.width - 12,
-            y: viewport.y + viewport.height - 12,
-          },
-        ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([]);
-        await expect(
-          rail.getByRole("button", { name: /^Color: New strokes:/ }),
-        ).toBeVisible();
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await input.touch([{ x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 }]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+        await expect(rail.getByRole("button", { name: /^Color: New strokes:/ })).toBeVisible();
         await tap(rail.getByRole("button", { name: "Use violet" }));
         const unchanged = (await editorDebug(page)).source;
         assert.match(unchanged, /\\draw\[[^\]]*\bred\b/);
@@ -5518,18 +4039,10 @@ describe("standalone workbench host boundary", function () {
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(frame.getByRole("option", { name: "Line", exact: true }));
         await input.penStroke([
-          {
-            x: viewport.x + viewport.width * 0.35,
-            y: viewport.y + viewport.height * 0.4,
-          },
-          {
-            x: viewport.x + viewport.width * 0.65,
-            y: viewport.y + viewport.height * 0.4,
-          },
+          { x: viewport.x + viewport.width * 0.35, y: viewport.y + viewport.height * 0.4 },
+          { x: viewport.x + viewport.width * 0.65, y: viewport.y + viewport.height * 0.4 },
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/\\draw\[[^\]]*\bviolet\b/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[[^\]]*\bviolet\b/);
       },
     );
   }
@@ -5544,32 +4057,22 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: /^Color: New strokes:/ }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: /^Color: New strokes:/ })),
         ]);
         const popup = frame.getByRole("dialog", { name: "Tool options" });
         await expect(popup).toBeVisible();
         // The platform colour control delivers its value as an input event, as a tablet's colour sheet does.
         await popup.getByLabel("Choose color").fill("#ff0000");
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: /^Color: New strokes:/ }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: /^Color: New strokes:/ })),
         ]);
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("option", { name: "Line", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
         ]);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const from = {
           x: viewport.x + viewport.width * 0.5,
           y: viewport.y + viewport.height * 0.5,
@@ -5579,9 +4082,7 @@ describe("standalone workbench host boundary", function () {
           { x: from.x + 60, y: from.y },
           { x: from.x + 120, y: from.y },
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/\\draw\[/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[/);
         const draw = (await editorDebug(page)).source
           .split("\n")
           .find((line) => line.includes("\\draw["))!;
@@ -5607,14 +4108,10 @@ describe("standalone workbench host boundary", function () {
         const saved = await rail
           .getByRole("button", { name: /^Use / })
           .evaluateAll((buttons) =>
-            buttons.map((button) =>
-              button.getAttribute("aria-label")!.slice(4),
-            ),
+            buttons.map((button) => button.getAttribute("aria-label")!.slice(4)),
           );
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: /^Color: New strokes:/ }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: /^Color: New strokes:/ })),
         ]);
         const popup = frame.getByRole("dialog", { name: "Tool options" });
         await expect(popup).toBeVisible();
@@ -5638,20 +4135,12 @@ describe("standalone workbench host boundary", function () {
         );
         // One spectrum control and one opacity slider; no channel or hex fields, no collection management.
         await expect(popup.getByLabel("Choose color")).toHaveCount(1);
-        await expect(
-          popup.getByRole("slider", { name: "Opacity" }),
-        ).toBeVisible();
+        await expect(popup.getByRole("slider", { name: "Opacity" })).toBeVisible();
         for (const gone of ["Hex color", "R", "G", "B"]) {
           await expect(popup.getByLabel(gone, { exact: true })).toHaveCount(0);
         }
-        for (const gone of [
-          "Create collection",
-          "Save collection",
-          "Delete collection",
-        ]) {
-          await expect(popup.getByRole("button", { name: gone })).toHaveCount(
-            0,
-          );
+        for (const gone of ["Create collection", "Save collection", "Delete collection"]) {
+          await expect(popup.getByRole("button", { name: gone })).toHaveCount(0);
         }
         await expect(popup.getByRole("combobox")).toHaveCount(0);
         await storyScreenshot(page, `color-popup-${tablet.name}`);
@@ -5680,14 +4169,10 @@ describe("standalone workbench host boundary", function () {
           rail
             .getByRole("button", { name: /^Use / })
             .evaluateAll((buttons) =>
-              buttons.map((button) =>
-                button.getAttribute("aria-label")!.slice(4),
-              ),
+              buttons.map((button) => button.getAttribute("aria-label")!.slice(4)),
             );
         const openColors = async () => {
-          await tap(
-            rail.getByRole("button", { name: "Settings", exact: true }),
-          );
+          await tap(rail.getByRole("button", { name: "Settings", exact: true }));
           const dialog = frame.getByTestId("settings-modal");
           await tap(dialog.getByTestId("settings-category-colors"));
           return dialog;
@@ -5701,10 +4186,7 @@ describe("standalone workbench host boundary", function () {
         await tap(dialog.getByRole("button", { name: "New collection" }));
         await dialog.getByLabel("Collection name").fill("Roots");
         assert.deepEqual(await names(), ["Default", "Roots"]);
-        assert.equal(
-          await collection.locator("option:checked").innerText(),
-          "Roots",
-        );
+        assert.equal(await collection.locator("option:checked").innerText(), "Roots");
         await tap(dialog.getByRole("button", { name: "Remove" }).first());
         await expect.poll(railColors).toEqual(original.slice(1));
         // Switching collections switches the rail's palette.
@@ -5714,34 +4196,20 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(railColors).toEqual(original.slice(1));
         // Collections and the active choice survive a reload.
         const rootsId = await collection.inputValue();
-        await expect
-          .poll(async () => {
-            const response = await page.request.get(`${url}api/preferences`);
-            assert.equal(response.status(), 200);
-            const preferences = (await response.json()) as Record<
-              string,
-              string
-            >;
-            const saved = preferences["tikz-editor:settings"];
-            if (!saved) return null;
-            const colorPicker = (
-              JSON.parse(saved) as {
-                settings: {
-                  colorPicker: {
-                    activeCollectionId: string;
-                    collections: { id: string; colors: string[] }[];
-                  };
-                };
-              }
-            ).settings.colorPicker;
-            return {
-              active: colorPicker.activeCollectionId,
-              colors: colorPicker.collections.find(
-                (entry) => entry.id === rootsId,
-              )?.colors,
-            };
-          })
-          .toEqual({ active: rootsId, colors: original.slice(1) });
+        await expect.poll(async () => {
+          const response = await page.request.get(`${url}api/preferences`);
+          assert.equal(response.status(), 200);
+          const preferences = await response.json() as Record<string, string>;
+          const saved = preferences["tikz-editor:settings"];
+          if (!saved) return null;
+          const colorPicker = (JSON.parse(saved) as {
+            settings: { colorPicker: { activeCollectionId: string; collections: { id: string; colors: string[] }[] } };
+          }).settings.colorPicker;
+          return {
+            active: colorPicker.activeCollectionId,
+            colors: colorPicker.collections.find((entry) => entry.id === rootsId)?.colors,
+          };
+        }).toEqual({ active: rootsId, colors: original.slice(1) });
         await page.reload();
         await editorReady(page);
         await expect.poll(railColors).toEqual(original.slice(1));
@@ -5749,17 +4217,11 @@ describe("standalone workbench host boundary", function () {
         assert.deepEqual(await names(), ["Default", "Roots"]);
         // Deleting asks first, then returns the rail to the remaining collection.
         await tap(dialog.getByRole("button", { name: "Delete collection" }));
-        assert.deepEqual(
-          await names(),
-          ["Default", "Roots"],
-          "Deleted without confirmation",
-        );
+        assert.deepEqual(await names(), ["Default", "Roots"], "Deleted without confirmation");
         await tap(dialog.getByRole("button", { name: "Delete Roots" }));
         await expect.poll(names).toEqual(["Default"]);
         await expect.poll(railColors).toEqual(original);
-        await expect(
-          dialog.getByRole("button", { name: "Delete collection" }),
-        ).toBeDisabled();
+        await expect(dialog.getByRole("button", { name: "Delete collection" })).toBeDisabled();
       },
     );
   }
@@ -5780,9 +4242,7 @@ describe("standalone workbench host boundary", function () {
         const dialog = frame.getByTestId("settings-modal");
         await tap(dialog.getByTestId("settings-category-colors"));
         await tap(dialog.getByRole("button", { name: "New collection" }));
-        while (
-          (await rail.getByRole("button", { name: /^Use / }).count()) < 24
-        ) {
+        while ((await rail.getByRole("button", { name: /^Use / }).count()) < 24) {
           await tap(dialog.getByRole("button", { name: "Add color" }));
         }
         await tap(dialog.getByRole("button", { name: "Close settings" }));
@@ -5810,17 +4270,13 @@ describe("standalone workbench host boundary", function () {
           "Undo",
           "Redo",
         ]) {
-          await expect(
-            rail.getByRole("button", { name, exact: true }),
-          ).toBeInViewport({
+          await expect(rail.getByRole("button", { name, exact: true })).toBeInViewport({
             ratio: 1,
           });
         }
         // The active colour is marked, and only it.
         await tap(rail.getByRole("button", { name: "Use red", exact: true }));
-        await expect(
-          rail.getByRole("button", { name: "Color: New strokes: red" }),
-        ).toBeVisible();
+        await expect(rail.getByRole("button", { name: "Color: New strokes: red" })).toBeVisible();
         assert.deepEqual(
           await swatches.evaluateAll((buttons) =>
             buttons.flatMap((button, index) =>
@@ -5831,9 +4287,7 @@ describe("standalone workbench host boundary", function () {
         );
         // The last saved colour is reached by scrolling the strip, and picking it moves the mark.
         await tap(swatches.last());
-        await expect(
-          rail.getByRole("button", { name: "Color: New strokes: black" }),
-        ).toBeVisible();
+        await expect(rail.getByRole("button", { name: "Color: New strokes: black" })).toBeVisible();
         assert.deepEqual(
           await swatches.evaluateAll((buttons) =>
             buttons.flatMap((button, index) =>
@@ -5842,17 +4296,8 @@ describe("standalone workbench host boundary", function () {
           ),
           [0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
         );
-        for (const name of [
-          "Select",
-          "Lasso",
-          "Eraser",
-          "Freehand",
-          "Geometry",
-          "Label",
-        ]) {
-          await expect(
-            rail.getByRole("button", { name, exact: true }),
-          ).toBeInViewport({
+        for (const name of ["Select", "Lasso", "Eraser", "Freehand", "Geometry", "Label"]) {
+          await expect(rail.getByRole("button", { name, exact: true })).toBeInViewport({
             ratio: 1,
           });
         }
@@ -5874,25 +4319,17 @@ describe("standalone workbench host boundary", function () {
       `repeats an element from its long press in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (2,1) -- (8,3);\end{tikzpicture}`,
-          );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+          .fill(String.raw`\begin{tikzpicture}\draw (2,1) -- (8,3);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const line = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(line).toBeVisible();
         const input = await TabletInput.attach(page);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await fitDiagram(frame, input);
         await input.longPress(await strokePoint(page, line, 0.5));
@@ -5907,16 +4344,10 @@ describe("standalone workbench host boundary", function () {
         const repeat = frame.getByTestId("repeat-modal");
         await expect(repeat).toBeVisible();
         await frame.getByTestId("repeat-columns-input").fill("3");
-        await input.touch([
-          await stableCenter(frame.getByTestId("repeat-confirm-button")),
-        ]);
+        await input.touch([await stableCenter(frame.getByTestId("repeat-confirm-button"))]);
         await expect
           .poll(
-            async () =>
-              (
-                (await editorDebug(page)).source.match(/\\draw|\\foreach/g) ??
-                []
-              ).length,
+            async () => ((await editorDebug(page)).source.match(/\\draw|\\foreach/g) ?? []).length,
           )
           .toBeGreaterThan(1);
       },
@@ -5929,16 +4360,12 @@ describe("standalone workbench host boundary", function () {
       `states geometry in lattice units, never cm or px, in the inspector and Repeat in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (2,1) -- (8,3);
 \draw[step=1] (-6,-6) grid (-2,-2);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const [line, grid] = [
           frame.locator('svg [data-source-id="path:0"]').first(),
@@ -5948,33 +4375,20 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         const rail = frame.locator("[data-diagram-tools]");
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         const physical = /\d\s*(cm|px)\b|\((cm|px)\)/;
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.touch([await strokePoint(page, line, 0.5)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Properties", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Properties", exact: true })),
         ]);
         await expect(panel).toBeVisible();
         await expect(panel.getByText("X shift", { exact: true })).toBeVisible();
         const lineText = await panel.innerText();
-        assert.doesNotMatch(
-          lineText,
-          physical,
-          `Line inspector: ${lineText.match(physical)?.[0]}`,
-        );
+        assert.doesNotMatch(lineText, physical, `Line inspector: ${lineText.match(physical)?.[0]}`);
         assert.match(
           lineText,
           /X shift[\s\S]{0,40}units/,
@@ -5986,30 +4400,15 @@ describe("standalone workbench host boundary", function () {
           .locator("input");
         await xshift.fill("2");
         await xshift.press("Enter");
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toMatch(/xshift=2cm/);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/xshift=2cm/);
         await input.touch([await strokePoint(page, grid, 0.5)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:1"]);
-        await expect(
-          panel.getByText("Step", { exact: false }).first(),
-        ).toBeVisible();
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
+        await expect(panel.getByText("Step", { exact: false }).first()).toBeVisible();
         const gridText = await panel.innerText();
-        assert.doesNotMatch(
-          gridText,
-          physical,
-          `Grid inspector: ${gridText.match(physical)?.[0]}`,
-        );
+        assert.doesNotMatch(gridText, physical, `Grid inspector: ${gridText.match(physical)?.[0]}`);
         // In portrait the panel lies over the line; close it before reaching for the line.
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", {
-              name: "Close properties",
-              exact: true,
-            }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Close properties", exact: true })),
         ]);
         await expect(panel).toHaveCount(0);
         await fitDiagram(frame, input);
@@ -6025,11 +4424,7 @@ describe("standalone workbench host boundary", function () {
         const repeat = frame.getByTestId("repeat-modal");
         await expect(repeat).toBeVisible();
         const repeatText = await repeat.innerText();
-        assert.doesNotMatch(
-          repeatText,
-          physical,
-          `Repeat: ${repeatText.match(physical)?.[0]}`,
-        );
+        assert.doesNotMatch(repeatText, physical, `Repeat: ${repeatText.match(physical)?.[0]}`);
       },
     );
   }
@@ -6046,13 +4441,8 @@ describe("standalone workbench host boundary", function () {
         const strip = rail.locator('[class*="embeddedTools"]');
         for (const theme of ["light", "dark"] as const) {
           if (theme === "dark") {
-            await page
-              .getByRole("button", { name: "Dark theme", exact: true })
-              .click();
-            await expect(frame.locator("html")).toHaveAttribute(
-              "data-color-scheme",
-              "dark",
-            );
+            await page.getByRole("button", { name: "Dark theme", exact: true }).click();
+            await expect(frame.locator("html")).toHaveAttribute("data-color-scheme", "dark");
           }
           const overflow = await strip.evaluate((element) => ({
             vertical: element.scrollHeight - element.clientHeight,
@@ -6075,15 +4465,11 @@ describe("standalone workbench host boundary", function () {
             "Undo",
             "Redo",
           ]) {
-            await expect(
-              rail.getByRole("button", { name, exact: true }),
-            ).toBeInViewport({
+            await expect(rail.getByRole("button", { name, exact: true })).toBeInViewport({
               ratio: 1,
             });
           }
-          await expect(
-            rail.getByRole("button", { name: /^Color: New strokes:/ }),
-          ).toBeInViewport({
+          await expect(rail.getByRole("button", { name: /^Color: New strokes:/ })).toBeInViewport({
             ratio: 1,
           });
           const swatches = rail.getByRole("button", { name: /^Use / });
@@ -6103,117 +4489,40 @@ describe("standalone workbench host boundary", function () {
       `orders and labels the dock over a dark canvas in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await page
-          .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (0,0) -- (4,0);\end{tikzpicture}`,
-          );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}\draw (0,0) -- (4,0);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Dark theme", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Dark theme", exact: true }).click();
         const frame = editorFrame(page);
         const rail = frame.locator("[data-diagram-tools]");
-        const names = await rail
-          .getByRole("button")
-          .evaluateAll((buttons) =>
-            buttons.map(
-              (button) =>
-                button.getAttribute("aria-label") ??
-                button.textContent?.trim() ??
-                "",
-            ),
-          );
-        const position = (name: string) =>
-          names.findIndex(
-            (entry) => entry === name || entry.startsWith(`${name}:`),
-          );
-        for (const name of [
-          "Select",
-          "Lasso",
-          "Freehand",
-          "Eraser",
-          "Geometry",
-          "Label",
-          "Bucket",
-          "Color",
-          "Undo",
-          "Redo",
-          "Layers",
-          "Properties",
-          "Settings",
-        ]) {
+        const names = await rail.getByRole("button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? ""));
+        const position = (name: string) => names.findIndex((entry) => entry === name || entry.startsWith(`${name}:`));
+        for (const name of ["Select", "Lasso", "Freehand", "Eraser", "Geometry", "Label", "Bucket", "Color", "Undo", "Redo", "Layers", "Properties", "Settings"]) {
           assert.ok(position(name) >= 0, `${name} is missing from the dock`);
         }
-        for (const [before, after] of [
-          ["Select", "Freehand"],
-          ["Freehand", "Eraser"],
-          ["Eraser", "Geometry"],
-          ["Geometry", "Label"],
-          ["Label", "Bucket"],
-          ["Bucket", "Color"],
-          ["Color", "Undo"],
-          ["Undo", "Redo"],
-          ["Redo", "Layers"],
-          ["Layers", "Properties"],
-          ["Properties", "Settings"],
-        ]) {
-          assert.ok(
-            position(before) < position(after),
-            `${before} must precede ${after}: ${names.join(", ")}`,
-          );
+        for (const [before, after] of [["Select", "Freehand"], ["Freehand", "Eraser"], ["Eraser", "Geometry"], ["Geometry", "Label"], ["Label", "Bucket"], ["Bucket", "Color"], ["Color", "Undo"], ["Undo", "Redo"], ["Redo", "Layers"], ["Layers", "Properties"], ["Properties", "Settings"]]) {
+          assert.ok(position(before) < position(after), `${before} must precede ${after}: ${names.join(", ")}`);
         }
         const swatch = names.findIndex((name) => name.startsWith("Use "));
-        assert.ok(
-          position("Color") < swatch && swatch < position("Undo"),
-          `Saved colors are outside the Color group: ${names.join(", ")}`,
-        );
+        assert.ok(position("Color") < swatch && swatch < position("Undo"), `Saved colors are outside the Color group: ${names.join(", ")}`);
         for (const label of ["Layers", "Properties", "Settings", "Lasso"]) {
-          const text = await rail
-            .getByRole("button", { name: label, exact: true })
-            .innerText();
+          const text = await rail.getByRole("button", { name: label, exact: true }).innerText();
           assert.ok(text.includes(label), `${label} has no readable label`);
         }
-        await expect
-          .poll(async () => {
-            const backgrounds = await Promise.all([
-              frame
-                .locator('[data-canvas-viewport="true"]')
-                .evaluate(
-                  (element) => getComputedStyle(element).backgroundColor,
-                ),
-              frame
-                .locator('[class*="svgLayer"]')
-                .first()
-                .evaluate(
-                  (element) => getComputedStyle(element).backgroundColor,
-                ),
-            ]);
-            return backgrounds.map((background) => {
-              const channels =
-                background.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
-              return channels.length === 3 && Math.max(...channels) < 90
-                ? "dark"
-                : background;
-            });
-          })
-          .toEqual(["dark", "dark"]);
-        const drawn = await frame
-          .locator('svg [data-source-id^="path:"]')
-          .first()
-          .evaluate((element) => getComputedStyle(element).stroke);
-        const strokeChannels =
-          drawn.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
-        assert.ok(
-          strokeChannels.length === 3 && Math.min(...strokeChannels) > 180,
-          `A black stroke is not legible: ${drawn}, attribute ${await frame.locator('svg [data-source-id^="path:"]').first().getAttribute("stroke")}`,
-        );
+        await expect.poll(async () => {
+          const backgrounds = await Promise.all([
+            frame.locator('[data-canvas-viewport="true"]').evaluate((element) => getComputedStyle(element).backgroundColor),
+            frame.locator('[class*="svgLayer"]').first().evaluate((element) => getComputedStyle(element).backgroundColor),
+          ]);
+          return backgrounds.map((background) => {
+            const channels = background.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+            return channels.length === 3 && Math.max(...channels) < 90 ? "dark" : background;
+          });
+        }).toEqual(["dark", "dark"]);
+        const drawn = await frame.locator('svg [data-source-id^="path:"]').first().evaluate((element) => getComputedStyle(element).stroke);
+        const strokeChannels = drawn.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+        assert.ok(strokeChannels.length === 3 && Math.min(...strokeChannels) > 180, `A black stroke is not legible: ${drawn}, attribute ${await frame.locator('svg [data-source-id^="path:"]').first().getAttribute("stroke")}`);
         await storyScreenshot(page, `dark-dock-${tablet.name}`);
       },
     );
@@ -6225,50 +4534,32 @@ describe("standalone workbench host boundary", function () {
       `names no key in the context menu a long press opens in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (2cm);\end{tikzpicture}`,
-          );
+          .fill(String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (2cm);\end{tikzpicture}`);
         const frame = editorFrame(page);
         const circle = frame.locator("circle[data-source-id]");
         await expect(circle).toBeAttached();
         const input = await TabletInput.attach(page);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         // The startup view depends on the canvas size at mount; the user fits the figure through the zoom popup.
         await fitDiagram(frame, input);
         await expect(circle).toBeInViewport();
         await input.longPress(
-          await strokePoint(
-            page,
-            frame.locator("circle[data-source-id]").first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         );
         const menu = frame.getByRole("menu").first();
         await expect(menu).toBeVisible();
-        const items = (await menu.locator("button").allInnerTexts()).map(
-          (text) => text.trim().replace(/\s+/g, " "),
+        const items = (await menu.locator("button").allInnerTexts()).map((text) =>
+          text.trim().replace(/\s+/g, " "),
         );
         assert.ok(items.includes("Delete"), items.join(" | "));
         for (const item of items) {
-          assert.doesNotMatch(
-            item,
-            /Ctrl|Cmd|⌘|⇧|Shift|Alt|⌥|Esc\b|Escape|⌫/,
-            item,
-          );
-          assert.doesNotMatch(
-            item,
-            /^(.+) \1$/,
-            `${item} repeats its key name`,
-          );
+          assert.doesNotMatch(item, /Ctrl|Cmd|⌘|⇧|Shift|Alt|⌥|Esc\b|Escape|⌫/, item);
+          assert.doesNotMatch(item, /^(.+) \1$/, `${item} repeats its key name`);
         }
       },
     );
@@ -6299,9 +4590,7 @@ describe("standalone workbench host boundary", function () {
         ]);
         const labels = await dialog
           .locator('label[for^="setting-"]')
-          .evaluateAll((nodes) =>
-            nodes.map((node) => node.childNodes[0].textContent!.trim()),
-          );
+          .evaluateAll((nodes) => nodes.map((node) => node.childNodes[0].textContent!.trim()));
         assert.deepEqual(labels, [
           "Grid Size",
           "Grid Opacity",
@@ -6313,10 +4602,7 @@ describe("standalone workbench host boundary", function () {
           "Generated Source Indent",
         ]);
         await dialog.getByLabel("Toolbar Position").selectOption("right");
-        await expect(frame.locator("[data-diagram-tools]")).toHaveAttribute(
-          "data-dock",
-          "right",
-        );
+        await expect(frame.locator("[data-diagram-tools]")).toHaveAttribute("data-dock", "right");
       },
     );
   }
@@ -6327,9 +4613,7 @@ describe("standalone workbench host boundary", function () {
       `selects every element from the empty-canvas long press in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
           .fill(
@@ -6339,36 +4623,22 @@ describe("standalone workbench host boundary", function () {
         await expect(frame.locator("[data-source-id]")).toHaveCount(2);
         const input = await TabletInput.attach(page);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.longPress({
           x: viewport.x + viewport.width * 0.85,
           y: viewport.y + viewport.height * 0.2,
         });
         const menu = frame.getByRole("menu").first();
-        await expect(
-          menu.getByRole("menuitem", { name: "Paste", exact: true }),
-        ).toBeVisible();
+        await expect(menu.getByRole("menuitem", { name: "Paste", exact: true })).toBeVisible();
         await input.touch([
-          await stableCenter(
-            menu.getByRole("menuitem", { name: "Select All", exact: true }),
-          ),
+          await stableCenter(menu.getByRole("menuitem", { name: "Select All", exact: true })),
         ]);
         const debug = await editorDebug(page);
         assert.deepEqual(
           [...debug.selection].sort(),
-          [
-            ...new Set(
-              debug.scene!.elements.map(
-                (element) => element.sourceRef.sourceId,
-              ),
-            ),
-          ].sort(),
+          [...new Set(debug.scene!.elements.map((element) => element.sourceRef.sourceId))].sort(),
         );
         assert.equal(debug.selection.length, 2);
       },
@@ -6383,119 +4653,59 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const settings = frame.getByTestId("settings-modal");
         const openShortcuts = async () => {
-          await tap(
-            rail.getByRole("button", { name: "Settings", exact: true }),
-          );
-          await tap(
-            settings.getByRole("button", {
-              name: "Keyboard shortcuts",
-              exact: true,
-            }),
-          );
-          await settings
-            .getByRole("searchbox", { name: "Find command", exact: true })
-            .fill("Line");
+          await tap(rail.getByRole("button", { name: "Settings", exact: true }));
+          await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
+          await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Line");
         };
         // The shipped default acts before we replace it.
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await page.keyboard.press("l");
-        await expect
-          .poll(async () => (await editorDebug(page)).tool)
-          .toBe("addLine");
+        await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
         await openShortcuts();
-        const row = settings.getByRole("group", {
-          name: "Line shortcut",
-          exact: true,
-        });
-        await tap(
-          row.getByRole("button", {
-            name: "Set shortcut for Line",
-            exact: true,
-          }),
-        );
+        const row = settings.getByRole("group", { name: "Line shortcut", exact: true });
+        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
         await page.keyboard.press("Control+Alt+l");
         await expect(row).toContainText("Ctrl+Alt+L");
         await storyScreenshot(page, `keyboard-shortcuts-${tablet.name}`);
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await page.keyboard.press("l");
-        assert.equal(
-          (await editorDebug(page)).tool,
-          "select",
-          "The replaced shortcut still ran",
-        );
+        assert.equal((await editorDebug(page)).tool, "select", "The replaced shortcut still ran");
         await page.keyboard.press("Control+Alt+l");
-        await expect
-          .poll(async () => (await editorDebug(page)).tool)
-          .toBe("addLine");
+        await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
         await page.reload();
         await editorReady(page);
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await page.keyboard.press("Control+Alt+l");
-        await expect
-          .poll(async () => (await editorDebug(page)).tool)
-          .toBe("addLine");
+        await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
         await openShortcuts();
-        await tap(
-          row.getByRole("button", {
-            name: "Set shortcut for Line",
-            exact: true,
-          }),
-        );
+        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
         await page.keyboard.press("Control+z");
         await expect(settings.getByRole("alert")).toContainText("Undo");
         await page.keyboard.press("Escape");
         await expect(row).toContainText("Ctrl+Alt+L");
-        await tap(
-          row.getByRole("button", {
-            name: "Set shortcut for Line",
-            exact: true,
-          }),
-        );
+        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
         await page.keyboard.press("Control+s");
         await expect(settings.getByRole("alert")).toContainText("Save");
         await expect(settings.getByRole("alert")).toContainText("reserved");
         await page.keyboard.press("Escape");
         await expect(row).toContainText("Ctrl+Alt+L");
-        await tap(
-          row.getByRole("button", {
-            name: "Clear shortcut for Line",
-            exact: true,
-          }),
-        );
+        await tap(row.getByRole("button", { name: "Clear shortcut for Line", exact: true }));
         await expect(row).toContainText("Unassigned");
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await page.keyboard.press("Control+Alt+l");
         await page.keyboard.press("l");
-        assert.equal(
-          (await editorDebug(page)).tool,
-          "select",
-          "A cleared shortcut still ran",
-        );
+        assert.equal((await editorDebug(page)).tool, "select", "A cleared shortcut still ran");
         await openShortcuts();
-        await tap(
-          row.getByRole("button", {
-            name: "Reset shortcut for Line",
-            exact: true,
-          }),
-        );
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(row.getByRole("button", { name: "Reset shortcut for Line", exact: true }));
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await page.keyboard.press("l");
-        await expect
-          .poll(async () => (await editorDebug(page)).tool)
-          .toBe("addLine");
+        await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
       },
     );
   }
@@ -6508,98 +4718,53 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
-        await tap(
-          rail.getByRole("button", { name: "Zoom and display", exact: true }),
-        );
+        await tap(rail.getByRole("button", { name: "Zoom and display", exact: true }));
         const popup = frame.getByRole("dialog", { name: "Tool options" });
         for (const aid of ["Grid", "Rulers", "Ruler guides"]) {
           const control = popup.getByRole("button", { name: aid, exact: true });
           await tap(control);
           await expect(control).toHaveAttribute("aria-pressed", "false");
         }
-        await tap(
-          rail.getByRole("button", { name: "Zoom and display", exact: true }),
-        );
+        await tap(rail.getByRole("button", { name: "Zoom and display", exact: true }));
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));
         const settings = frame.getByTestId("settings-modal");
-        await tap(
-          settings.getByRole("button", { name: "Canvas", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Canvas", exact: true }));
         await settings.getByLabel("Grid Size").selectOption("coarse");
         await settings.getByLabel("Grid Opacity").fill("42");
         await settings.getByLabel("Edit Handle Size").selectOption("11");
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await setSnapRule(frame, input, "Lattice", false);
         await setSnapRule(frame, input, "Objects", false);
         await setSnapRule(frame, input, "Alignment", false);
         await setSnapRule(frame, input, "Angle", true);
-        await page
-          .getByRole("button", { name: "Dark theme", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Dark theme", exact: true }).click();
         await page.reload();
         await editorReady(page);
-        await expect(
-          page.getByRole("button", { name: "Light theme", exact: true }),
-        ).toBeVisible();
+        await expect(page.getByRole("button", { name: "Light theme", exact: true })).toBeVisible();
         const reopened = editorFrame(page);
         const reopenedRail = reopened.locator("[data-diagram-tools]");
-        await expect(
-          reopenedRail.getByRole("button", { name: "Snap: angle" }),
-        ).toBeVisible();
+        await expect(reopenedRail.getByRole("button", { name: "Snap: angle" })).toBeVisible();
         await tap(reopenedRail.getByRole("button", { name: "Snap: angle" }));
-        const snapPopup = reopened.getByRole("dialog", {
-          name: "Tool options",
-        });
+        const snapPopup = reopened.getByRole("dialog", { name: "Tool options" });
         for (const rule of ["Lattice", "Objects", "Alignment"]) {
-          await expect(
-            snapPopup.getByRole("button", { name: rule, exact: true }),
-          ).toHaveAttribute("aria-pressed", "false");
+          await expect(snapPopup.getByRole("button", { name: rule, exact: true })).toHaveAttribute("aria-pressed", "false");
         }
-        await expect(
-          snapPopup.getByRole("button", { name: "Angle", exact: true }),
-        ).toHaveAttribute("aria-pressed", "true");
+        await expect(snapPopup.getByRole("button", { name: "Angle", exact: true })).toHaveAttribute("aria-pressed", "true");
         await tap(reopenedRail.getByRole("button", { name: "Snap: angle" }));
-        await tap(
-          reopenedRail.getByRole("button", {
-            name: "Zoom and display",
-            exact: true,
-          }),
-        );
-        const reopenedPopup = reopened.getByRole("dialog", {
-          name: "Tool options",
-        });
+        await tap(reopenedRail.getByRole("button", { name: "Zoom and display", exact: true }));
+        const reopenedPopup = reopened.getByRole("dialog", { name: "Tool options" });
         for (const aid of ["Grid", "Rulers", "Ruler guides"]) {
-          await expect(
-            reopenedPopup.getByRole("button", { name: aid, exact: true }),
-          ).toHaveAttribute("aria-pressed", "false");
+          await expect(reopenedPopup.getByRole("button", { name: aid, exact: true })).toHaveAttribute("aria-pressed", "false");
         }
-        await tap(
-          reopenedRail.getByRole("button", {
-            name: "Zoom and display",
-            exact: true,
-          }),
-        );
-        await tap(
-          reopenedRail.getByRole("button", { name: "Settings", exact: true }),
-        );
+        await tap(reopenedRail.getByRole("button", { name: "Zoom and display", exact: true }));
+        await tap(reopenedRail.getByRole("button", { name: "Settings", exact: true }));
         const reopenedSettings = reopened.getByTestId("settings-modal");
-        await tap(
-          reopenedSettings.getByRole("button", { name: "Canvas", exact: true }),
-        );
-        await expect(reopenedSettings.getByLabel("Grid Size")).toHaveValue(
-          "coarse",
-        );
-        await expect(reopenedSettings.getByLabel("Grid Opacity")).toHaveValue(
-          "42",
-        );
-        await expect(
-          reopenedSettings.getByLabel("Edit Handle Size"),
-        ).toHaveValue("11");
+        await tap(reopenedSettings.getByRole("button", { name: "Canvas", exact: true }));
+        await expect(reopenedSettings.getByLabel("Grid Size")).toHaveValue("coarse");
+        await expect(reopenedSettings.getByLabel("Grid Opacity")).toHaveValue("42");
+        await expect(reopenedSettings.getByLabel("Edit Handle Size")).toHaveValue("11");
       },
     );
   }
@@ -6611,53 +4776,30 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const settings = frame.getByTestId("settings-modal");
         await tap(
           frame
             .locator("[data-diagram-tools]")
             .getByRole("button", { name: "Settings", exact: true }),
         );
-        await tap(
-          settings.getByRole("button", {
-            name: "Keyboard shortcuts",
-            exact: true,
-          }),
-        );
-        const search = settings.getByRole("searchbox", {
-          name: "Find command",
-          exact: true,
-        });
+        await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
+        const search = settings.getByRole("searchbox", { name: "Find command", exact: true });
         await search.fill("Settings");
-        await tap(
-          settings.getByRole("button", {
-            name: "Set shortcut for Settings",
-            exact: true,
-          }),
-        );
+        await tap(settings.getByRole("button", { name: "Set shortcut for Settings", exact: true }));
         await page.keyboard.press("q");
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await page.keyboard.press("q");
         await expect(settings).toBeVisible();
         await search.fill("");
         await search.press("q");
         await expect(search).toHaveValue("q");
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
-        await tap(
-          rail.getByRole("button", { name: "Properties", exact: true }),
-        );
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
         const mode = frame
-          .getByRole("complementary", {
-            name: "Diagram properties",
-            exact: true,
-          })
+          .getByRole("complementary", { name: "Diagram properties", exact: true })
           .locator("select")
           .first();
         await expect(mode).toBeVisible();
@@ -6681,34 +4823,21 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));
         const settings = frame.getByTestId("settings-modal");
-        await tap(
-          settings.getByRole("button", {
-            name: "Keyboard shortcuts",
-            exact: true,
-          }),
-        );
+        await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
         await settings
           .getByRole("searchbox", { name: "Find command", exact: true })
           .fill("Simplify Path");
         await tap(
-          settings.getByRole("button", {
-            name: "Set shortcut for Simplify Path",
-            exact: true,
-          }),
+          settings.getByRole("button", { name: "Set shortcut for Simplify Path", exact: true }),
         );
         await page.keyboard.press("Control+Alt+p");
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await tap(rail.getByRole("button", { name: "Freehand", exact: true }));
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.penStroke(
           Array.from({ length: 60 }, (_, i) => ({
             x: viewport.x + viewport.width * 0.35 + i * 6,
@@ -6722,20 +4851,13 @@ describe("standalone workbench host boundary", function () {
         const ids = await frame
           .locator('svg [data-source-id^="path:"]')
           .evaluateAll((nodes) => [
-            ...new Set(
-              nodes.map((node) => node.getAttribute("data-source-id")!),
-            ),
+            ...new Set(nodes.map((node) => node.getAttribute("data-source-id")!)),
           ]);
-        const curve = frame
-          .locator(`svg [data-source-id="${ids[ids.length - 1]}"]`)
-          .first();
+        const curve = frame.locator(`svg [data-source-id="${ids[ids.length - 1]}"]`).first();
         const selectCurve = async () => {
           await fitDiagram(frame, input);
           await input.touch([await strokePoint(page, curve, 0.3)]);
-          const whole = frame.getByRole("button", {
-            name: "Done",
-            exact: true,
-          });
+          const whole = frame.getByRole("button", { name: "Done", exact: true });
           if (await whole.isVisible()) {
             await tap(whole);
           }
@@ -6743,31 +4865,18 @@ describe("standalone workbench host boundary", function () {
         await selectCurve();
         const before = (await editorDebug(page)).source;
         const anchors = async () =>
-          ((await editorDebug(page)).source.match(/\.\. controls/g) ?? [])
-            .length;
+          ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length;
         const count = await anchors();
         await tap(frame.getByRole("button", { name: "Simplify", exact: true }));
         await expect.poll(anchors, { timeout: 30_000 }).toBeLessThan(count);
-        const refinement = frame.getByRole("dialog", {
-          name: "Curve refinement",
-        });
-        await tap(
-          refinement.getByRole("button", { name: "Cancel", exact: true }),
-        );
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(before);
+        const refinement = frame.getByRole("dialog", { name: "Curve refinement" });
+        await tap(refinement.getByRole("button", { name: "Cancel", exact: true }));
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(before);
         await expect
           .poll(async () => (await editorDebug(page)).selection)
           .toEqual([ids[ids.length - 1]]);
-        await expect(
-          frame.getByRole("button", { name: "Simplify", exact: true }),
-        ).toBeVisible();
-        assert.equal(
-          await anchors(),
-          count,
-          "Reaching the keyboard baseline changed the curve",
-        );
+        await expect(frame.getByRole("button", { name: "Simplify", exact: true })).toBeVisible();
+        assert.equal(await anchors(), count, "Reaching the keyboard baseline changed the curve");
         await page.keyboard.press("Control+Alt+p");
         await expect(
           refinement,
@@ -6776,8 +4885,7 @@ describe("standalone workbench host boundary", function () {
         await expect
           .poll(anchors, {
             timeout: 30_000,
-            message:
-              "The configured command did not reach the canvas simplifier",
+            message: "The configured command did not reach the canvas simplifier",
           })
           .toBeLessThan(count);
       },
@@ -6789,72 +4897,43 @@ describe("standalone workbench host boundary", function () {
       { viewport: tablet },
       `uses configured Undo, Delete and previously unassigned Layers shortcuts in ${tablet.name}`,
       async function () {
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const source = String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`;
         await page.locator(".cm-content").fill(source);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         await fitDiagram(frame, input);
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await input.touch([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5),
         ]);
         await page.keyboard.press("Delete");
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .not.toContain("\\draw");
+        await expect.poll(async () => (await editorDebug(page)).source).not.toContain("\\draw");
         await page.keyboard.press("Control+z");
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(source);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));
         const settings = frame.getByTestId("settings-modal");
-        await tap(
-          settings.getByRole("button", {
-            name: "Keyboard shortcuts",
-            exact: true,
-          }),
-        );
+        await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
         for (const [name, shortcut] of [
           ["Delete", "Control+Alt+d"],
           ["Undo", "Control+Alt+u"],
           ["Layers", "Control+Alt+j"],
         ]) {
-          await settings
-            .getByRole("searchbox", { name: "Find command", exact: true })
-            .fill(name);
+          await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill(name);
           await tap(
             settings
               .getByRole("group", { name: `${name} shortcut`, exact: true })
-              .getByRole("button", {
-                name: `Set shortcut for ${name}`,
-                exact: true,
-              }),
+              .getByRole("button", { name: `Set shortcut for ${name}`, exact: true }),
           );
           await page.keyboard.press(shortcut);
         }
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await fitDiagram(frame, input);
         await input.touch([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5),
         ]);
         await page.keyboard.press("Delete");
         assert.equal(
@@ -6863,9 +4942,7 @@ describe("standalone workbench host boundary", function () {
           "The old canvas Delete binding remained active",
         );
         await page.keyboard.press("Control+Alt+d");
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .not.toContain("\\draw");
+        await expect.poll(async () => (await editorDebug(page)).source).not.toContain("\\draw");
         await page.keyboard.press("Control+z");
         assert.doesNotMatch(
           (await editorDebug(page)).source,
@@ -6873,53 +4950,26 @@ describe("standalone workbench host boundary", function () {
           "The old canvas Undo binding remained active",
         );
         await page.keyboard.press("Control+Alt+u");
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(source);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
         await page.keyboard.press("Control+Alt+j");
         await expect(
-          frame.getByRole("tab", {
-            name: "Layers",
-            exact: true,
-            selected: true,
-          }),
+          frame.getByRole("tab", { name: "Layers", exact: true, selected: true }),
         ).toBeVisible();
-        await tap(
-          frame.getByRole("button", { name: "Close properties", exact: true }),
-        );
+        await tap(frame.getByRole("button", { name: "Close properties", exact: true }));
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));
-        await settings
-          .getByRole("searchbox", { name: "Find command", exact: true })
-          .fill("Layers");
-        await tap(
-          settings.getByRole("button", {
-            name: "Set shortcut for Layers",
-            exact: true,
-          }),
-        );
+        await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Layers");
+        await tap(settings.getByRole("button", { name: "Set shortcut for Layers", exact: true }));
         await page.keyboard.press("ArrowLeft");
-        await tap(
-          settings.getByRole("button", { name: "Close settings", exact: true }),
-        );
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await fitDiagram(frame, input);
         await input.touch([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5),
         ]);
         await page.keyboard.press("Control+Alt+j");
-        await expect(
-          frame.getByRole("tab", { name: "Layers", exact: true }),
-        ).toHaveCount(0);
+        await expect(frame.getByRole("tab", { name: "Layers", exact: true })).toHaveCount(0);
         await page.keyboard.press("ArrowLeft");
         await expect(
-          frame.getByRole("tab", {
-            name: "Layers",
-            exact: true,
-            selected: true,
-          }),
+          frame.getByRole("tab", { name: "Layers", exact: true, selected: true }),
         ).toBeVisible();
         assert.equal(
           (await editorDebug(page)).source,
@@ -6937,15 +4987,12 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         await setSnapRule(frame, input, "Lattice", false);
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(frame.getByRole("option", { name: "Line", exact: true }));
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const from = {
           x: viewport.x + viewport.width * 0.55,
           y: viewport.y + viewport.height * 0.4,
@@ -6960,24 +5007,14 @@ describe("standalone workbench host boundary", function () {
           const path = (await editorDebug(page)).scene?.elements.find(
             (element) => element.kind === "Path",
           );
-          const points = path?.commands?.flatMap((command) =>
-            command.to ? [command.to] : [],
-          );
-          assert.ok(
-            points && points.length >= 2,
-            "The drawn path has no editable geometry",
-          );
+          const points = path?.commands?.flatMap((command) => (command.to ? [command.to] : []));
+          assert.ok(points && points.length >= 2, "The drawn path has no editable geometry");
           return points;
         };
         const angle = async () => {
           const p = await points();
           return Math.abs(
-            (Math.atan2(
-              p[p.length - 1].y - p[0].y,
-              p[p.length - 1].x - p[0].x,
-            ) *
-              180) /
-              Math.PI,
+            (Math.atan2(p[p.length - 1].y - p[0].y, p[p.length - 1].x - p[0].x) * 180) / Math.PI,
           );
         };
         await draw();
@@ -6986,9 +5023,7 @@ describe("standalone workbench host boundary", function () {
           "The free baseline was already angle constrained",
         );
         await tap(rail.getByRole("button", { name: "Undo", exact: true }));
-        await expect(
-          frame.locator('svg [data-source-id^="path:"]'),
-        ).toHaveCount(0);
+        await expect(frame.locator('svg [data-source-id^="path:"]')).toHaveCount(0);
         await setSnapRule(frame, input, "Angle", true);
         await draw();
         assert.ok(
@@ -6997,21 +5032,15 @@ describe("standalone workbench host boundary", function () {
         );
         await tap(rail.getByRole("button", { name: "Undo", exact: true }));
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
-        await tap(
-          frame.getByRole("option", { name: "Rectangle", exact: true }),
-        );
+        await tap(frame.getByRole("option", { name: "Rectangle", exact: true }));
         await input.penStroke([
           from,
           { x: from.x + 55, y: from.y + 22.5 },
           { x: from.x + 110, y: from.y + 45 },
         ]);
         const square = await points();
-        const width =
-          Math.max(...square.map((p) => p.x)) -
-          Math.min(...square.map((p) => p.x));
-        const height =
-          Math.max(...square.map((p) => p.y)) -
-          Math.min(...square.map((p) => p.y));
+        const width = Math.max(...square.map((p) => p.x)) - Math.min(...square.map((p) => p.x));
+        const height = Math.max(...square.map((p) => p.y)) - Math.min(...square.map((p) => p.y));
         assert.ok(
           width > 10 && Math.abs(width - height) < 0.4,
           `The constrained rectangle was ${width} by ${height}`,
@@ -7030,10 +5059,7 @@ describe("standalone workbench host boundary", function () {
         const before = (await points())[0];
         await drag();
         const constrained = (await points())[0];
-        assert.ok(
-          constrained.x > before.x + 1,
-          "The constrained move did not move the shape",
-        );
+        assert.ok(constrained.x > before.x + 1, "The constrained move did not move the shape");
         assert.ok(
           Math.abs(constrained.y - before.y) < 0.1,
           `The constrained move changed its other axis: ${JSON.stringify({ before, constrained, source: (await editorDebug(page)).source })}`,
@@ -7053,38 +5079,23 @@ describe("standalone workbench host boundary", function () {
       { viewport: tablet },
       `edits figure bounds in scaled lattice units in ${tablet.name}`,
       async function () {
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await page.locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}[x=2cm,y=0.5cm]
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}[x=2cm,y=0.5cm]
 \draw (0,0) rectangle (4,6);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await fitDiagram(frame, input);
-        await tap(
-          rail.getByRole("button", { name: "Properties", exact: true }),
-        );
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
-        await expect(
-          panel.getByText("Figure Bounds", { exact: true }),
-        ).toBeVisible();
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        await expect(panel.getByText("Figure Bounds", { exact: true })).toBeVisible();
         await panel.locator("select").selectOption("fixed");
         const field = (name: string) =>
-          panel
-            .locator('[class*="compactNumberField"]', { hasText: name })
-            .locator("input");
+          panel.locator('[class*="compactNumberField"]', { hasText: name }).locator("input");
         assert.ok(
           Math.abs(Number(await field("Width").inputValue()) - 4) < 0.05,
           "Automatic width was converted to centimetres instead of lattice units",
@@ -7127,19 +5138,12 @@ describe("standalone workbench host boundary", function () {
         const popup = frame.getByRole("dialog", { name: "Tool options" });
         // The Snap popup's text after the figure's options are set to `options`.
         const snapPopupText = async (options: string) => {
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
-          await page.locator(".cm-content")
-            .fill(String.raw`\begin{tikzpicture}${options}
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}${options}
 \draw (0,0) -- (3,2);
 \end{tikzpicture}`);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
-          await expect(
-            frame.locator('svg [data-source-id="path:0"]').first(),
-          ).toBeAttached();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await expect(frame.locator('svg [data-source-id="path:0"]').first()).toBeAttached();
           await input.touch([await stableCenter(trigger)]);
           await expect(popup).toBeVisible();
           const text = await popup.innerText();
@@ -7180,25 +5184,19 @@ describe("standalone workbench host boundary", function () {
       `lands a placed line's ends and a dragged Bézier control point on whole lattice points in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
 \draw (2,4) .. controls (4,7) and (6,7) .. (8,4);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator('svg [data-source-id="path:2"]').first();
         await expect(curve).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -7207,63 +5205,35 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        await expect(
-          rail.getByRole("button", { name: /^Snap: / }),
-        ).toHaveAccessibleName("Snap: lattice");
+        await expect(rail.getByRole("button", { name: /^Snap: / })).toHaveAccessibleName(
+          "Snap: lattice",
+        );
         const numbers = (line: string) =>
-          [...line.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) =>
-            Number(match[0]),
-          );
+          [...line.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
         const sourceLines = async () =>
-          (await editorDebug(page)).source
-            .split("\n")
-            .map((line) => line.trim());
+          (await editorDebug(page)).source.split("\n").map((line) => line.trim());
         // A line placed between two off-lattice pen positions, away from every object point and
         // alignment guide, is written on whole lattice points.
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("option", { name: "Line", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
         ]);
         await input.penStroke([at(1.3, 1.6), at(2.4, 2.1), at(3.6, 2.4)]);
-        await expect
-          .poll(
-            async () =>
-              (await sourceLines()).filter((line) => line.startsWith("\\draw"))
-                .length,
-          )
-          .toBe(4);
-        const placed = (await sourceLines())
-          .filter((line) => line.startsWith("\\draw"))
-          .at(-1)!;
+        await expect.poll(async () => (await sourceLines()).filter((line) => line.startsWith("\\draw")).length).toBe(4);
+        const placed = (await sourceLines()).filter((line) => line.startsWith("\\draw")).at(-1)!;
         assert.deepEqual(
           numbers(placed),
           [1, 2, 4, 2],
@@ -7271,36 +5241,24 @@ describe("standalone workbench host boundary", function () {
         );
         // A Bézier control point dragged to an off-lattice pen position lands on a whole lattice point.
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         // The placed line stays selected, with its controls near the curve; clear it on empty canvas first.
         await input.touch([at(9, 9)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await input.penStroke([await strokePoint(page, curve, 0.5)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:2"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
         // Control handles show next to a selected curve point: select the start (2,4) to reach (4,7).
-        const anchors = frame.locator(
-          'rect[data-handle-kind="move-handle"][data-source-id="path:2"]',
-        );
+        const anchors = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:2"]');
         await expect(anchors).toHaveCount(2);
-        const start = (
-          await Promise.all(
-            (await anchors.all()).map((anchor) => stableCenter(anchor)),
-          )
-        ).sort((a, b) => a.x - b.x)[0];
+        const start = (await Promise.all((await anchors.all()).map((anchor) => stableCenter(anchor)))).sort(
+          (a, b) => a.x - b.x,
+        )[0];
         await input.penStroke([start]);
         await expect(
           frame.getByText("1 point selected", { exact: true }),
         ).toBeVisible();
-        const controls = frame.locator(
-          'circle[data-handle-kind="move-handle"][data-source-id="path:2"]',
-        );
+        const controls = frame.locator('circle[data-handle-kind="move-handle"][data-source-id="path:2"]');
         await expect(controls).toHaveCount(1);
         const firstControl = await stableCenter(controls.first());
         const to = at(3.4, 8.6);
@@ -7313,13 +5271,9 @@ describe("standalone workbench host boundary", function () {
         }
         await input.penUp(to);
         await expect
-          .poll(async () =>
-            (await sourceLines()).find((line) => line.includes(".. controls")),
-          )
+          .poll(async () => (await sourceLines()).find((line) => line.includes(".. controls")))
           .not.toMatch(/controls \(4,7\)/);
-        const dragged = (await sourceLines()).find((line) =>
-          line.includes(".. controls"),
-        )!;
+        const dragged = (await sourceLines()).find((line) => line.includes(".. controls"))!;
         assert.deepEqual(
           numbers(dragged),
           [2, 4, 3, 9, 6, 7, 8, 4],
@@ -7335,27 +5289,19 @@ describe("standalone workbench host boundary", function () {
       { viewport: tablet },
       `offers touch-sized floating Properties controls and only mounted tabs in ${tablet.name}`,
       async function () {
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const source = String.raw`\begin{tikzpicture}
 \draw (0,0) rectangle (4,6);
 \end{tikzpicture}`;
         await page.locator(".cm-content").fill(source);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await fitDiagram(frame, input);
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         const checkControls = async () => {
           const controls = panel.locator(
             'button,input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),select,textarea',
@@ -7376,33 +5322,18 @@ describe("standalone workbench host boundary", function () {
           assert.ok(checked >= 4, "The panel had no editable control baseline");
           const body = panel.locator(".embed-inspector-content");
           assert.ok(
-            await body.evaluate(
-              (element) => element.scrollWidth <= element.clientWidth + 1,
-            ),
+            await body.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
             "Properties controls overflow horizontally",
           );
         };
-        await tap(
-          rail.getByRole("button", { name: "Properties", exact: true }),
-        );
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
         await checkControls();
-        assert.deepEqual(await panel.getByRole("tab").allInnerTexts(), [
-          "Properties",
-          "Layers",
-        ]);
-        await tap(
-          panel.getByRole("button", { name: "Close properties", exact: true }),
-        );
+        assert.deepEqual(await panel.getByRole("tab").allInnerTexts(), ["Properties", "Layers"]);
+        await tap(panel.getByRole("button", { name: "Close properties", exact: true }));
         await input.touch([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.06,
-          ),
+          await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.06),
         ]);
-        await tap(
-          rail.getByRole("button", { name: "Properties", exact: true }),
-        );
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
         await checkControls();
         assert.equal(
           (await editorDebug(page)).source,
@@ -7419,21 +5350,14 @@ describe("standalone workbench host boundary", function () {
       { viewport: tablet },
       `offers touch-sized Repeat dialog controls in ${tablet.name}`,
       async function () {
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`,
-          );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+          .fill(String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const tap = async (locator: Locator) =>
-          input.touch([await stableCenter(locator)]);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         await tap(
           frame
             .locator("[data-diagram-tools]")
@@ -7441,17 +5365,10 @@ describe("standalone workbench host boundary", function () {
         );
         await fitDiagram(frame, input);
         await input.longPress(
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5),
         );
         await tap(
-          frame
-            .getByRole("menu")
-            .first()
-            .getByRole("menuitem", { name: "Repeat...", exact: true }),
+          frame.getByRole("menu").first().getByRole("menuitem", { name: "Repeat...", exact: true }),
         );
         const repeat = frame.getByTestId("repeat-modal");
         await expect(repeat).toBeVisible();
@@ -7464,12 +5381,7 @@ describe("standalone workbench host boundary", function () {
           );
         }
         await storyScreenshot(page, `repeat-touch-${tablet.name}`);
-        await tap(
-          repeat.getByRole("button", {
-            name: "Close repeat dialog",
-            exact: true,
-          }),
-        );
+        await tap(repeat.getByRole("button", { name: "Close repeat dialog", exact: true }));
         await expect(repeat).toHaveCount(0);
       },
     );
@@ -7481,31 +5393,21 @@ describe("standalone workbench host boundary", function () {
       `inserts, deletes, and opens layers through touch routes in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`,
-          );
+          .fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(1);
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
 
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Geometry", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("option", { name: "Line", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
         ]);
         assert.equal((await editorDebug(page)).tool, "addLine");
         const from = {
@@ -7523,48 +5425,29 @@ describe("standalone workbench host boundary", function () {
           .toMatch(/\\draw[^;]*--[^;]*;/);
 
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         // The inserted line stays selected and its control may cover the circle; tap empty canvas to dismiss it.
         await input.touch([
-          {
-            x: viewport.x + viewport.width - 12,
-            y: viewport.y + viewport.height - 12,
-          },
+          { x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 },
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await fitDiagram(frame, input);
         await input.longPress(
-          await strokePoint(
-            page,
-            frame.locator("circle[data-source-id]").first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         );
         await input.touch([
           await stableCenter(
-            frame
-              .getByRole("menu")
-              .first()
-              .getByRole("menuitem", { name: "Delete", exact: true }),
+            frame.getByRole("menu").first().getByRole("menuitem", { name: "Delete", exact: true }),
           ),
         ]);
         await expect(frame.locator("circle[data-source-id]")).toHaveCount(0);
         assert.doesNotMatch((await editorDebug(page)).source, /circle/);
 
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Layers", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Layers", exact: true })),
         ]);
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         await expect(panel).toBeVisible();
         await expect(
           panel.getByRole("tabpanel").getByText("Layers", { exact: true }),
@@ -7589,33 +5472,16 @@ describe("standalone workbench host boundary", function () {
               .getByRole("button", { name: "Layers", exact: true }),
           ),
         ]);
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         await expect(
-          panel.getByRole("tab", {
-            name: "Layers",
-            exact: true,
-            selected: true,
-          }),
+          panel.getByRole("tab", { name: "Layers", exact: true, selected: true }),
         ).toBeVisible();
+        await expect(panel.getByRole("tab", { name: "Objects", exact: true })).toHaveCount(0);
         await expect(
-          panel.getByRole("tab", { name: "Objects", exact: true }),
-        ).toHaveCount(0);
-        await expect(
-          panel
-            .getByRole("tabpanel")
-            .getByText("Layers", { exact: true })
-            .first(),
+          panel.getByRole("tabpanel").getByText("Layers", { exact: true }).first(),
         ).toBeVisible();
         await input.touch([
-          await stableCenter(
-            panel.getByRole("button", {
-              name: "Close properties",
-              exact: true,
-            }),
-          ),
+          await stableCenter(panel.getByRole("button", { name: "Close properties", exact: true })),
         ]);
       },
     );
@@ -7627,17 +5493,11 @@ describe("standalone workbench host boundary", function () {
       `creates, renames, fills, hides, locks, orders and deletes TikZ scope layers by touch in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (-14,-18) -- (-2,-12);\end{tikzpicture}`,
-          );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+          .fill(String.raw`\begin{tikzpicture}\draw (-14,-18) -- (-2,-12);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator("svg [data-source-id]")).toHaveCount(1);
         const input = await TabletInput.attach(page);
@@ -7648,26 +5508,17 @@ describe("standalone workbench host boundary", function () {
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Layers", exact: true }));
         const panel = frame
-          .getByRole("complementary", {
-            name: "Diagram properties",
-            exact: true,
-          })
+          .getByRole("complementary", { name: "Diagram properties", exact: true })
           .getByRole("tabpanel");
         const layers = () =>
           panel
             .getByRole("group", { name: / layer$/ })
             .evaluateAll((groups) =>
-              groups.map((group) =>
-                group.getAttribute("aria-label")!.replace(/ layer$/, ""),
-              ),
+              groups.map((group) => group.getAttribute("aria-label")!.replace(/ layer$/, "")),
             );
         // A new layer is a named scope; layers are listed front first.
-        await tap(
-          panel.getByRole("button", { name: "New layer", exact: true }),
-        );
-        await tap(
-          panel.getByRole("button", { name: "New layer", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "New layer", exact: true }));
+        await tap(panel.getByRole("button", { name: "New layer", exact: true }));
         await expect
           .poll(source)
           .toMatch(
@@ -7685,23 +5536,14 @@ describe("standalone workbench host boundary", function () {
           );
         }
         // Renaming writes the scope's name.
-        await tap(
-          panel.getByRole("button", { name: "Rename Layer 1", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "Rename Layer 1", exact: true }));
         await panel.getByRole("textbox", { name: "Layer name" }).fill("Ground");
         await page.keyboard.press("Enter");
         await expect.poll(source).toMatch(/\\begin\{scope\}\[name=Ground\]/);
         // The selected line moves into the layer's scope.
         await tap(panel.getByRole("button", { name: "Line", exact: true }));
-        await expect
-          .poll(async () => (await editorDebug(page)).selection.length)
-          .toBe(1);
-        await tap(
-          panel.getByRole("button", {
-            name: "Move selection to Ground",
-            exact: true,
-          }),
-        );
+        await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+        await tap(panel.getByRole("button", { name: "Move selection to Ground", exact: true }));
         await expect
           .poll(source)
           .toMatch(
@@ -7709,40 +5551,26 @@ describe("standalone workbench host boundary", function () {
           );
         assert.equal((await source()).match(/\\draw/g)!.length, 1);
         const childIndent = async () =>
-          (await panel
-            .getByRole("button", { name: "Line", exact: true })
-            .boundingBox())!.x -
-          (await panel
-            .getByRole("button", { name: "Ground Layer", exact: true })
-            .boundingBox())!.x;
+          (await panel.getByRole("button", { name: "Line", exact: true }).boundingBox())!.x -
+          (await panel.getByRole("button", { name: "Ground Layer", exact: true }).boundingBox())!.x;
         await expect
-          .poll(childIndent, {
-            message: "The layer child is drawn to the left of its parent",
-          })
+          .poll(childIndent, { message: "The layer child is drawn to the left of its parent" })
           .toBeGreaterThan(0);
         const line = frame.locator("svg [data-source-id]").first();
         const drawnOpacity = () =>
           line.evaluate((element) => {
             let opacity = Number(getComputedStyle(element).strokeOpacity);
-            for (
-              let node: Element | null = element;
-              node;
-              node = node.parentElement
-            ) {
+            for (let node: Element | null = element; node; node = node.parentElement) {
               opacity *= Number(getComputedStyle(node).opacity);
             }
             return opacity;
           });
         // Hiding changes the painted line as well as its source; showing restores both.
         await expect.poll(drawnOpacity).toBeGreaterThan(0);
-        await tap(
-          panel.getByRole("button", { name: "Hide Ground", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "Hide Ground", exact: true }));
         await expect.poll(source).toMatch(/\[name=Ground, transparent\]/);
         await expect.poll(drawnOpacity).toBe(0);
-        await tap(
-          panel.getByRole("button", { name: "Show Ground", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "Show Ground", exact: true }));
         await expect.poll(source).toMatch(/\[name=Ground\]/);
         await expect.poll(drawnOpacity).toBeGreaterThan(0);
         // The pen drags the line of an unlocked layer, and not of a locked one.
@@ -7769,10 +5597,7 @@ describe("standalone workbench host boundary", function () {
         );
         // The selected line's control stays off the open panel.
         const aside = (await frame
-          .getByRole("complementary", {
-            name: "Diagram properties",
-            exact: true,
-          })
+          .getByRole("complementary", { name: "Diagram properties", exact: true })
           .boundingBox())!;
         for (const control of [
           frame.getByRole("button", { name: "Lock", exact: true }),
@@ -7789,9 +5614,7 @@ describe("standalone workbench host boundary", function () {
         }
         await tap(rail.getByRole("button", { name: "Undo", exact: true }));
         await expect.poll(source).toMatch(/\\draw \(-14,-18\) -- \(-2,-12\);/);
-        await tap(
-          panel.getByRole("button", { name: "Lock Ground", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "Lock Ground", exact: true }));
         await expect(
           panel.getByRole("button", { name: "Unlock Ground", exact: true }),
         ).toHaveAttribute("aria-pressed", "true");
@@ -7801,39 +5624,23 @@ describe("standalone workbench host boundary", function () {
           /\\draw \(-14,-18\) -- \(-2,-12\);/,
           "A locked layer's line moved",
         );
-        await tap(
-          panel.getByRole("button", { name: "Unlock Ground", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "Unlock Ground", exact: true }));
         // Raising puts the layer in front: later in the source, first in the list.
-        await tap(
-          panel.getByRole("button", { name: "Raise Ground", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "Raise Ground", exact: true }));
         await expect.poll(layers).toEqual(["Ground", "Layer 2"]);
         assert.match(await source(), /\[name=Layer 2\][^]*\[name=Ground\]/);
         // Deleting asks first, then removes the scope.
+        await tap(panel.getByRole("button", { name: "Delete Layer 2", exact: true }));
+        assert.match(await source(), /name=Layer 2/, "Deleted without confirmation");
         await tap(
-          panel.getByRole("button", { name: "Delete Layer 2", exact: true }),
-        );
-        assert.match(
-          await source(),
-          /name=Layer 2/,
-          "Deleted without confirmation",
-        );
-        await tap(
-          panel.getByRole("button", {
-            name: "Delete Layer 2 and its objects",
-            exact: true,
-          }),
+          panel.getByRole("button", { name: "Delete Layer 2 and its objects", exact: true }),
         );
         await expect.poll(source).not.toMatch(/Layer 2/);
         await expect.poll(layers).toEqual(["Ground"]);
         await storyScreenshot(page, `layers-${tablet.name}`);
         await tap(
           frame
-            .getByRole("complementary", {
-              name: "Diagram properties",
-              exact: true,
-            })
+            .getByRole("complementary", { name: "Diagram properties", exact: true })
             .getByRole("button", { name: "Close properties", exact: true }),
         );
       },
@@ -7846,17 +5653,13 @@ describe("standalone workbench host boundary", function () {
       `reopens named layers and visibility with session-local locks in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \coordinate (anchor) at (0,0);
 \draw (anchor) -- (4,0);
 \draw (0,2) -- (4,2);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => {
@@ -7864,119 +5667,41 @@ describe("standalone workbench host boundary", function () {
           await input.touch([await stableCenter(locator)]);
         };
         await tap(frame.getByRole("button", { name: "Layers", exact: true }));
-        const panel = frame
-          .getByRole("complementary", { name: "Diagram properties" })
-          .getByRole("tabpanel");
-        await tap(
-          panel.getByRole("button", { name: "New layer", exact: true }),
-        );
-        await tap(
-          panel.getByRole("button", { name: "New layer", exact: true }),
-        );
+        const panel = frame.getByRole("complementary", { name: "Diagram properties" }).getByRole("tabpanel");
+        await tap(panel.getByRole("button", { name: "New layer", exact: true }));
+        await tap(panel.getByRole("button", { name: "New layer", exact: true }));
         await fitDiagram(frame, input);
         await tap(frame.getByRole("button", { name: "Select", exact: true }));
-        await input.penStroke([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id^="path:"]').first(),
-            0.3,
-          ),
-        ]);
-        await tap(
-          panel.getByRole("button", {
-            name: "Move selection to Layer 1",
-            exact: true,
-          }),
-        );
-        await panel
-          .getByRole("button", { name: "Line", exact: true })
-          .last()
-          .click();
-        await tap(
-          panel.getByRole("button", {
-            name: "Move selection to Layer 2",
-            exact: true,
-          }),
-        );
-        await tap(
-          panel.getByRole("button", { name: "Hide Layer 2", exact: true }),
-        );
-        if (
-          (await panel
-            .getByRole("button", { name: "Raise Layer 1", exact: true })
-            .count()) === 0
-        ) {
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id^="path:"]').first(), 0.3)]);
+        await tap(panel.getByRole("button", { name: "Move selection to Layer 1", exact: true }));
+        await panel.getByRole("button", { name: "Line", exact: true }).last().click();
+        await tap(panel.getByRole("button", { name: "Move selection to Layer 2", exact: true }));
+        await tap(panel.getByRole("button", { name: "Hide Layer 2", exact: true }));
+        if (await panel.getByRole("button", { name: "Raise Layer 1", exact: true }).count() === 0) {
           await tap(frame.getByRole("button", { name: "Layers", exact: true }));
         }
-        assert.ok(
-          await panel
-            .getByRole("button", { name: "Raise Layer 1", exact: true })
-            .count(),
-          `Layer 1 missing after hide: ${(await editorDebug(page)).source}`,
-        );
-        await tap(
-          panel.getByRole("button", { name: "Raise Layer 1", exact: true }),
-        );
-        if (
-          (await panel
-            .getByRole("button", { name: "Lock Layer 1", exact: true })
-            .count()) === 0
-        ) {
+        assert.ok(await panel.getByRole("button", { name: "Raise Layer 1", exact: true }).count(), `Layer 1 missing after hide: ${(await editorDebug(page)).source}`);
+        await tap(panel.getByRole("button", { name: "Raise Layer 1", exact: true }));
+        if (await panel.getByRole("button", { name: "Lock Layer 1", exact: true }).count() === 0) {
           await tap(frame.getByRole("button", { name: "Layers", exact: true }));
         }
-        await tap(
-          panel.getByRole("button", { name: "Lock Layer 1", exact: true }),
-        );
+        await tap(panel.getByRole("button", { name: "Lock Layer 1", exact: true }));
         const source = (await editorDebug(page)).source;
-        assert.match(
-          source,
-          /\[name=Layer 2, transparent\][^]*\[name=Layer 1\]/,
-        );
-        assert.match(
-          source,
-          /\[name=Layer 2, transparent\]\s*\\draw[^]*\[name=Layer 1\]\s*\\draw/,
-        );
+        assert.match(source, /\[name=Layer 2, transparent\][^]*\[name=Layer 1\]/);
+        assert.match(source, /\[name=Layer 2, transparent\]\s*\\draw[^]*\[name=Layer 1\]\s*\\draw/);
         assert.match(source, /\\coordinate \(anchor\)[^]*\\draw \(anchor\)/);
         await page.reload();
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(source);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const reopened = editorFrame(page);
-        await tap(
-          reopened.getByRole("button", { name: "Layers", exact: true }),
-        );
-        const reopenedPanel = reopened
-          .getByRole("complementary", { name: "Diagram properties" })
-          .getByRole("tabpanel");
-        await expect
-          .poll(async () =>
-            reopenedPanel
-              .getByRole("group", { name: / layer$/ })
-              .evaluateAll((nodes) =>
-                nodes.map((node) => node.getAttribute("aria-label")),
-              ),
-          )
-          .toEqual(["Layer 1 layer", "Layer 2 layer"]);
-        await expect(
-          reopenedPanel.getByRole("button", {
-            name: "Show Layer 2",
-            exact: true,
-          }),
-        ).toBeVisible();
-        await expect(
-          reopenedPanel.getByRole("button", {
-            name: "Lock Layer 1",
-            exact: true,
-          }),
-        ).toHaveAttribute("aria-pressed", "false");
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(source);
+        await tap(reopened.getByRole("button", { name: "Layers", exact: true }));
+        const reopenedPanel = reopened.getByRole("complementary", { name: "Diagram properties" }).getByRole("tabpanel");
+        await expect.poll(async () => reopenedPanel.getByRole("group", { name: / layer$/ }).evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")))).toEqual(["Layer 1 layer", "Layer 2 layer"]);
+        await expect(reopenedPanel.getByRole("button", { name: "Show Layer 2", exact: true })).toBeVisible();
+        await expect(reopenedPanel.getByRole("button", { name: "Lock Layer 1", exact: true })).toHaveAttribute("aria-pressed", "false");
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
       },
     );
   }
@@ -7986,17 +5711,13 @@ describe("standalone workbench host boundary", function () {
       { viewport: tablet },
       `keeps selection actions usable beside Layers when the selection fills the canvas in ${tablet.name}`,
       async function () {
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \begin{scope}[name=Long foreground layer]
 \draw (-100,-100) rectangle (100,100);
 \end{scope}
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
@@ -8007,10 +5728,7 @@ describe("standalone workbench host boundary", function () {
               .getByRole("button", { name: "Layers", exact: true }),
           ),
         ]);
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         const title = panel.getByRole("button", {
           name: "Long foreground layer Layer",
           exact: true,
@@ -8038,20 +5756,13 @@ describe("standalone workbench host boundary", function () {
           .getByRole("button", { name: "Zoom and display", exact: true });
         await input.touch([await stableCenter(zoom)]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "200%", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "200%", exact: true })),
         ]);
         await input.touch([await stableCenter(zoom)]);
         await input.touch([
-          await stableCenter(
-            panel.getByRole("button", { name: "Rectangle", exact: true }),
-          ),
+          await stableCenter(panel.getByRole("button", { name: "Rectangle", exact: true })),
         ]);
-        const actions = frame.getByRole("button", {
-          name: "More",
-          exact: true,
-        });
+        const actions = frame.getByRole("button", { name: "More", exact: true });
         await expect(actions).toBeInViewport({ ratio: 1 });
         const control = (await actions.boundingBox())!;
         const aside = (await panel.boundingBox())!;
@@ -8064,12 +5775,8 @@ describe("standalone workbench host boundary", function () {
           "The selection strip overlaps Layers",
         );
         await input.touch([await stableCenter(actions)]);
-        await expect(
-          frame.getByRole("menuitem", { name: "Delete", exact: true }),
-        ).toBeVisible();
-        await page.screenshot({
-          path: `test-results/workbench/layers-cramped-${tablet.name}.png`,
-        });
+        await expect(frame.getByRole("menuitem", { name: "Delete", exact: true })).toBeVisible();
+        await page.screenshot({ path: `test-results/workbench/layers-cramped-${tablet.name}.png` });
       },
     );
   }
@@ -8080,22 +5787,16 @@ describe("standalone workbench host boundary", function () {
       `refuses to move a coordinate into a layer drawn after the line that uses it in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \coordinate (a) at (-10,-14);
 \draw (a) -- (-4,-16);
 \begin{scope}[name=Front]
 \end{scope}
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator("svg [data-source-id]").first(),
-        ).toBeAttached();
+        await expect(frame.locator("svg [data-source-id]").first()).toBeAttached();
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => {
           await input.touch([await stableCenter(locator)]);
@@ -8106,48 +5807,21 @@ describe("standalone workbench host boundary", function () {
             .locator("[data-diagram-tools]")
             .getByRole("button", { name: "Layers", exact: true }),
         );
-        const aside = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const aside = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         const panel = aside.getByRole("tabpanel");
         const before = await source();
-        await tap(
-          panel.getByRole("button", { name: "Coordinate", exact: true }),
-        );
-        await expect
-          .poll(async () => (await editorDebug(page)).selection.length)
-          .toBe(1);
-        await tap(
-          panel.getByRole("button", {
-            name: "Move selection to Front",
-            exact: true,
-          }),
-        );
-        await expect(frame.getByTestId("canvas-warning-message")).toContainText(
-          "out of order",
-        );
-        assert.equal(
-          await source(),
-          before,
-          "The coordinate moved after the line that uses it",
-        );
+        await tap(panel.getByRole("button", { name: "Coordinate", exact: true }));
+        await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+        await tap(panel.getByRole("button", { name: "Move selection to Front", exact: true }));
+        await expect(frame.getByTestId("canvas-warning-message")).toContainText("out of order");
+        assert.equal(await source(), before, "The coordinate moved after the line that uses it");
         // The line itself may join the later layer.
         await tap(panel.getByRole("button", { name: "Line", exact: true }));
-        await tap(
-          panel.getByRole("button", {
-            name: "Move selection to Front",
-            exact: true,
-          }),
-        );
+        await tap(panel.getByRole("button", { name: "Move selection to Front", exact: true }));
         await expect
           .poll(source)
-          .toMatch(
-            /\\begin\{scope\}\[name=Front\]\s*\\draw \(a\) -- \(-4,-16\);\s*\\end\{scope\}/,
-          );
-        await tap(
-          aside.getByRole("button", { name: "Close properties", exact: true }),
-        );
+          .toMatch(/\\begin\{scope\}\[name=Front\]\s*\\draw \(a\) -- \(-4,-16\);\s*\\end\{scope\}/);
+        await tap(aside.getByRole("button", { name: "Close properties", exact: true }));
       },
     );
   }
@@ -8162,52 +5836,26 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
         const overlap = async (locator: ReturnType<typeof frame.locator>) => {
-          const [a, b] = [
-            (await rail.boundingBox())!,
-            (await locator.boundingBox())!,
-          ];
+          const [a, b] = [(await rail.boundingBox())!, (await locator.boundingBox())!];
           return (
-            Math.max(
-              0,
-              Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x),
-            ) *
-            Math.max(
-              0,
-              Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y),
-            )
+            Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
+            Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y))
           );
         };
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 120));
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         await expect(result).toBeVisible();
-        assert.equal(
-          await overlap(result),
-          0,
-          "The freehand result covers the rail",
-        );
+        assert.equal(await overlap(result), 0, "The freehand result covers the rail");
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Cancel", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Properties", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Properties", exact: true })),
         ]);
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         await expect(panel).toBeVisible();
-        assert.equal(
-          await overlap(panel),
-          0,
-          "The properties panel covers the rail",
-        );
+        assert.equal(await overlap(panel), 0, "The properties panel covers the rail");
         await storyScreenshot(page, `placement-${tablet.name}`);
       },
     );
@@ -8219,17 +5867,13 @@ describe("standalone workbench host boundary", function () {
       `opens Properties as a side panel in landscape and a bottom sheet in portrait, clear of the selected object, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (-1,-1) rectangle (1,1);
 \draw (6,-8) rectangle (9,-5);
 \path[use as bounding box] (-10,-10) rectangle (10,10);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const corner = frame.locator('svg [data-source-id="path:1"]').first();
         await expect(corner).toBeVisible();
@@ -8241,40 +5885,18 @@ describe("standalone workbench host boundary", function () {
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await input.penStroke([await strokePoint(page, corner, 0.1)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:1"]);
-        await tap(
-          rail.getByRole("button", { name: "Properties", exact: true }),
-        );
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
         await expect(panel).toBeVisible();
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
-        const overlap = (
-          a: { x: number; y: number; width: number; height: number },
-          b: typeof a,
-        ) =>
-          Math.max(
-            0,
-            Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x),
-          ) *
-          Math.max(
-            0,
-            Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y),
-          );
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+          Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
+          Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
         const clearOfSubject = async (what: string) => {
           await expect
             .poll(
-              async () =>
-                overlap(
-                  (await panel.boundingBox())!,
-                  (await corner.boundingBox())!,
-                ),
+              async () => overlap((await panel.boundingBox())!, (await corner.boundingBox())!),
               `${what} covers the selected rectangle`,
             )
             .toBe(0);
@@ -8312,10 +5934,7 @@ describe("standalone workbench host boundary", function () {
             "The bottom sheet covers the dock",
           );
           await clearOfSubject("the bottom sheet");
-          const expand = panel.getByRole("button", {
-            name: "Expand properties",
-            exact: true,
-          });
+          const expand = panel.getByRole("button", { name: "Expand properties", exact: true });
           await expect(expand).toHaveAttribute("aria-expanded", "false");
           await tap(expand);
           await expect(expand).toHaveAttribute("aria-expanded", "true");
@@ -8338,17 +5957,13 @@ describe("standalone workbench host boundary", function () {
       `keeps the selected object and Properties above the on-screen keyboard in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (-1,-1) rectangle (1,1);
 \draw (6,-8) rectangle (9,-5);
 \path[use as bounding box] (-10,-10) rectangle (10,10);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const corner = frame.locator('svg [data-source-id="path:1"]').first();
         await expect(corner).toBeVisible();
@@ -8360,19 +5975,10 @@ describe("standalone workbench host boundary", function () {
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await input.penStroke([await strokePoint(page, corner, 0.1)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:1"]);
-        await tap(
-          rail.getByRole("button", { name: "Properties", exact: true }),
-        );
-        const panel = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
-        await tap(
-          panel.getByRole("spinbutton", { name: "X shift", exact: true }),
-        );
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        await tap(panel.getByRole("spinbutton", { name: "X shift", exact: true }));
         const scale = (await editorDebug(page)).viewport.scale;
         // iPadOS reports the keyboard as a shorter visual viewport over an unchanged layout.
         const keyboardTop = Math.round(tablet.height * 0.58);
@@ -8385,9 +5991,7 @@ describe("standalone workbench host boundary", function () {
             window.visualViewport!.dispatchEvent(new Event("resize"));
           }, height);
         await reportVisibleHeight(keyboardTop);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await expect
           .poll(async () => {
             const box = (await corner.boundingBox())!;
@@ -8414,32 +6018,16 @@ describe("standalone workbench host boundary", function () {
           field.y + field.height <= keyboardTop,
           "The keyboard covers the focused Properties field",
         );
-        const overlap = (
-          a: { x: number; y: number; width: number; height: number },
-          b: typeof a,
-        ) =>
-          Math.max(
-            0,
-            Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x),
-          ) *
-          Math.max(
-            0,
-            Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y),
-          );
+        const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+          Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
+          Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
         await expect
           .poll(
-            async () =>
-              overlap(
-                (await panel.boundingBox())!,
-                (await corner.boundingBox())!,
-              ),
+            async () => overlap((await panel.boundingBox())!, (await corner.boundingBox())!),
             "The raised panel covers the selected rectangle",
           )
           .toBe(0);
-        const control = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
+        const control = frame.getByRole("toolbar", { name: "Selection", exact: true });
         assert.equal(
           overlap((await control.boundingBox())!, (await panel.boundingBox())!),
           0,
@@ -8454,10 +6042,7 @@ describe("standalone workbench host boundary", function () {
         await reportVisibleHeight(tablet.height);
         if (tablet.name === "portrait") {
           await expect
-            .poll(
-              panelBottom,
-              "The bottom sheet stays raised after the keyboard closes",
-            )
+            .poll(panelBottom, "The bottom sheet stays raised after the keyboard closes")
             .toBeGreaterThan(keyboardTop);
         }
       },
@@ -8473,13 +6058,8 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
-        const drag = async (
-          from: { x: number; y: number },
-          to: { x: number; y: number },
-        ) =>
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) =>
           input.touch(
             Array.from({ length: 13 }, (_, i) => ({
               x: from.x + ((to.x - from.x) * i) / 12,
@@ -8491,15 +6071,10 @@ describe("standalone workbench host boundary", function () {
           for (const ruler of ["canvas-top-ruler", "canvas-left-ruler"]) {
             const box = (await frame.getByTestId(ruler).boundingBox())!;
             const overlapX =
-              Math.min(railBox.x + railBox.width, box.x + box.width) -
-              Math.max(railBox.x, box.x);
+              Math.min(railBox.x + railBox.width, box.x + box.width) - Math.max(railBox.x, box.x);
             const overlapY =
-              Math.min(railBox.y + railBox.height, box.y + box.height) -
-              Math.max(railBox.y, box.y);
-            assert.ok(
-              overlapX <= 0 || overlapY <= 0,
-              `The rail covers ${ruler}`,
-            );
+              Math.min(railBox.y + railBox.height, box.y + box.height) - Math.max(railBox.y, box.y);
+            assert.ok(overlapX <= 0 || overlapY <= 0, `The rail covers ${ruler}`);
           }
         };
         // The dock sits at the lower edge by default (docs/interaction-model.md, Space).
@@ -8507,27 +6082,15 @@ describe("standalone workbench host boundary", function () {
         await clearOfRulers();
         const names = await rail
           .getByRole("button")
-          .evaluateAll((buttons) =>
-            buttons.map((button) => button.getAttribute("aria-label")),
-          );
-        assert.ok(
-          names.indexOf("Lasso") < 8 && names.indexOf("Eraser") < 8,
-          names.join(", "),
-        );
-        await drag(
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
-          {
-            x: viewport.x + viewport.width - 10,
-            y: viewport.y + viewport.height / 2,
-          },
-        );
+          .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
+        assert.ok(names.indexOf("Lasso") < 8 && names.indexOf("Eraser") < 8, names.join(", "));
+        await drag(await stableCenter(rail.getByRole("button", { name: "Select", exact: true })), {
+          x: viewport.x + viewport.width - 10,
+          y: viewport.y + viewport.height / 2,
+        });
         await expect(rail).toHaveAttribute("data-dock", "bottom");
         await drag(
-          await stableCenter(
-            rail.getByRole("button", { name: "Move toolbar", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
           {
             x: viewport.x + viewport.width - 10,
             y: viewport.y + viewport.height / 2,
@@ -8536,9 +6099,7 @@ describe("standalone workbench host boundary", function () {
         await expect(rail).toHaveAttribute("data-dock", "right");
         await clearOfRulers();
         await drag(
-          await stableCenter(
-            rail.getByRole("button", { name: "Move toolbar", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
           {
             x: viewport.x + viewport.width / 2,
             y: viewport.y + 10,
@@ -8547,9 +6108,7 @@ describe("standalone workbench host boundary", function () {
         await expect(rail).toHaveAttribute("data-dock", "top");
         await clearOfRulers();
         await drag(
-          await stableCenter(
-            rail.getByRole("button", { name: "Move toolbar", exact: true }),
-          ),
+          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
           {
             x: viewport.x + 10,
             y: viewport.y + viewport.height / 2,
@@ -8566,58 +6125,37 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await context.grantPermissions(["clipboard-read", "clipboard-write"]);
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`,
-          );
+          .fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
         const frame = editorFrame(page);
         await expect(frame.locator("circle[data-source-id]")).toHaveCount(1);
         const input = await TabletInput.attach(page);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await fitDiagram(frame, input);
         await input.longPress(
-          await strokePoint(
-            page,
-            frame.locator("circle[data-source-id]").first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         );
         await input.touch([
           await stableCenter(
-            frame
-              .getByRole("menu")
-              .first()
-              .getByRole("menuitem", { name: "Copy", exact: true }),
+            frame.getByRole("menu").first().getByRole("menuitem", { name: "Copy", exact: true }),
           ),
         ]);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.longPress({
           x: viewport.x + viewport.width * 0.85,
           y: viewport.y + viewport.height * 0.2,
         });
         await input.touch([
           await stableCenter(
-            frame
-              .getByRole("menu")
-              .first()
-              .getByRole("menuitem", { name: "Paste", exact: true }),
+            frame.getByRole("menu").first().getByRole("menuitem", { name: "Paste", exact: true }),
           ),
         ]);
         await expect
-          .poll(
-            async () =>
-              ((await editorDebug(page)).source.match(/circle/g) ?? []).length,
-          )
+          .poll(async () => ((await editorDebug(page)).source.match(/circle/g) ?? []).length)
           .toBe(2);
       },
     );
@@ -8632,15 +6170,8 @@ describe("standalone workbench host boundary", function () {
           await input.touch([await stableCenter(locator)]);
         };
         for (const kind of ["tikzcd", "tikzpicture"] as const) {
-          await tap(
-            page.getByRole("group", { name: "File" }).locator("summary"),
-          );
-          await tap(
-            page.getByRole("button", {
-              name: "New tikzpicture or tikzcd…",
-              exact: true,
-            }),
-          );
+          await tap(page.getByRole("group", { name: "File" }).locator("summary"));
+          await tap(page.getByRole("button", { name: "New tikzpicture or tikzcd…", exact: true }));
           await expect(
             page.getByRole("dialog", { name: "Save changes?" }),
             "An untouched new diagram has no changes to save",
@@ -8675,13 +6206,8 @@ describe("standalone workbench host boundary", function () {
       const input = await TabletInput.attach(page);
       const rail = frame.locator("[data-diagram-tools]");
       for (const name of ["Select", "Lasso", "Eraser", "Freehand", "Bucket"]) {
-        const box = (await rail
-          .getByRole("button", { name, exact: true })
-          .boundingBox())!;
-        await input.penHover({
-          x: box.x + box.width / 2,
-          y: box.y + box.height / 2,
-        });
+        const box = (await rail.getByRole("button", { name, exact: true }).boundingBox())!;
+        await input.penHover({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
         const tooltip = frame.getByRole("tooltip");
         await expect(tooltip).toBeVisible();
         assert.doesNotMatch(
@@ -8700,33 +6226,23 @@ describe("standalone workbench host boundary", function () {
       `reverses a path from its long-press menu in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`,
-          );
+          .fill(String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
         const frame = editorFrame(page);
         const line = frame.locator("[data-source-id]").first();
         await expect(line).toBeVisible();
         const input = await TabletInput.attach(page);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await fitDiagram(frame, input);
         await input.longPress(await strokePoint(page, line, 0.5));
         const menu = frame.getByRole("menu").first();
+        await input.touch([await stableCenter(menu.getByRole("menuitem", { name: /^Path/ }))]);
         await input.touch([
-          await stableCenter(menu.getByRole("menuitem", { name: /^Path/ })),
-        ]);
-        await input.touch([
-          await stableCenter(
-            frame.getByRole("menuitem", { name: "Reverse Path", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("menuitem", { name: "Reverse Path", exact: true })),
         ]);
         await expect
           .poll(async () => (await editorDebug(page)).source)
@@ -8741,9 +6257,7 @@ describe("standalone workbench host boundary", function () {
       `erases only the swept part of each stroke a pen sweep crosses, as one undo step, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzpicture}
 \draw (-6,-4) -- (-6,4);
 \draw (-2,-4) -- (-2,4);
@@ -8751,64 +6265,48 @@ describe("standalone workbench host boundary", function () {
 \draw (6,-4) -- (6,4);
 \end{tikzpicture}`;
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(4);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Eraser", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Eraser", exact: true })),
         ]);
-        const strokes = await frame
-          .locator("[data-source-id]")
-          .evaluateAll((nodes) =>
-            nodes.map((node) => {
-              const box = node.getBoundingClientRect();
-              return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-            }),
-          );
+        const strokes = await frame.locator("[data-source-id]").evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const box = node.getBoundingClientRect();
+            return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+          }),
+        );
         const [left, , curve, right] = [...strokes].sort((a, b) => a.x - b.x);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         // One sweep along y = 0 crosses both left lines and the curve, and stops short of the right line.
         const y = frameBox.y + left.y;
         const from = frameBox.x + left.x - 20,
           to = frameBox.x + (curve.x + right.x) / 2;
         await input.penStroke(
-          Array.from({ length: 16 }, (_, i) => ({
-            x: from + (i * (to - from)) / 15,
-            y,
-          })),
+          Array.from({ length: 16 }, (_, i) => ({ x: from + (i * (to - from)) / 15, y })),
         );
         const statements = async () =>
-          (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ??
-          ([] as string[]);
+          (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ?? ([] as string[]);
         await expect
           .poll(async () => (await statements()).length, {
-            message:
-              "The sweep did not leave two pieces of each stroke it crossed",
+            message: "The sweep did not leave two pieces of each stroke it crossed",
           })
           .toBe(7);
         const points = (statement: string) =>
-          [...statement.matchAll(/\((-?[\d.]+),\s*(-?[\d.]+)\)/g)].map(
-            (match) => ({
-              x: Number(match[1]),
-              y: Number(match[2]),
-            }),
-          );
+          [...statement.matchAll(/\((-?[\d.]+),\s*(-?[\d.]+)\)/g)].map((match) => ({
+            x: Number(match[1]),
+            y: Number(match[2]),
+          }));
         const near = (a: number, b: number) => Math.abs(a - b) < 0.01;
         const drawn = await statements();
         for (const x of [-6, -2]) {
           const pieces = drawn
             .filter(
               (text) =>
-                !text.includes("controls") &&
-                points(text).every((point) => near(point.x, x)),
+                !text.includes("controls") && points(text).every((point) => near(point.x, x)),
             )
             .map((text) =>
               points(text)
@@ -8830,14 +6328,8 @@ describe("standalone workbench host boundary", function () {
             `The upper piece of x = ${x} is ${upper}`,
           );
         }
-        const curvePieces = drawn
-          .filter((text) => text.includes("controls"))
-          .map(points);
-        assert.equal(
-          curvePieces.length,
-          2,
-          `The curve is not two pieces: ${drawn.join(" ")}`,
-        );
+        const curvePieces = drawn.filter((text) => text.includes("controls")).map(points);
+        assert.equal(curvePieces.length, 2, `The curve is not two pieces: ${drawn.join(" ")}`);
         const [first, second] = curvePieces.sort((a, b) => a[0].y - b[0].y);
         assert.ok(
           near(first[0].x, 2) &&
@@ -8865,9 +6357,7 @@ describe("standalone workbench host boundary", function () {
               .getByRole("button", { name: "Undo", exact: true }),
           ),
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(authored);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
       },
     );
   }
@@ -8878,10 +6368,7 @@ describe("standalone workbench host boundary", function () {
       `shows a tapped element's source in the code pane, even one opened afterward, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        const code = page.getByRole("button", {
-          name: "Code: left sidebar",
-          exact: true,
-        });
+        const code = page.getByRole("button", { name: "Code: left sidebar", exact: true });
         await code.click();
         const authored = String.raw`\begin{tikzpicture}
 \draw (2,8) -- (12,14);
@@ -8895,9 +6382,9 @@ describe("standalone workbench host boundary", function () {
         // The source lines the code pane's selection highlight spans, as the author sees them.
         const codeSelection = () =>
           page.locator(".cm-editor").evaluate((editor) => {
-            const highlights = [
-              ...editor.querySelectorAll(".cm-selectionBackground"),
-            ].map((node) => node.getBoundingClientRect());
+            const highlights = [...editor.querySelectorAll(".cm-selectionBackground")].map((node) =>
+              node.getBoundingClientRect(),
+            );
             return [...editor.querySelectorAll(".cm-line")]
               .filter((line) => {
                 const text = document.createRange();
@@ -8918,72 +6405,38 @@ describe("standalone workbench host boundary", function () {
               .join("\n");
           });
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.touch([
-          await strokePoint(
-            page,
-            frame.locator("circle[data-source-id]").first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         ]);
         await expect
           .poll(codeSelection, { message: "touch tap on the circle" })
           .toBe(String.raw`\draw (8,-6) circle (3cm);`);
         await editorReady(page);
-        const linePoint = await strokePoint(
-          page,
-          frame.locator("path[data-source-id]").first(),
-          0.25,
-        );
-        const lineId = await frame
-          .locator("path[data-source-id]")
-          .first()
-          .getAttribute("data-source-id");
-        const pick = await page.evaluate(
-          ({ point, targetId }) => {
-            const iframe = document.querySelector<HTMLIFrameElement>(
-              'iframe[title="TikZ visual editor"]',
-            )!;
-            const box = iframe.getBoundingClientRect();
-            const doc = iframe.contentDocument!;
-            const center = doc
-              .elementFromPoint(point.x - box.left, point.y - box.top)
-              ?.outerHTML.slice(0, 200);
-            for (let radius = 0; radius <= 8; radius++) {
-              for (let dy = -radius; dy <= radius; dy++) {
-                for (let dx = -radius; dx <= radius; dx++) {
-                  if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
-                  const element = doc.elementFromPoint(
-                    point.x - box.left + dx,
-                    point.y - box.top + dy,
-                  );
-                  if (
-                    element?.getAttribute("data-hit-region-target-id") ===
-                    targetId
-                  ) {
-                    return {
-                      point: { x: point.x + dx, y: point.y + dy },
-                      center,
-                    };
-                  }
+        const linePoint = await strokePoint(page, frame.locator("path[data-source-id]").first(), 0.25);
+        const lineId = await frame.locator("path[data-source-id]").first().getAttribute("data-source-id");
+        const pick = await page.evaluate(({ point, targetId }) => {
+          const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="TikZ visual editor"]')!;
+          const box = iframe.getBoundingClientRect();
+          const doc = iframe.contentDocument!;
+          const center = doc.elementFromPoint(point.x - box.left, point.y - box.top)?.outerHTML.slice(0, 200);
+          for (let radius = 0; radius <= 8; radius++) {
+            for (let dy = -radius; dy <= radius; dy++) {
+              for (let dx = -radius; dx <= radius; dx++) {
+                if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+                const element = doc.elementFromPoint(point.x - box.left + dx, point.y - box.top + dy);
+                if (element?.getAttribute("data-hit-region-target-id") === targetId) {
+                  return { point: { x: point.x + dx, y: point.y + dy }, center };
                 }
               }
             }
-            return { point: null, center };
-          },
-          { point: linePoint, targetId: lineId },
-        );
-        assert.ok(
-          pick.point,
-          `Line has no hit region near its stroke: ${pick.center}`,
-        );
+          }
+          return { point: null, center };
+        }, { point: linePoint, targetId: lineId });
+        assert.ok(pick.point, `Line has no hit region near its stroke: ${pick.center}`);
         await input.penStroke([pick.point, pick.point]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([lineId]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([lineId]);
         await expect
           .poll(codeSelection, { message: "pen tap on the line" })
           .toBe(String.raw`\draw (2,8) -- (12,14);`);
@@ -8991,17 +6444,11 @@ describe("standalone workbench host boundary", function () {
         await code.click();
         await expect(page.locator(".cm-content")).toBeHidden();
         await input.touch([
-          await strokePoint(
-            page,
-            frame.locator("circle[data-source-id]").first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         ]);
         await code.click();
         await expect
-          .poll(codeSelection, {
-            message: "circle tapped while the code pane was closed",
-          })
+          .poll(codeSelection, { message: "circle tapped while the code pane was closed" })
           .toBe(String.raw`\draw (8,-6) circle (3cm);`);
       },
     );
@@ -9013,9 +6460,7 @@ describe("standalone workbench host boundary", function () {
       `keeps the selection strip off a neighbouring line when no place holds all its actions in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         // The line's bounds reach down beside the circle, so only a short place beside the circle is free.
         const authored = String.raw`\begin{tikzpicture}
 \draw (2,-4) -- (12,14);
@@ -9027,23 +6472,16 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         const circle = frame.locator("circle[data-source-id]").first();
         const line = frame.locator("path[data-source-id]").first();
         const circleId = await circle.getAttribute("data-source-id");
         const lineId = await line.getAttribute("data-source-id");
         await input.touch([await strokePoint(page, circle, 0.5)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([circleId]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([circleId]);
         await editorReady(page);
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const stripBox = (await strip.boundingBox())!;
         const covered = [];
         for (const fraction of [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]) {
@@ -9060,11 +6498,7 @@ describe("standalone workbench host boundary", function () {
         await page.screenshot({
           path: `test-results/workbench/selection-strip-beside-neighbour-${tablet.name}.png`,
         });
-        assert.deepEqual(
-          covered,
-          [],
-          "The selection strip covers these fractions of the line",
-        );
+        assert.deepEqual(covered, [], "The selection strip covers these fractions of the line");
         // The strip still offers the selection's actions: the lock is in view and works.
         const lock = strip.getByRole("button", { name: "Lock", exact: true });
         await expect(lock).toBeInViewport({ ratio: 1 });
@@ -9077,9 +6511,7 @@ describe("standalone workbench host boundary", function () {
           await strokePoint(page, line, 0.25),
           await strokePoint(page, line, 0.25),
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([lineId]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([lineId]);
         assert.equal((await editorDebug(page)).source, authored);
       },
     );
@@ -9091,26 +6523,20 @@ describe("standalone workbench host boundary", function () {
       `places a selected curve's control outside the curve and clear of the rail in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
           .fill(
             String.raw`\begin{tikzpicture}\draw (-6,-3) .. controls (-2,4) and (2,-4) .. (6,3);\end{tikzpicture}`,
           );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator("[data-source-id]").first();
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         const intersects = (
           a: { x: number; y: number; width: number; height: number },
@@ -9137,26 +6563,15 @@ describe("standalone workbench host boundary", function () {
           } else {
             await input.penStroke([tapAt]);
           }
-          const control = frame.getByRole("toolbar", {
-            name: "Selection",
-            exact: true,
-          });
+          const control = frame.getByRole("toolbar", { name: "Selection", exact: true });
           await expect(control).toBeVisible();
           const controlBox = (await control.boundingBox())!;
+          assert.ok(!intersects(controlBox, box), `${contact}: the curve control covers the curve`);
           assert.ok(
-            !intersects(controlBox, box),
-            `${contact}: the curve control covers the curve`,
-          );
-          assert.ok(
-            !intersects(
-              controlBox,
-              (await frame.locator("[data-diagram-tools]").boundingBox())!,
-            ),
+            !intersects(controlBox, (await frame.locator("[data-diagram-tools]").boundingBox())!),
             `${contact}: the curve control covers the rail`,
           );
-          await input.touch([
-            { x: frameBox.x + 8, y: frameBox.y + frameBox.height - 8 },
-          ]);
+          await input.touch([{ x: frameBox.x + 8, y: frameBox.y + frameBox.height - 8 }]);
         }
       },
     );
@@ -9169,29 +6584,21 @@ describe("standalone workbench host boundary", function () {
         `highlights, locks, and keeps a curve selected by ${contact} in ${tablet.name}`,
         async function () {
           await editorReady(page);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (2,-2) .. controls (5,6) and (9,-6) .. (12,2);
 \draw (-6,14) -- (-2,18);
 \end{tikzpicture}`);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           const frame = editorFrame(page);
-          await expect(
-            frame.locator('svg [data-source-id="path:1"]').first(),
-          ).toBeVisible();
+          await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
           const input = await TabletInput.attach(page);
           await fitDiagram(frame, input);
           const frameBox = (await page
             .locator('iframe[title="TikZ visual editor"]')
             .boundingBox())!;
           const tap = async (point: { x: number; y: number }) =>
-            contact === "touch"
-              ? input.touch([point])
-              : input.penStroke([point]);
+            contact === "touch" ? input.touch([point]) : input.penStroke([point]);
           const onCurve = async (fraction: number) => {
             const point = await frame
               .locator('svg [data-source-id="path:0"]')
@@ -9199,30 +6606,19 @@ describe("standalone workbench host boundary", function () {
               .evaluate((path: SVGGeometryElement, at) => {
                 const p = path.getPointAtLength(path.getTotalLength() * at);
                 const m = path.getScreenCTM()!;
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               }, fraction);
             return { x: frameBox.x + point.x, y: frameBox.y + point.y };
           };
           await input.touch([
-            await stableCenter(
-              frame.getByRole("button", { name: "Select", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
           ]);
           await tap(await onCurve(0.3));
-          await expect
-            .poll(async () => (await editorDebug(page)).selection)
-            .toEqual(["path:0"]);
-          await expect(
-            frame.locator('[data-selection-highlight="path:0"]'),
-          ).toBeVisible();
+          await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+          await expect(frame.locator('[data-selection-highlight="path:0"]')).toBeVisible();
           const lock = frame.getByRole("button", { name: "Lock", exact: true });
           await expect(lock).toHaveAttribute("aria-pressed", "false");
-          const hint = (await frame
-            .getByTestId("canvas-selection-hint")
-            .boundingBox())!;
+          const hint = (await frame.getByTestId("canvas-selection-hint").boundingBox())!;
           const control = (await lock.locator("..").boundingBox())!;
           assert.ok(
             Math.min(hint.x + hint.width, control.x + control.width) <=
@@ -9231,21 +6627,14 @@ describe("standalone workbench host boundary", function () {
                 Math.max(hint.y, control.y),
             `The curve control covers the canvas hint ${JSON.stringify({ hint, control })}`,
           );
-          await storyScreenshot(
-            page,
-            `curve-selected-${contact}-${tablet.name}`,
-          );
+          await storyScreenshot(page, `curve-selected-${contact}-${tablet.name}`);
           await input.touch([await stableCenter(lock)]);
           await expect(lock).toHaveAttribute("aria-pressed", "true");
           await storyScreenshot(page, `curve-locked-${contact}-${tablet.name}`);
           await tap((await emptyCanvasGesture(frame))[0]);
           // The other line is separated from the curve and its floating control.
           await tap(
-            await strokePoint(
-              page,
-              frame.locator('svg [data-source-id="path:1"]').first(),
-              0.99,
-            ),
+            await strokePoint(page, frame.locator('svg [data-source-id="path:1"]').first(), 0.99),
           );
           await expect(lock).toHaveAttribute("aria-pressed", "true");
           assert.deepEqual(
@@ -9254,14 +6643,10 @@ describe("standalone workbench host boundary", function () {
             "A locked curve stays selected",
           );
           const anchor = frame
-            .locator(
-              '[data-handle-kind="move-handle"][data-source-id="path:0"]',
-            )
+            .locator('[data-handle-kind="move-handle"][data-source-id="path:0"]')
             .first();
           await tap(await settledCenter(anchor));
-          await expect
-            .poll(async () => (await editorDebug(page)).handle)
-            .not.toBeNull();
+          await expect.poll(async () => (await editorDebug(page)).handle).not.toBeNull();
           await expect(lock).toHaveAttribute("aria-pressed", "true");
           assert.deepEqual((await editorDebug(page)).selection, ["path:0"]);
           const before = (await editorDebug(page)).viewport;
@@ -9277,19 +6662,11 @@ describe("standalone workbench host boundary", function () {
           await expect(lock).toHaveAttribute("aria-pressed", "false");
           // Positive baseline: that same line is selectable once the curve is unlocked.
           await tap(
-            await strokePoint(
-              page,
-              frame.locator('svg [data-source-id="path:1"]').first(),
-              0.99,
-            ),
+            await strokePoint(page, frame.locator('svg [data-source-id="path:1"]').first(), 0.99),
           );
-          await expect
-            .poll(async () => (await editorDebug(page)).selection)
-            .toEqual(["path:1"]);
+          await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
           await tap((await emptyCanvasGesture(frame))[0]);
-          await expect
-            .poll(async () => (await editorDebug(page)).selection)
-            .toEqual([]);
+          await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         },
       );
     }
@@ -9301,60 +6678,37 @@ describe("standalone workbench host boundary", function () {
       `edits a point on a styled curve from its control in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw[red, thick] (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.touch([await strokePoint(page, curve, 0.2)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
-        await expect(
-          frame.getByText("Curve · 3 points", { exact: true }),
-        ).toBeVisible();
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await expect(frame.getByText("Curve · 3 points", { exact: true })).toBeVisible();
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const middle = await frame
-          .locator(
-            'rect[data-handle-kind="move-handle"][data-source-id="path:0"]',
-          )
+          .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
           .evaluateAll(
             (nodes) =>
               nodes
                 .map((node) => {
                   const box = node.getBoundingClientRect();
-                  return {
-                    x: box.x + box.width / 2,
-                    y: box.y + box.height / 2,
-                  };
+                  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
                 })
                 .sort((a, b) => a.x - b.x)[1],
           );
+        await input.touch([{ x: frameBox.x + middle.x, y: frameBox.y + middle.y }]);
         await input.touch([
-          { x: frameBox.x + middle.x, y: frameBox.y + middle.y },
-        ]);
-        await input.touch([
-          await stableCenter(
-            frame
-              .getByRole("toolbar", { name: "Selection", exact: true })
-              .getByRole("button", { name: "Corner", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Corner", exact: true })),
         ]);
         await expect
           .poll(async () => (await editorDebug(page)).source)
@@ -9370,49 +6724,26 @@ describe("standalone workbench host boundary", function () {
       `gives a selected rectangle the shape control, not the curve control, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page
           .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (2,-2) rectangle (8,2);\end{tikzpicture}`,
-          );
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+          .fill(String.raw`\begin{tikzpicture}\draw (2,-2) rectangle (8,2);\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        const rectangle = frame
-          .locator('svg [data-source-id="path:0"]')
-          .first();
+        const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(rectangle).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.touch([await strokePoint(page, rectangle, 0.1)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
-        await expect(
-          strip.getByRole("button", { name: "Fill and stroke", exact: true }),
-        ).toBeVisible();
-        await expect(
-          strip.getByText("Rectangle", { exact: true }),
-        ).toBeVisible();
-        await expect(
-          strip.getByRole("button", { name: "Edit points", exact: true }),
-        ).toHaveCount(0);
-        await expect(
-          strip.getByRole("button", { name: "Simplify", exact: true }),
-        ).toHaveCount(0);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        await expect(strip.getByRole("button", { name: "Fill and stroke", exact: true })).toBeVisible();
+        await expect(strip.getByText("Rectangle", { exact: true })).toBeVisible();
+        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toHaveCount(0);
+        await expect(strip.getByRole("button", { name: "Simplify", exact: true })).toHaveCount(0);
       },
     );
   }
@@ -9423,9 +6754,7 @@ describe("standalone workbench host boundary", function () {
       `shows one selection strip whose actions follow the selection: a shape, a curve, curve points, and several objects, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
@@ -9434,18 +6763,12 @@ describe("standalone workbench host boundary", function () {
 \draw (4,6) .. controls (5,9) and (7,9) .. (8,6) .. controls (9,3) and (11,3) .. (12,6);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:4"]').first(),
-        ).toBeVisible();
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const frameBox = (await page
-          .locator('iframe[title="TikZ visual editor"]')
-          .boundingBox())!;
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const ends = async (id: string) =>
           frame
             .locator(`svg [data-source-id="${id}"]`)
@@ -9454,75 +6777,38 @@ describe("standalone workbench host boundary", function () {
               const m = path.getScreenCTM()!;
               return [0, path.getTotalLength()].map((length) => {
                 const p = path.getPointAtLength(length);
-                return {
-                  x: p.x * m.a + p.y * m.c + m.e,
-                  y: p.x * m.b + p.y * m.d + m.f,
-                };
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
               });
             });
-        const [[origin, xTen], [, yTen]] = [
-          await ends("path:0"),
-          await ends("path:1"),
-        ];
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
         const at = (x: number, y: number) => ({
           x:
-            frameBox.x +
-            origin.x +
-            ((xTen.x - origin.x) * x) / 10 +
-            ((yTen.x - origin.x) * y) / 10,
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
           y:
-            frameBox.y +
-            origin.y +
-            ((xTen.y - origin.y) * x) / 10 +
-            ((yTen.y - origin.y) * y) / 10,
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
-        const button = (name: string) =>
-          strip.getByRole("button", { name, exact: true });
-        const selection = async () =>
-          [...(await editorDebug(page)).selection].sort();
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const button = (name: string) => strip.getByRole("button", { name, exact: true });
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
         // Every control the strip shows is one that applies: nothing is greyed out, and the
         // old launchers that hid the actions behind a second tap are gone.
         const stripIsClean = async () => {
           for (const control of await strip.getByRole("button").all()) {
             await expect(control).toBeEnabled();
           }
-          for (const name of [
-            "Selection actions",
-            "Curve actions",
-            "More curve actions",
-            "Point actions",
-          ]) {
-            await expect(
-              frame.getByRole("button", { name, exact: true }),
-            ).toHaveCount(0);
+          for (const name of ["Selection actions", "Curve actions", "More curve actions", "Point actions"]) {
+            await expect(frame.getByRole("button", { name, exact: true })).toHaveCount(0);
           }
         };
 
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
-        ]);
-        const rectangle = frame
-          .locator('svg [data-source-id="path:2"]')
-          .first();
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        const rectangle = frame.locator('svg [data-source-id="path:2"]').first();
         await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
         await expect.poll(selection).toEqual(["path:2"]);
         await expect(strip).toBeVisible();
-        await expect(strip.getByRole("button").first()).toHaveAccessibleName(
-          "Lock",
-        );
-        for (const name of [
-          "Fill and stroke",
-          "Transform",
-          "Duplicate",
-          "More",
-        ]) {
+        await expect(strip.getByRole("button").first()).toHaveAccessibleName("Lock");
+        for (const name of ["Fill and stroke", "Transform", "Duplicate", "More"]) {
           await expect(button(name)).toBeVisible();
         }
         for (const name of ["Align", "Distribute", "Edit points", "Simplify"]) {
@@ -9531,12 +6817,7 @@ describe("standalone workbench host boundary", function () {
         await stripIsClean();
         await input.penStroke([await stableCenter(button("Transform"))]);
         const transform = frame.getByRole("menu").last();
-        await expect(
-          transform.getByRole("menuitem", {
-            name: "Rotate Right 90°",
-            exact: true,
-          }),
-        ).toBeVisible();
+        await expect(transform.getByRole("menuitem", { name: "Rotate Right 90°", exact: true })).toBeVisible();
         await input.penStroke([await stableCenter(button("Transform"))]);
         await expect(transform).toHaveCount(0);
         await storyScreenshot(page, `selection-strip-shape-${tablet.name}`);
@@ -9549,12 +6830,8 @@ describe("standalone workbench host boundary", function () {
         const curve = frame.locator('svg [data-source-id="path:4"]').first();
         await input.penStroke([await strokePoint(page, curve, 0.3)]);
         await expect.poll(selection).toEqual(["path:4"]);
-        await expect(strip.getByRole("button").first()).toHaveAccessibleName(
-          "Lock",
-        );
-        await expect(
-          strip.getByText("Curve · 3 points", { exact: true }),
-        ).toBeVisible();
+        await expect(strip.getByRole("button").first()).toHaveAccessibleName("Lock");
+        await expect(strip.getByText("Curve · 3 points", { exact: true })).toBeVisible();
         for (const name of ["Edit points", "Simplify", "Duplicate", "More"]) {
           await expect(button(name)).toBeVisible();
         }
@@ -9572,9 +6849,7 @@ describe("standalone workbench host boundary", function () {
         // Edit points enters point editing; the strip then names the points and offers only point commands.
         await input.penStroke([await stableCenter(button("Edit points"))]);
         await expect(button("Done")).toBeVisible();
-        const anchors = frame.locator(
-          'rect[data-handle-kind="move-handle"][data-source-id="path:4"]',
-        );
+        const anchors = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:4"]');
         await expect(anchors).toHaveCount(3);
         const anchorAt = async (index: number) => {
           const points = await anchors.evaluateAll((nodes) =>
@@ -9585,15 +6860,10 @@ describe("standalone workbench host boundary", function () {
               })
               .sort((a, b) => a.x - b.x),
           );
-          return {
-            x: frameBox.x + points[index].x,
-            y: frameBox.y + points[index].y,
-          };
+          return { x: frameBox.x + points[index].x, y: frameBox.y + points[index].y };
         };
         await input.penStroke([await anchorAt(1)]);
-        await expect(
-          strip.getByText("1 point selected", { exact: true }),
-        ).toBeVisible();
+        await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
         for (const name of ["Smooth", "Corner", "Delete", "Done"]) {
           await expect(button(name)).toBeVisible();
         }
@@ -9602,108 +6872,51 @@ describe("standalone workbench host boundary", function () {
         }
         await stripIsClean();
         await input.penStroke([await anchorAt(0)]);
-        await expect(
-          strip.getByText("2 points selected", { exact: true }),
-        ).toBeVisible();
+        await expect(strip.getByText("2 points selected", { exact: true })).toBeVisible();
         await expect(button("Corner")).toHaveCount(0);
         await storyScreenshot(page, `selection-strip-points-${tablet.name}`);
         await input.penStroke([await stableCenter(button("Done"))]);
-        await expect(
-          strip.getByText("Curve · 3 points", { exact: true }),
-        ).toBeVisible();
+        await expect(strip.getByText("Curve · 3 points", { exact: true })).toBeVisible();
         await expect(button("Edit points")).toBeVisible();
-        assert.equal(
-          (await editorDebug(page)).handle,
-          null,
-          "Done leaves no point active",
-        );
+        assert.equal((await editorDebug(page)).handle, null, "Done leaves no point active");
 
         // Two objects align but cannot be distributed; three can. Each lasso starts from an
         // empty canvas: the strip of the previous selection may stand over the shapes.
         await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
         await expect.poll(selection).toEqual([]);
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Lasso", exact: true }),
-          ),
-        ]);
-        await input.penStroke([
-          at(0.5, 0.5),
-          at(6.5, 0.5),
-          at(6.5, 3.6),
-          at(0.5, 3.6),
-          at(0.5, 0.6),
-        ]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true }))]);
+        await input.penStroke([at(0.5, 0.5), at(6.5, 0.5), at(6.5, 3.6), at(0.5, 3.6), at(0.5, 0.6)]);
         await expect.poll(selection).toEqual(["path:2", "path:3"]);
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
-        ]);
-        await expect(
-          strip.getByText("2 objects", { exact: true }),
-        ).toBeVisible();
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        await expect(strip.getByText("2 objects", { exact: true })).toBeVisible();
         for (const name of ["Align", "Transform", "More"]) {
           await expect(button(name)).toBeVisible();
         }
-        for (const name of [
-          "Distribute",
-          "Lock",
-          "Edit points",
-          "Fill and stroke",
-        ]) {
+        for (const name of ["Distribute", "Lock", "Edit points", "Fill and stroke"]) {
           await expect(button(name)).toHaveCount(0);
         }
         await stripIsClean();
         await input.penStroke([await stableCenter(button("Align"))]);
         const align = frame.getByRole("menu").last();
-        await input.penStroke([
-          await stableCenter(
-            align.getByRole("menuitem", { name: "Left", exact: true }),
-          ),
-        ]);
+        await input.penStroke([await stableCenter(align.getByRole("menuitem", { name: "Left", exact: true }))]);
         const leftEdge = async (id: string) =>
-          (await frame
-            .locator(`svg [data-source-id="${id}"]`)
-            .first()
-            .boundingBox())!.x;
+          (await frame.locator(`svg [data-source-id="${id}"]`).first().boundingBox())!.x;
         await expect
-          .poll(async () =>
-            Math.abs((await leftEdge("path:2")) - (await leftEdge("path:3"))),
-          )
+          .poll(async () => Math.abs((await leftEdge("path:2")) - (await leftEdge("path:3"))))
           .toBeLessThan(1.5);
 
         await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
         await expect.poll(selection).toEqual([]);
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Lasso", exact: true }),
-          ),
-        ]);
-        await input.penStroke([
-          at(0.5, 0.5),
-          at(13, 0.5),
-          at(13, 10),
-          at(0.5, 10),
-          at(0.5, 0.6),
-        ]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true }))]);
+        await input.penStroke([at(0.5, 0.5), at(13, 0.5), at(13, 10), at(0.5, 10), at(0.5, 0.6)]);
         await expect.poll(selection).toEqual(["path:2", "path:3", "path:4"]);
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
-        ]);
-        await expect(
-          strip.getByText("3 objects", { exact: true }),
-        ).toBeVisible();
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        await expect(strip.getByText("3 objects", { exact: true })).toBeVisible();
         await expect(button("Distribute")).toBeVisible();
         await stripIsClean();
         await input.penStroke([await stableCenter(button("Distribute"))]);
         await expect(
-          frame
-            .getByRole("menu")
-            .last()
-            .getByRole("menuitem", { name: "Horizontal", exact: true }),
+          frame.getByRole("menu").last().getByRole("menuitem", { name: "Horizontal", exact: true }),
         ).toBeVisible();
         await storyScreenshot(page, `selection-strip-several-${tablet.name}`);
       },
@@ -9716,73 +6929,32 @@ describe("standalone workbench host boundary", function () {
       `leaves point editing with Escape and keeps the curve ready to edit in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzpicture}
 \draw (1,1) .. controls (2,4) and (4,4) .. (5,1) .. controls (6,-2) and (8,-2) .. (9,1);
 \end{tikzpicture}`;
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
-        ]);
+        await input.touch([await stableCenter(frame.getByRole("button", { name: "Select", exact: true }))]);
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await input.penStroke([await strokePoint(page, curve, 0.3)]);
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
-        await expect(
-          strip.getByRole("button", { name: "Edit points", exact: true }),
-        ).toBeVisible();
-        await input.penStroke([
-          await stableCenter(
-            strip.getByRole("button", { name: "Edit points", exact: true }),
-          ),
-        ]);
-        const anchor = frame
-          .locator(
-            'rect[data-handle-kind="move-handle"][data-source-id="path:0"]',
-          )
-          .nth(1);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toBeVisible();
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit points", exact: true }))]);
+        const anchor = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]').nth(1);
         const anchorBox = (await anchor.boundingBox())!;
-        await input.penHover({
-          x: anchorBox.x + anchorBox.width / 2 + 9,
-          y: anchorBox.y + anchorBox.height / 2,
-        });
+        await input.penHover({ x: anchorBox.x + anchorBox.width / 2 + 9, y: anchorBox.y + anchorBox.height / 2 });
         await expect(anchor).toHaveAttribute("style", /fill: var\(--accent\)/);
-        await input.penStroke([
-          {
-            x: anchorBox.x + anchorBox.width / 2,
-            y: anchorBox.y + anchorBox.height / 2,
-          },
-        ]);
-        await expect(
-          strip.getByText("1 point selected", { exact: true }),
-        ).toBeVisible();
+        await input.penStroke([{ x: anchorBox.x + anchorBox.width / 2, y: anchorBox.y + anchorBox.height / 2 }]);
+        await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
         await page.keyboard.press("Escape");
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
-        await expect(
-          strip.getByRole("button", { name: "Edit points", exact: true }),
-        ).toBeVisible();
-        await input.penStroke([
-          await stableCenter(
-            strip.getByRole("button", { name: "Edit points", exact: true }),
-          ),
-        ]);
-        await expect(
-          strip.getByRole("button", { name: "Done", exact: true }),
-        ).toBeVisible();
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toBeVisible();
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit points", exact: true }))]);
+        await expect(strip.getByRole("button", { name: "Done", exact: true })).toBeVisible();
         assert.equal((await editorDebug(page)).source, authored);
       },
     );
@@ -9895,111 +7067,55 @@ describe("standalone workbench host boundary", function () {
       `edits a locked curve point and subset, misses, undoes, and keeps editing in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzpicture}
 \draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0) .. controls (15,-4) and (17,-4) .. (18,0);
 \end{tikzpicture}`;
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
-        ]);
+        await input.touch([await stableCenter(frame.getByRole("button", { name: "Select", exact: true }))]);
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await input.penStroke([await strokePoint(page, curve, 0.15)]);
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
-        const action = (name: string) =>
-          strip.getByRole("button", { name, exact: true });
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const action = (name: string) => strip.getByRole("button", { name, exact: true });
         await input.penStroke([await stableCenter(action("Lock"))]);
         await expect(action("Lock")).toHaveAttribute("aria-pressed", "true");
         await input.penStroke([await stableCenter(action("Edit points"))]);
-        const anchors = frame.locator(
-          'rect[data-handle-kind="move-handle"][data-source-id="path:0"]',
-        );
+        const anchors = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]');
         await expect(anchors).toHaveCount(5);
         const pointAt = async (index: number) => {
-          const boxes = await anchors.evaluateAll((nodes) =>
-            nodes
-              .map((node) => {
-                const box = node.getBoundingClientRect();
-                return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-              })
-              .sort((a, b) => a.x - b.x),
-          );
-          const iframe = (await page
-            .locator('iframe[title="TikZ visual editor"]')
-            .boundingBox())!;
+          const boxes = await anchors.evaluateAll((nodes) => nodes.map((node) => {
+            const box = node.getBoundingClientRect();
+            return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+          }).sort((a, b) => a.x - b.x));
+          const iframe = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
           return { x: iframe.x + boxes[index].x, y: iframe.y + boxes[index].y };
         };
         await input.penStroke([await pointAt(1)]);
-        await expect(
-          strip.getByText("1 point selected", { exact: true }),
-        ).toBeVisible();
-        await expect(
-          frame.locator(
-            'circle[data-handle-kind="move-handle"][data-source-id="path:0"]',
-          ),
-        ).toHaveCount(2);
+        await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
+        await expect(frame.locator('circle[data-handle-kind="move-handle"][data-source-id="path:0"]')).toHaveCount(2);
         await input.penStroke([await stableCenter(action("Corner"))]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .not.toBe(authored);
+        await expect.poll(async () => (await editorDebug(page)).source).not.toBe(authored);
         await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
-        await input.penStroke([
-          await stableCenter(
-            frame
-              .locator("[data-diagram-tools]")
-              .getByRole("button", { name: "Undo", exact: true }),
-          ),
-        ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(authored);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await input.penStroke([await stableCenter(frame.locator("[data-diagram-tools]").getByRole("button", { name: "Undo", exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
         await editorReady(page);
         await input.penStroke([await pointAt(1)]);
-        await expect(
-          strip.getByText("1 point selected", { exact: true }),
-        ).toBeVisible();
+        await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
         await input.penStroke([await pointAt(2)]);
-        await expect(
-          strip.getByText("2 points selected", { exact: true }),
-        ).toBeVisible();
+        await expect(strip.getByText("2 points selected", { exact: true })).toBeVisible();
         await input.penStroke([await stableCenter(action("Delete"))]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .not.toBe(authored);
-        await input.penStroke([
-          await stableCenter(
-            frame
-              .locator("[data-diagram-tools]")
-              .getByRole("button", { name: "Undo", exact: true }),
-          ),
-        ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).source)
-          .toBe(authored);
+        await expect.poll(async () => (await editorDebug(page)).source).not.toBe(authored);
+        await input.penStroke([await stableCenter(frame.locator("[data-diagram-tools]").getByRole("button", { name: "Undo", exact: true }))]);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
         await editorReady(page);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await input.penStroke([await pointAt(3)]);
-        await expect(
-          strip.getByText("1 point selected", { exact: true }),
-        ).toBeVisible();
+        await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
         await input.penStroke([await stableCenter(action("Done"))]);
         await expect(action("Edit points")).toBeVisible();
       },
@@ -10012,100 +7128,40 @@ describe("standalone workbench host boundary", function () {
       `aligns and distributes three selected objects as separate undo steps in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzpicture}
 \draw (2,2) circle (1);
 \draw (5,4) circle (1);
 \draw (10,3) circle (1);
 \end{tikzpicture}`;
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         const rail = frame.locator("[data-diagram-tools]");
-        const boxes = await Promise.all(
-          [0, 1, 2].map((index) =>
-            frame
-              .locator(`svg [data-source-id="path:${index}"]`)
-              .first()
-              .boundingBox(),
-          ),
-        );
+        const boxes = await Promise.all([0, 1, 2].map((index) => frame.locator(`svg [data-source-id="path:${index}"]`).first().boundingBox()));
         const left = Math.min(...boxes.map((box) => box!.x)) - 12;
         const right = Math.max(...boxes.map((box) => box!.x + box!.width)) + 12;
         const top = Math.min(...boxes.map((box) => box!.y)) - 12;
-        const bottom =
-          Math.max(...boxes.map((box) => box!.y + box!.height)) + 12;
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Lasso", exact: true }),
-          ),
-        ]);
-        await input.penStroke([
-          { x: left, y: top },
-          { x: right, y: top },
-          { x: right, y: bottom },
-          { x: left, y: bottom },
-          { x: left, y: top + 1 },
-        ]);
-        const selected = async () =>
-          [...(await editorDebug(page)).selection].sort();
+        const bottom = Math.max(...boxes.map((box) => box!.y + box!.height)) + 12;
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true }))]);
+        await input.penStroke([{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }, { x: left, y: top + 1 }]);
+        const selected = async () => [...(await editorDebug(page)).selection].sort();
         await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Select", exact: true }),
-          ),
-        ]);
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Properties", exact: true }),
-          ),
-        ]);
-        const properties = frame.getByRole("complementary", {
-          name: "Diagram properties",
-          exact: true,
-        });
-        await expect(
-          properties.getByText("3 selected objects", { exact: true }),
-        ).toBeVisible();
-        await expect(
-          properties.getByText("Selected objects", { exact: true }),
-        ).toBeVisible();
-        await input.touch([
-          await stableCenter(
-            rail.getByRole("button", { name: "Properties", exact: true }),
-          ),
-        ]);
-        const strip = frame.getByRole("toolbar", {
-          name: "Selection",
-          exact: true,
-        });
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Properties", exact: true }))]);
+        const properties = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        await expect(properties.getByText("3 selected objects", { exact: true })).toBeVisible();
+        await expect(properties.getByText("Selected objects", { exact: true })).toBeVisible();
+        await input.touch([await stableCenter(rail.getByRole("button", { name: "Properties", exact: true }))]);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const source = async () => (await editorDebug(page)).source;
         const command = async (group: string, name: string) => {
-          await input.penStroke([
-            await stableCenter(
-              strip.getByRole("button", { name: group, exact: true }),
-            ),
-          ]);
-          await input.penStroke([
-            await stableCenter(
-              frame
-                .getByRole("menu")
-                .last()
-                .getByRole("menuitem", { name, exact: true }),
-            ),
-          ]);
+          await input.penStroke([await stableCenter(strip.getByRole("button", { name: group, exact: true }))]);
+          await input.penStroke([await stableCenter(frame.getByRole("menu").last().getByRole("menuitem", { name, exact: true }))]);
           await expect.poll(source).not.toBe(authored);
-          await input.penStroke([
-            await stableCenter(
-              rail.getByRole("button", { name: "Undo", exact: true }),
-            ),
-          ]);
+          await input.penStroke([await stableCenter(rail.getByRole("button", { name: "Undo", exact: true }))]);
           await expect.poll(source).toBe(authored);
           await editorReady(page);
           await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
@@ -10114,41 +7170,15 @@ describe("standalone workbench host boundary", function () {
         await command("Distribute", "Horizontal");
         await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
         await expect.poll(selected).toEqual([]);
-        await input.penStroke([
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.15,
-          ),
-        ]);
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.15)]);
         await expect.poll(selected).toEqual(["path:0"]);
-        await input.penStroke([
-          await stableCenter(
-            strip.getByRole("button", { name: "More", exact: true }),
-          ),
-        ]);
-        await input.penStroke([
-          await stableCenter(frame.getByRole("menuitem", { name: /^Reorder/ })),
-        ]);
-        await input.penStroke([
-          await stableCenter(
-            frame.getByRole("menuitem", {
-              name: "Bring to Front",
-              exact: true,
-            }),
-          ),
-        ]);
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "More", exact: true }))]);
+        await input.penStroke([await stableCenter(frame.getByRole("menuitem", { name: /^Reorder/ }))]);
+        await input.penStroke([await stableCenter(frame.getByRole("menuitem", { name: "Bring to Front", exact: true }))]);
         await expect.poll(source).not.toBe(authored);
         const ordered = await source();
-        assert.ok(
-          ordered.indexOf("(2,2) circle") > ordered.indexOf("(10,3) circle"),
-          ordered,
-        );
-        await input.penStroke([
-          await stableCenter(
-            rail.getByRole("button", { name: "Undo", exact: true }),
-          ),
-        ]);
+        assert.ok(ordered.indexOf("(2,2) circle") > ordered.indexOf("(10,3) circle"), ordered);
+        await input.penStroke([await stableCenter(rail.getByRole("button", { name: "Undo", exact: true }))]);
         await expect.poll(source).toBe(authored);
         await editorReady(page);
       },
@@ -10162,15 +7192,11 @@ describe("standalone workbench host boundary", function () {
         `deletes a chosen subset of a curve's points by ${contact} in ${tablet.name}`,
         async function () {
           await editorReady(page);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0) .. controls (15,-4) and (17,-4) .. (18,0);
 \end{tikzpicture}`);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           const frame = editorFrame(page);
           const curve = frame.locator('svg [data-source-id="path:0"]').first();
           await expect(curve).toBeVisible();
@@ -10180,38 +7206,22 @@ describe("standalone workbench host boundary", function () {
             .locator('iframe[title="TikZ visual editor"]')
             .boundingBox())!;
           const tap = async (point: { x: number; y: number }) =>
-            contact === "touch"
-              ? input.touch([point])
-              : input.penStroke([point]);
+            contact === "touch" ? input.touch([point]) : input.penStroke([point]);
           await input.touch([
-            await stableCenter(
-              frame.getByRole("button", { name: "Select", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
           ]);
           const onCurve = await curve.evaluate((path: SVGGeometryElement) => {
             const p = path.getPointAtLength(path.getTotalLength() * 0.15);
             const m = path.getScreenCTM()!;
-            return {
-              x: p.x * m.a + p.y * m.c + m.e,
-              y: p.x * m.b + p.y * m.d + m.f,
-            };
+            return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
           });
           await tap({ x: frameBox.x + onCurve.x, y: frameBox.y + onCurve.y });
-          await expect
-            .poll(async () => (await editorDebug(page)).selection)
-            .toEqual(["path:0"]);
+          await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
           await input.touch([
-            await stableCenter(
-              frame.getByRole("button", { name: "Edit points", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("button", { name: "Edit points", exact: true })),
           ]);
-          await expect(
-            frame.getByRole("button", { name: "Done", exact: true }),
-          ).toBeVisible();
-          await storyScreenshot(
-            page,
-            `curve-actions-${contact}-${tablet.name}`,
-          );
+          await expect(frame.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+          await storyScreenshot(page, `curve-actions-${contact}-${tablet.name}`);
           const anchors = frame.locator(
             'rect[data-handle-kind="move-handle"][data-source-id="path:0"]',
           );
@@ -10231,27 +7241,15 @@ describe("standalone workbench host boundary", function () {
             frame.getByText("2 points selected", { exact: true }),
           ).toBeVisible();
           await input.touch([
-            await stableCenter(
-              frame
-                .getByRole("toolbar", { name: "Selection", exact: true })
-                .getByRole("button", { name: "Delete", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Delete", exact: true })),
           ]);
           await expect
             .poll(
-              async () =>
-                ((await editorDebug(page)).source.match(/\.\. controls/g) ?? [])
-                  .length,
+              async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length,
             )
             .toBe(2);
-          assert.match(
-            (await editorDebug(page)).source,
-            /\(2,0\)[\s\S]*\(14,0\)[\s\S]*\(18,0\)/,
-          );
-          assert.doesNotMatch(
-            (await editorDebug(page)).source,
-            /\(6,0\)|\(10,0\)/,
-          );
+          assert.match((await editorDebug(page)).source, /\(2,0\)[\s\S]*\(14,0\)[\s\S]*\(18,0\)/);
+          assert.doesNotMatch((await editorDebug(page)).source, /\(6,0\)|\(10,0\)/);
         },
       );
     }
@@ -10268,18 +7266,11 @@ describe("standalone workbench host boundary", function () {
         const rail = frame.locator("[data-diagram-tools]");
         for (const moment of ["at startup", "after the code pane opens"]) {
           if (moment !== "at startup") {
-            await page
-              .getByRole("button", { name: "Code: left sidebar", exact: true })
-              .click();
+            await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
             await expect(page.locator(".cm-content")).toBeVisible();
           }
-          const [label, railBox] = [
-            await settledCenter(origin),
-            (await rail.boundingBox())!,
-          ];
-          const viewport = (await frame
-            .locator('[data-canvas-viewport="true"]')
-            .boundingBox())!;
+          const [label, railBox] = [await settledCenter(origin), (await rail.boundingBox())!];
+          const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
           assert.ok(
             label.x > viewport.x &&
               label.x < viewport.x + viewport.width &&
@@ -10305,75 +7296,49 @@ describe("standalone workbench host boundary", function () {
         `edits a curve point from the curve's own control by ${contact} in ${tablet.name}`,
         async function () {
           await editorReady(page);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0);
 \end{tikzpicture}`);
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           const frame = editorFrame(page);
           const curve = frame.locator('svg [data-source-id="path:0"]').first();
           await expect(curve).toBeVisible();
           const input = await TabletInput.attach(page);
           await fitDiagram(frame, input);
           const tap = async (point: { x: number; y: number }) =>
-            contact === "touch"
-              ? input.touch([point])
-              : input.penStroke([point]);
+            contact === "touch" ? input.touch([point]) : input.penStroke([point]);
           await input.touch([
-            await stableCenter(
-              frame.getByRole("button", { name: "Select", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
           ]);
           await tap(await strokePoint(page, curve, 0.15));
-          await expect
-            .poll(async () => (await editorDebug(page)).selection)
-            .toEqual(["path:0"]);
+          await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
           const pointAt = async (x: number) => {
             const frameBox = (await page
               .locator('iframe[title="TikZ visual editor"]')
               .boundingBox())!;
             // Anchors are the square handles; round ones are control points.
             const anchors = await frame
-              .locator(
-                'rect[data-handle-kind="move-handle"][data-source-id="path:0"]',
-              )
+              .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
               .evaluateAll((nodes) =>
                 nodes
                   .map((node) => {
                     const box = node.getBoundingClientRect();
-                    return {
-                      x: box.x + box.width / 2,
-                      y: box.y + box.height / 2,
-                    };
+                    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
                   })
                   .sort((a, b) => a.x - b.x),
               );
-            return {
-              x: frameBox.x + anchors[x].x,
-              y: frameBox.y + anchors[x].y,
-            };
+            return { x: frameBox.x + anchors[x].x, y: frameBox.y + anchors[x].y };
           };
           await tap(await pointAt(1));
           await expect(
             frame.getByText("1 point selected", { exact: true }),
           ).toBeVisible();
           for (const name of ["Corner", "Smooth", "Delete", "Split"]) {
-            await expect(
-              frame
-                .getByRole("toolbar", { name: "Selection", exact: true })
-                .getByRole("button", { name, exact: true }),
-            ).toBeVisible();
+            await expect(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name, exact: true })).toBeVisible();
           }
-          const hint = (await frame
-            .getByTestId("canvas-selection-hint")
-            .boundingBox())!;
-          const control = (await frame
-            .getByRole("toolbar", { name: "Selection", exact: true })
-            .boundingBox())!;
+          const hint = (await frame.getByTestId("canvas-selection-hint").boundingBox())!;
+          const control = (await frame.getByRole("toolbar", { name: "Selection", exact: true }).boundingBox())!;
           assert.ok(
             Math.min(hint.x + hint.width, control.x + control.width) <=
               Math.max(hint.x, control.x) ||
@@ -10381,43 +7346,26 @@ describe("standalone workbench host boundary", function () {
                 Math.max(hint.y, control.y),
             `The point control covers the canvas hint ${JSON.stringify({ hint, control })}`,
           );
-          await storyScreenshot(
-            page,
-            `point-selected-${contact}-${tablet.name}`,
-          );
+          await storyScreenshot(page, `point-selected-${contact}-${tablet.name}`);
           await expect(
             frame.getByRole("button", { name: "Point actions", exact: true }),
           ).toHaveCount(0);
           await input.longPress(await pointAt(1));
           await expect(frame.getByRole("menu")).toHaveCount(0);
           await expect(
-            frame
-              .getByRole("toolbar", { name: "Selection", exact: true })
-              .getByRole("button", { name: "Corner", exact: true }),
+            frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Corner", exact: true }),
           ).toBeVisible();
           const before = (await editorDebug(page)).source;
           await input.touch([
-            await stableCenter(
-              frame
-                .getByRole("toolbar", { name: "Selection", exact: true })
-                .getByRole("button", { name: "Corner", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Corner", exact: true })),
           ]);
-          await expect
-            .poll(async () => (await editorDebug(page)).source)
-            .not.toBe(before);
+          await expect.poll(async () => (await editorDebug(page)).source).not.toBe(before);
           assert.match((await editorDebug(page)).source, /\(6,0\)/);
           await tap(await pointAt(1));
           await input.touch([
-            await stableCenter(
-              frame
-                .getByRole("toolbar", { name: "Selection", exact: true })
-                .getByRole("button", { name: "Delete", exact: true }),
-            ),
+            await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Delete", exact: true })),
           ]);
-          await expect
-            .poll(async () => (await editorDebug(page)).source)
-            .not.toMatch(/\(6,0\)/);
+          await expect.poll(async () => (await editorDebug(page)).source).not.toMatch(/\(6,0\)/);
         },
       );
     }
@@ -10429,43 +7377,27 @@ describe("standalone workbench host boundary", function () {
       `adds a curve point with a finger double tap, as its hint says, in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (2,0) .. controls (6,8) and (10,8) .. (14,0);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         await input.touch([await strokePoint(page, curve, 0.25)]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual(["path:0"]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         const hint = await frame.locator("body").innerText();
-        assert.doesNotMatch(
-          hint,
-          /click/i,
-          "The canvas hint names a mouse gesture",
-        );
+        assert.doesNotMatch(hint, /click/i, "The canvas hint names a mouse gesture");
         assert.match(hint, /Double-tap the curve to add a point/);
         await input.doubleTap(await strokePoint(page, curve, 0.5));
         await expect
-          .poll(
-            async () =>
-              ((await editorDebug(page)).source.match(/\.\. controls/g) ?? [])
-                .length,
-          )
+          .poll(async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length)
           .toBe(2);
       },
     );
@@ -10479,35 +7411,24 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const viewport = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 120));
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Cancel", exact: true }),
-          ),
+          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
         const drawn = await frame
           .locator("svg [data-source-id]")
           .evaluateAll((nodes) => [
-            ...new Set(
-              nodes.map((node) => node.getAttribute("data-source-id")),
-            ),
+            ...new Set(nodes.map((node) => node.getAttribute("data-source-id"))),
           ]);
         assert.equal(drawn.length, 1);
         // A lasso selects the whole curve: a tap on so dense a stroke lands on one of its points.
-        const box = (await frame
-          .locator(`svg [data-source-id="${drawn[0]}"]`)
-          .first()
-          .boundingBox())!;
+        const box = (await frame.locator(`svg [data-source-id="${drawn[0]}"]`).first().boundingBox())!;
         const pad = 24;
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Lasso", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Lasso", exact: true })),
         ]);
         await input.penStroke([
           { x: box.x - pad, y: box.y - pad },
@@ -10516,26 +7437,19 @@ describe("standalone workbench host boundary", function () {
           { x: box.x - pad, y: box.y + box.height + pad },
           { x: box.x - pad, y: box.y - pad + 1 },
         ]);
-        await expect
-          .poll(async () => (await editorDebug(page)).selection)
-          .toEqual([drawn[0]]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([drawn[0]]);
         await input.touch([
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         ]);
         const anchors = frame.locator(
           `rect[data-handle-kind="move-handle"][data-source-id="${drawn[0]}"]`,
         );
         await expect(anchors.first()).toBeVisible();
         const count = await anchors.count();
-        await expect(
-          frame.getByText(`Curve · ${count} points`, { exact: true }),
-        ).toBeVisible();
+        await expect(frame.getByText(`Curve · ${count} points`, { exact: true })).toBeVisible();
         assert.equal(
           count,
-          ((await editorDebug(page)).source.match(/--|\.\. controls/g) ?? [])
-            .length + 1,
+          ((await editorDebug(page)).source.match(/--|\.\. controls/g) ?? []).length + 1,
         );
       },
     );
@@ -10545,57 +7459,35 @@ describe("standalone workbench host boundary", function () {
       `reaches edit commands by pen from the selection control in ${tablet.name}`,
       async function () {
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \draw (4,-2) circle (2cm);
 \draw (10,-4) rectangle (14,0);
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
-        await expect(
-          frame.locator('svg [data-source-id="path:1"]').first(),
-        ).toBeVisible();
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const penTap = async (point: { x: number; y: number }) =>
-          input.penStroke([point]);
+        const penTap = async (point: { x: number; y: number }) => input.penStroke([point]);
         await penTap(
-          await stableCenter(
-            frame.getByRole("button", { name: "Select", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "Select", exact: true })),
         );
         await penTap(
-          await strokePoint(
-            page,
-            frame.locator('svg [data-source-id="path:0"]').first(),
-            0.5,
-          ),
+          await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5),
         );
         await penTap(
-          await stableCenter(
-            frame.getByRole("button", { name: "More", exact: true }),
-          ),
+          await stableCenter(frame.getByRole("button", { name: "More", exact: true })),
         );
         const menu = frame.getByRole("menu").first();
         for (const name of ["Cut", "Copy", "Duplicate", "Delete"]) {
-          await expect(
-            menu.getByRole("menuitem", { name, exact: true }),
-          ).toBeVisible();
+          await expect(menu.getByRole("menuitem", { name, exact: true })).toBeVisible();
         }
         await penTap(
-          await stableCenter(
-            menu.getByRole("menuitem", { name: "Duplicate", exact: true }),
-          ),
+          await stableCenter(menu.getByRole("menuitem", { name: "Duplicate", exact: true })),
         );
         await expect
-          .poll(
-            async () =>
-              ((await editorDebug(page)).source.match(/circle/g) ?? []).length,
-          )
+          .poll(async () => ((await editorDebug(page)).source.match(/circle/g) ?? []).length)
           .toBe(2);
       },
     );
@@ -10605,21 +7497,12 @@ describe("standalone workbench host boundary", function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.evaluate(() => navigator.clipboard.writeText("before drawing"));
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
-    const canvas = (await frame
-      .locator('[data-canvas-viewport="true"]')
-      .boundingBox())!;
-    await page.mouse.move(
-      canvas.x + canvas.width * 0.4,
-      canvas.y + canvas.height / 2,
-    );
+    const canvas = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+    await page.mouse.move(canvas.x + canvas.width * 0.4, canvas.y + canvas.height / 2);
     await page.mouse.down();
-    await page.mouse.move(
-      canvas.x + canvas.width * 0.4 + 90,
-      canvas.y + canvas.height / 2 + 25,
-      {
-        steps: 12,
-      },
-    );
+    await page.mouse.move(canvas.x + canvas.width * 0.4 + 90, canvas.y + canvas.height / 2 + 25, {
+      steps: 12,
+    });
     const render = (await page
       .getByRole("button", { name: "Preview: right sidebar", exact: true })
       .boundingBox())!;
@@ -10629,32 +7512,21 @@ describe("standalone workbench host boundary", function () {
     await page.mouse.up();
     // Use the observed button positions: locator stability waits can let the
     // editor's throttled change notification arrive before this rapid sequence.
-    await page.mouse.click(
-      render.x + render.width / 2,
-      render.y + render.height / 2,
-    );
+    await page.mouse.click(render.x + render.width / 2, render.y + render.height / 2);
     await page.mouse.click(copy.x + copy.width / 2, copy.y + copy.height / 2);
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("workbench-ink:");
     const authored = String.raw`\begin{tikzpicture}\draw[red] (0,0) rectangle (4,3);\end{tikzpicture}`;
     await page.locator(".cm-content").fill(authored);
-    await page
-      .getByRole("button", { name: "Copy source", exact: true })
-      .click();
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(authored);
+    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(authored);
   });
 
   it("copies the completed Quiver edit immediately after switching to rendered view", async function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page
-      .locator(".cm-content")
-      .fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
-    await page
-      .getByRole("button", { name: "Quiver: right sidebar", exact: true })
-      .click();
+    await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
     const frame = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await frame.locator(".vertex").nth(1).click();
     await frame.locator(".label-input").evaluate((input: HTMLInputElement) => {
@@ -10662,26 +7534,17 @@ describe("standalone workbench host boundary", function () {
       input.dispatchEvent(new Event("input", { bubbles: true }));
       const buttons = [...window.parent.document.querySelectorAll("button")];
       buttons
-        .find(
-          (button) =>
-            button.getAttribute("aria-label") === "Preview: right sidebar",
-        )!
+        .find((button) => button.getAttribute("aria-label") === "Preview: right sidebar")!
         .click();
-      buttons
-        .find((button) => button.textContent?.trim() === "Copy source")!
-        .click();
+      buttons.find((button) => button.textContent?.trim() === "Copy source")!.click();
     });
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("ClipboardFinal");
     const newer = String.raw`\begin{tikzcd}NewerAuthored \arrow[r] & Source\end{tikzcd}`;
     await page.locator(".cm-content").fill(newer);
-    await page
-      .getByRole("button", { name: "Copy source", exact: true })
-      .click();
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(newer);
+    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(newer);
   });
 
   story(
@@ -10690,92 +7553,53 @@ describe("standalone workbench host boundary", function () {
     async function () {
       await page.goto(`${url}quiver-embedding.html`);
       const frame = page.frameLocator("iframe");
-      await expect(frame.locator(".vertex")).toHaveCount(2, {
-        timeout: 30_000,
-      });
+      await expect(frame.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
       await frame.locator(".vertex").nth(1).click();
       // Deliver the edit and save gesture in one browser task, before Quiver's
       // 40ms change notification can update the embedding document.
-      await frame
-        .locator(".label-input")
-        .evaluate((input: HTMLInputElement) => {
-          input.value = "Completed";
-          input.dispatchEvent(new Event("input", { bubbles: true }));
-          input.dispatchEvent(
-            new KeyboardEvent("keydown", {
-              key: "s",
-              code: "KeyS",
-              ctrlKey: true,
-              bubbles: true,
-            }),
-          );
-        });
-      await expect(page.getByLabel("Persisted document")).toContainText(
-        "Completed",
-      );
-      const saved = await page.evaluate(() =>
-        localStorage.getItem("embedded-diagram"),
-      );
+      await frame.locator(".label-input").evaluate((input: HTMLInputElement) => {
+        input.value = "Completed";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true }),
+        );
+      });
+      await expect(page.getByLabel("Persisted document")).toContainText("Completed");
+      const saved = await page.evaluate(() => localStorage.getItem("embedded-diagram"));
       assert.equal(saved, await page.getByLabel("Host document").inputValue());
       await frame.locator(".label-input").fill("Subsequent");
       await frame.locator(".label-input").press("Control+s");
-      await expect(page.getByLabel("Persisted document")).toContainText(
-        "Subsequent",
-      );
+      await expect(page.getByLabel("Persisted document")).toContainText("Subsequent");
       assert.equal(
         await page.evaluate(() => localStorage.getItem("embedded-diagram")),
         await page.getByLabel("Host document").inputValue(),
       );
-      const persisted = await page.evaluate(() =>
-        localStorage.getItem("embedded-diagram"),
-      );
+      const persisted = await page.evaluate(() => localStorage.getItem("embedded-diagram"));
       await page.getByRole("checkbox", { name: "Read-only document" }).check();
       await frame.locator(".label-input").fill("Rejected");
       await frame.locator(".label-input").press("Control+s");
       await expect(page.getByLabel("Host error")).toContainText("read-only");
-      assert.equal(
-        await page.evaluate(() => localStorage.getItem("embedded-diagram")),
-        persisted,
-      );
-      assert.equal(
-        await page.getByLabel("Host document").inputValue(),
-        persisted,
-      );
-      await page
-        .getByRole("checkbox", { name: "Read-only document" })
-        .uncheck();
+      assert.equal(await page.evaluate(() => localStorage.getItem("embedded-diagram")), persisted);
+      assert.equal(await page.getByLabel("Host document").inputValue(), persisted);
+      await page.getByRole("checkbox", { name: "Read-only document" }).uncheck();
       const newer = String.raw`\begin{tikzcd}HostAuthority \arrow[r] & Newer\end{tikzcd}`;
-      await page
-        .getByLabel("Host document")
-        .evaluate((input: HTMLTextAreaElement, value) => {
-          input.value = value;
-          input.dispatchEvent(new Event("input", { bubbles: true }));
-          document
-            .querySelector("iframe")!
-            .contentDocument!.querySelector(".label-input")!
-            .dispatchEvent(
-              new KeyboardEvent("keydown", {
-                key: "s",
-                code: "KeyS",
-                ctrlKey: true,
-                bubbles: true,
-              }),
-            );
-        }, newer);
-      await expect(frame.locator(".vertex").first()).toContainText(
-        "HostAuthority",
-      );
+      await page.getByLabel("Host document").evaluate((input: HTMLTextAreaElement, value) => {
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        document
+          .querySelector("iframe")!
+          .contentDocument!.querySelector(".label-input")!
+          .dispatchEvent(
+            new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true }),
+          );
+      }, newer);
+      await expect(frame.locator(".vertex").first()).toContainText("HostAuthority");
       assert.equal(await page.getByLabel("Host document").inputValue(), newer);
-      assert.equal(
-        await page.evaluate(() => localStorage.getItem("embedded-diagram")),
-        persisted,
-      );
+      assert.equal(await page.evaluate(() => localStorage.getItem("embedded-diagram")), persisted);
       await frame.locator(".vertex").nth(1).click();
       await frame.locator(".label-input").fill("Resumed");
       await frame.locator(".label-input").press("Control+s");
-      await expect(page.getByLabel("Persisted document")).toContainText(
-        "Resumed",
-      );
+      await expect(page.getByLabel("Persisted document")).toContainText("Resumed");
       assert.equal(
         await page.evaluate(() => localStorage.getItem("embedded-diagram")),
         await page.getByLabel("Host document").inputValue(),
@@ -10795,35 +7619,20 @@ describe("standalone workbench host boundary", function () {
         await page.goto(`${url}embedding.html`);
         await expect(page.locator("#status")).toHaveText("Loaded");
         await page.getByLabel("Authored source").fill(authored);
-        await page
-          .getByRole("button", { name: "Load source", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Load source", exact: true }).click();
         await expect(page.locator("#status")).toHaveText("Loaded");
-        await page
-          .getByRole("button", { name: "Snapshot", exact: true })
-          .click();
-        await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-          timeout: 12000,
-        });
+        await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+        await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
         const visualSvg = (await readySnapshot()).svg;
         await page.goto(url);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await editorReady(page);
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Preview: right sidebar", exact: true })
-          .click();
-        await expect(page.locator(".tikz-view-status")).toContainText(
-          "Up to date",
-          {
-            timeout: 40000,
-          },
-        );
-        const compiledUri = await page
-          .locator(".tikz-figure-viewer-source")
-          .getAttribute("src");
+        await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+        await expect(page.locator(".tikz-view-status")).toContainText("Up to date", {
+          timeout: 40000,
+        });
+        const compiledUri = await page.locator(".tikz-figure-viewer-source").getAttribute("src");
         assert.ok(compiledUri !== null);
         const difference = await page.evaluate(
           async ({ visualSvg, compiledUri }) => {
@@ -10839,10 +7648,7 @@ describe("standalone workbench host boundary", function () {
               const canvas = document.createElement("canvas");
               canvas.width = canvas.height = 512;
               const context = canvas.getContext("2d")!;
-              const scale = Math.min(
-                512 / image.naturalWidth,
-                512 / image.naturalHeight,
-              );
+              const scale = Math.min(512 / image.naturalWidth, 512 / image.naturalHeight);
               context.drawImage(
                 image,
                 0,
@@ -10865,9 +7671,7 @@ describe("standalone workbench host boundary", function () {
               });
               const occupied = mask.flatMap((value, i) => (value ? [i] : []));
               if (occupied.length === 0) {
-                throw new Error(
-                  "The rendered diagram has no expected coloured geometry",
-                );
+                throw new Error("The rendered diagram has no expected coloured geometry");
               }
               let left = 511,
                 right = 0,
@@ -10882,21 +7686,15 @@ describe("standalone workbench host boundary", function () {
               aspectRatios.push((right - left) / (bottom - top));
               masks.push(
                 Array.from({ length: 128 * 128 }, (_, i) => {
-                  const x = Math.round(
-                    left + ((i % 128) * (right - left)) / 127,
-                  );
-                  const y = Math.round(
-                    top + (Math.floor(i / 128) * (bottom - top)) / 127,
-                  );
+                  const x = Math.round(left + ((i % 128) * (right - left)) / 127);
+                  const y = Math.round(top + (Math.floor(i / 128) * (bottom - top)) / 127);
                   return mask[y * 512 + x];
                 }),
               );
             }
             const [visual, compiled] = masks;
             return {
-              shape:
-                visual.filter((value, i) => value !== compiled[i]).length /
-                visual.length,
+              shape: visual.filter((value, i) => value !== compiled[i]).length / visual.length,
               aspect: Math.abs(aspectRatios[0] / aspectRatios[1] - 1),
             };
           },
@@ -10921,13 +7719,10 @@ describe("standalone workbench host boundary", function () {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator("#status")).toHaveText("Loaded");
       for (const trace of geometryTraces) {
-        await page.getByLabel("Authored source")
-          .fill(String.raw`\begin{tikzpicture}
+        await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
 % corpus authored comment
 \end{tikzpicture}`);
-        await page
-          .getByRole("button", { name: "Load source", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Load source", exact: true }).click();
         const stroke = {
           key: trace.name,
           intent: trace.intent ?? "geometry",
@@ -10939,23 +7734,15 @@ describe("standalone workbench host boundary", function () {
             pressure: 0.4 + 0.1 * Math.sin(i),
           })),
         };
-        await page
-          .getByLabel("Original strokes")
-          .fill(JSON.stringify([stroke]));
-        await page
-          .getByRole("button", { name: "Import strokes", exact: true })
-          .click();
-        await expect(page.locator("#command-result")).toHaveText(
-          "import-ink:ok:",
-        );
+        await page.getByLabel("Original strokes").fill(JSON.stringify([stroke]));
+        await page.getByRole("button", { name: "Import strokes", exact: true }).click();
+        await expect(page.locator("#command-result")).toHaveText("import-ink:ok:");
         await expect(page.getByLabel("Authored source")).toHaveValue(
           new RegExp(`workbench-ink-end:${trace.name}`),
         );
         const original = await page.getByLabel("Authored source").inputValue();
         await page.getByLabel("Stroke key").fill(trace.name);
-        await page
-          .getByRole("button", { name: "Interpret stroke", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
         await expect(page.locator("#command-result")).toHaveText(
           trace.intent === "ink"
             ? "interpret-ink:failed:ink-is-not-geometry"
@@ -10964,16 +7751,10 @@ describe("standalone workbench host boundary", function () {
               : "interpret-ink:ok:",
         );
         // Read current bytes through the public source operation before snapshotting.
-        await page
-          .getByRole("button", { name: "Copy current source", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Copy current source", exact: true }).click();
         await expect(page.locator("#command-result")).toHaveText("source:ok:");
-        await page
-          .getByRole("button", { name: "Snapshot", exact: true })
-          .click();
-        await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-          timeout: 12000,
-        });
+        await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+        await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
         const accepted = await readySnapshot();
         assert.ok(accepted.source.includes(trace.primitive), trace.name);
         assert.deepEqual(accepted.originalInk[0].stroke, stroke, trace.name);
@@ -10983,8 +7764,7 @@ describe("standalone workbench host boundary", function () {
         const error = await page.evaluate(
           ({ svg, points, viewBox }) => {
             const holder = document.createElement("div");
-            holder.style.cssText =
-              "position:fixed;left:0;top:0;visibility:hidden";
+            holder.style.cssText = "position:fixed;left:0;top:0;visibility:hidden";
             holder.innerHTML = svg;
             document.body.append(holder);
             const root = holder.querySelector("svg")!;
@@ -10999,25 +7779,14 @@ describe("standalone workbench host boundary", function () {
               const length = element.getTotalLength();
               const transform = inverse.multiply(element.getScreenCTM()!);
               for (let d = 0; d <= length; d += 0.4) {
-                rendered.push(
-                  element.getPointAtLength(d).matrixTransform(transform),
-                );
+                rendered.push(element.getPointAtLength(d).matrixTransform(transform));
               }
-              rendered.push(
-                element.getPointAtLength(length).matrixTransform(transform),
-              );
+              rendered.push(element.getPointAtLength(length).matrixTransform(transform));
             }
             holder.remove();
-            const raw = points.map(([x, y]) => ({
-              x,
-              y: 2 * viewBox.y + viewBox.height - y,
-            }));
+            const raw = points.map(([x, y]) => ({ x, y: 2 * viewBox.y + viewBox.height - y }));
             const inputError = Math.max(
-              ...raw.map((p) =>
-                Math.min(
-                  ...rendered.map((q) => Math.hypot(p.x - q.x, p.y - q.y)),
-                ),
-              ),
+              ...raw.map((p) => Math.min(...rendered.map((q) => Math.hypot(p.x - q.x, p.y - q.y)))),
             );
             const outputError = Math.max(
               ...rendered.map((p) =>
@@ -11028,11 +7797,7 @@ describe("standalone workbench host boundary", function () {
                       dy = b.y - a.y;
                     const t = Math.max(
                       0,
-                      Math.min(
-                        1,
-                        ((p.x - a.x) * dx + (p.y - a.y) * dy) /
-                          (dx * dx + dy * dy || 1),
-                      ),
+                      Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)),
                     );
                     return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
                   }),
@@ -11041,22 +7806,14 @@ describe("standalone workbench host boundary", function () {
             );
             return Math.max(inputError, outputError);
           },
-          {
-            svg: accepted.svg,
-            points: trace.points,
-            viewBox: accepted.viewBox,
-          },
+          { svg: accepted.svg, points: trace.points, viewBox: accepted.viewBox },
         );
         assert.ok(
           error <= trace.error + 0.3,
           `${trace.name}: bidirectional geometric error ${error} exceeds ${trace.error}`,
         );
-        await page
-          .getByRole("button", { name: "Restore stroke", exact: true })
-          .click();
-        await expect(page.locator("#command-result")).toHaveText(
-          "restore-ink:ok:",
-        );
+        await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
+        await expect(page.locator("#command-result")).toHaveText("restore-ink:ok:");
         await expect(page.getByLabel("Authored source")).toHaveValue(original);
       }
     },
@@ -11065,26 +7822,20 @@ describe("standalone workbench host boundary", function () {
   it("rejects a source notification from the right frame but the wrong session", async function () {
     await page.addInitScript(() => {
       window.addEventListener("message", (event) => {
-        const message =
-          typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        const message = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
         if (message?.event === "loaded") {
-          (
-            window as unknown as { editorLoad: { revision: number } }
-          ).editorLoad = message;
+          (window as unknown as { editorLoad: { revision: number } }).editorLoad = message;
         }
       });
     });
     await page.reload();
     await editorReady(page);
-    await page
-      .getByRole("button", { name: "Code: left sidebar", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     const authored = await page
       .locator(".cm-content .cm-line")
       .evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"));
     const loaded = await page.evaluate(
-      () =>
-        (window as unknown as { editorLoad: { revision: number } }).editorLoad,
+      () => (window as unknown as { editorLoad: { revision: number } }).editorLoad,
     );
     await page.frames()[1].evaluate(({ revision }) => {
       window.parent.postMessage(
@@ -11098,32 +7849,21 @@ describe("standalone workbench host boundary", function () {
       );
     }, loaded);
     await page.evaluate(
-      () =>
-        new Promise((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(resolve)),
-        ),
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );
     assert.equal(
       await page
         .locator(".cm-content .cm-line")
-        .evaluateAll((lines) =>
-          lines.map((line) => line.textContent).join("\n"),
-        ),
+        .evaluateAll((lines) => lines.map((line) => line.textContent).join("\n")),
       authored,
     );
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page
-      .getByRole("button", { name: "Copy source", exact: true })
-      .click();
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(authored);
+    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(authored);
     assert.equal(
       await page
         .locator(".cm-content .cm-line")
-        .evaluateAll((lines) =>
-          lines.map((line) => line.textContent).join("\n"),
-        ),
+        .evaluateAll((lines) => lines.map((line) => line.textContent).join("\n")),
       authored,
     );
   });
@@ -11141,41 +7881,27 @@ describe("standalone workbench host boundary", function () {
         return route.abort();
       });
       await page.goto(url);
-      await page
-        .getByRole("button", { name: "Code: left sidebar", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       await editorReady(page);
       await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
 \node at (0,0) {$x^2$};
 \draw[blue] (0,0) rectangle (2,1);
 \end{tikzpicture}`);
       const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
-      await expect(
-        frame.locator('[data-canvas-viewport="true"]'),
-      ).toBeVisible();
-      await expect
-        .poll(() => frame.locator("[data-source-id]").count())
-        .toBeGreaterThan(1);
+      await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
+      await expect.poll(() => frame.locator("[data-source-id]").count()).toBeGreaterThan(1);
       await editorReady(page);
       await freehandTool(frame).click();
       await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
-      const box = (await frame
-        .locator('[data-canvas-viewport="true"]')
-        .boundingBox())!;
+      const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
       await page.mouse.down();
-      await page.mouse.move(
-        box.x + box.width * 0.55 + 90,
-        box.y + box.height * 0.3 + 25,
-        {
-          steps: 12,
-        },
-      );
+      await page.mouse.move(box.x + box.width * 0.55 + 90, box.y + box.height * 0.3 + 25, {
+        steps: 12,
+      });
       await page.mouse.up();
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-      await page
-        .getByRole("button", { name: "Copy source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Copy source", exact: true }).click();
       await expect
         .poll(() => page.evaluate(() => navigator.clipboard.readText()))
         .toMatch(/workbench-ink:/);
@@ -11207,18 +7933,10 @@ describe("standalone workbench host boundary", function () {
     await page.waitForTimeout(600);
     assert.equal(await sourcePane.innerText(), authored);
     const frame = editorFrame(page);
-    await frame
-      .getByRole("button", { name: "Properties", exact: true })
-      .click();
-    await expect(
-      frame.getByRole("complementary", { name: "Diagram properties" }),
-    ).toBeVisible();
-    await frame
-      .getByRole("button", { name: "Close properties", exact: true })
-      .click();
-    await expect(
-      frame.getByRole("complementary", { name: "Diagram properties" }),
-    ).toHaveCount(0);
+    await frame.getByRole("button", { name: "Properties", exact: true }).click();
+    await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
+    await frame.getByRole("button", { name: "Close properties", exact: true }).click();
+    await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toHaveCount(0);
     assert.equal(await sourcePane.innerText(), authored);
   });
 
@@ -11229,9 +7947,7 @@ describe("standalone workbench host boundary", function () {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const accepted = await readySnapshot();
       await page.evaluate(async () => {
         const sibling = document.createElement("iframe");
@@ -11243,9 +7959,7 @@ describe("standalone workbench host boundary", function () {
         document.body.append(sibling);
         await loaded;
       });
-      const sibling = page
-        .frames()
-        .find((frame) => frame.url() === "about:blank")!;
+      const sibling = page.frames().find((frame) => frame.url() === "about:blank")!;
       await sibling.evaluate(({ sessionId, revision }) => {
         parent.frames[0].postMessage(
           {
@@ -11261,9 +7975,7 @@ describe("standalone workbench host boundary", function () {
         );
       }, accepted);
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const retained = await readySnapshot();
       assert.equal(retained.source, accepted.source);
       assert.equal(retained.svg, accepted.svg);
@@ -11277,41 +7989,23 @@ describe("standalone workbench host boundary", function () {
       await editorReady(page);
       const sourcePane = page.locator(".cm-content");
       await expect(sourcePane).toBeHidden();
-      await page
-        .getByRole("button", { name: "Code: left sidebar", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       const source = String.raw`\begin{tikzpicture}
 % Keep this authored comment.
 \draw[blue] (0,0) circle (1cm);
 \end{tikzpicture}`;
       await sourcePane.fill(source);
-      await page
-        .getByRole("button", { name: "Code: left sidebar", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       const frame = editorFrame(page);
-      await frame
-        .getByRole("button", { name: "Properties", exact: true })
-        .click();
-      await expect(
-        frame.getByRole("complementary", { name: "Diagram properties" }),
-      ).toBeVisible();
-      await page.screenshot({
-        path: "test-results/workbench/tablet-properties.png",
-      });
+      await frame.getByRole("button", { name: "Properties", exact: true }).click();
+      await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
+      await page.screenshot({ path: "test-results/workbench/tablet-properties.png" });
       await expect(sourcePane).toBeHidden();
-      await page
-        .getByRole("button", { name: "Code: left sidebar", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       assert.equal(await sourcePane.innerText(), source);
-      await expect(
-        frame.getByRole("complementary", { name: "Diagram properties" }),
-      ).toBeVisible();
-      await page.screenshot({
-        path: "test-results/workbench/tablet-both-panels.png",
-      });
-      await frame
-        .getByRole("button", { name: "Close properties", exact: true })
-        .click();
+      await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
+      await page.screenshot({ path: "test-results/workbench/tablet-both-panels.png" });
+      await frame.getByRole("button", { name: "Close properties", exact: true }).click();
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);
       const writes: string[] = [];
       page.on("request", (request) => {
@@ -11319,12 +8013,8 @@ describe("standalone workbench host boundary", function () {
           writes.push(request.url());
         }
       });
-      await page
-        .getByRole("button", { name: "Copy source", exact: true })
-        .click();
-      await expect
-        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-        .toBe(source);
+      await page.getByRole("button", { name: "Copy source", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(source);
       assert.deepEqual(writes, []);
       await sourcePane.press("Control+z");
       await expect(sourcePane).not.toHaveText(source);
@@ -11342,34 +8032,19 @@ describe("standalone workbench host boundary", function () {
 \draw[red] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
       await page.getByLabel("Authored source").fill(source);
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const result = await readySnapshot();
       assert.equal(result.source, source);
       assert.equal(result.revision, 2);
-      assert.ok(
-        result.localBounds,
-        "The accepted drawing includes its local placement bounds",
-      );
-      assert.ok(
-        Math.abs(result.localBounds.maxX - result.localBounds.minX - 85.358) <
-          1,
-      );
-      assert.ok(
-        Math.abs(result.localBounds.maxY - result.localBounds.minY - 56.906) <
-          1,
-      );
+      assert.ok(result.localBounds, "The accepted drawing includes its local placement bounds");
+      assert.ok(Math.abs(result.localBounds.maxX - result.localBounds.minX - 85.358) < 1);
+      assert.ok(Math.abs(result.localBounds.maxY - result.localBounds.minY - 56.906) < 1);
       const drawing = await page.evaluate((svg) => {
         const document = new DOMParser().parseFromString(svg, "image/svg+xml");
         return {
-          paths: [...document.querySelectorAll("path")].map((path) =>
-            path.getAttribute("d"),
-          ),
+          paths: [...document.querySelectorAll("path")].map((path) => path.getAttribute("d")),
           errors: document.querySelectorAll("parsererror").length,
         };
       }, result.svg);
@@ -11378,9 +8053,7 @@ describe("standalone workbench host boundary", function () {
         drawing.paths.some((path) => path !== null && path.includes("85.358")),
         "The exported view must contain the authored 3cm rectangle",
       );
-      await page.screenshot({
-        path: "test-results/workbench/embedding-snapshot.png",
-      });
+      await page.screenshot({ path: "test-results/workbench/embedding-snapshot.png" });
       await page.getByRole("button", { name: "Dispose", exact: true }).click();
       await expect(page.locator("iframe")).toHaveCount(0);
     },
@@ -11393,9 +8066,7 @@ describe("standalone workbench host boundary", function () {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const accepted = await readySnapshot();
       await page.evaluate((accepted) => {
         const editor = document.querySelector<HTMLIFrameElement>("#editor")!;
@@ -11403,20 +8074,11 @@ describe("standalone workbench host boundary", function () {
         output.id = "repeated-result";
         document.querySelector("section")!.append(output);
         window.addEventListener("message", (event) => {
-          if (
-            event.source !== editor.contentWindow ||
-            event.origin !== location.origin
-          ) {
+          if (event.source !== editor.contentWindow || event.origin !== location.origin) {
             return;
           }
-          const reply =
-            typeof event.data === "string"
-              ? JSON.parse(event.data)
-              : event.data;
-          if (
-            reply.event === "snapshot" &&
-            reply.requestId === accepted.requestId
-          ) {
+          const reply = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+          if (reply.event === "snapshot" && reply.requestId === accepted.requestId) {
             output.textContent = JSON.stringify(reply);
           }
         });
@@ -11432,16 +8094,9 @@ describe("standalone workbench host boundary", function () {
         );
       }, accepted);
       await expect(page.locator("#repeated-result")).not.toBeEmpty();
-      assert.deepEqual(
-        JSON.parse(await page.locator("#repeated-result").innerText()),
-        accepted,
-      );
-      await page
-        .getByRole("button", { name: "Copy current source", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        accepted.source,
-      );
+      assert.deepEqual(JSON.parse(await page.locator("#repeated-result").innerText()), accepted);
+      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(accepted.source);
     },
   );
 
@@ -11451,38 +8106,29 @@ describe("standalone workbench host boundary", function () {
     async function () {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Authored source")
-        .fill(String.raw`\begin{tikzpicture}
+      await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
 \draw[red] (0,0) rectangle (3,2);
 \end{tikzpicture}`);
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const accepted = await readySnapshot();
       await page.evaluate(({ sessionId }) => {
-        document
-          .querySelector<HTMLIFrameElement>("iframe")!
-          .contentWindow!.postMessage(
-            {
-              action: "load",
-              sessionId,
-              revision: 1,
-              requestId: crypto.randomUUID(),
-              fileName: "fixture.tikz",
-              autosave: 0,
-              source: String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`,
-            },
-            location.origin,
-          );
+        document.querySelector<HTMLIFrameElement>("iframe")!.contentWindow!.postMessage(
+          {
+            action: "load",
+            sessionId,
+            revision: 1,
+            requestId: crypto.randomUUID(),
+            fileName: "fixture.tikz",
+            autosave: 0,
+            source: String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`,
+          },
+          location.origin,
+        );
       }, accepted);
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const retained = await readySnapshot();
       assert.equal(retained.source, accepted.source);
       assert.equal(retained.svg, accepted.svg);
@@ -11501,15 +8147,9 @@ describe("standalone workbench host boundary", function () {
         await page.goto(`${url}embedding.html`);
         await expect(page.locator("#status")).toHaveText("Loaded");
         await page.getByLabel("Authored source").fill(source);
-        await page
-          .getByRole("button", { name: "Load source", exact: true })
-          .click();
-        await page
-          .getByRole("button", { name: "Snapshot", exact: true })
-          .click();
-        await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-          timeout: 12000,
-        });
+        await page.getByRole("button", { name: "Load source", exact: true }).click();
+        await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+        await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
         const accepted = await readySnapshot();
         assert.equal(accepted.source, source);
         exports.push(accepted.svg);
@@ -11522,12 +8162,8 @@ describe("standalone workbench host boundary", function () {
       const owners = await page.locator("figure").evaluateAll((figures) =>
         figures.map((figure) => {
           const clipped = figure.querySelector("[clip-path]")!;
-          const reference = /^url\(#(.+)\)$/.exec(
-            clipped.getAttribute("clip-path")!,
-          )![1];
-          return (
-            document.getElementById(reference)!.closest("figure") === figure
-          );
+          const reference = /^url\(#(.+)\)$/.exec(clipped.getAttribute("clip-path")!)![1];
+          return document.getElementById(reference)!.closest("figure") === figure;
         }),
       );
       assert.deepEqual(owners, [true, true]);
@@ -11544,17 +8180,11 @@ describe("standalone workbench host boundary", function () {
       const second = String.raw`\begin{tikzpicture}\fill[red] (0,0) rectangle (3,2);\end{tikzpicture}`;
       const authored = `${first} ${second}`;
       await page.getByLabel("Authored source").fill(authored);
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
       const frame = page.frameLocator("#editor");
-      await frame
-        .getByRole("button", { name: "Figure 2", exact: true })
-        .click();
+      await frame.getByRole("button", { name: "Figure 2", exact: true }).click();
       const untouched = await hostSnapshot();
-      await frame
-        .getByRole("button", { name: "Figure 1", exact: true })
-        .click();
+      await frame.getByRole("button", { name: "Figure 1", exact: true }).click();
       const before = await hostSnapshot();
       const stroke = {
         key: "earlier-figure-stroke",
@@ -11568,17 +8198,12 @@ describe("standalone workbench host boundary", function () {
         })),
       };
       await page.getByLabel("Original strokes").fill(JSON.stringify([stroke]));
-      await page
-        .getByRole("button", { name: "Import strokes", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        /earlier-figure-stroke/,
-      );
+      await page.getByRole("button", { name: "Import strokes", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(/earlier-figure-stroke/);
       const imported = await hostSnapshot();
       assert.equal(
         imported.source.slice(
-          imported.source.indexOf("\\end{tikzpicture}") +
-            "\\end{tikzpicture}".length,
+          imported.source.indexOf("\\end{tikzpicture}") + "\\end{tikzpicture}".length,
         ),
         ` ${second}`,
       );
@@ -11588,102 +8213,61 @@ describe("standalone workbench host boundary", function () {
       );
       assert.equal(imported.state.activeFigureId, before.state.activeFigureId);
       const associated = imported.originalInk[0].sourceIds[0];
-      await expect(
-        frame.locator(`path[data-source-id="${associated}"]`).first(),
-      ).toHaveAttribute("stroke", "#00aa00");
-      await page.getByLabel("Stroke key").fill(stroke.key);
-      await page
-        .getByRole("button", { name: "Interpret stroke", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).not.toHaveValue(
-        imported.source,
+      await expect(frame.locator(`path[data-source-id="${associated}"]`).first()).toHaveAttribute(
+        "stroke",
+        "#00aa00",
       );
+      await page.getByLabel("Stroke key").fill(stroke.key);
+      await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).not.toHaveValue(imported.source);
       const fitted = await hostSnapshot();
       assert.equal(
         fitted.source.slice(
-          fitted.source.indexOf("\\end{tikzpicture}") +
-            "\\end{tikzpicture}".length,
+          fitted.source.indexOf("\\end{tikzpicture}") + "\\end{tikzpicture}".length,
         ),
         ` ${second}`,
       );
       await frame.locator('[data-canvas-viewport="true"]').press("Control+z");
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        imported.source,
-      );
-      await frame
-        .locator('[data-canvas-viewport="true"]')
-        .press("Control+Shift+z");
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        fitted.source,
-      );
-      await page
-        .getByRole("button", { name: "Restore stroke", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        imported.source,
-      );
-      assert.deepEqual(
-        (await hostSnapshot()).originalInk,
-        imported.originalInk,
-      );
-      await frame
-        .getByRole("button", { name: "Figure 2", exact: true })
-        .click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(imported.source);
+      await frame.locator('[data-canvas-viewport="true"]').press("Control+Shift+z");
+      await expect(page.getByLabel("Authored source")).toHaveValue(fitted.source);
+      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(imported.source);
+      assert.deepEqual((await hostSnapshot()).originalInk, imported.originalInk);
+      await frame.getByRole("button", { name: "Figure 2", exact: true }).click();
       const later = await hostSnapshot();
-      assert.deepEqual(
-        await paintedGeometry(later.svg),
-        await paintedGeometry(untouched.svg),
-      );
+      assert.deepEqual(await paintedGeometry(later.svg), await paintedGeometry(untouched.svg));
       assert.deepEqual(later.originalInk, []);
-      await page
-        .getByRole("button", { name: "Restore stroke", exact: true })
-        .click();
-      await expect(page.locator("#command-result")).toHaveText(
-        "restore-ink:failed:missing-stroke",
-      );
-      assert.equal(
-        await page.getByLabel("Authored source").inputValue(),
-        imported.source,
-      );
+      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
+      await expect(page.locator("#command-result")).toHaveText("restore-ink:failed:missing-stroke");
+      assert.equal(await page.getByLabel("Authored source").inputValue(), imported.source);
       await page.reload();
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByLabel("Saved snapshot").fill(JSON.stringify(later));
-      await page
-        .getByRole("button", { name: "Load snapshot", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
       await expect(page.locator("#status")).toHaveText("Loaded");
       const reopened = await hostSnapshot();
       assert.equal(reopened.state.activeFigureId, later.state.activeFigureId);
       assert.equal(reopened.source, later.source);
-      assert.deepEqual(
-        await paintedGeometry(reopened.svg),
-        await paintedGeometry(later.svg),
-      );
+      assert.deepEqual(await paintedGeometry(reopened.svg), await paintedGeometry(later.svg));
       await page.evaluate((snapshot) => {
-        document
-          .querySelector<HTMLIFrameElement>("#editor")!
-          .contentWindow!.postMessage(
-            {
-              action: "load",
-              sessionId: snapshot.sessionId,
-              revision: snapshot.revision + 1,
-              requestId: "invalid-figure-state",
-              source: snapshot.source,
-              state: { ...snapshot.state, activeFigureId: "figure:999" },
-              fileName: "fixture.tikz",
-            },
-            location.origin,
-          );
+        document.querySelector<HTMLIFrameElement>("#editor")!.contentWindow!.postMessage(
+          {
+            action: "load",
+            sessionId: snapshot.sessionId,
+            revision: snapshot.revision + 1,
+            requestId: "invalid-figure-state",
+            source: snapshot.source,
+            state: { ...snapshot.state, activeFigureId: "figure:999" },
+            fileName: "fixture.tikz",
+          },
+          location.origin,
+        );
       }, reopened);
-      await expect(page.locator("#command-result")).toHaveText(
-        "load:failed:invalid-command",
-      );
+      await expect(page.locator("#command-result")).toHaveText("load:failed:invalid-command");
       const afterRejectedLoad = await hostSnapshot();
       assert.equal(afterRejectedLoad.source, reopened.source);
-      assert.equal(
-        afterRejectedLoad.state.activeFigureId,
-        reopened.state.activeFigureId,
-      );
+      assert.equal(afterRejectedLoad.state.activeFigureId, reopened.state.activeFigureId);
       assert.deepEqual(
         await paintedGeometry(afterRejectedLoad.svg),
         await paintedGeometry(reopened.svg),
@@ -11704,24 +8288,15 @@ describe("standalone workbench host boundary", function () {
 \draw[red] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
       await page.getByLabel("Authored source").fill(`${first}\n${second}`);
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
       const frame = page.frameLocator("#editor");
-      await frame
-        .getByRole("button", { name: "Figure 1", exact: true })
-        .click();
+      await frame.getByRole("button", { name: "Figure 1", exact: true }).click();
       await freehandTool(page.frameLocator("#editor")).click();
       const before = await hostSnapshot();
-      const bounds = (await frame
-        .locator('[data-canvas-viewport="true"]')
-        .boundingBox())!;
+      const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       const draw = async () => {
         await freehandTool(frame).click();
-        await page.mouse.move(
-          bounds.x + bounds.width * 0.35,
-          bounds.y + bounds.height * 0.6,
-        );
+        await page.mouse.move(bounds.x + bounds.width * 0.35, bounds.y + bounds.height * 0.6);
         await page.mouse.down();
         await page.mouse.move(
           bounds.x + bounds.width * 0.35 + 110,
@@ -11734,29 +8309,17 @@ describe("standalone workbench host boundary", function () {
           .getByRole("button", { name: "Accept", exact: true })
           .click();
         // The stroke stays selected; its restore control belongs to the Select tool.
-        await frame
-          .getByRole("button", { name: "Select", exact: true })
-          .click();
+        await frame.getByRole("button", { name: "Select", exact: true }).click();
         await expect(
-          frame.getByRole("button", {
-            name: "Restore original stroke",
-            exact: true,
-          }),
+          frame.getByRole("button", { name: "Restore original stroke", exact: true }),
         ).toBeVisible();
       };
       await draw();
-      const fittedSource = await page
-        .getByLabel("Authored source")
-        .inputValue();
-      await frame
-        .getByRole("button", { name: "Restore original stroke", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).not.toHaveValue(
-        fittedSource,
-      );
+      const fittedSource = await page.getByLabel("Authored source").inputValue();
+      await frame.getByRole("button", { name: "Restore original stroke", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).not.toHaveValue(fittedSource);
       const raw = await hostSnapshot();
-      const originalDrawing =
-        /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(raw.source)![1];
+      const originalDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(raw.source)![1];
       const duplicateFigure = second.replace(
         "\\end{tikzpicture}",
         `${originalDrawing}\n\\end{tikzpicture}`,
@@ -11765,43 +8328,29 @@ describe("standalone workbench host boundary", function () {
       await page
         .getByLabel("Saved snapshot")
         .fill(JSON.stringify({ ...before, source: duplicateSource }));
-      await page
-        .getByRole("button", { name: "Load snapshot", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
       await expect(page.locator("#status")).toHaveText("Loaded");
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        duplicateSource,
-      );
-      await frame
-        .getByRole("button", { name: "Figure 2", exact: true })
-        .click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(duplicateSource);
+      await frame.getByRole("button", { name: "Figure 2", exact: true }).click();
       const laterBeforeDraw = await hostSnapshot();
-      await page
-        .getByRole("button", { name: "Load snapshot", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
       await expect(page.locator("#status")).toHaveText("Loaded");
       await hostSnapshot();
       await draw();
       const fitted = await hostSnapshot();
       assert.equal(
         fitted.source.slice(
-          fitted.source.indexOf("\\end{tikzpicture}") +
-            "\\end{tikzpicture}".length,
+          fitted.source.indexOf("\\end{tikzpicture}") + "\\end{tikzpicture}".length,
         ),
         `\n${duplicateFigure}`,
       );
       assert.equal(fitted.originalInk.length, 1);
-      assert.notEqual(
-        fitted.originalInk[0].stroke.key,
-        raw.originalInk[0].stroke.key,
-      );
+      assert.notEqual(fitted.originalInk[0].stroke.key, raw.originalInk[0].stroke.key);
       assert.deepEqual(
         fitted.originalInk[0].stroke.samples.map(({ x, y }) => [x, y]),
         raw.originalInk[0].stroke.samples.map(({ x, y }) => [x, y]),
       );
-      const fittedDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(
-        fitted.source,
-      )![1];
+      const fittedDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(fitted.source)![1];
       assert.notEqual(fittedDrawing, originalDrawing);
       await frame.locator('[data-canvas-viewport="true"]').press("Control+z");
       await expect(page.getByLabel("Authored source")).toHaveValue(
@@ -11809,30 +8358,16 @@ describe("standalone workbench host boundary", function () {
       );
       const restored = await hostSnapshot();
       assert.equal(
-        /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(
-          restored.source,
-        )![1],
+        /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(restored.source)![1],
         originalDrawing,
       );
       assert.deepEqual(restored.originalInk, fitted.originalInk);
-      await frame
-        .locator('[data-canvas-viewport="true"]')
-        .press("Control+Shift+z");
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        fitted.source,
-      );
-      await page
-        .getByLabel("Stroke key")
-        .fill(fitted.originalInk[0].stroke.key);
-      await page
-        .getByRole("button", { name: "Restore stroke", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        restored.source,
-      );
-      await frame
-        .getByRole("button", { name: "Figure 2", exact: true })
-        .click();
+      await frame.locator('[data-canvas-viewport="true"]').press("Control+Shift+z");
+      await expect(page.getByLabel("Authored source")).toHaveValue(fitted.source);
+      await page.getByLabel("Stroke key").fill(fitted.originalInk[0].stroke.key);
+      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(restored.source);
+      await frame.getByRole("button", { name: "Figure 2", exact: true }).click();
       const other = await hostSnapshot();
       assert.deepEqual(other.originalInk, []);
       assert.deepEqual(
@@ -11873,16 +8408,10 @@ describe("standalone workbench host boundary", function () {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByLabel("Original strokes").fill(JSON.stringify(strokes));
-      await page
-        .getByRole("button", { name: "Import strokes", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        /lecture-stroke-1/,
-      );
+      await page.getByRole("button", { name: "Import strokes", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(/lecture-stroke-1/);
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const saved = await readySnapshot();
       assert.deepEqual(
         saved.originalInk.map((entry: { stroke: unknown }) => entry.stroke),
@@ -11890,14 +8419,9 @@ describe("standalone workbench host boundary", function () {
       );
       async function assertPaintedOutline(svg: string): Promise<void> {
         const paint = await page.evaluate((markup) => {
-          const root = new DOMParser().parseFromString(
-            markup,
-            "image/svg+xml",
-          ).documentElement;
+          const root = new DOMParser().parseFromString(markup, "image/svg+xml").documentElement;
           document.body.append(root);
-          const path = root.querySelector(
-            "path[data-source-id]",
-          ) as SVGPathElement;
+          const path = root.querySelector("path[data-source-id]") as SVGPathElement;
           const box = path.getBBox();
           const matrix = (root as unknown as SVGSVGElement)
             .getCTM()!
@@ -11923,35 +8447,21 @@ describe("standalone workbench host boundary", function () {
         }, svg);
         assert.equal(paint.fill, "rgb(224, 32, 64)");
         assert.equal(paint.interior, true);
-        assert.ok(
-          Math.abs(paint.bounds[0][0]) < 0.01 &&
-            Math.abs(paint.bounds[1][0] - 76) < 0.01,
-        );
+        assert.ok(Math.abs(paint.bounds[0][0]) < 0.01 && Math.abs(paint.bounds[1][0] - 76) < 0.01);
         const ys = paint.bounds.map((point) => point[1]).sort((a, b) => a - b);
-        assert.ok(
-          Math.abs(ys[0] + 35) < 0.01 && Math.abs(ys[1] + 5) < 0.01,
-          JSON.stringify(paint),
-        );
+        assert.ok(Math.abs(ys[0] + 35) < 0.01 && Math.abs(ys[1] + 5) < 0.01, JSON.stringify(paint));
       }
       await assertPaintedOutline(saved.svg);
       await page.getByLabel("Stroke key").fill(strokes[0].key);
-      await page
-        .getByRole("button", { name: "Interpret stroke", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).not.toHaveValue(
-        saved.source,
-      );
+      await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).not.toHaveValue(saved.source);
       const fitted = await page.getByLabel("Authored source").inputValue();
       await page.reload();
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByLabel("Authored source").fill(fitted);
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const reopened = await readySnapshot();
       assert.equal(reopened.source, fitted);
       assert.deepEqual(
@@ -11960,33 +8470,20 @@ describe("standalone workbench host boundary", function () {
       );
       assert.ok(reopened.svg.includes("#112233"));
       await page.getByLabel("Stroke key").fill(strokes[0].key);
-      await page
-        .getByRole("button", { name: "Restore stroke", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        saved.source,
-      );
+      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(saved.source);
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const restored = await readySnapshot();
       await assertPaintedOutline(restored.svg);
       assert.deepEqual(restored.originalInk, saved.originalInk);
-      await page
-        .frameLocator("iframe")
-        .locator('[data-canvas-viewport="true"]')
-        .press("Control+z");
+      await page.frameLocator("iframe").locator('[data-canvas-viewport="true"]').press("Control+z");
       await expect(page.getByLabel("Authored source")).toHaveValue(fitted);
       const frame = page.frameLocator("#editor");
-      await frame
-        .locator('[data-canvas-viewport="true"]')
-        .scrollIntoViewIfNeeded();
+      await frame.locator('[data-canvas-viewport="true"]').scrollIntoViewIfNeeded();
       await frame.locator('[data-canvas-viewport="true"]').press("v");
       const line = (await frame
-        .locator(
-          `path[data-source-id="${reopened.originalInk[0].sourceIds[0]}"]`,
-        )
+        .locator(`path[data-source-id="${reopened.originalInk[0].sourceIds[0]}"]`)
         .first()
         .boundingBox())!;
       // A horizontal SVG line has a zero-height DOM box, but its painted stroke
@@ -11994,15 +8491,9 @@ describe("standalone workbench host boundary", function () {
       await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
       const selected = await hostSnapshot();
       assert.equal(selected.state.selection.length, 1);
-      await frame
-        .getByRole("button", { name: "Restore original stroke", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        saved.source,
-      );
-      await frame
-        .getByRole("button", { name: "Reapply original fit", exact: true })
-        .click();
+      await frame.getByRole("button", { name: "Restore original stroke", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(saved.source);
+      await frame.getByRole("button", { name: "Reapply original fit", exact: true }).click();
       await expect(page.getByLabel("Authored source")).toHaveValue(fitted);
     },
   );
@@ -12037,41 +8528,25 @@ describe("standalone workbench host boundary", function () {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByLabel("Original strokes").fill(JSON.stringify(strokes));
-      await page
-        .getByRole("button", { name: "Import strokes", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        /translucent-stroke/,
-      );
+      await page.getByRole("button", { name: "Import strokes", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(/translucent-stroke/);
       const imported = await page.getByLabel("Authored source").inputValue();
       await page.getByLabel("Stroke key").fill(strokes[0].key);
-      await page
-        .getByRole("button", { name: "Interpret stroke", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).not.toHaveValue(
-        imported,
-      );
+      await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).not.toHaveValue(imported);
       const hostFit = await page.getByLabel("Authored source").inputValue();
-      await page
-        .getByRole("button", { name: "Restore stroke", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
       await expect(page.getByLabel("Authored source")).toHaveValue(imported);
       const frame = page.frameLocator("#editor");
-      await frame
-        .locator('[data-canvas-viewport="true"]')
-        .scrollIntoViewIfNeeded();
+      await frame.locator('[data-canvas-viewport="true"]').scrollIntoViewIfNeeded();
       await frame.locator('[data-canvas-viewport="true"]').press("v");
       const snapshot = await hostSnapshot();
       const line = (await frame
-        .locator(
-          `path[data-source-id="${snapshot.originalInk[0].sourceIds[0]}"]`,
-        )
+        .locator(`path[data-source-id="${snapshot.originalInk[0].sourceIds[0]}"]`)
         .first()
         .boundingBox())!;
       await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
-      await frame
-        .getByRole("button", { name: "Reapply original fit", exact: true })
-        .click();
+      await frame.getByRole("button", { name: "Reapply original fit", exact: true }).click();
       await expect(
         page.getByLabel("Authored source"),
         "The canvas refit differs from the host refit",
@@ -12085,17 +8560,12 @@ describe("standalone workbench host boundary", function () {
     async function () {
       await page.goto(`${url}embedding.html`);
       await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Authored source")
-        .fill(String.raw`\begin{tikzpicture}
+      await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
 \node[inner sep=0pt] at (0,0) {\includegraphics[width=4cm]{image-resource.svg}};
 \end{tikzpicture}`);
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const exported = await readySnapshot();
       await page.goto(`${url}svg-viewer.html`);
       await context.setOffline(true);
@@ -12164,51 +8634,34 @@ describe("standalone workbench host boundary", function () {
         clickCount: 1,
         pointerType: "pen",
       });
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        /workbench-ink:/,
-      );
+      await expect(page.getByLabel("Authored source")).toHaveValue(/workbench-ink:/);
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const snapshot = await readySnapshot();
       assert.equal(snapshot.originalInk.length, 1);
       const samples = snapshot.originalInk[0].stroke.samples;
       assert.ok(samples.length >= 22);
       assert.ok(
         samples.some(
-          (sample) =>
-            sample.pressure !== undefined &&
-            Math.abs(sample.pressure - 0.5) < 0.01,
+          (sample) => sample.pressure !== undefined && Math.abs(sample.pressure - 0.5) < 0.01,
         ),
       );
-      assert.ok(
-        samples.some((sample) => sample.tiltX === 12 && sample.tiltY === -8),
-      );
+      assert.ok(samples.some((sample) => sample.tiltX === 12 && sample.tiltY === -8));
     },
   );
 
   it("lets the author keep handwritten ink outside geometric interpretation", async function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const frame = editorFrame(page);
-    await frame
-      .getByRole("button", { name: "Properties", exact: true })
-      .click();
-    await frame
-      .getByRole("checkbox", { name: "Interpret geometry", exact: true })
-      .uncheck();
-    await frame
-      .getByRole("button", { name: "Close properties", exact: true })
-      .click();
-    const box = (await frame
-      .locator('[data-canvas-viewport="true"]')
-      .boundingBox())!;
+    await frame.getByRole("button", { name: "Properties", exact: true }).click();
+    await frame.getByRole("checkbox", { name: "Interpret geometry", exact: true }).uncheck();
+    await frame.getByRole("button", { name: "Close properties", exact: true }).click();
+    const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const x = box.x + box.width * 0.4,
       y = box.y + box.height * 0.55;
     await frame.locator("body").evaluate(() => {
       const received: { time: number; pressure: number }[] = [];
-      (window as unknown as { receivedPen: typeof received }).receivedPen =
-        received;
+      (window as unknown as { receivedPen: typeof received }).receivedPen = received;
       for (const kind of ["pointerdown", "pointermove", "pointerup"]) {
         window.addEventListener(
           kind,
@@ -12219,10 +8672,7 @@ describe("standalone workbench host boundary", function () {
             }
             const coalesced = pointer.getCoalescedEvents();
             for (const sample of coalesced.length ? coalesced : [pointer]) {
-              received.push({
-                time: sample.timeStamp,
-                pressure: sample.pressure,
-              });
+              received.push({ time: sample.timeStamp, pressure: sample.pressure });
             }
           },
           true,
@@ -12260,9 +8710,7 @@ describe("standalone workbench host boundary", function () {
       clickCount: 1,
       pointerType: "pen",
     });
-    await page
-      .getByRole("button", { name: "Copy source", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Copy source", exact: true }).click();
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("workbench-ink-end:");
@@ -12276,11 +8724,7 @@ describe("standalone workbench host boundary", function () {
       .locator("body")
       .evaluate(
         () =>
-          (
-            window as unknown as {
-              receivedPen: { time: number; pressure: number }[];
-            }
-          ).receivedPen,
+          (window as unknown as { receivedPen: { time: number; pressure: number }[] }).receivedPen,
       );
     assert.deepEqual(
       original.samples.map((sample: { time: number; pressure: number }) => ({
@@ -12295,9 +8739,7 @@ describe("standalone workbench host boundary", function () {
       0,
       "The handwritten loop must not become a circle",
     );
-    await expect(
-      frame.getByRole("dialog", { name: "Freehand result" }),
-    ).toHaveCount(0);
+    await expect(frame.getByRole("dialog", { name: "Freehand result" })).toHaveCount(0);
   });
 
   story(
@@ -12308,9 +8750,7 @@ describe("standalone workbench host boundary", function () {
       await expect(page.locator("#status")).toHaveText("Loaded");
       const frame = page.frameLocator("#editor");
       await freehandTool(page.frameLocator("#editor")).click();
-      const box = (await frame
-        .locator('[data-canvas-viewport="true"]')
-        .boundingBox())!;
+      const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       const x = box.x + box.width * 0.3,
         y = box.y + box.height * 0.55;
       const cdp = await context.newCDPSession(page);
@@ -12342,24 +8782,14 @@ describe("standalone workbench host boundary", function () {
         clickCount: 1,
         pointerType: "pen",
       });
-      await page
-        .getByRole("button", { name: "Copy current source", exact: true })
-        .click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        /workbench-ink:/,
-      );
+      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
+      await expect(page.getByLabel("Authored source")).toHaveValue(/workbench-ink:/);
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const result = await readySnapshot();
       assert.equal(result.originalInk.length, 1);
       assert.ok(result.originalInk[0].stroke.samples.length >= 3);
-      assert.ok(
-        result.svg.includes(
-          `data-source-id="${result.originalInk[0].sourceIds[0]}"`,
-        ),
-      );
+      assert.ok(result.svg.includes(`data-source-id="${result.originalInk[0].sourceIds[0]}"`));
       await expect(freehandTool(page.frameLocator("#editor"))).toHaveAttribute(
         "aria-pressed",
         "true",
@@ -12369,9 +8799,7 @@ describe("standalone workbench host boundary", function () {
 
   async function embeddingSnapshot(): Promise<EditorSnapshot> {
     await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-    await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-      timeout: 12000,
-    });
+    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
     return readySnapshot();
   }
 
@@ -12406,15 +8834,9 @@ describe("standalone workbench host boundary", function () {
           .getByRole("dialog", { name: "Freehand result" })
           .getByRole("button", { name: "Accept", exact: true })
           .click();
-        await expect(
-          frame.getByRole("dialog", { name: "Freehand result" }),
-        ).toHaveCount(0);
-        await page
-          .getByRole("button", { name: "Copy current source", exact: true })
-          .click();
-        await expect(page.getByLabel("Authored source")).toHaveValue(
-          /workbench-ink:/,
-        );
+        await expect(frame.getByRole("dialog", { name: "Freehand result" })).toHaveCount(0);
+        await page.getByRole("button", { name: "Copy current source", exact: true }).click();
+        await expect(page.getByLabel("Authored source")).toHaveValue(/workbench-ink:/);
         await fitDiagram(frame, input);
         const drawn = await embeddingSnapshot();
         assert.equal(drawn.originalInk.length, 1);
@@ -12422,10 +8844,7 @@ describe("standalone workbench host boundary", function () {
           drawn.originalInk[0].stroke.samples.length >= 22,
           "Palm contact must not replace the pen drag",
         );
-        await expect(freehandTool(frame)).toHaveAttribute(
-          "aria-pressed",
-          "true",
-        );
+        await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
         await input.touch([
           { x, y },
           { x: x + 55, y: y + 35 },
@@ -12438,13 +8857,8 @@ describe("standalone workbench host boundary", function () {
         await input.pinch({ x: x + 40, y }, 80, 140);
         const pinched = await embeddingSnapshot();
         assert.equal(pinched.source, drawn.source);
-        assert.ok(
-          pinched.state.viewport.scale > beforePinch.state.viewport.scale,
-        );
-        await expect(freehandTool(frame)).toHaveAttribute(
-          "aria-pressed",
-          "true",
-        );
+        assert.ok(pinched.state.viewport.scale > beforePinch.state.viewport.scale);
+        await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
         await storyScreenshot(page, `palm-pan-pinch-${tablet.name}`);
       },
     );
@@ -12473,18 +8887,12 @@ describe("standalone workbench host boundary", function () {
         .fill(
           String.raw`\begin{tikzpicture}\node at (0,0) {\includegraphics[width=4cm]{image-resource.svg}};\end{tikzpicture}`,
         );
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
-      await expect(page.locator("#status")).toHaveText("Loaded", {
-        timeout: 15000,
-      });
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
+      await expect(page.locator("#status")).toHaveText("Loaded", { timeout: 15000 });
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
       await expect.poll(() => exporting).toBe(true);
       await expect(page.locator("#status")).toHaveText("Awaiting snapshot");
-      await page
-        .getByRole("button", { name: "Cancel snapshot", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Cancel snapshot", exact: true }).click();
       await expect(page.locator("#status")).toHaveText("Snapshot failed");
       const cancelled = await snapshotResult();
       assert.ok(
@@ -12493,14 +8901,10 @@ describe("standalone workbench host boundary", function () {
       );
       const next = String.raw`\begin{tikzpicture}\draw[red] (0,0) rectangle (3,2);\end{tikzpicture}`;
       await page.getByLabel("Authored source").fill(next);
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
       release();
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const accepted = await readySnapshot();
       assert.equal(accepted.source, next);
       assert.ok(accepted.svg.includes("85.358"));
@@ -12540,9 +8944,7 @@ describe("standalone workbench host boundary", function () {
         originalScale!,
       );
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const saved = await readySnapshot();
       assert.equal(saved.state.tool, "addFreehand");
       const displayedCircle = frame.locator(
@@ -12553,13 +8955,9 @@ describe("standalone workbench host boundary", function () {
       await page.reload();
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByLabel("Saved snapshot").fill(JSON.stringify(saved));
-      await page
-        .getByRole("button", { name: "Load snapshot", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", {
-        timeout: 12000,
-      });
+      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
       const restored = await readySnapshot();
       assert.deepEqual(restored.state, saved.state);
       await expect(freehandTool(page.frameLocator("#editor"))).toHaveAttribute(
@@ -12567,9 +8965,7 @@ describe("standalone workbench host boundary", function () {
         "true",
       );
       assert.equal(
-        await frame
-          .locator("[data-canvas-scale]")
-          .getAttribute("data-canvas-scale"),
+        await frame.locator("[data-canvas-scale]").getAttribute("data-canvas-scale"),
         String(saved.state.viewport.scale),
       );
       await expect
@@ -12578,10 +8974,7 @@ describe("standalone workbench host boundary", function () {
           return after && before
             ? Math.max(
                 ...["x", "y", "width", "height"].map((key) =>
-                  Math.abs(
-                    after[key as keyof typeof after] -
-                      before[key as keyof typeof before],
-                  ),
+                  Math.abs(after[key as keyof typeof after] - before[key as keyof typeof before]),
                 ),
               )
             : Infinity;
@@ -12612,16 +9005,10 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`;
       const frame = page.frameLocator("#editor");
       const hostSource = page.getByLabel("Authored source");
-      const strokes = (source: string) =>
-        (source.match(/^[ \t]*% workbench-ink:/gm) ?? []).length;
+      const strokes = (source: string) => (source.match(/^[ \t]*% workbench-ink:/gm) ?? []).length;
       const draw = async (across: number, down: number) => {
-        const bounds = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
-        await page.mouse.move(
-          bounds.x + bounds.width * across,
-          bounds.y + bounds.height * down,
-        );
+        const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await page.mouse.move(bounds.x + bounds.width * across, bounds.y + bounds.height * down);
         await page.mouse.down();
         await page.mouse.move(
           bounds.x + bounds.width * across + 100,
@@ -12631,22 +9018,16 @@ describe("standalone workbench host boundary", function () {
         await page.mouse.up();
         // Accepting the offered fit makes it a history step after the recorded stroke.
         const result = frame.getByRole("dialog", { name: "Freehand result" });
-        await result
-          .getByRole("button", { name: "Accept", exact: true })
-          .click();
+        await result.getByRole("button", { name: "Accept", exact: true }).click();
         await expect(result).toHaveCount(0);
       };
-      const undo = () =>
-        frame.getByRole("button", { name: "Undo", exact: true }).click();
-      const redo = () =>
-        frame.getByRole("button", { name: "Redo", exact: true }).click();
+      const undo = () => frame.getByRole("button", { name: "Undo", exact: true }).click();
+      const redo = () => frame.getByRole("button", { name: "Redo", exact: true }).click();
 
       await page.goto(`${url}embedding.html`);
       await expect(page.locator("#status")).toHaveText("Loaded");
       await hostSource.fill(authored);
-      await page
-        .getByRole("button", { name: "Load source", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
       const loaded = await hostSnapshot();
       assert.equal(loaded.source, authored);
       assert.equal(loaded.revision, 2);
@@ -12658,37 +9039,28 @@ describe("standalone workbench host boundary", function () {
       const drawn = await hostSource.inputValue();
       assert.equal(strokes(drawn), 1);
       for (const line of authored.split("\n")) {
-        assert.ok(
-          drawn.includes(line),
-          `The drawn source lost the authored line ${line}:\n${drawn}`,
-        );
+        assert.ok(drawn.includes(line), `The drawn source lost the authored line ${line}:\n${drawn}`);
       }
       const accepted = await hostSnapshot();
       assert.equal(accepted.source, drawn);
       assert.equal(accepted.revision, loaded.revision);
-      assert.notEqual(
-        accepted.svg,
-        loaded.svg,
-        "The snapshot does not show the drawn stroke",
-      );
+      assert.notEqual(accepted.svg, loaded.svg, "The snapshot does not show the drawn stroke");
 
       // A load the host sent before this drawing does not replace it.
       await page.evaluate(
         ({ sessionId, source }) => {
-          document
-            .querySelector<HTMLIFrameElement>("#editor")!
-            .contentWindow!.postMessage(
-              {
-                action: "load",
-                sessionId,
-                revision: 1,
-                requestId: crypto.randomUUID(),
-                fileName: "fixture.tikz",
-                autosave: 0,
-                source,
-              },
-              location.origin,
-            );
+          document.querySelector<HTMLIFrameElement>("#editor")!.contentWindow!.postMessage(
+            {
+              action: "load",
+              sessionId,
+              revision: 1,
+              requestId: crypto.randomUUID(),
+              fileName: "fixture.tikz",
+              autosave: 0,
+              source,
+            },
+            location.origin,
+          );
         },
         {
           sessionId: accepted.sessionId,
@@ -12709,12 +9081,8 @@ describe("standalone workbench host boundary", function () {
       await redo();
       await redo();
       await expect(hostSource).toHaveValue(drawn);
-      await page
-        .getByRole("button", { name: "Copy current source", exact: true })
-        .click();
-      await expect
-        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-        .toBe(drawn);
+      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(drawn);
       const redone = await hostSnapshot();
       assert.equal(redone.source, drawn);
       assert.equal(redone.svg, accepted.svg);
@@ -12726,9 +9094,7 @@ describe("standalone workbench host boundary", function () {
       });
       await page.getByRole("button", { name: "Snapshot", exact: true }).click();
       await expect.poll(() => exporting).toBe(true);
-      await page
-        .getByRole("button", { name: "Cancel snapshot", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Cancel snapshot", exact: true }).click();
       await expect(page.locator("#status")).toHaveText("Snapshot failed");
       const cancelled = await snapshotResult();
       assert.ok(
@@ -12748,32 +9114,22 @@ describe("standalone workbench host boundary", function () {
       await page.reload();
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByLabel("Saved snapshot").fill(JSON.stringify(saved));
-      await page
-        .getByRole("button", { name: "Load snapshot", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
       const restored = await hostSnapshot();
       assert.equal(restored.source, drawn);
       assert.deepEqual(restored.state, saved.state);
       assert.equal(restored.svg, saved.svg);
       await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
       await draw(0.2, 0.45);
-      await expect
-        .poll(async () => strokes(await hostSource.inputValue()))
-        .toBe(2);
+      await expect.poll(async () => strokes(await hostSource.inputValue())).toBe(2);
       await expect(hostSource).toHaveValue(/\.\. controls[\s\S]*\.\. controls/);
       const continued = await hostSnapshot();
       assert.equal(continued.source, await hostSource.inputValue());
       assert.ok(
-        continued.source.includes(
-          drawn.slice(0, drawn.lastIndexOf("\\end{tikzpicture}")),
-        ),
+        continued.source.includes(drawn.slice(0, drawn.lastIndexOf("\\end{tikzpicture}"))),
         `The first stroke changed:\n${continued.source}`,
       );
-      assert.notEqual(
-        continued.svg,
-        saved.svg,
-        "The snapshot does not show the second stroke",
-      );
+      assert.notEqual(continued.svg, saved.svg, "The snapshot does not show the second stroke");
       await undo();
       await undo();
       await expect(hostSource).toHaveValue(drawn);
@@ -12789,41 +9145,20 @@ describe("standalone workbench host boundary", function () {
       const frame = page.frameLocator("#editor");
       const hostSource = page.getByLabel("Authored source");
       const authored = await hostSource.inputValue();
-      const body = authored.slice(
-        0,
-        authored.lastIndexOf("\\end{tikzpicture}"),
-      );
-      assert.ok(
-        body.endsWith(";\n"),
-        "The fixture's last authored line ends before the closing line",
-      );
+      const body = authored.slice(0, authored.lastIndexOf("\\end{tikzpicture}"));
+      assert.ok(body.endsWith(";\n"), "The fixture's last authored line ends before the closing line");
       await freehandTool(frame).click();
-      const bounds = (await frame
-        .locator('[data-canvas-viewport="true"]')
-        .boundingBox())!;
-      await page.mouse.move(
-        bounds.x + bounds.width * 0.2,
-        bounds.y + bounds.height * 0.25,
-      );
+      const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await page.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.25);
       await page.mouse.down();
-      await page.mouse.move(
-        bounds.x + bounds.width * 0.2 + 100,
-        bounds.y + bounds.height * 0.25 + 30,
-        {
-          steps: 12,
-        },
-      );
+      await page.mouse.move(bounds.x + bounds.width * 0.2 + 100, bounds.y + bounds.height * 0.25 + 30, {
+        steps: 12,
+      });
       await page.mouse.up();
       await expect(hostSource).toHaveValue(/% workbench-ink-end:/);
       const drawn = await hostSource.inputValue();
-      const record = drawn.slice(
-        body.length,
-        drawn.lastIndexOf("\\end{tikzpicture}"),
-      );
-      assert.ok(
-        drawn.startsWith(body),
-        `The authored lines changed:\n${drawn}`,
-      );
+      const record = drawn.slice(body.length, drawn.lastIndexOf("\\end{tikzpicture}"));
+      assert.ok(drawn.startsWith(body), `The authored lines changed:\n${drawn}`);
       // The record's lines are the opening record, the scope, its drawing, and the closing record: none blank, none indented.
       const lines = record.split("\n");
       assert.equal(lines.pop(), "", "The record ends its last line");
@@ -12841,20 +9176,12 @@ describe("standalone workbench host boundary", function () {
   it("copies a just-finished canvas edit before the throttled source notification", async function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
-    const box = (await frame
-      .locator('[data-canvas-viewport="true"]')
-      .boundingBox())!;
+    const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     await page.mouse.move(box.x + box.width / 3, box.y + box.height / 2);
     await page.mouse.down();
-    await page.mouse.move(
-      box.x + box.width / 3 + 110,
-      box.y + box.height / 2 + 25,
-      { steps: 12 },
-    );
+    await page.mouse.move(box.x + box.width / 3 + 110, box.y + box.height / 2 + 25, { steps: 12 });
     await page.mouse.up();
-    await page
-      .getByRole("button", { name: "Copy source", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Copy source", exact: true }).click();
     await expect(page.locator(".cm-content")).toContainText("workbench-ink:");
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -12869,60 +9196,33 @@ describe("standalone workbench host boundary", function () {
       { viewport: { width, height: 1024 } },
       `edits a Quiver diagram and retains source and selection across views at ${width}px`,
       async function () {
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
         await page.locator(".cm-content").fill(authored);
-        await page
-          .getByRole("button", { name: "Quiver: right sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
         await expect(
-          page.getByRole("button", {
-            name: "Quiver: right sidebar",
-            exact: true,
-          }),
+          page.getByRole("button", { name: "Quiver: right sidebar", exact: true }),
         ).toHaveAttribute("aria-pressed", "true");
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Preview: right sidebar", exact: true })
-          .click();
-        await expect(page.locator(".tikz-view-status")).toContainText(
-          "Up to date",
-          {
-            timeout: 30000,
-          },
-        );
+        await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+        await expect(page.locator(".tikz-view-status")).toContainText("Up to date", {
+          timeout: 30000,
+        });
         assert.equal(await page.locator(".cm-content").innerText(), authored);
-        await page
-          .getByRole("button", { name: "Quiver: right sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
         if (width === 768) {
-          await page
-            .getByRole("button", { name: "Code: left sidebar", exact: true })
-            .click();
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         }
-        const frame = page.frameLocator(
-          'iframe[title="Quiver diagram editor"]',
-        );
+        const frame = page.frameLocator('iframe[title="Quiver diagram editor"]');
         await frame.locator(".vertex").nth(1).click();
         await frame.locator(".label-input").fill("C");
         await expect(page.locator(".cm-content")).toContainText("C");
-        await page
-          .getByRole("button", { name: "Preview: right sidebar", exact: true })
-          .click();
-        await expect(page.locator(".tikz-view-status")).toContainText(
-          "Up to date",
-          {
-            timeout: 30000,
-          },
-        );
-        await page.screenshot({
-          path: `test-results/workbench/quiver-render-${width}.png`,
+        await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+        await expect(page.locator(".tikz-view-status")).toContainText("Up to date", {
+          timeout: 30000,
         });
-        await page
-          .getByRole("button", { name: "Quiver: right sidebar", exact: true })
-          .click();
+        await page.screenshot({ path: `test-results/workbench/quiver-render-${width}.png` });
+        await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
         await expect(frame.locator(".label-input")).toHaveValue("C");
         await frame.locator(".label-input").press("Control+z");
         await expect(frame.locator(".vertex").nth(1)).toContainText("B");
@@ -12938,28 +9238,14 @@ describe("standalone workbench host boundary", function () {
 
   async function authorAndRender(width: number, height: number): Promise<void> {
     await editorReady(page);
-    await page
-      .getByRole("button", { name: "Code: left sidebar", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     await page.locator(".cm-content").fill(renderSwitchAuthored);
     await editorReady(page);
-    await page
-      .getByRole("button", { name: "Preview: right sidebar", exact: true })
-      .click();
-    await expect(page.locator(".tikz-view-status")).toContainText(
-      "Up to date",
-      { timeout: 40000 },
-    );
-    assert.equal(
-      await page.locator(".cm-content").innerText(),
-      renderSwitchAuthored,
-    );
-    await page.screenshot({
-      path: `test-results/workbench/rendered-${width}x${height}.png`,
-    });
-    await page
-      .getByRole("button", { name: "Canvas: right sidebar", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+    await expect(page.locator(".tikz-view-status")).toContainText("Up to date", { timeout: 40000 });
+    assert.equal(await page.locator(".cm-content").innerText(), renderSwitchAuthored);
+    await page.screenshot({ path: `test-results/workbench/rendered-${width}x${height}.png` });
+    await page.getByRole("button", { name: "Canvas: right sidebar", exact: true }).click();
   }
 
   story(
@@ -12967,29 +9253,18 @@ describe("standalone workbench host boundary", function () {
     "retains authored source and its drawing tool through rendered-view switches with a desktop mouse",
     async function () {
       await authorAndRender(1280, 1024);
-      const viewport = editorFrame(page).locator(
-        '[data-canvas-viewport="true"]',
-      );
+      const viewport = editorFrame(page).locator('[data-canvas-viewport="true"]');
       const bounds = (await viewport.boundingBox())!;
-      await page.mouse.move(
-        bounds.x + bounds.width / 3,
-        bounds.y + bounds.height / 2,
-      );
+      await page.mouse.move(bounds.x + bounds.width / 3, bounds.y + bounds.height / 2);
       await page.mouse.down();
-      await page.mouse.move(
-        bounds.x + bounds.width / 3 + 100,
-        bounds.y + bounds.height / 2 + 25,
-        {
-          steps: 16,
-        },
-      );
+      await page.mouse.move(bounds.x + bounds.width / 3 + 100, bounds.y + bounds.height / 2 + 25, {
+        steps: 16,
+      });
       await page.mouse.up();
       await expect(page.locator(".cm-content")).toContainText("workbench-ink:");
       await viewport.press("Control+z");
       await viewport.press("Control+z");
-      await expect
-        .poll(() => page.locator(".cm-content").innerText())
-        .toBe(renderSwitchAuthored);
+      await expect.poll(() => page.locator(".cm-content").innerText()).toBe(renderSwitchAuthored);
     },
   );
 
@@ -13001,36 +9276,22 @@ describe("standalone workbench host boundary", function () {
         await authorAndRender(tablet.width, tablet.height);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        await expect(freehandTool(frame)).toHaveAttribute(
-          "aria-pressed",
-          "true",
-        );
-        const bounds = (await frame
-          .locator('[data-canvas-viewport="true"]')
-          .boundingBox())!;
+        await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
+        const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const before = (await editorDebug(page)).historyIndex;
         await input.penStroke(waveAcross(bounds, 0.45, 0.5, 100));
         await frame
           .getByRole("dialog", { name: "Freehand result" })
           .getByRole("button", { name: "Accept", exact: true })
           .click();
-        await expect(page.locator(".cm-content")).toContainText(
-          "workbench-ink:",
-        );
-        await expect(freehandTool(frame)).toHaveAttribute(
-          "aria-pressed",
-          "true",
-        );
+        await expect(page.locator(".cm-content")).toContainText("workbench-ink:");
+        await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
         const strokeEdits = (await editorDebug(page)).historyIndex - before;
         assert.ok(strokeEdits > 0, "The stroke is an undoable edit");
         for (let i = 0; i < strokeEdits; i++) {
-          await frame
-            .getByRole("button", { name: "Undo", exact: true })
-            .click();
+          await frame.getByRole("button", { name: "Undo", exact: true }).click();
         }
-        await expect
-          .poll(() => page.locator(".cm-content").innerText())
-          .toBe(renderSwitchAuthored);
+        await expect.poll(() => page.locator(".cm-content").innerText()).toBe(renderSwitchAuthored);
       },
     );
   }
@@ -13044,13 +9305,9 @@ describe("standalone workbench host boundary", function () {
 % retain authored source through an interruption
 \draw (1,2) -- (4,5);
 \end{tikzpicture}`;
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await page.locator(".cm-content").fill(authored);
-        await expect(page.locator(".tikz-standalone-status")).toContainText(
-          "Recovery saved",
-        );
+        await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
         const persistentHome = workbench.configHome;
         await page.goto("about:blank");
         await workbench.stop();
@@ -13058,26 +9315,10 @@ describe("standalone workbench host boundary", function () {
         url = workbench.url;
         await page.goto(url);
         await editorReady(page);
-        await page
-          .getByRole("button", { name: "Code: left sidebar", exact: true })
-          .click();
-        await expect
-          .poll(() =>
-            page
-              .locator(".cm-line")
-              .evaluateAll((lines) =>
-                lines.map((line) => line.textContent).join("\n"),
-              ),
-          )
-          .toBe(authored);
-        await expect(
-          page
-            .frameLocator('iframe[title="TikZ visual editor"]')
-            .locator("path[data-source-id]"),
-        ).toHaveCount(1);
-        await expect(page.locator(".tikz-standalone-status")).toContainText(
-          "Recovery saved",
-        );
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(authored);
+        await expect(page.frameLocator('iframe[title="TikZ visual editor"]').locator("path[data-source-id]")).toHaveCount(1);
+        await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
       },
     );
   }
