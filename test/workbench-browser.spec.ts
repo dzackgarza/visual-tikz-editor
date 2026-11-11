@@ -8631,6 +8631,43 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    { initialPage: "blank" },
+    "writes a drawn stroke's record on whole lines directly after the authored lines",
+    async function () {
+      await page.goto(`${url}embedding.html`);
+      await expect(page.locator("#status")).toHaveText("Loaded");
+      const frame = page.frameLocator("#editor");
+      const hostSource = page.getByLabel("Authored source");
+      const authored = await hostSource.inputValue();
+      const body = authored.slice(0, authored.lastIndexOf("\\end{tikzpicture}"));
+      assert.ok(body.endsWith(";\n"), "The fixture's last authored line ends before the closing line");
+      await freehandTool(frame).click();
+      const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await page.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.25);
+      await page.mouse.down();
+      await page.mouse.move(bounds.x + bounds.width * 0.2 + 100, bounds.y + bounds.height * 0.25 + 30, {
+        steps: 12,
+      });
+      await page.mouse.up();
+      await expect(hostSource).toHaveValue(/% workbench-ink-end:/);
+      const drawn = await hostSource.inputValue();
+      const record = drawn.slice(body.length, drawn.lastIndexOf("\\end{tikzpicture}"));
+      assert.ok(drawn.startsWith(body), `The authored lines changed:\n${drawn}`);
+      // The record's lines are the opening record, the scope, its drawing, and the closing record: none blank, none indented.
+      const lines = record.split("\n");
+      assert.equal(lines.pop(), "", "The record ends its last line");
+      assert.deepEqual(
+        lines.filter((line) => line === "" || /^[ \t]/.test(line)),
+        [],
+        `The record has a blank or indented line:\n${record}`,
+      );
+      assert.match(lines[0], /^% workbench-ink:/);
+      assert.equal(lines[1], "\\begin{scope}");
+      assert.match(lines[lines.length - 1], /^% workbench-ink-end:/);
+    },
+  );
+
   it("copies a just-finished canvas edit before the throttled source notification", async function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
