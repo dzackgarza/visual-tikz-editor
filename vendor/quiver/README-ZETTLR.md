@@ -21,6 +21,9 @@ The fork boundary is intentionally narrow:
   mode, and the web import/export/share panes are not exposed.
 - Quiver's generated round-trip URL comment is removed before source is written
   back to Markdown; the Markdown `tikzcd` environment is the source of truth.
+- The host returns the imported bytes whenever Quiver's export equals its
+  export of the diagram as imported. A history step back to the loaded diagram
+  therefore restores the document's authored source.
 
 Macro consistency has an explicit boundary. The host receives the user's typed
 MathJax macro map plus simple one-line declarations from the same maintained

@@ -27,6 +27,9 @@ const host_origin = new URL(document.referrer).origin;
 let session_id = null;
 let revision = 0;
 let current_source = "";
+// The bytes Quiver last imported, and Quiver's own export of that diagram.
+let loaded_source = "";
+let loaded_export = null;
 let source_dirty = false;
 let suppress_change = false;
 let emit_timer = null;
@@ -82,6 +85,8 @@ function load_source(source, macros, theme) {
     if (emit_timer !== null) clearTimeout(emit_timer);
     emit_timer = null;
     current_source = source;
+    loaded_source = source;
+    loaded_export = null;
     source_dirty = false;
     suppress_change = true;
     try {
@@ -97,6 +102,7 @@ function load_source(source, macros, theme) {
             ui.switch_theme(theme);
         }
         const { diagnostics } = ui.quiver.import(ui, "tikz-cd", source, ui.settings);
+        loaded_export = export_source();
         post({
             type: "zettlr-quiver:loaded",
             diagnostics: serialise_diagnostics(diagnostics),
@@ -113,7 +119,10 @@ function load_source(source, macros, theme) {
 
 function read_source() {
     if (source_dirty) {
-        current_source = export_source();
+        // A history step back to the imported diagram returns the document's own
+        // bytes, not Quiver's rewrite of them.
+        const exported = export_source();
+        current_source = exported === loaded_export ? loaded_source : exported;
         source_dirty = false;
     }
     return current_source;
