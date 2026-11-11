@@ -2780,6 +2780,111 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `carries one two-figure document through edits in each figure, the whole history, and a TeX compile in ${tablet.name}`,
+      async function () {
+        const firstAuthored = String.raw`\begin{tikzpicture}
+% the first figure
+\draw (1,1) -- (4,1);
+\end{tikzpicture}`;
+        const secondAuthored = String.raw`\begin{tikzpicture}
+% the second figure
+\draw (2,2) rectangle (6,5);
+\end{tikzpicture}`;
+        const authored = `${firstAuthored}\n\n${secondAuthored}`;
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const source = async () => (await editorDebug(page)).source;
+        const steps: string[] = [authored];
+        const last = () => steps[steps.length - 1];
+        const step = async (message: string) => {
+          await expect.poll(source, { message }).not.toBe(last());
+          steps.push(await source());
+        };
+        // Each figure's text: the first ends at the first \end{tikzpicture}.
+        const figures = (text: string) => {
+          const cut = text.indexOf("\\end{tikzpicture}") + "\\end{tikzpicture}".length;
+          return [text.slice(0, cut), text.slice(cut)];
+        };
+        await expect.poll(source).toBe(authored);
+
+        // A line constructed in the first figure leaves the second figure's text as written.
+        await tap(frame.getByRole("button", { name: "Figure 1", exact: true }));
+        await fitDiagram(frame, input);
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Line", exact: true }));
+        const lineY = viewport.y + viewport.height * 0.25;
+        const lineFrom = viewport.x + viewport.width * 0.2;
+        await input.penStroke([
+          { x: lineFrom, y: lineY },
+          { x: lineFrom + 160, y: lineY },
+        ]);
+        await step("The constructed line is not in the source");
+        assert.equal(figures(last())[1], `\n\n${secondAuthored}`, last());
+        assert.equal((figures(last())[0].match(/\\draw[^;]*--[^;]*;/g) ?? []).length, 2, last());
+        const firstWithLine = figures(last())[0];
+
+        // The second figure's rectangle takes a stroke color and a bucket fill; the first figure stays as it was.
+        await tap(frame.getByRole("button", { name: "Figure 2", exact: true }));
+        await fitDiagram(frame, input);
+        const rectangle = frame.locator("svg [data-source-id]").first();
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
+        await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+        await tap(rail.getByRole("button", { name: "Use red" }));
+        await step("The stroke color is not in the source");
+        await tap(rail.getByRole("button", { name: "Bucket", exact: true }));
+        await tap(rail.getByRole("button", { name: "Use blue" }));
+        const box = (await rectangle.boundingBox())!;
+        await input.penStroke([{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]);
+        await step("The fill is not in the source");
+        assert.equal(figures(last())[0], firstWithLine, last());
+        assert.match(figures(last())[1], /\\draw\[red, fill=blue\] \(2,2\) rectangle \(6,5\);/);
+        const secondEdited = figures(last())[1];
+
+        // Back in the first figure, the authored line is deleted; the second figure keeps its edits.
+        await tap(frame.getByRole("button", { name: "Figure 1", exact: true }));
+        await fitDiagram(frame, input);
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5)]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await tap(strip.getByRole("button", { name: "More", exact: true }));
+        await tap(frame.getByRole("menu").first().getByRole("menuitem", { name: "Delete", exact: true }));
+        await step("The deleted line is still in the source");
+        const final = last();
+        assert.ok(!figures(final)[0].includes("\\draw (1,1) -- (4,1);"), final);
+        assert.ok(figures(final)[0].includes("% the first figure"), final);
+        assert.equal(figures(final)[1], secondEdited, final);
+
+        // Undo walks back through every step of both figures to the authored bytes; Redo walks forward.
+        for (const earlier of steps.slice(0, -1).reverse()) {
+          await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+          await expect.poll(source, { message: "Undo did not restore the step before" }).toBe(earlier);
+        }
+        for (const later of steps.slice(1)) {
+          await tap(rail.getByRole("button", { name: "Redo", exact: true }));
+          await expect.poll(source, { message: "Redo did not restore the step after" }).toBe(later);
+        }
+
+        // TeX compiles the session's document.
+        await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+        await expect(page.locator(".tikz-view-status")).toContainText("Up to date", { timeout: 40000 });
+        assert.ok((await page.locator(".tikz-figure-viewer-source").first().getAttribute("src")) !== null);
+        assert.equal(await source(), final);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `fits a stroke with anchors a pen can pick apart, also at its slow, hooked, and snapped ends, in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
@@ -9243,6 +9348,57 @@ describe("standalone workbench host boundary", function () {
         await expect(frame.locator(".label-input")).toHaveValue("C");
         await frame.locator(".label-input").press("Control+z");
         await expect(frame.locator(".vertex").nth(1)).toContainText("B");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `carries one Quiver diagram through two relabelled vertices, a TeX compile, view switches, and the whole history in ${tablet.name}`,
+      async function () {
+        const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
+        await expect(page.getByRole("button", { name: "Quiver: right sidebar", exact: true })).toHaveAttribute("aria-pressed", "true");
+        const code = () => page.locator(".cm-content").innerText();
+        const frame = page.frameLocator('iframe[title="Quiver diagram editor"]');
+        const input = await TabletInput.attach(page);
+        const vertex = (index: number) => frame.locator(".vertex").nth(index);
+        await expect(vertex(1)).toContainText("B");
+        const relabel = async (index: number, label: string) => {
+          await input.touch([await stableCenter(vertex(index))]);
+          await frame.locator(".label-input").fill(label);
+          await expect.poll(code).toContain(label);
+          return code();
+        };
+        const first = await relabel(1, "C");
+        const second = await relabel(0, "D");
+        assert.match(second, /^\\begin\{tikzcd\}\s*D & C\s*\\arrow\["f", from=1-1, to=1-2\]\s*\\end\{tikzcd\}$/);
+
+        // TeX compiles the edited diagram, and the edit survives the view switches.
+        await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+        await expect(page.locator(".tikz-view-status")).toContainText("Up to date", { timeout: 40000 });
+        assert.equal(await code(), second);
+        await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
+        await expect(vertex(0)).toContainText("D");
+        await expect(vertex(1)).toContainText("C");
+
+        // Quiver owns this history: its Undo walks back to the authored diagram in Quiver's own form,
+        // and its Redo walks forward to the final source.
+        const press = async (name: "undo" | "redo", message: string, restored: (text: string) => boolean) => {
+          await input.touch([await stableCenter(frame.locator(`.action[data-name="${name}"]`))]);
+          await expect.poll(async () => restored(await code()), { message }).toBe(true);
+        };
+        await press("undo", "Undo did not restore the first relabel", (text) => text === first);
+        await press("undo", "Undo did not restore the authored diagram", (text) =>
+          /^\\begin\{tikzcd\}\s*A & B\s*\\arrow\["f", from=1-1, to=1-2\]\s*\\end\{tikzcd\}$/.test(text),
+        );
+        await expect(vertex(1)).toContainText("B");
+        await press("redo", "Redo did not restore the first relabel", (text) => text === first);
+        await press("redo", "Redo did not restore the second relabel", (text) => text === second);
+        await expect(vertex(0)).toContainText("D");
       },
     );
   }
