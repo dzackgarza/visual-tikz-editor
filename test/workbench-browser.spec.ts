@@ -2418,6 +2418,129 @@ describe("standalone workbench host boundary", function () {
 
   for (const tablet of TABLET_VIEWPORTS) {
     story(
+      { viewport: tablet, initialPage: "blank" },
+      `carries one offline pen session through a fitted stroke, a constructed line, a deletion, an erasure, and the whole history in ${tablet.name}`,
+      async function () {
+        const external: string[] = [];
+        await context.route("**/*", (route) => {
+          if (new URL(route.request().url()).origin === new URL(url).origin) {
+            return route.continue();
+          }
+          external.push(route.request().url());
+          return route.abort();
+        });
+        await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+        const authored = String.raw`\begin{tikzpicture}
+% a comment the editor must keep
+\draw[blue] (0,0) rectangle (2,1);
+\draw[red] (0,-1) -- (2,-1.5);
+\end{tikzpicture}`;
+        await page.goto(url);
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        const source = async () => (await editorDebug(page)).source;
+        const redLine = frame.locator('svg [data-source-id="path:1"]').first();
+        await expect(redLine).toBeVisible();
+        await expect.poll(source).toBe(authored);
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        const steps: string[] = [authored];
+        const step = async (message: string) => {
+          await expect.poll(source, { message }).not.toBe(last());
+          steps.push(await source());
+        };
+        const last = () => steps[steps.length - 1];
+        const strokeRecords = (text: string) => (text.match(/^% workbench-ink:/gm) ?? []).length;
+        const fitShown = (text: string) => text.includes(".. controls");
+        const press = async (name: "Undo" | "Redo", message: string, expected: string) => {
+          await tap(rail.getByRole("button", { name, exact: true }));
+          await expect.poll(source, { message }).toBe(expected);
+        };
+
+        // A pen stroke shows its fit as a preview; accepting it makes the fit a history step after the stroke.
+        await tap(rail.getByRole("button", { name: "Freehand", exact: true }));
+        await input.penStroke(waveAcross(viewport, 0.15, 0.12, 140));
+        const result = frame.getByRole("dialog", { name: "Freehand result" });
+        await expect(result).toBeVisible();
+        await tap(result.getByRole("button", { name: "Accept", exact: true }));
+        await expect(result).toHaveCount(0);
+        await step("The accepted fit is not in the source");
+        assert.match(last(), /\.\. controls/);
+
+        // A line placed with the Line tool.
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Line", exact: true }));
+        const lineY = viewport.y + viewport.height * 0.25;
+        const lineFrom = viewport.x + viewport.width * 0.15;
+        await input.penStroke([
+          { x: lineFrom, y: lineY },
+          { x: lineFrom + 160, y: lineY },
+        ]);
+        await step("The constructed line is not in the source");
+        const lines = (text: string) => (text.match(/\\draw[^;]*--[^;]*;/g) ?? []).length;
+        assert.equal(lines(last()), 2);
+
+        // The authored red line, picked with the pen and deleted from the selection strip's menu.
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await input.penStroke([await strokePoint(page, redLine, 0.5)]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
+        await tap(
+          frame
+            .getByRole("toolbar", { name: "Selection", exact: true })
+            .getByRole("button", { name: "More", exact: true }),
+        );
+        await tap(
+          frame.getByRole("menu").first().getByRole("menuitem", { name: "Delete", exact: true }),
+        );
+        await step("The deleted line is still in the source");
+        assert.ok(!last().includes("\\draw[red]"), last());
+
+        // An eraser sweep across the constructed line cuts it in two.
+        await tap(rail.getByRole("button", { name: "Eraser", exact: true }));
+        await input.penStroke(
+          Array.from({ length: 9 }, (_, i) => ({ x: lineFrom + 80, y: lineY - 20 + i * 5 })),
+        );
+        await step("The eraser sweep did not change the source");
+        const final = last();
+        assert.equal(lines(final), 2, `The swept line is not two lines:\n${final}`);
+        for (const kept of ["% a comment the editor must keep", "\\draw[blue] (0,0) rectangle (2,1);"]) {
+          assert.ok(final.includes(kept), `The session lost the authored line ${kept}:\n${final}`);
+        }
+        const finalPicture = await frame.locator("svg [data-source-id]").count();
+
+        // Undo walks back through every step to the authored bytes; Redo walks forward to the final source.
+        for (const earlier of steps.slice(1, -1).reverse()) {
+          await press("Undo", "Undo did not restore the step before", earlier);
+        }
+        // Under the fit lies the stroke as drawn, then the authored source.
+        await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+        await expect
+          .poll(async () => [strokeRecords(await source()), fitShown(await source())], {
+            message: "Undo did not restore the stroke as drawn",
+          })
+          .toEqual([1, false]);
+        const asDrawn = await source();
+        await press("Undo", "Undo did not restore the authored source", authored);
+        await press("Redo", "Redo did not restore the stroke as drawn", asDrawn);
+        for (const later of steps.slice(1)) {
+          await press("Redo", "Redo did not restore the step after", later);
+        }
+        await expect(frame.locator("svg [data-source-id]")).toHaveCount(finalPicture);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.getByRole("button", { name: "Copy source", exact: true }).click();
+        await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(final);
+        assert.deepEqual(external, [], "The session asked for an external asset");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
       { viewport: tablet },
       `fits a stroke with anchors a pen can pick apart, also at its slow, hooked, and snapped ends, in ${tablet.name}`,
       async function () {
