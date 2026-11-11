@@ -6960,7 +6960,7 @@ index cf4cf2cf..f9ecfae9 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..6d61d05b 100644
+index 4e22ccfa..ea99e739 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -7052,7 +7052,7 @@ index 4e22ccfa..6d61d05b 100644
  } from "./freehand-tool";
 +import { editSemanticCurveNodes } from "./semantic-curve-edit";
 +import { collectEraserStrokes, ERASER_RADIUS_PX, sweptStrokeIds, type EraserStroke } from "./eraser-sweep";
-+import { cuttablePath, remainingStatements, sweepCapsule, type CuttablePath } from "./partial-erase";
++import { cuttablePath, pathStatementSpan, remainingStatements, sweepCapsule, type CuttablePath } from "./partial-erase";
 +import { OCCUPIED_INSETS_EVENT, occupiedInsets } from "./occupied-insets";
 +import { isFingerContact, POINT_HOLD_SLOP_PX, POINT_TARGET_RADIUS_PX, resolvePointTarget, type PointTargetMark } from "./point-target";
 +import freehandPopupCss from "./FreehandResultPopup.module.css";
@@ -8569,7 +8569,7 @@ index 4e22ccfa..6d61d05b 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4064,327 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4064,328 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -8708,7 +8708,8 @@ index 4e22ccfa..6d61d05b 100644
 +      baseSource: source, spans: new Map(scene?.elements.filter((element) => element.kind === "Path" || element.kind === "Circle" || element.kind === "Ellipse").map((element) => {
 +        const span = element.sourceRef.sourceSpan;
 +        const entry = inkEntries.find((item) => span.from >= item.drawingFrom && span.to <= item.drawingTo);
-+        return [element.sourceRef.sourceId, entry ? { from: entry.from, to: entry.to } : span];
++        // A circle or ellipse element spans only its own operation; the erased object is its whole statement.
++        return [element.sourceRef.sourceId, entry ? { from: entry.from, to: entry.to } : pathStatementSpan(source, element.sourceRef.sourceId, editParseOptions) ?? span];
 +      })),
 +      region: null, radius: Math.hypot(side.x - origin.x, side.y - origin.y), toWorld, cuts: new Map(),
 +      // A recorded stroke is cut when its drawing is that one statement; its pieces replace the record.
@@ -8718,7 +8719,7 @@ index 4e22ccfa..6d61d05b 100644
 +        const span = element.sourceRef.sourceSpan;
 +        const entry = inkEntries.find((item) => span.from >= item.drawingFrom && span.to <= item.drawingTo);
 +        if (entry && source.slice(entry.drawingFrom, entry.drawingTo).trim() !== source.slice(span.from, span.to).trim()) return null;
-+        return cuttablePath(source, id, handles, editParseOptions);
++        return cuttablePath(source, id, handles, editParseOptions, scene?.elements ?? []);
 +      } };
 +    dispatch({ type: "CLEAR_SELECTION" });
 +    setLockedCurveId(null);
@@ -8899,7 +8900,7 @@ index 4e22ccfa..6d61d05b 100644
    const {
      onViewportKeyDown,
      onViewportPaste,
-@@ -3306,6 +4412,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4413,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -8907,7 +8908,7 @@ index 4e22ccfa..6d61d05b 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4437,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4438,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -8932,7 +8933,7 @@ index 4e22ccfa..6d61d05b 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4555,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4556,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -8967,7 +8968,7 @@ index 4e22ccfa..6d61d05b 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4576,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4577,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -8975,7 +8976,7 @@ index 4e22ccfa..6d61d05b 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4590,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4591,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -8983,7 +8984,7 @@ index 4e22ccfa..6d61d05b 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4666,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4667,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -8992,7 +8993,7 @@ index 4e22ccfa..6d61d05b 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4711,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4712,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -9001,7 +9002,7 @@ index 4e22ccfa..6d61d05b 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4790,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4791,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -9025,7 +9026,7 @@ index 4e22ccfa..6d61d05b 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4903,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4904,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -9033,7 +9034,7 @@ index 4e22ccfa..6d61d05b 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4916,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4917,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -9041,7 +9042,7 @@ index 4e22ccfa..6d61d05b 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4927,250 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4928,250 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -9292,7 +9293,7 @@ index 4e22ccfa..6d61d05b 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5190,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5191,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -9315,7 +9316,7 @@ index 4e22ccfa..6d61d05b 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5221,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5222,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -9331,7 +9332,7 @@ index 4e22ccfa..6d61d05b 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +5247,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5248,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -9365,7 +9366,7 @@ index 4e22ccfa..6d61d05b 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5279,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5280,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -9375,7 +9376,7 @@ index 4e22ccfa..6d61d05b 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5292,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5293,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -9410,7 +9411,7 @@ index 4e22ccfa..6d61d05b 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5346,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5347,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -9418,7 +9419,7 @@ index 4e22ccfa..6d61d05b 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5355,61 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5356,61 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -11979,57 +11980,146 @@ index 00000000..c6d66e2a
 +}
 diff --git a/packages/app/src/ui/canvas-panel/partial-erase.ts b/packages/app/src/ui/canvas-panel/partial-erase.ts
 new file mode 100644
-index 00000000..3ba9062e
+index 00000000..d6cfc9a7
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/partial-erase.ts
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,293 @@
 +import type paper from "paper";
 +import type { WorldPoint } from "../coords/types";
++import type { PathStatement } from "tikz-editor/ast/types";
 +import { localToSourceUnits, worldToLocal } from "tikz-editor/edit/coords";
 +import { formatNumber } from "tikz-editor/edit/format";
-+import type { EditParseOptions } from "tikz-editor/edit/parse-options";
++import { parseTikzForEdit, type EditParseOptions } from "tikz-editor/edit/parse-options";
 +import { buildStatementText, resolveEligibleExplicitPath, resolvePathControlHandle } from "tikz-editor/edit/path-editing";
-+import { isFrameLocalCoordinateEditHandle, type EditHandle } from "tikz-editor/semantic/types";
++import { findPathStatementById } from "tikz-editor/edit/statement-find";
++import { commandsToSegments } from "tikz-editor/geometry/path-sampler";
++import { isFrameLocalCoordinateEditHandle, type EditHandle, type SceneElement, type ScenePathCommand } from "tikz-editor/semantic/types";
 +import { geometryScope } from "./paper-scope";
 +
 +/**
-+ * Partial erasing: the eraser sweep is a region of capsules in world space, and an
-+ * explicit line or cubic path keeps the parts outside it as separate statements.
-+ * The cut is paper.js boolean subtraction of the region from the open path
-+ * (`PathItem#subtract` with `trace: false`, http://paperjs.org/reference/pathitem/#subtract-path).
++ * Partial erasing: the eraser sweep is a region of capsules in world space, and a
++ * path keeps the parts outside it. The cut is paper.js boolean subtraction of the
++ * region from the open path (`PathItem#subtract` with `trace: false`,
++ * http://paperjs.org/reference/pathitem/#subtract-path).
++ *
++ * An explicit line or cubic path is rebuilt from its authored points. Any other path
++ * (circle, ellipse, arc, rectangle, plot, ...) is rebuilt from its scene geometry: a
++ * remaining part that lies on an authored circle or ellipse is written as an `arc`
++ * operation, a straight part as a line, anything else as a cubic.
 + */
 +
++type Point = { x: number; y: number };
 +type SourcePoint = { world: WorldPoint; raw: string | null };
++/** A circle or ellipse of the path in world space; `rotation` is in degrees. */
++type WorldEllipse = { center: Point; rx: number; ry: number; rotation: number };
 +
 +/** A path statement the sweep can cut: its world geometry and how to write points back in its frame. */
 +export type CuttablePath = {
 +  span: { from: number; to: number };
 +  text: (body: string) => string;
-+  sourcePoint: (world: { x: number; y: number }) => string | null;
-+  anchors: SourcePoint[];
-+  /** For each segment, its two controls, or null for a line. */
-+  controls: Array<[SourcePoint, SourcePoint] | null>;
-+  closed: boolean;
++  /** A world point in the statement's own coordinates, in source units. */
++  local: (world: Point) => Point | null;
++  /** Authored points whose source text survives a cut unchanged. */
++  kept: SourcePoint[];
++  /** The subpaths of the statement in world space. */
++  geometry: () => paper.Path[];
++  ellipses: WorldEllipse[];
++  /** Whether the remaining pieces stay one statement: true for a path of several subpaths. */
++  onePath: boolean;
 +};
 +
-+function samePoint(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
++function samePoint(a: Point, b: Point): boolean {
 +  return Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
 +}
 +
-+/** The statement `sourceId` as a cuttable path, or null when it is not an explicit line or cubic path with editable points. */
-+export function cuttablePath(source: string, sourceId: string, handles: readonly EditHandle[], parseOptions: EditParseOptions): CuttablePath | null {
++function frameLocal(frame: Parameters<typeof worldToLocal>[1]): CuttablePath["local"] {
++  return (world) => {
++    const local = worldToLocal(world as WorldPoint, frame);
++    return local ? localToSourceUnits(local) : null;
++  };
++}
++
++/** The whole source span of the path statement `sourceId`, or null when it is not a path statement. */
++export function pathStatementSpan(source: string, sourceId: string, parseOptions: EditParseOptions): { from: number; to: number } | null {
++  return findPathStatementById(parseTikzForEdit(source, parseOptions).figure.body, sourceId)?.span ?? null;
++}
++
++/** Path items whose geometry the scene path of the statement shows in full. */
++const GEOMETRY_ITEM_KINDS: ReadonlySet<PathStatement["items"][number]["kind"]> = new Set(["Coordinate", "PathOption", "PathComment", "PathKeyword", "PlotOperation", "ToOperation", "SvgOperation"]);
++
++/** The subpaths of scene commands. Scene arcs follow the SVG endpoint form in world coordinates, which paper.js reads as path data (http://paperjs.org/reference/pathitem/#pathdata). */
++function commandsPath(scope: paper.PaperScope, commands: readonly ScenePathCommand[]): paper.Path[] {
++  // The scene repeats a move to the current point after an arc; that move does not start a subpath.
++  const data = commands.filter((command, index) => {
++    const before = commands[index - 1];
++    return !(command.kind === "M" && before && before.kind !== "Z" && samePoint(before.to, command.to));
++  }).map((command) => {
++    if (command.kind === "Z") return "Z";
++    if (command.kind === "C") return `C ${command.c1.x} ${command.c1.y} ${command.c2.x} ${command.c2.y} ${command.to.x} ${command.to.y}`;
++    if (command.kind === "A") return `A ${command.rx} ${command.ry} ${command.xAxisRotation} ${command.largeArc ? 1 : 0} ${command.sweep ? 1 : 0} ${command.to.x} ${command.to.y}`;
++    return `${command.kind} ${command.to.x} ${command.to.y}`;
++  }).join(" ");
++  const compound = new scope.CompoundPath({ pathData: data, insert: false });
++  return (compound.removeChildren() as paper.Path[]).filter((item) => item.segments.length > 1);
++}
++
++/** A path statement that is not an explicit line or cubic path, cut by its scene geometry. */
++function sceneCuttablePath(source: string, sourceId: string, handles: readonly EditHandle[], parseOptions: EditParseOptions, elements: readonly SceneElement[]): CuttablePath | null {
++  const statement = findPathStatementById(parseTikzForEdit(source, parseOptions).figure.body, sourceId);
++  // Options before the first coordinate belong to the statement, not to its path.
++  const firstItem = statement?.items.find((item) => item.kind === "Coordinate"), lastItem = statement?.items.at(-1);
++  if (!statement || !firstItem || !lastItem || statement.items.some((item) => !GEOMETRY_ITEM_KINDS.has(item.kind))) return null;
++  const own = handles.filter((handle) => handle.sourceRef.sourceId === sourceId);
++  const frameHandle = own.find(isFrameLocalCoordinateEditHandle);
++  const shapes = elements.filter((element) => element.sourceRef.sourceId === sourceId && !element.adornment);
++  if (!frameHandle || shapes.length === 0 || shapes.some((element) => element.kind === "Text" || element.transform)) return null;
++  const ellipses: WorldEllipse[] = [];
++  for (const element of shapes) {
++    if (element.kind === "Circle") ellipses.push({ center: element.center, rx: element.radius, ry: element.radius, rotation: 0 });
++    else if (element.kind === "Ellipse") ellipses.push({ center: element.center, rx: element.rx, ry: element.ry, rotation: element.rotation ?? 0 });
++    else if (element.kind === "Path") for (const segment of commandsToSegments(element.undecoratedCommands ?? element.commands)) {
++      if (segment.kind === "A" && segment.arc) ellipses.push({ center: { x: segment.arc.cx, y: segment.arc.cy }, rx: segment.arc.rx, ry: segment.arc.ry, rotation: segment.arc.xAxisRotation });
++    }
++  }
++  const geometry = (): paper.Path[] => {
++    const scope = geometryScope();
++    return shapes.flatMap((element): paper.Path[] => {
++      if (element.kind === "Circle") return [new scope.Path.Circle({ center: [element.center.x, element.center.y], radius: element.radius, insert: false })];
++      if (element.kind === "Ellipse") {
++        const ellipse = new scope.Path.Ellipse({ center: [element.center.x, element.center.y], radius: [element.rx, element.ry], insert: false });
++        ellipse.rotate(element.rotation ?? 0, new scope.Point(element.center.x, element.center.y));
++        return [ellipse];
++      }
++      return element.kind === "Path" ? commandsPath(scope, element.undecoratedCommands ?? element.commands) : [];
++    });
++  };
++  return {
++    span: statement.span,
++    text: (body) => `${source.slice(statement.span.from, firstItem.span.from)}${body}${source.slice(lastItem.span.to, statement.span.to)}`,
++    local: frameLocal(frameHandle.frame),
++    // A relative coordinate depends on the point before it, so only absolute text survives a cut unchanged.
++    kept: own.filter((handle) => handle.kind === "path-point" && isFrameLocalCoordinateEditHandle(handle) && handle.rewriteMode !== "delta")
++      .map((handle) => ({ world: handle.world, raw: source.slice(handle.sourceRef.sourceSpan.from, handle.sourceRef.sourceSpan.to) })),
++    geometry,
++    ellipses,
++    onePath: geometry().length > 1
++  };
++}
++
++/** The statement `sourceId` as a cuttable path, or null when its geometry or frame cannot be written back. */
++export function cuttablePath(source: string, sourceId: string, handles: readonly EditHandle[], parseOptions: EditParseOptions, elements: readonly SceneElement[]): CuttablePath | null {
 +  const resolved = resolveEligibleExplicitPath(source, sourceId, parseOptions);
-+  if (resolved.kind !== "eligible") return null;
++  if (resolved.kind !== "eligible") return sceneCuttablePath(source, sourceId, handles, parseOptions, elements);
 +  const { analysis } = resolved;
 +  const anchorHandles = analysis.anchors.map((anchor) => handles.find((handle) => handle.kind === "path-point" &&
 +    handle.sourceRef.sourceId === sourceId && handle.sourceRef.sourceSpan.from === anchor.item.span.from && handle.sourceRef.sourceSpan.to === anchor.item.span.to));
 +  const frameHandle = anchorHandles[0];
 +  if (!frameHandle || !isFrameLocalCoordinateEditHandle(frameHandle) || anchorHandles.some((handle) => !handle)) return null;
-+  const frame = frameHandle.frame;
 +  // A relative coordinate depends on the point before it, so only absolute text survives a cut unchanged.
 +  const keep = (handle: EditHandle, raw: string): SourcePoint => ({ world: handle.world, raw: isFrameLocalCoordinateEditHandle(handle) && handle.rewriteMode !== "delta" ? raw : null });
 +  const anchors = analysis.anchors.map((anchor, index) => keep(anchorHandles[index]!, anchor.raw));
-+  const controls: CuttablePath["controls"] = [];
++  /** For each segment, its two controls, or null for a line. */
++  const controls: Array<[SourcePoint, SourcePoint] | null> = [];
 +  for (const segment of analysis.segments) {
 +    if (segment.kind === "line") { controls.push(null); continue; }
 +    const items = [segment.control1Index, segment.control2Index].map((index) => analysis.statement.items[index]);
@@ -12040,15 +12130,21 @@ index 00000000..3ba9062e
 +  return {
 +    span: analysis.statement.span,
 +    text: (body) => buildStatementText(source, analysis, body),
-+    sourcePoint: (world) => {
-+      const local = worldToLocal(world as WorldPoint, frame);
-+      if (!local) return null;
-+      const cm = localToSourceUnits(local);
-+      return `(${formatNumber(cm.x)},${formatNumber(cm.y)})`;
++    local: frameLocal(frameHandle.frame),
++    kept: [...anchors, ...controls.flatMap((pair) => pair ?? [])],
++    geometry: () => {
++      const scope = geometryScope();
++      const segments = anchors.map((anchor) => new scope.Segment(new scope.Point(anchor.world.x, anchor.world.y)));
++      controls.forEach((pair, index) => {
++        if (!pair) return;
++        const start = segments[index], end = segments[(index + 1) % segments.length];
++        start.handleOut = new scope.Point(pair[0].world.x, pair[0].world.y).subtract(start.point);
++        end.handleIn = new scope.Point(pair[1].world.x, pair[1].world.y).subtract(end.point);
++      });
++      return [new scope.Path({ segments, closed: analysis.closed, insert: false })];
 +    },
-+    anchors,
-+    controls,
-+    closed: analysis.closed
++    ellipses: [],
++    onePath: false
 +  };
 +}
 +
@@ -12066,46 +12162,120 @@ index 00000000..3ba9062e
 +  return capsule;
 +}
 +
++/** An ellipse in the statement's own coordinates whose axes lie along the coordinate axes, as a TikZ `arc` needs. */
++type LocalEllipse = { world: WorldEllipse; center: Point; rx: number; ry: number };
++
++function localEllipse(path: CuttablePath, world: WorldEllipse): LocalEllipse | null {
++  const angle = world.rotation * Math.PI / 180;
++  const center = path.local(world.center);
++  const alongX = path.local({ x: world.center.x + world.rx * Math.cos(angle), y: world.center.y + world.rx * Math.sin(angle) });
++  const alongY = path.local({ x: world.center.x - world.ry * Math.sin(angle), y: world.center.y + world.ry * Math.cos(angle) });
++  if (!center || !alongX || !alongY) return null;
++  const u = { x: alongX.x - center.x, y: alongX.y - center.y }, v = { x: alongY.x - center.x, y: alongY.y - center.y };
++  const aligned = (major: number, minor: number) => Math.abs(minor) < 1e-6 * Math.abs(major);
++  if (aligned(u.x, u.y) && aligned(v.y, v.x)) return { world, center, rx: Math.abs(u.x), ry: Math.abs(v.y) };
++  if (aligned(u.y, u.x) && aligned(v.x, v.y)) return { world, center, rx: Math.abs(v.x), ry: Math.abs(u.y) };
++  return null;
++}
++
++/** Whether `curve` lies on `ellipse`: five of its points satisfy the ellipse equation. A cubic arc of a quarter turn is off by 3e-4 of the radius. */
++function curveOnEllipse(curve: paper.Curve, ellipse: WorldEllipse): boolean {
++  const angle = -ellipse.rotation * Math.PI / 180;
++  return [0, 0.25, 0.5, 0.75, 1].every((time) => {
++    const point = curve.getPointAtTime(time);
++    const dx = point.x - ellipse.center.x, dy = point.y - ellipse.center.y;
++    const x = (dx * Math.cos(angle) - dy * Math.sin(angle)) / ellipse.rx, y = (dx * Math.sin(angle) + dy * Math.cos(angle)) / ellipse.ry;
++    return Math.abs(Math.hypot(x, y) - 1) < 2e-3;
++  });
++}
++
++/** The angle of `point` on `ellipse` in degrees, as TikZ measures `start angle` and `end angle`. */
++function ellipseAngle(path: CuttablePath, ellipse: LocalEllipse, point: Point): number | null {
++  const local = path.local(point);
++  return local ? Math.atan2((local.y - ellipse.center.y) / ellipse.ry, (local.x - ellipse.center.x) / ellipse.rx) * 180 / Math.PI : null;
++}
++
++/** The signed difference `to - from` in degrees, in (-180, 180]. */
++function turn(from: number, to: number): number {
++  const delta = (to - from) % 360;
++  return delta > 180 ? delta - 360 : delta <= -180 ? delta + 360 : delta;
++}
++
++/** The body of one remaining piece, or null when a point cannot be written in the statement's coordinates. */
++function pieceBody(path: CuttablePath, piece: paper.Path, ellipses: readonly LocalEllipse[]): string | null {
++  const write = (point: Point): string | null => {
++    const original = path.kept.find((item) => item.raw && samePoint(item.world, point));
++    if (original?.raw) return original.raw;
++    const local = path.local(point);
++    return local ? `(${formatNumber(local.x)},${formatNumber(local.y)})` : null;
++  };
++  const first = write(piece.firstSegment.point);
++  if (!first) return null;
++  const parts = [first];
++  const curves = piece.curves;
++  for (let index = 0; index < curves.length; index++) {
++    const curve = curves[index];
++    const closes = piece.closed && index === curves.length - 1;
++    if (!curve.hasHandles()) {
++      const target = closes ? "cycle" : write(curve.point2);
++      if (!target) return null;
++      parts.push(`-- ${target}`);
++      continue;
++    }
++    const ellipse = ellipses.find((candidate) => curveOnEllipse(curve, candidate.world));
++    if (ellipse) {
++      const start = ellipseAngle(path, ellipse, curve.point1);
++      if (start === null) return null;
++      let angle = start, sweep = 0;
++      // Consecutive curves on one ellipse are one arc; each is under half a turn, so its middle fixes its direction.
++      for (; index < curves.length && curveOnEllipse(curves[index], ellipse.world); index++) {
++        const middle = ellipseAngle(path, ellipse, curves[index].getPointAtTime(0.5)), end = ellipseAngle(path, ellipse, curves[index].point2);
++        if (middle === null || end === null) return null;
++        sweep += turn(angle, middle) + turn(middle, end);
++        angle = end;
++      }
++      index--;
++      const from = ((Number(formatNumber(start)) % 360) + 360) % 360;
++      const radii = Math.abs(ellipse.rx - ellipse.ry) < 1e-6 * ellipse.rx
++        ? `radius=${formatNumber(ellipse.rx, { fractionDigits: 4 })}`
++        : `x radius=${formatNumber(ellipse.rx, { fractionDigits: 4 })}, y radius=${formatNumber(ellipse.ry, { fractionDigits: 4 })}`;
++      parts.push(`arc[start angle=${formatNumber(from)}, end angle=${formatNumber(from + sweep)}, ${radii}]`);
++      if (piece.closed && index === curves.length - 1) parts.push("-- cycle");
++      continue;
++    }
++    const control1 = write(curve.point1.add(curve.handle1)), control2 = write(curve.point2.add(curve.handle2));
++    const target = closes ? "cycle" : write(curve.point2);
++    if (!control1 || !control2 || !target) return null;
++    parts.push(`.. controls ${control1} and ${control2} .. ${target}`);
++  }
++  return parts.join(" ");
++}
++
 +/**
 + * The statements left of `path` after `region` is erased: null when the region misses it,
-+ * an empty list when it covers it, otherwise one statement per remaining piece.
++ * an empty list when it covers it, otherwise the remaining pieces.
 + */
 +export function remainingStatements(path: CuttablePath, region: paper.PathItem, minimumLength: number): string[] | null {
 +  const scope = geometryScope();
-+  const segments = path.anchors.map((anchor) => new scope.Segment(new scope.Point(anchor.world.x, anchor.world.y)));
-+  path.controls.forEach((pair, index) => {
-+    if (!pair) return;
-+    const start = segments[index], end = segments[(index + 1) % segments.length];
-+    start.handleOut = new scope.Point(pair[0].world.x, pair[0].world.y).subtract(start.point);
-+    end.handleIn = new scope.Point(pair[1].world.x, pair[1].world.y).subtract(end.point);
-+  });
-+  const geometry = new scope.Path({ segments, closed: path.closed, insert: false });
-+  if (geometry.getIntersections(region).length === 0) return region.contains(geometry.firstSegment.point) ? [] : null;
-+  const rest = geometry.subtract(region, { trace: false, insert: false });
-+  const pieces = (rest instanceof scope.CompoundPath ? rest.children : [rest]) as paper.Path[];
-+  const statements: string[] = [];
-+  for (const piece of pieces) {
-+    if (piece.length < minimumLength) continue;
-+    const write = (point: paper.Point): string | null => {
-+      const original = [...path.anchors, ...path.controls.flatMap((pair) => pair ?? [])].find((item) => item.raw && samePoint(item.world, point));
-+      return original?.raw ?? path.sourcePoint(point);
-+    };
-+    const first = write(piece.firstSegment.point);
-+    if (!first) return null;
-+    const parts = [first];
-+    const count = piece.closed ? piece.segments.length : piece.segments.length - 1;
-+    for (let index = 0; index < count; index++) {
-+      const start = piece.segments[index], end = piece.segments[(index + 1) % piece.segments.length];
-+      const target = index + 1 === piece.segments.length ? "cycle" : write(end.point);
-+      if (!target) return null;
-+      if (start.handleOut.isZero() && end.handleIn.isZero()) { parts.push(`-- ${target}`); continue; }
-+      const control1 = write(start.point.add(start.handleOut)), control2 = write(end.point.add(end.handleIn));
-+      if (!control1 || !control2) return null;
-+      parts.push(`.. controls ${control1} and ${control2} .. ${target}`);
-+    }
-+    statements.push(path.text(parts.join(" ")));
++  const rest: paper.Path[] = [];
++  let touched = false;
++  for (const subpath of path.geometry()) {
++    if (subpath.getIntersections(region).length === 0 && !region.contains(subpath.firstSegment.point)) { rest.push(subpath); continue; }
++    touched = true;
++    const cut = subpath.subtract(region, { trace: false, insert: false });
++    rest.push(...(cut instanceof scope.CompoundPath ? cut.children : [cut]) as paper.Path[]);
 +  }
-+  return statements;
++  if (!touched) return null;
++  const pieces = rest.filter((piece) => piece.segments.length > 1 && piece.length >= minimumLength);
++  const ellipses = path.ellipses.flatMap((ellipse) => localEllipse(path, ellipse) ?? []);
++  const bodies: string[] = [];
++  for (const piece of pieces) {
++    const body = pieceBody(path, piece, ellipses);
++    if (body === null) return null;
++    bodies.push(body);
++  }
++  if (bodies.length === 0) return [];
++  return path.onePath ? [path.text(bodies.join(" "))] : bodies.map((body) => path.text(body));
 +}
 diff --git a/packages/app/src/ui/canvas-panel/path-selection-hint.ts b/packages/app/src/ui/canvas-panel/path-selection-hint.ts
 index 0961ce75..5418b80f 100644
@@ -22581,10 +22751,10 @@ index f4e310bc..075e80d3 100644
      expect(initial.fitToContentRequestToken).toBe(0);
 diff --git a/test/tablet-logic.spec.ts b/test/tablet-logic.spec.ts
 new file mode 100644
-index 00000000..591a9e37
+index 00000000..711b2566
 --- /dev/null
 +++ b/test/tablet-logic.spec.ts
-@@ -0,0 +1,353 @@
+@@ -0,0 +1,418 @@
 +import { boundsInLatticeUnits, latticeStepStatement } from '../packages/core/src/edit/lattice-units';
 +import { resolveFigureCoordinateFrame } from '../packages/core/src/edit/coordinate-frame';
 +import { worldBounds, worldTransform, worldVector, pt } from '../packages/core/src/coords/index';
@@ -22607,6 +22777,8 @@ index 00000000..591a9e37
 +import { cm } from './edit-actions-helpers.js';
 +import { resolvePointTarget } from '../packages/app/src/ui/canvas-panel/point-target.js';
 +import { computeDragCapability } from '../packages/app/src/ui/canvas-panel/drag-capability.js';
++import { cuttablePath, remainingStatements, sweepCapsule } from '../packages/app/src/ui/canvas-panel/partial-erase.js';
++import { commandsToSegments, splitPathIntoSubpaths, totalSegmentLength } from '../packages/core/src/geometry/path-sampler.js';
 +
 +// These exercise the same source transformations and snap entry point as the canvas,
 +// without paying for a browser to prove arithmetic or dependency ordering.
@@ -22936,6 +23108,69 @@ index 00000000..591a9e37
 +
 +  it('states the length of a skewed lattice vector', () => {
 +    expect(statement('[x={(1cm,1cm)},y={(-1cm,1cm)}]')).toBe('One lattice step is 1.414 cm.');
++  });
++});
++
++describe('the eraser cuts a path that is not explicit lines and curves', () => {
++  const figure = (body: string) => `\\begin{tikzpicture}\n${body}\n\\end{tikzpicture}`;
++  const evaluate = (source: string) => evaluateTikzFigure(parseTikz(source, { recover: true, includeContextDefinitions: true }).figure, source);
++  /** The source after one straight sweep, in centimetres of the figure, across statement `path:0`. */
++  const sweep = (source: string, from: [number, number], to: [number, number], radius: number) => {
++    const scene = evaluate(source);
++    const path = cuttablePath(source, 'path:0', scene.editHandles, {}, scene.scene.elements);
++    if (!path) return null;
++    const pieces = remainingStatements(path, sweepCapsule(wp(cm(from[0]), cm(from[1])), wp(cm(to[0]), cm(to[1])), cm(radius)), cm(radius) / 20);
++    return pieces && source.slice(0, path.span.from) + pieces.join('\n') + source.slice(path.span.to);
++  };
++  /** The two ends of every drawn subpath of `source`, in centimetres. */
++  const ends = (source: string) => evaluate(source).scene.elements.flatMap((element) => element.kind === 'Path' ? splitPathIntoSubpaths(element.commands) : []).flatMap((commands) => {
++    const points = commands.flatMap((command) => command.kind === 'Z' ? [] : [command.to]);
++    return [points[0]!, points[points.length - 1]!].map((point) => [point.x / cm(1), point.y / cm(1)] as [number, number]);
++  });
++  const drawnLength = (source: string) => evaluate(source).scene.elements.reduce((sum, element) => sum + (element.kind === 'Path' ? totalSegmentLength(commandsToSegments(element.commands)) : 0), 0) / cm(1);
++  const distanceToSegment = ([x, y]: [number, number], [ax, ay]: [number, number], [bx, by]: [number, number]) => {
++    const t = Math.min(1, Math.max(0, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2)));
++    return Math.hypot(x - ax - t * (bx - ax), y - ay - t * (by - ay));
++  };
++
++  it('leaves a rotated ellipse as one arc of the same ellipse that ends at the edge of the sweep', () => {
++    const along = [Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)] as const;
++    const from: [number, number] = [2.5 * along[0], 2.5 * along[1]], to: [number, number] = [3.5 * along[0], 3.5 * along[1]];
++    const result = sweep(figure('\\draw[rotate=30] (0,0) ellipse (3 and 1.5);'), from, to, 0.2)!;
++    expect(result).toMatch(/^\\begin\{tikzpicture\}\n\\draw\[rotate=30\] \([^)]*\) arc\[start angle=[-\d.]+, end angle=[-\d.]+, x radius=3, y radius=1\.5\];\n\\end\{tikzpicture\}$/);
++    const cutEnds = ends(result);
++    expect(cutEnds).toHaveLength(2);
++    for (const end of cutEnds) {
++      const local = [end[0] * along[0] + end[1] * along[1], -end[0] * along[1] + end[1] * along[0]];
++      expect((local[0]! / 3) ** 2 + (local[1]! / 1.5) ** 2).toBeCloseTo(1, 2);
++      expect(distanceToSegment(end, from, to)).toBeCloseTo(0.2, 2);
++    }
++    expect(Math.hypot(cutEnds[0]![0] - cutEnds[1]![0], cutEnds[0]![1] - cutEnds[1]![1])).toBeCloseTo(0.4, 1);
++  });
++
++  it('keeps a grid one statement and removes only the swept length of one line', () => {
++    const source = figure('\\draw[gray] (0,0) grid (2,2);');
++    expect(drawnLength(source)).toBeCloseTo(12, 6);
++    const result = sweep(source, [0.5, 0.9], [0.5, 1.1], 0.1)!;
++    expect(result.match(/\\draw\[gray\]/g)).toHaveLength(1);
++    expect(drawnLength(result)).toBeCloseTo(11.8, 3);
++    const cutEnds = ends(result).filter((end) => Math.abs(end[1] - 1) < 1e-3 && end[0] > 0.01 && end[0] < 0.99).map((end) => end[0]).sort();
++    expect(cutEnds[0]).toBeCloseTo(0.4, 3);
++    expect(cutEnds[1]).toBeCloseTo(0.6, 3);
++  });
++
++  it('cuts a bent `to` path into two curves that keep its ends', () => {
++    const result = sweep(figure('\\draw[->] (0,0) to[bend left] (4,0);'), [2, -2], [2, 2], 0.2)!;
++    expect(result.match(/\\draw\[->\]/g)).toHaveLength(2);
++    const points = ends(result);
++    expect(points).toHaveLength(4);
++    expect(points.filter((point) => Math.hypot(point[0], point[1]) < 1e-3 || Math.hypot(point[0] - 4, point[1]) < 1e-3)).toHaveLength(2);
++    expect(points.filter((point) => Math.abs(Math.abs(point[0] - 2) - 0.2) < 2e-3)).toHaveLength(2);
++  });
++
++  it('does not cut a path whose pieces it cannot write', () => {
++    expect(sweep(figure('\\draw (0,0) -- node[above] {a} (4,0);'), [2, -1], [2, 1], 0.2)).toBeNull();
++    expect(sweep(figure('\\draw plot coordinates {(0,0) (2,1) (4,0)};'), [2, 0], [2, 2], 0.2)).toBeNull();
 +  });
 +});
 diff --git a/test/web/editor-command-runtime.spec.ts b/test/web/editor-command-runtime.spec.ts
