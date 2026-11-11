@@ -8478,6 +8478,159 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    { initialPage: "blank" },
+    "carries one hosted drawing through drawing, a stale load, undo, redo, a cancelled snapshot, disposal, and a restored session",
+    async function () {
+      await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      let gate: Promise<void> | null = null;
+      let exporting = false;
+      await page.route("**/image-resource.svg", async (route) => {
+        if (gate !== null) {
+          exporting ||= route.request().resourceType() === "fetch";
+          await gate;
+        }
+        await route.continue();
+      });
+      const authored = String.raw`\begin{tikzpicture}
+% a comment the editor must keep
+\pgfmathsetmacro{\side}{2}
+\foreach \k in {0,1,2} { \draw[blue] (\k,0) rectangle ++(\side/2,1); }
+\node at (5,0) {\includegraphics[width=1cm]{image-resource.svg}};
+\end{tikzpicture}`;
+      const frame = page.frameLocator("#editor");
+      const hostSource = page.getByLabel("Authored source");
+      const strokes = (source: string) => (source.match(/^[ \t]*% workbench-ink:/gm) ?? []).length;
+      const draw = async (across: number, down: number) => {
+        const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await page.mouse.move(bounds.x + bounds.width * across, bounds.y + bounds.height * down);
+        await page.mouse.down();
+        await page.mouse.move(
+          bounds.x + bounds.width * across + 100,
+          bounds.y + bounds.height * down + 30,
+          { steps: 12 },
+        );
+        await page.mouse.up();
+        // Accepting the offered fit makes it a history step after the recorded stroke.
+        const result = frame.getByRole("dialog", { name: "Freehand result" });
+        await result.getByRole("button", { name: "Accept", exact: true }).click();
+        await expect(result).toHaveCount(0);
+      };
+      const undo = () => frame.getByRole("button", { name: "Undo", exact: true }).click();
+      const redo = () => frame.getByRole("button", { name: "Redo", exact: true }).click();
+
+      await page.goto(`${url}embedding.html`);
+      await expect(page.locator("#status")).toHaveText("Loaded");
+      await hostSource.fill(authored);
+      await page.getByRole("button", { name: "Load source", exact: true }).click();
+      const loaded = await hostSnapshot();
+      assert.equal(loaded.source, authored);
+      assert.equal(loaded.revision, 2);
+
+      // A drawn stroke reaches the host; every authored line stays as written.
+      await freehandTool(frame).click();
+      await draw(0.2, 0.25);
+      await expect(hostSource).toHaveValue(/\.\. controls/);
+      const drawn = await hostSource.inputValue();
+      assert.equal(strokes(drawn), 1);
+      for (const line of authored.split("\n")) {
+        assert.ok(drawn.includes(line), `The drawn source lost the authored line ${line}:\n${drawn}`);
+      }
+      const accepted = await hostSnapshot();
+      assert.equal(accepted.source, drawn);
+      assert.equal(accepted.revision, loaded.revision);
+      assert.notEqual(accepted.svg, loaded.svg, "The snapshot does not show the drawn stroke");
+
+      // A load the host sent before this drawing does not replace it.
+      await page.evaluate(
+        ({ sessionId, source }) => {
+          document.querySelector<HTMLIFrameElement>("#editor")!.contentWindow!.postMessage(
+            {
+              action: "load",
+              sessionId,
+              revision: 1,
+              requestId: crypto.randomUUID(),
+              fileName: "fixture.tikz",
+              autosave: 0,
+              source,
+            },
+            location.origin,
+          );
+        },
+        {
+          sessionId: accepted.sessionId,
+          source: String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`,
+        },
+      );
+      const retained = await hostSnapshot();
+      assert.equal(retained.source, drawn);
+      assert.equal(retained.svg, accepted.svg);
+
+      // Undo steps back through the fit and the stroke to the authored bytes; Redo returns both.
+      await undo();
+      await expect(hostSource).not.toHaveValue(/\.\. controls/);
+      assert.equal(strokes(await hostSource.inputValue()), 1);
+      await undo();
+      await expect(hostSource).toHaveValue(authored);
+      assert.equal((await hostSnapshot()).svg, loaded.svg);
+      await redo();
+      await redo();
+      await expect(hostSource).toHaveValue(drawn);
+      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(drawn);
+      const redone = await hostSnapshot();
+      assert.equal(redone.source, drawn);
+      assert.equal(redone.svg, accepted.svg);
+
+      // A snapshot cancelled while its image is pending leaves the drawing ready for the next request.
+      let release!: () => void;
+      gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+      await expect.poll(() => exporting).toBe(true);
+      await page.getByRole("button", { name: "Cancel snapshot", exact: true }).click();
+      await expect(page.locator("#status")).toHaveText("Snapshot failed");
+      const cancelled = await snapshotResult();
+      assert.ok(
+        cancelled.status === "failed" && cancelled.error === "cancelled",
+        JSON.stringify(cancelled),
+      );
+      release();
+      gate = null;
+      const saved = await hostSnapshot();
+      assert.equal(saved.source, drawn);
+      assert.equal(saved.svg, accepted.svg);
+      assert.equal(saved.state.tool, "addFreehand");
+
+      // A disposed editor is gone; a new session restored from the snapshot goes on editing.
+      await page.getByRole("button", { name: "Dispose", exact: true }).click();
+      await expect(page.locator("iframe")).toHaveCount(0);
+      await page.reload();
+      await expect(page.locator("#status")).toHaveText("Loaded");
+      await page.getByLabel("Saved snapshot").fill(JSON.stringify(saved));
+      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
+      const restored = await hostSnapshot();
+      assert.equal(restored.source, drawn);
+      assert.deepEqual(restored.state, saved.state);
+      assert.equal(restored.svg, saved.svg);
+      await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
+      await draw(0.2, 0.45);
+      await expect.poll(async () => strokes(await hostSource.inputValue())).toBe(2);
+      await expect(hostSource).toHaveValue(/\.\. controls[\s\S]*\.\. controls/);
+      const continued = await hostSnapshot();
+      assert.equal(continued.source, await hostSource.inputValue());
+      assert.ok(
+        continued.source.includes(drawn.slice(0, drawn.lastIndexOf("\\end{tikzpicture}"))),
+        `The first stroke changed:\n${continued.source}`,
+      );
+      assert.notEqual(continued.svg, saved.svg, "The snapshot does not show the second stroke");
+      await undo();
+      await undo();
+      await expect(hostSource).toHaveValue(drawn);
+    },
+  );
+
   it("copies a just-finished canvas edit before the throttled source notification", async function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
