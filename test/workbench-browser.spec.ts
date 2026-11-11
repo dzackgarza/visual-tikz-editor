@@ -3979,6 +3979,21 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(source).toBe(authored);
         await tap(rail.getByRole("button", { name: "Redo", exact: true }));
         await expect.poll(source).toBe(filled);
+        // A pen that hovers first shows the fill as a preview; its tap then commits the same single step.
+        await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+        await expect.poll(source).toBe(authored);
+        await tap(rail.getByRole("button", { name: "Bucket", exact: true }));
+        const inside = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        await input.penHover({ x: inside.x - 6, y: inside.y });
+        await input.penHover(inside);
+        await expect.poll(source, { message: "The hover did not preview the fill" }).toBe(filled);
+        await input.penStroke([inside]);
+        await input.penHover({ x: viewport.x + viewport.width - 30, y: viewport.y + viewport.height - 30 });
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await expect.poll(async () => (await editorDebug(page)).tool).toBe("select");
+        assert.equal(await source(), filled, "The previewed fill left the source with the bucket");
+        await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+        await expect.poll(source).toBe(authored);
       },
     );
   }

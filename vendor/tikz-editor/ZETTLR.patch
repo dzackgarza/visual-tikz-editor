@@ -6960,7 +6960,7 @@ index cf4cf2cf..f9ecfae9 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..5a48e1d6 100644
+index 4e22ccfa..6d61d05b 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -8404,7 +8404,24 @@ index 4e22ccfa..5a48e1d6 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3064,9 +3775,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3049,12 +3760,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+         setWarning(`${resolution.result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
+       }
+ 
++      // The fill is one history step from the source without the preview, so the preview leaves the source first.
++      const preview = bucketPreviewSessionRef.current;
++      bucketPreviewSessionRef.current = null;
++      if (preview) dispatch({ type: "SET_SOURCE_TRANSIENT", documentId: preview.documentId, source: preview.baseSource, changedSourceIds: [preview.sourceId] });
+       dispatch({
+         type: "APPLY_EDIT_ACTION",
+         action: resolution.action,
+         precomputedResult: resolution.result
+       });
+-      bucketPreviewSessionRef.current = null;
+     },
+     setSnapLines,
+     logSnapDebug,
+@@ -3064,9 +3778,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -8414,7 +8431,7 @@ index 4e22ccfa..5a48e1d6 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3785,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3788,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -8422,7 +8439,7 @@ index 4e22ccfa..5a48e1d6 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3856,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3859,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -8433,7 +8450,7 @@ index 4e22ccfa..5a48e1d6 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3882,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3885,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -8443,7 +8460,7 @@ index 4e22ccfa..5a48e1d6 100644
      ]
    );
  
-@@ -3192,6 +3904,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3907,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -8522,7 +8539,7 @@ index 4e22ccfa..5a48e1d6 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +4004,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +4007,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -8541,7 +8558,7 @@ index 4e22ccfa..5a48e1d6 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +4038,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4041,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -8552,7 +8569,7 @@ index 4e22ccfa..5a48e1d6 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4061,327 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4064,327 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -8882,7 +8899,7 @@ index 4e22ccfa..5a48e1d6 100644
    const {
      onViewportKeyDown,
      onViewportPaste,
-@@ -3306,6 +4409,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4412,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -8890,7 +8907,7 @@ index 4e22ccfa..5a48e1d6 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4434,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4437,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -8915,7 +8932,7 @@ index 4e22ccfa..5a48e1d6 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4552,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4555,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -8950,7 +8967,7 @@ index 4e22ccfa..5a48e1d6 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4573,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4576,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -8958,7 +8975,7 @@ index 4e22ccfa..5a48e1d6 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4587,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4590,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -8966,7 +8983,7 @@ index 4e22ccfa..5a48e1d6 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4663,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4666,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -8975,7 +8992,7 @@ index 4e22ccfa..5a48e1d6 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4708,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4711,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -8984,7 +9001,7 @@ index 4e22ccfa..5a48e1d6 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4787,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4790,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -9008,7 +9025,7 @@ index 4e22ccfa..5a48e1d6 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4900,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4903,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -9016,7 +9033,7 @@ index 4e22ccfa..5a48e1d6 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4913,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4916,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -9024,7 +9041,7 @@ index 4e22ccfa..5a48e1d6 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4924,250 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4927,250 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -9275,7 +9292,7 @@ index 4e22ccfa..5a48e1d6 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5187,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5190,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -9298,7 +9315,7 @@ index 4e22ccfa..5a48e1d6 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5218,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5221,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -9314,7 +9331,7 @@ index 4e22ccfa..5a48e1d6 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +5244,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5247,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -9348,7 +9365,7 @@ index 4e22ccfa..5a48e1d6 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5276,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5279,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -9358,7 +9375,7 @@ index 4e22ccfa..5a48e1d6 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5289,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5292,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -9393,7 +9410,7 @@ index 4e22ccfa..5a48e1d6 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5343,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5346,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -9401,7 +9418,7 @@ index 4e22ccfa..5a48e1d6 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5352,61 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5355,61 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -12878,6 +12895,48 @@ index dac6b0b3..22c439df 100644
  export type OverlaySelectionState = {
    selectionBounds: SelectionBounds[];
    selectionBoundsBySource: ReadonlyMap<string, SvgBounds>;
+diff --git a/packages/app/src/ui/canvas-panel/useBucketFillPreview.ts b/packages/app/src/ui/canvas-panel/useBucketFillPreview.ts
+index 31816cbd..67fbce22 100644
+--- a/packages/app/src/ui/canvas-panel/useBucketFillPreview.ts
++++ b/packages/app/src/ui/canvas-panel/useBucketFillPreview.ts
+@@ -99,19 +99,24 @@ export function useBucketFillPreview({
+       return;
+     }
+ 
+-    dispatch({
+-      type: "SET_SOURCE_TRANSIENT",
+-      source: nextPreviewSource,
+-      changedSourceIds: [hoveredElementId]
+-    });
+-    bucketPreviewSessionRef.current = {
+-      documentId: activeDocumentId,
+-      figureId: activeFigureId,
+-      sourceId: hoveredElementId,
+-      colorToken: bucketFillColor,
+-      baseSource,
+-      previewSource: nextPreviewSource
+-    };
++    // A pen or finger without hover enters and presses in one input task, and the preview replaces the hit region
++    // under the pointer. The preview waits for the next task, so the press reaches the region it entered.
++    const timer = setTimeout(() => {
++      dispatch({
++        type: "SET_SOURCE_TRANSIENT",
++        source: nextPreviewSource,
++        changedSourceIds: [hoveredElementId]
++      });
++      bucketPreviewSessionRef.current = {
++        documentId: activeDocumentId,
++        figureId: activeFigureId,
++        sourceId: hoveredElementId,
++        colorToken: bucketFillColor,
++        baseSource,
++        previewSource: nextPreviewSource
++      };
++    }, 0);
++    return () => clearTimeout(timer);
+   }, [
+     activeDocumentId,
+     activeFigureId,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 index de0ccae2..5905982b 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
