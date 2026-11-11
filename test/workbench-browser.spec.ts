@@ -5259,7 +5259,9 @@ describe("standalone workbench host boundary", function () {
           await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
         // The placed line stays selected, with its controls near the curve; clear it on empty canvas first.
-        await input.touch([at(9, 9)]);
+        // The canvas corner is clear of the selection strip, which follows the selection.
+        const canvas = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await input.touch([{ x: canvas.x + canvas.width - 12, y: canvas.y + canvas.height - 12 }]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await input.penStroke([await strokePoint(page, curve, 0.5)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
