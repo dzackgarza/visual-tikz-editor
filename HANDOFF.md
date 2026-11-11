@@ -26,7 +26,7 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 | Latest listed release | Prerelease `workbench-07f072a` | Qualify later changes independently |
 | Project cards, including archived | Workspace plan and its feature | Use the current card and this inventory |
 | GitHub #14 | Closed again on three consecutive green instrumented runs at `5e36766` (41078668784, 41078719334, 41078725991). Since `29aeaa6` the canvas marks its startup view installed (`data-canvas-view="ready"`) and the shared ready wait requires that mark before its two-frame stillness check | A story that fails only in the full suite reopens it with the run and the triage log |
-| GitHub #15 | Open; the eraser erases circles, ellipses, and multi-operation paths whole | The physical-tablet session decides; see the decisions table below |
+| GitHub #15 | Decided on the issue: the eraser cuts every drawn path. A sweep leaves the rest of a circle, an ellipse, an arc, a rectangle, a grid, or a `to` path in place; the story "erases only the swept part of a circle, an ellipse, an arc path, and a rectangle" holds it | Close it when the Development diagnostics run that contains the story is green |
 | GitHub #16 | Closed on run 41024136888 at `30fdae3`; the Development diagnostics workflow runs `just test-ci`, logic tests and browser suite included, on every push to any branch | Branch protection and PR review belong to the stabilized phase, which the user chooses after the baseline freezes |
 
 ## Next work, ranked
@@ -83,12 +83,14 @@ These rows define final acceptance. They do not classify every listed feature as
 
 ### Product decisions to retain
 
-User decisions of 2026-10-29:
+Decisions; a row without a named owner is a user decision of 2026-10-29:
 
 | Topic | Decision |
 | --- | --- |
 | Release scope | Partial erasing, autosave with interruption recovery, PDF/SVG/PNG export, and attached relationships (arrows and labels follow the nodes and objects they attach to, reusable styles, pencil hardware gestures) are release requirements. |
 | Snapping precedence | Object features first (Ipe model): endpoints, intersections, and centers beat alignment guides, which beat the lattice. The guide names the chosen target. Angle snapping constrains direction after the point target. |
+| Eraser scope (maintainer, 2026-11-11, issue #15) | The eraser cuts every drawn path; whole-object erasing is not a mode of this eraser. Inkscape, Illustrator, Xournal, and Goodnotes erase in part under one eraser mode. |
+| Hold-to-move delay (maintainer, 2026-11-12) | 450 ms is the default of "Hold to move a point". The platform long-press defaults are 400 ms (Android `ViewConfiguration.getLongPressTimeout`) and 500 ms (iOS `UILongPressGestureRecognizer.minimumPressDuration`); the setting stays configurable. |
 | Session state architecture | One XState statechart in the fork owns the session states of [the interaction model](docs/interaction-model.md) and replaces the independent mode states in `CanvasPanel.tsx`. |
 | Pen input on existing points | Use iPadOS-native interaction patterns established by research, not preference. [Pen input on existing points](docs/research/pen-input-on-existing-points.md) derives the policy: a pen stroke starting on a point draws at once and attaches to it; a held finger modifier or a pen hold past a delay moves the point; double tap never moves points. |
 
@@ -125,7 +127,7 @@ Slice 2 completion list, complete at `6577662`. Each item needs a failing story 
 1. Refinement surface. The current-stroke adjustment is primary: smoothing and simplification sliders, each with an exact-value field, the drawn points, and Accept, Cancel, and Restore original. Escape closes the surface and keeps the current state: an applied fit stays, an unapplied preview is dropped. Cancel returns to the state before the refinement opened; Restore original returns to the recorded stroke and shows only when it differs from Cancel. The scope controls (New strokes for this session, Save as default as a lasting preference, automatic refinement of future strokes, keeping the original in source) sit behind one explicit Defaults action, separate from the adjustment. COMPLAINTS.md lines 45, 63, 95, and audit item 9 state the requirements.
 2. Simplify on a selected curve opens the same refinement on that curve. Simplify again runs another pass on the preview. Restore original is offered when the source keeps the recorded stroke.
 3. Pen policy on existing points ([research](docs/research/pen-input-on-existing-points.md)): a pen stroke that starts on a point draws at once and attaches to it; a finger held by the other hand, or a pen held still past a configurable delay, moves the point. Double tap never moves points. Done: a mark on the point shows attach, the filling hold, and move; the delay is the "Hold to move a point" setting (450 ms by default); a pen on a point under a held finger never draws.
-4. Partial erasing: the eraser removes only the swept part of a stroke and keeps the remaining pieces as separate strokes, as one undo step. Done for explicit line and cubic paths, recorded strokes included: the pieces replace the stroke, and absolute points keep their source text. A circle, an ellipse, or a path with other operations is still erased whole; the physical-tablet session judges whether that is acceptable.
+4. Partial erasing: the eraser removes only the swept part of a stroke and keeps the remaining pieces as separate strokes, as one undo step. Done for explicit line and cubic paths, recorded strokes included: the pieces replace the stroke, and absolute points keep their source text. A circle, an ellipse, and a path with any other geometric operation are cut too: a remaining part of a circle or an ellipse is written as an `arc` with the authored radii, a straight part with `--`, any other part with cubic controls, and a statement with several subpaths (a grid) stays one statement. A `plot` path, a path that holds a node, and a path with no point in its own frame are erased whole, as a valid whole statement.
 5. Pencil hardware gestures: done as a recorded platform limit ([research](docs/research/pencil-hardware-gestures.md)). iPadOS Safari delivers no double tap or squeeze to web content; the physical-tablet session confirms that they do nothing on the canvas.
 6. The two freehand observations below: crowded anchors near stroke ends, and a stroke started near a raw stroke's endpoint replacing that stroke's first points. Done: both are disposed.
 
@@ -155,13 +157,11 @@ Slice 4 status at `123dc0e`: items 1–6 pass their named stories in both tablet
 
 Slice 5 requires accepted edits to an existing `.tikz` file to autosave through the standalone host with disk-revision conflict checks, an untitled diagram to keep a recoverable draft until Save As, and PDF/SVG/PNG export for every authored figure. Focused browser stories prove untitled recovery in both tablet orientations, native file autosave and restart, retention of a draft after an external disk change, and two distinct figures in SVG and PNG plus a two-page PDF. The host still owns the file and authored source. Combined A/H/I, fidelity, and original-complaint workflows remain the software acceptance boundary. A green Development diagnostics run at the final revision is required before external qualification can gate publication.
 
-### Physical-tablet session: decisions and confirmations
+### Physical-tablet session: observations
 
-The user runs this session (qualification step 3). It settles these items; each stays open until its result is recorded here.
+The user runs this session (qualification step 3). Each item is an observation of the device, not a product decision; each stays open until its result is recorded here.
 
-| Item | Question for the session | Owner of the follow-up |
+| Item | Observation to record | Follow-up |
 | --- | --- | --- |
-| Erasing a circle, an ellipse, or a path with other operations whole | Is whole-object erasing acceptable for these, or must the eraser cut them too? | Issue #15. A "cut them too" answer makes it slice 2 work before the slice 5 gate. |
 | Pen pointer type and hover in iPadOS Safari | Does the pen arrive as `pointerType: "pen"`, and does hover show the attachment target? ([research](docs/research/pen-input-on-existing-points.md)) | A "no" reopens slice 2 item 3: the move modifier and target marks need another signal. |
 | Pencil double tap and squeeze | Do they do nothing on the canvas, as the platform limit predicts? ([research](docs/research/pencil-hardware-gestures.md)) | A "something happens" answer is a new observation for this ledger. |
-| Hold-to-move delay | Is 450 ms the right default for "Hold to move a point"? | Change the default in the settings; no architecture follows. |
