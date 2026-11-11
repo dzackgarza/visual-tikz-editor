@@ -2842,8 +2842,8 @@ describe("standalone workbench host boundary", function () {
         await step("The stroke color is not in the source");
         await tap(rail.getByRole("button", { name: "Bucket", exact: true }));
         await tap(rail.getByRole("button", { name: "Use blue" }));
-        const box = (await rectangle.boundingBox())!;
-        await input.penStroke([{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]);
+        // The color choice redraws the picture; the pen waits for the redrawn rectangle.
+        await input.penStroke([await settledCenter(rectangle)]);
         await step("The fill is not in the source");
         assert.equal(figures(last())[0], firstWithLine, last());
         assert.match(figures(last())[1], /\\draw\[red, fill=blue\] \(2,2\) rectangle \(6,5\);/);
