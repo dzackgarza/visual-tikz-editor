@@ -5784,8 +5784,10 @@ describe("standalone workbench host boundary", function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
+        // The layer list replaces its rows for each new source and again for its render,
+        // so a tap aims only once the editor has rendered the current source.
         const tap = async (locator: Locator) => {
-          await locator.scrollIntoViewIfNeeded();
+          await editorReady(page);
           await input.touch([await stableCenter(locator)]);
         };
         await tap(frame.getByRole("button", { name: "Layers", exact: true }));
@@ -5798,6 +5800,10 @@ describe("standalone workbench host boundary", function () {
         await tap(panel.getByRole("button", { name: "Move selection to Layer 1", exact: true }));
         await panel.getByRole("button", { name: "Line", exact: true }).last().click();
         await tap(panel.getByRole("button", { name: "Move selection to Layer 2", exact: true }));
+        // The move is in the source before the next tap waits for its render.
+        await expect
+          .poll(async () => (await editorDebug(page)).source)
+          .toMatch(/\[name=Layer 2\]\s*\\draw[^]*\[name=Layer 1\]\s*\\draw|\[name=Layer 1\]\s*\\draw[^]*\[name=Layer 2\]\s*\\draw/);
         await tap(panel.getByRole("button", { name: "Hide Layer 2", exact: true }));
         if (await panel.getByRole("button", { name: "Raise Layer 1", exact: true }).count() === 0) {
           await tap(frame.getByRole("button", { name: "Layers", exact: true }));
