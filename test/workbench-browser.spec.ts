@@ -9385,16 +9385,14 @@ describe("standalone workbench host boundary", function () {
         await expect(vertex(0)).toContainText("D");
         await expect(vertex(1)).toContainText("C");
 
-        // Quiver owns this history: its Undo walks back to the authored diagram in Quiver's own form,
-        // and its Redo walks forward to the final source.
+        // Quiver owns this history: its Undo walks back to the authored bytes, and its Redo walks
+        // forward to the final source.
         const press = async (name: "undo" | "redo", message: string, restored: (text: string) => boolean) => {
           await input.touch([await stableCenter(frame.locator(`.action[data-name="${name}"]`))]);
           await expect.poll(async () => restored(await code()), { message }).toBe(true);
         };
         await press("undo", "Undo did not restore the first relabel", (text) => text === first);
-        await press("undo", "Undo did not restore the authored diagram", (text) =>
-          /^\\begin\{tikzcd\}\s*A & B\s*\\arrow\["f", from=1-1, to=1-2\]\s*\\end\{tikzcd\}$/.test(text),
-        );
+        await press("undo", "Undo did not restore the authored bytes", (text) => text === authored);
         await expect(vertex(1)).toContainText("B");
         await press("redo", "Redo did not restore the first relabel", (text) => text === first);
         await press("redo", "Redo did not restore the second relabel", (text) => text === second);
