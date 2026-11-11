@@ -2542,6 +2542,98 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `carries one session through a saved style, a second line given the style, a new layer, a line moved into it, and the whole history in ${tablet.name}`,
+      async function () {
+        await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+        const authored = String.raw`\begin{tikzpicture}
+% a comment the editor must keep
+\draw[red,line width=2pt] (0,0) -- (4,0);
+\draw (0,2) -- (4,2);
+\end{tikzpicture}`;
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(authored);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        const source = async () => (await editorDebug(page)).source;
+        const steps: string[] = [authored];
+        const last = () => steps[steps.length - 1];
+        const step = async (message: string) => {
+          await expect.poll(source, { message }).not.toBe(last());
+          steps.push(await source());
+        };
+        await expect.poll(source).toBe(authored);
+        await fitDiagram(frame, input);
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const style = frame.getByRole("dialog", { name: "Style" });
+
+        // The red line's appearance becomes a named style.
+        await input.penStroke([
+          await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.3),
+        ]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await tap(strip.getByRole("button", { name: "Style", exact: true }));
+        await style.getByLabel("Style name").fill("accent line");
+        await tap(style.getByRole("button", { name: "Save style" }));
+        await step("The style is not in the source");
+        assert.match(last(), /accent line\/\.style=\{red,\s*line width=2pt\}/);
+        assert.match(last(), /\\draw\[accent line\] \(0,0\) -- \(4,0\)/);
+
+        // The plain line takes the same style.
+        await input.penStroke([
+          await strokePoint(page, frame.locator('svg [data-source-id="path:1"]').first(), 0.3),
+        ]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
+        await tap(strip.getByRole("button", { name: "Style", exact: true }));
+        await tap(style.getByRole("button", { name: "Apply accent line" }));
+        await step("The second line did not take the style");
+        assert.match(last(), /\\draw\[accent line\] \(0,2\) -- \(4,2\)/);
+
+        // A new layer takes the styled line, picked in the layer list, into its scope.
+        await tap(rail.getByRole("button", { name: "Layers", exact: true }));
+        const panel = frame
+          .getByRole("complementary", { name: "Diagram properties", exact: true })
+          .getByRole("tabpanel");
+        await tap(panel.getByRole("button", { name: "New layer", exact: true }));
+        await step("The layer is not in the source");
+        assert.match(last(), /\\begin\{scope\}\[name=Layer 1\]/);
+        await tap(panel.getByRole("button", { name: "Line", exact: true }).first());
+        await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+        await tap(panel.getByRole("button", { name: "Move selection to Layer 1", exact: true }));
+        await step("The line did not move into the layer");
+        const final = last();
+        assert.match(
+          final,
+          /\\begin\{scope\}\[name=Layer 1\]\s*\\draw\[accent line\] \(0,2\) -- \(4,2\);\s*\\end\{scope\}/,
+        );
+        assert.ok(final.includes("% a comment the editor must keep"), final);
+        assert.equal(final.match(/\\draw/g)!.length, 2, `The session changed the number of lines:\n${final}`);
+        const finalPicture = await frame.locator("svg [data-source-id]").count();
+
+        // Undo walks back through every step to the authored bytes; Redo walks forward to the final source.
+        for (const earlier of steps.slice(0, -1).reverse()) {
+          await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+          await expect.poll(source, { message: "Undo did not restore the step before" }).toBe(earlier);
+        }
+        for (const later of steps.slice(1)) {
+          await tap(rail.getByRole("button", { name: "Redo", exact: true }));
+          await expect.poll(source, { message: "Redo did not restore the step after" }).toBe(later);
+        }
+        await expect(frame.locator("svg [data-source-id]")).toHaveCount(finalPicture);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.getByRole("button", { name: "Copy source", exact: true }).click();
+        await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(final);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `fits a stroke with anchors a pen can pick apart, also at its slow, hooked, and snapped ends, in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
