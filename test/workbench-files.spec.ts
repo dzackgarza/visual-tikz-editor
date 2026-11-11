@@ -394,6 +394,121 @@ describe("standalone native file workflow", function () {
     await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
   });
 
+  it("carries one authored file through drawing, undo, redo, a view switch, copy, export, a restart, and further editing", async function () {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const directory = await mkdtemp(join(tmpdir(), "workbench-session-"));
+    const filePath = join(directory, "session.tikz");
+    const authored = String.raw`\begin{tikzpicture}
+% a comment the editor must keep
+\pgfmathsetmacro{\side}{2}
+\foreach \k in {0,1,2} { \draw[blue] (\k,0) rectangle ++(\side/2,1); }
+\draw[->, thick] (0,-1) -- (4,-1) node[right] {$x$};
+\end{tikzpicture}`;
+    const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
+    // The source pane draws only the visible part of a long ink record, so the session's source is read by Copy source.
+    const copiedSource = async () => {
+      await page.getByRole("button", { name: "Copy source", exact: true }).click();
+      return page.evaluate(() => navigator.clipboard.readText());
+    };
+    const onDisk = () => readFile(filePath, "utf8");
+    const strokes = (source: string) => (source.match(/^[ \t]*% workbench-ink:/gm) ?? []).length;
+    const draw = async (across: number, down: number) => {
+      await editorReady(page);
+      const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      await page.mouse.move(bounds.x + bounds.width * across, bounds.y + bounds.height * down);
+      await page.mouse.down();
+      await page.mouse.move(bounds.x + bounds.width * across + 100, bounds.y + bounds.height * down + 30, {
+        steps: 12,
+      });
+      await page.mouse.up();
+      // Accepting the offered fit makes it a history step after the recorded stroke.
+      const result = frame.getByRole("dialog", { name: "Freehand result" });
+      await result.getByRole("button", { name: "Accept", exact: true }).click();
+      await expect(result).toHaveCount(0);
+    };
+    const fitted = (source: string) => (source.match(/\.\. controls/g) ?? []).length > 0;
+    const undo = () => frame.getByRole("button", { name: "Undo", exact: true }).click();
+    const redo = () => frame.getByRole("button", { name: "Redo", exact: true }).click();
+    const exportSvg = async (name: string) => {
+      diagramPath = join(directory, `${name}.svg`);
+      await page.getByRole("group", { name: "Export" }).locator("summary").click();
+      await page.getByRole("button", { name: "SVG", exact: true }).click();
+      await chooseFile(`session-${name}`);
+      await expect.poll(() => existsSync(diagramPath)).toBe(true);
+      const svg = await readFile(diagramPath, "utf8");
+      assert.match(svg, /<svg[\s\S]*<\/svg>/);
+      return svg;
+    };
+
+    await page.request.post(`${url}api/new`, { data: "tikzpicture" });
+    await page.goto(url);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await page.locator(".cm-content").fill(authored);
+    diagramPath = filePath;
+    await fileMenu().click();
+    await page.getByRole("button", { name: "Save As…", exact: true }).click();
+    await chooseFile("save");
+    await expect.poll(() => existsSync(filePath)).toBe(true);
+    await expect.poll(onDisk).toBe(authored);
+    const authoredPicture = await exportSvg("authored");
+
+    // A drawn stroke is added to the file; every authored line stays as written.
+    await draw(0.3, 0.7);
+    await expect.poll(async () => fitted(await onDisk()), { message: "the fitted stroke is autosaved" }).toBe(true);
+    const drawn = await onDisk();
+    assert.equal(strokes(drawn), 1);
+    for (const line of authored.split("\n")) {
+      assert.ok(drawn.includes(line), `The drawn file lost the authored line ${line}:\n${drawn}`);
+    }
+    const drawnElements = await frame.locator("[data-source-id]").count();
+
+    // Undo steps back through the fit and the stroke to the authored bytes; Redo returns both.
+    await undo();
+    await expect
+      .poll(async () => [strokes(await onDisk()), fitted(await onDisk())], { message: "Undo restores the recorded stroke" })
+      .toEqual([1, false]);
+    await undo();
+    await expect.poll(onDisk, { message: "Undo restores the authored file" }).toBe(authored);
+    await redo();
+    await expect.poll(async () => strokes(await onDisk()), { message: "Redo restores the stroke" }).toBe(1);
+    await redo();
+    await expect.poll(onDisk, { message: "Redo restores the drawn file" }).toBe(drawn);
+
+    // The rendered view and the way back change neither the source nor the picture.
+    await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+    await page.getByRole("button", { name: "Canvas: right sidebar", exact: true }).click();
+    await editorReady(page);
+    await expect(frame.locator("[data-source-id]")).toHaveCount(drawnElements);
+    await expect.poll(copiedSource, { message: "the view switch keeps the source" }).toBe(drawn);
+    assert.equal(await onDisk(), drawn);
+
+    // The export shows the stroke and leaves the file alone.
+    const drawnPicture = await exportSvg("drawn");
+    assert.notEqual(drawnPicture, authoredPicture, "The export does not show the drawn stroke");
+    assert.equal(await onDisk(), drawn);
+    await expect(page.locator(".tikz-standalone-status")).toHaveText("Saved");
+
+    // After a restart the same file, source, and picture come back, and editing goes on.
+    await page.goto("about:blank");
+    await workbench.stop();
+    await startServer();
+    await page.goto(url);
+    await expect(page.locator(".document-bar strong")).toHaveText("session.tikz");
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await expect.poll(copiedSource, { message: "the reopened session has the file's source" }).toBe(drawn);
+    await editorReady(page);
+    await expect(frame.locator("[data-source-id]")).toHaveCount(drawnElements);
+    await draw(0.3, 0.45);
+    await expect.poll(async () => strokes(await onDisk()), { message: "the second stroke is autosaved" }).toBe(2);
+    const continued = await onDisk();
+    assert.ok(continued.includes(drawn.slice(0, drawn.lastIndexOf("\\end{tikzpicture}"))), `The first stroke changed:\n${continued}`);
+    await undo();
+    await expect.poll(async () => strokes(await onDisk())).toBe(2);
+    await undo();
+    await expect.poll(onDisk, { message: "Undo in the new session restores the reopened file" }).toBe(drawn);
+    await expect(page.locator(".tikz-standalone-status")).toHaveText("Saved");
+  });
+
   for (const tablet of TABLET_VIEWPORTS) {
   it(`reopens layered source from disk with its names, order, visibility, and references in ${tablet.name}`, async function () {
     await page.setViewportSize(tablet);
