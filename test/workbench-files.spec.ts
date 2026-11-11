@@ -92,6 +92,8 @@ describe("standalone native file workflow", function () {
         GDK_BACKEND: "x11",
         GSK_RENDERER: "cairo",
         GDK_DEBUG: "no-portals",
+        // GIO's built-in monitor: the file dialog must not wait for the private bus to start the gvfs udisks2 monitor.
+        GIO_USE_VOLUME_MONITOR: "unix",
       }).filter((entry): entry is [string, string] => entry[1] !== undefined),
     );
     sessionBus = spawn("dbus-daemon", ["--session", "--nofork", "--print-address=1"], {

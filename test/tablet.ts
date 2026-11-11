@@ -72,7 +72,12 @@ export const editorFrame = (page: Page): FrameLocator =>
 export async function stableCenter(locator: Locator): Promise<Point> {
   // A finger scrolls a scrollable control to reach a button; canvas items use settledCenter.
   await locator.scrollIntoViewIfNeeded();
-  return settledCenter(locator);
+  const settled = await settledCenter(locator);
+  // A layout change after the first scroll can move the control out of its scroll container.
+  await locator.scrollIntoViewIfNeeded();
+  const box = (await locator.boundingBox())!;
+  const unmoved = box.x + box.width / 2 === settled.x && box.y + box.height / 2 === settled.y;
+  return unmoved ? settled : settledCenter(locator);
 }
 
 /** The centre of a canvas item once its box stops moving; never scrolls its container. */
