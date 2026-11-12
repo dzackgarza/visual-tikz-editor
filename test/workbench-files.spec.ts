@@ -322,15 +322,16 @@ describe("standalone native file workflow", function () {
     assert.equal(await readFile(diagramPath, "utf8"), external);
   });
 
-  it("titles the window with the file name and a leading * while changes are unsaved", async function () {
+  it("titles an untitled window Unsaved Document, and a file's window with its name and a leading * while changes are unsaved", async function () {
     diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-title-")), "figure.tikz");
     await page.request.post(`${url}api/new`, { data: "tikzpicture" });
     await page.goto(url);
-    await expect(page).toHaveTitle("Untitled.tikz - Visual TikZ Editor");
+    await expect(page).toHaveTitle("Unsaved Document - Visual TikZ Editor");
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     const original = String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`;
     await page.locator(".cm-content").fill(original);
-    await expect(page).toHaveTitle("*Untitled.tikz - Visual TikZ Editor");
+    await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
+    await expect(page).toHaveTitle("Unsaved Document - Visual TikZ Editor");
     await fileMenu().click();
     await page.getByRole("button", { name: "Save As…", exact: true }).click();
     await chooseFile("save");

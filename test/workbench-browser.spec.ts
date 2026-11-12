@@ -239,14 +239,14 @@ describe("standalone workbench host boundary", function () {
     "opens an untitled tikzpicture at launch, starts each kind from File, and closes Save changes on Escape",
     async function () {
       await page.goto(url);
-      await expect(page.locator(".document-bar strong")).toHaveText("Untitled.tikz");
+      await expect(page.locator(".document-bar strong")).toHaveText("Unsaved Document");
       await expect(page.locator('iframe[title="TikZ visual editor"]')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await editorReady(page);
       const fileMenu = page.getByRole("group", { name: "File" }).locator("summary");
       await fileMenu.click();
       await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
-      await expect(page.locator(".document-bar strong")).toHaveText("Untitled.tikzcd");
+      await expect(page.locator(".document-bar strong")).toHaveText("Unsaved Document");
       await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible({ timeout: 30_000 });
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       const edited = String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`;
@@ -259,7 +259,7 @@ describe("standalone workbench host boundary", function () {
       await page.keyboard.press("Escape");
       await expect(prompt).toHaveCount(0);
       await expect(fileMenu).toBeFocused();
-      await expect(page).toHaveTitle("*Untitled.tikzcd - Visual TikZ Editor");
+      await expect(page).toHaveTitle("Unsaved Document - Visual TikZ Editor");
       assert.equal(await page.locator(".cm-content").innerText(), edited);
       await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible();
     },
