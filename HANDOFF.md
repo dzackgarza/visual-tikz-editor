@@ -22,7 +22,7 @@ The work is complete when all of these hold at the head of `main`:
 | J. View | 100 % is printed size; a figure opens fitted and reopens at its last view; zoom readout and menu; rulers in centimetres | Open: [#63](https://github.com/dzackgarza/visual-tikz-editor/issues/63)–[#66](https://github.com/dzackgarza/visual-tikz-editor/issues/66) |
 | Software gate | Development diagnostics is green at the head | Green at `d9bedaf` ([43218778807](https://github.com/dzackgarza/visual-tikz-editor/actions/runs/43218778807)); later heads change documentation only |
 | Release | Each green head that changes the product has a release | [workbench-2e59d93](https://github.com/dzackgarza/visual-tikz-editor/releases/tag/workbench-2e59d93) |
-| Issues | No open issue | Open: epic [#17](https://github.com/dzackgarza/visual-tikz-editor/issues/17) with [#18](https://github.com/dzackgarza/visual-tikz-editor/issues/18), [#25](https://github.com/dzackgarza/visual-tikz-editor/issues/25), and the implementation issues #26–#66 |
+| Issues | No open issue | Open: epic [#17](https://github.com/dzackgarza/visual-tikz-editor/issues/17) with [#18](https://github.com/dzackgarza/visual-tikz-editor/issues/18) and the implementation issues #26–#66 |
 
 No stub is permitted. The user's use of the editor on a physical tablet is continuing feedback, not a gate: an observation opens or reopens an issue, and that issue is ordinary work under step 2.
 
@@ -31,7 +31,7 @@ The rules behind A–J and the product decisions are in [the interaction model](
 ## Next work, ranked
 
 1. Read the software gate on the head of `main` (`gh run list --workflow development.yml --branch main --limit 1`). A red run is the first work: reproduce the failing story with `bun run test:browser --grep '<story>'`, commit the red story, then repair it. Commit as the work goes and push once, when it is complete. [Development](docs/development.md) covers the story helpers and the traps of the fonts and the native file dialogs.
-2. Work the implementation issues #26–#66 in the order of their dependencies: each names the specification items it implements and the issues it depends on. An issue starts with its acceptance story, committed red against the present build; the stories that assert the rule it replaces are rewritten in the same change ([#25](https://github.com/dzackgarza/visual-tikz-editor/issues/25) lists them per issue). Then the repair. Record decisions on the issue, from prior art.
+2. Work the implementation issues #26–#66 in the order of their dependencies: each names the specification items it implements and the issues it depends on. An issue starts with its acceptance story, committed red against the present build; the stories that assert the rule it replaces are rewritten in the same change ([stories that assert replaced rules](docs/prior-art/stories.md) lists them per issue). Then the repair. Record decisions on the issue, from prior art.
 3. A question no specification answers is answered first from prior art in the owning specification, then in code. A new interface issue follows the template's Prior art section.
 4. Publish a release for each green head that changes the product (`just release-assets <run-id>`, then `gh release create`; see [Development](docs/development.md#releases)). Reconcile [#1](https://github.com/dzackgarza/visual-tikz-editor/issues/1) and #2 against the release.
 
