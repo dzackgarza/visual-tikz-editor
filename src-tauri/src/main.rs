@@ -28,6 +28,9 @@ fn main() {
                                 let url = url.parse().expect("invalid workbench URL");
                                 WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(url))
                                     .title("Visual TikZ Editor")
+                                    .on_document_title_changed(|window, title| {
+                                        window.set_title(&title).expect("could not set the window title");
+                                    })
                                     .inner_size(1280.0, 800.0)
                                     .build()
                                     .expect("could not open workbench window");

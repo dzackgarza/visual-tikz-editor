@@ -249,6 +249,12 @@ const theme = ref<TikzWorkbenchTheme>(
 const dirty = computed(() => document.value !== null && (source.value !== savedSource.value ||
   document.value.recovery === "conflict" || (!document.value.saved && recoverySaved.value)));
 const fileName = computed(() => document.value?.path.split("/").pop() ?? "TikZ workbench");
+// "*ref.svg - Inkscape": the file name, a leading * while changes are unsaved, then the app name. The desktop shell copies it to the window.
+watch([fileName, dirty, document], () => {
+  window.document.title = document.value === null
+    ? "Visual TikZ Editor"
+    : `${dirty.value ? "*" : ""}${fileName.value} - Visual TikZ Editor`;
+}, { immediate: true });
 const status = computed(() => {
   if (hostError.value !== "") return hostError.value;
   if (document.value === null) return loadError.value === "" ? "Loading…" : "Load failed";

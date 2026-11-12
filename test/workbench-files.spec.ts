@@ -335,6 +335,7 @@ describe("standalone native file workflow", function () {
     await fileMenu().click();
     await page.getByRole("button", { name: "Save As…", exact: true }).click();
     await chooseFile("save");
+    await expect.poll(() => existsSync(diagramPath)).toBe(true);
     await expect.poll(() => readFile(diagramPath, "utf8")).toBe(original);
     await expect(page).toHaveTitle("figure.tikz - Visual TikZ Editor");
     // A change on disk holds the edit unsaved until the conflict ends.

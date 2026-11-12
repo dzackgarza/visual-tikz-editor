@@ -78,7 +78,7 @@ Not verified from a primary source: how long a GNOME toast stays; the GNOME wind
 | Theme | Toolbar button, stored preference, system ignored | Follow the system | App-specific appearance control |
 | Views offered | All four, always | Only views valid for the document | Error panels on demand |
 | View names | Rail and view labels differ; glyphs | One name per view | Two names |
-| Window title | "Visual TikZ Editor" | File name, app name, unsaved marker | No document identity |
+| Window title | "Visual TikZ Editor" | File name, app name, unsaved marker | Repaired |
 | Error display | Replaces status, wraps to three lines, moves the bar | Banner for a state, toast for an event | Layout shift; no distinction |
 | Confirmation | None for Copy source and Export | Toast | Silent |
 | Save conflict | Status text; Save keeps failing | Compare or Overwrite | No resolution; repeated failure |
@@ -96,7 +96,7 @@ Not verified from a primary source: how long a GNOME toast stays; the GNOME wind
 6. **Help menu.** Keyboard Shortcuts, which lists every shortcut above; About Visual TikZ Editor.
 7. **Views by document.** The rail and the View menu offer only the views whose `supports` test holds for the document: Quiver for a tikzcd, Canvas for a tikzpicture, Code and Preview for both. Each view has one name in the rail, the View menu, and the view itself: Code, Preview, Canvas, Quiver. Rail buttons use icons from the icon set the canvas already uses, with the name as tooltip and accessible label.
 8. **Theme.** The interface follows the system appearance (`prefers-color-scheme`) and changes when the system changes. The theme button, the stored theme preference, and the `localStorage` read are deleted.
-9. **Window title.** "figure.tikz - Visual TikZ Editor", with a leading "\*" while there are unsaved changes, as in Inkscape. The browser build sets the page title the same way.
+9. **Window title.** "figure.tikz - Visual TikZ Editor", with a leading "\*" while there are unsaved changes, as in Inkscape. The browser build sets the page title the same way. An untitled document is titled by its file name, "Untitled.tikz - Visual TikZ Editor". The present build meets this rule.
 10. **Messages.** The document bar is one row of fixed height; no message changes its height or moves its controls. A persistent state (the file changed on disk, the renderer is unavailable) shows as a banner at the top of the workspace with one title and at most one button, and leaves when the state ends. A single event shows as a toast: "Copied TikZ source", "Exported figure.pdf", or the failed command and its reason. Where the status text sits belongs to #21.
 11. **Save conflict.** When the file changed on disk, a banner reads "figure.tikz changed on disk" with the actions Compare and Overwrite, as in VS Code. Compare shows the disk text against the editor text; Overwrite writes the editor text over the file. A Save after the conflict shows the same banner and leaves the file unchanged until Compare or Overwrite ends the conflict, as in VS Code; the present build already does this (WF 290).
 12. **New and start-up.** File > New tikzpicture and New tikzcd create the document directly. A launch with no file opens an untitled tikzpicture, as Ipe and Xournal++ open an untitled document. The kind chooser dialog is deleted. Every dialog (Save changes, Document Properties) closes on Escape, returns focus to the control that opened it, and leaves the workspace mounted behind it.
@@ -111,7 +111,6 @@ An issue that names a dependency starts after that audit has its specification.
 | 3, 5 | [#43](https://github.com/dzackgarza/visual-tikz-editor/issues/43) Edit and Object menus send commands to the focused view | #24, #39 |
 | 4, 7 | [#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44) View menu; views offered by document kind; one name per view | #23 |
 | 8 | [#45](https://github.com/dzackgarza/visual-tikz-editor/issues/45) Theme follows the system appearance | — |
-| 9 | [#46](https://github.com/dzackgarza/visual-tikz-editor/issues/46) Window title with file name and unsaved marker | — |
 | 10 | [#47](https://github.com/dzackgarza/visual-tikz-editor/issues/47) Fixed-height document bar; banners and toasts | #21 |
 | 11 | [#48](https://github.com/dzackgarza/visual-tikz-editor/issues/48) Save conflict: Compare and Overwrite | — |
 | 2 | [#50](https://github.com/dzackgarza/visual-tikz-editor/issues/50) Document Properties dialog | — |
