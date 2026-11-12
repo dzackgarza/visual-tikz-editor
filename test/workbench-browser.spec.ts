@@ -2869,7 +2869,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `fits a stroke with anchors a pen can pick apart, also at its slow, hooked, and snapped ends, in ${tablet.name}`,
+      `fits a stroke with anchors a pen can pick apart, also at its slow and hooked ends, in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);

@@ -113,7 +113,7 @@ The selection pin, the lock toggle, and Done: WB 2620, 3766, 3810, 4925, 5598, 6
 
 ### #57 Freehand options before drawing
 
-The Freehand result popover: WB 2312 `keeps the original stroke after an automatic fit`; WB 2405; WB 2871 `fits a stroke with anchors a pen can pick apart, also at its slow, hooked, and snapped ends`; WB 2958 `keeps automatic fits when drawing continues and the tool changes, and one Undo restores the last original`; WB 3017, 3122 (Escape closes the result); WB 3335 `refines one stroke from one surface, with new-stroke scope behind Defaults`; WB 3457 `places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke`; WB 3526, 3658, 3766, 3810, 4925, 5946, 7684, 8555, 8930, 9084 `keeps palm contact out of pen drawing and supports finger pan and pinch afterward`, 9259, 9594; WF 397. WB 2367 `keeps every stroke drawn and erased in quick succession` and WB 2922 `starts a new stroke near a raw stroke's end and leaves that stroke unchanged` press Escape after a stroke, which closes the result today.
+The Freehand result popover: WB 2312 `keeps the original stroke after an automatic fit`; WB 2405; WB 2871 `fits a stroke with anchors a pen can pick apart, also at its slow and hooked ends`; WB 2958 `keeps automatic fits when drawing continues and the tool changes, and one Undo restores the last original`; WB 3017, 3122 (Escape closes the result); WB 3335 `refines one stroke from one surface, with new-stroke scope behind Defaults`; WB 3457 `places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke`; WB 3526, 3658, 3766, 3810, 4925, 5946, 7684, 8555, 8930, 9084 `keeps palm contact out of pen drawing and supports finger pan and pinch afterward`, 9259, 9594; WF 397. WB 2367 `keeps every stroke drawn and erased in quick succession` and WB 2922 `starts a new stroke near a raw stroke's end and leaves that stroke unchanged` press Escape after a stroke, which closes the result today.
 
 ### #58 Shapes on a hold
 
@@ -143,4 +143,4 @@ The dock's zoom button and the "Zoom and display" popover: WB 208, 237, 332, 448
 
 WB 1009 `labels the rulers in lattice steps when the figure scales its lattice`.
 
-No story asserts the behaviour that #33, #38, #39, #43, #46, #60, or #62 replace; their acceptance stories are new. The storage-status stories (WB 3438, WB 9622, and the "Saved" checks in WF) assert a rule the [interaction model](../interaction-model.md) keeps.
+No story asserts the behaviour that #33, #38, #39, #43, #46, or #60 replace; their acceptance stories are new. The storage-status stories (WB 3438, WB 9622, and the "Saved" checks in WF) assert a rule the [interaction model](../interaction-model.md) keeps.
