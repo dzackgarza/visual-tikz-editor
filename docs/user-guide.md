@@ -78,11 +78,11 @@ Attachments are TikZ references in the source. Moving a node, a line, or a point
 
 A circle or arc drawn from its centre takes the second point as its radius. An arc's end keeps the radius and lands on a lattice point of its ray when one is within reach, otherwise on a nearby multiple of 45 or 15 degrees.
 
-Coordinate fields, figure bounds, and Repeat use lattice units. The Snap popup states the size of one lattice step from the figure's `x`, `y`, or `scale` options, for example "One lattice step is 2 cm along x and 0.5 cm along y."
+Coordinate fields, figure bounds, and Repeat use lattice units. File > Document Properties… shows the size of one lattice step along x and y in centimetres, from the figure's `x`, `y`, or `scale` options.
 
 ## Freehand strokes
 
-After a pen stroke, the editor offers a fitted curve with its recorded-sample and fitted-point counts. Keep the original stroke to restore it later, including after reopening the file. **Simplify** runs again until no simpler fit remains. Clear **Interpret geometry** in the Freehand properties to keep handwriting as ink.
+After a pen stroke, the editor offers a fitted curve; the canvas shows the recorded samples and the fitted points. Keep the original stroke to restore it later, including after reopening the file. **Simplify again** is available until no simpler fit remains. Clear **Interpret geometry** in the Freehand properties to keep handwriting as ink.
 
 ## Layers
 
@@ -90,7 +90,7 @@ A layer is a named top-level TikZ `scope`. In **Layers**, you can create and ren
 
 ## Settings and shortcuts
 
-Settings has three categories: canvas settings, named colour collections, and keyboard shortcuts. In **Keyboard shortcuts**, search for a command, choose **Set keys**, and press the new shortcut. **Clear** removes a command's bindings, **Reset** restores its defaults, and **Reset all shortcuts** restores the whole set. A shortcut that another command uses is refused with an alert that names that command. Settings and shortcuts persist across restarts.
+Settings has three categories: canvas settings, named colour collections, and keyboard shortcuts. In **Keyboard shortcuts**, search for a command, choose **Set keys**, and press the new shortcut; the row shows "Press the new shortcut" while it records, and Escape cancels. **Clear** removes a command's bindings, **Reset** restores its defaults, and **Reset all shortcuts** restores the whole set. A shortcut that another command uses is refused with an alert that names that command. Settings and shortcuts persist across restarts.
 
 ## Export
 

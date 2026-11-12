@@ -62,11 +62,11 @@ Upstream panels that no control in the inspected interface opens (Assistant, Sty
 | Next-step text | In the dock lane and again in Properties | One line in a status bar under the canvas | Two surfaces, neither a status line |
 | Selection hint | A box over the canvas, under the dock | Status bar | Overlay hides content |
 | Standard handles | "Drag square points or round curve handles" | Do not explain standard components | Explains handles |
-| Option descriptions | A sentence under every snap rule, settings row, and construction field | Labels and values | Descriptions everywhere |
-| Lattice step | A sentence in the snapping popover | A value with the document's grid settings | Figure property shown as prose |
-| Internal values | "(0.0045)", "2 raw samples · 1 fitted anchors" | Values in user units, or none | Implementation detail |
+| Option descriptions | A sentence under every snap rule, settings row, and construction field | Labels and values | Repaired |
+| Lattice step | A sentence in the snapping popover | A value with the document's grid settings | Repaired |
+| Internal values | "(0.0045)", "2 raw samples · 1 fitted anchors" | Values in user units, or none | Repaired |
 | Units | "units" for a number in cm | The unit named | Wrong or vague unit |
-| Shortcut panel | Instruction paragraph before any action | Prompt at the moment of recording | Instruction ahead of the task |
+| Shortcut panel | Instruction paragraph before any action | Prompt at the moment of recording | Repaired |
 | Unavailable view | Error panel explaining which view to use | The view is not offered ([shell](shell.md) item 7) | Explains a dead end |
 
 ## Specification
@@ -75,10 +75,10 @@ Upstream panels that no control in the inspected interface opens (Assistant, Sty
 2. **Status line.** One line of fixed height under the Canvas view, in every host. Left: the next step of the active tool or selection, one sentence that starts with a verb, as in Inkscape ("Drag to erase."). Then the modifier keys for the step, as upstream ("Shift: square · Ctrl: ignore snapping"). Right: the pointer position with its unit. The line never wraps and never moves the canvas; text longer than the line is ellipsised. With nothing to say, the line is empty but keeps its height.
 3. **Status line content.** The construction stages of `constructionInstruction`, as sentences ("Drag from the centre to the edge."); the tool texts "Drag to draw." and "Drag to magnify."; for a selected path "Double-tap the curve to add a point." The variant name comes first when the tool has variants ("Circle by three points: place the second point."). "Drag square points or round curve handles" is deleted. The dock step lane loses its text ([#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31)); the Properties hint box and the canvas hint overlay are deleted.
 4. **Tooltips.** Pointer only. The name, one verb phrase of at most 60 characters, and the shortcut when one exists, as in Inkscape ("Eraser Tool / Erase objects or paths (Shift+E)"). The eraser reads "Eraser" and "Erase strokes". The verb phrase states what the tool does, never how to use it.
-5. **Option labels.** The snapping popover, Settings, the tool options popovers, the Geometry construction controls, and the Freehand result popover show labels and values only. Their description sentences are deleted. A slider shows its value in a user unit (ms, cm, pt) or shows no number. The sample and anchor counts and "This curve is already as simple as Simplify can make it." are deleted; Simplify is disabled when it has no effect.
-6. **Lattice step.** The lattice step is a figure property shown as a value in Document Properties ([#50](https://github.com/dzackgarza/visual-tikz-editor/issues/50)), not a sentence in the snapping popover.
+5. **Option labels.** The snapping popover, Settings, the tool options popovers, the Geometry construction controls, and the Freehand result popover show labels and values only. Their description sentences are deleted. A slider shows its value in a user unit (ms, cm, pt) or shows no number. The sample and anchor counts and "This curve is already as simple as Simplify can make it." are deleted; Simplify is disabled when it has no effect. The present build meets this rule.
+6. **Lattice step.** The lattice step is a figure property shown as a value in Document Properties ([#50](https://github.com/dzackgarza/visual-tikz-editor/issues/50)), not a sentence in the snapping popover. The present build meets this rule.
 7. **Units.** Every displayed measurement names its unit, and the unit is the one the number is in: centimetres as "cm", TikZ coordinates as the figure's coordinates with no unit word. The word "units" alone is not used.
-8. **Shortcut recording.** The instruction paragraph is deleted. When a row starts recording, its field shows "Press the new shortcut", as VS Code shows its prompt only at recording time; Escape cancels.
+8. **Shortcut recording.** The instruction paragraph is deleted. When a row starts recording, its field shows "Press the new shortcut", as VS Code shows its prompt only at recording time; Escape cancels. The present build meets this rule.
 9. **Views and errors.** Views that cannot edit the document are not offered ([#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44)), so the unavailable panel and its explanations are deleted. A remaining failure of an offered view, such as a tikzcd that Quiver cannot map to source lines, is a banner ([#47](https://github.com/dzackgarza/visual-tikz-editor/issues/47)).
 
 ## Implementation issues
@@ -88,7 +88,6 @@ An issue that names a dependency starts after that audit has its specification.
 | Items | Issue | Depends on |
 | --- | --- | --- |
 | 1–3 | [#52](https://github.com/dzackgarza/visual-tikz-editor/issues/52) Status line under the Canvas view | — |
-| 1, 5, 6, 8 | [#53](https://github.com/dzackgarza/visual-tikz-editor/issues/53) Labels and values only on option surfaces | #50 |
 | 7 | [#54](https://github.com/dzackgarza/visual-tikz-editor/issues/54) Name the unit of every displayed measurement | — |
 | 4 | [#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28) Dock contents as icons (tooltip format) | #22 |
 | 3 | [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31) Step text to a status line | #52 |

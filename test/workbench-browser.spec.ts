@@ -3829,50 +3829,41 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `shows every recorded sample and every fitted anchor the freehand result counts in ${tablet.name}`,
+      `shows every recorded sample and every fitted anchor of the freehand result on the canvas in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
+        const segments = async () =>
+          ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length;
+        const before = await segments();
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 160));
         await expect(result).toBeVisible();
-        const counts = async () => {
-          const text = await result.innerText();
-          return {
-            samples: Number(/(\d+) raw samples/.exec(text)![1]),
-            anchors: Number(/(\d+) fitted anchors/.exec(text)![1]),
-            drawnSamples: await frame.getByTestId("freehand-raw-samples").locator("circle").count(),
-            drawnAnchors: await frame
-              .getByTestId("freehand-fitted-anchors")
-              .locator("circle")
-              .count(),
-          };
-        };
-        // What the author reads in the result is what the canvas shows, once the fit has rendered.
+        const drawn = async () => ({
+          samples: await frame.getByTestId("freehand-raw-samples").locator("circle").count(),
+          anchors: await frame.getByTestId("freehand-fitted-anchors").locator("circle").count(),
+        });
+        // The fitted curve the source holds has one anchor more than its Bézier segments.
+        const written = async () => (await segments()) - before + 1;
         await expect
-          .poll(
-            async () => {
-              const c = await counts();
-              return c.drawnSamples === c.samples && c.drawnAnchors === c.anchors && c.anchors > 1;
-            },
-            { message: "The canvas does not show the samples and anchors the result counts" },
-          )
+          .poll(async () => (await drawn()).anchors === (await written()) && (await written()) > 1, {
+            message: "The canvas does not show the anchors of the curve the source holds",
+          })
           .toBe(true);
+        const samples = (await drawn()).samples;
+        assert.ok(samples > (await written()), "The canvas shows fewer samples than anchors");
         await storyScreenshot(page, `freehand-samples-${tablet.name}`);
-        // Moving the simplification slider refits; the counts and the canvas still agree.
-        const slider = result.getByRole("slider").nth(1);
-        await slider.fill("1.2");
+        // Moving the simplification slider refits the same samples; the canvas follows the new curve.
+        const fitted = await written();
+        await result.getByRole("slider", { name: "Simplification", exact: true }).fill("1.2");
         await expect
-          .poll(
-            async () => {
-              const c = await counts();
-              return c.drawnSamples === c.samples && c.drawnAnchors === c.anchors;
-            },
-            { message: "After refitting, the canvas and the counts disagree" },
-          )
+          .poll(async () => (await written()) !== fitted && (await drawn()).anchors === (await written()), {
+            message: "After refitting, the canvas does not show the anchors of the new curve",
+          })
           .toBe(true);
+        assert.equal((await drawn()).samples, samples, "Refitting changed the recorded samples");
       },
     );
   }
@@ -4036,29 +4027,19 @@ describe("standalone workbench host boundary", function () {
           .poll(anchors, { timeout: 30_000, message: "Simplify previewed no simpler curve" })
           .toBeLessThan(counts[0]);
         counts.push(await anchors());
-        // Simplify again runs another pass on the preview, until the curve is final.
-        const final = refinement.getByText(/already as simple/i);
-        for (let step = 0; step < 8 && !(await final.isVisible()); step++) {
-          await input.touch([
-            await stableCenter(
-              refinement.getByRole("button", { name: "Simplify again", exact: true }),
-            ),
-          ]);
+        // Simplify again runs another pass on the preview; it is disabled once no pass is simpler.
+        const again = refinement.getByRole("button", { name: "Simplify again", exact: true });
+        for (let step = 0; step < 8 && (await again.isEnabled()); step++) {
+          await input.touch([await stableCenter(again)]);
           await expect
-            .poll(
-              async () =>
-                (await anchors()) !== counts[counts.length - 1] || (await final.isVisible()),
-              {
-                timeout: 30_000,
-                message: `Simplify again step ${step + 1} neither changed the curve nor said it was final (anchors ${counts.join(" → ")})`,
-              },
-            )
-            .toBe(true);
-          if (!(await final.isVisible())) {
-            counts.push(await anchors());
-          }
+            .poll(anchors, {
+              timeout: 30_000,
+              message: `Simplify again step ${step + 1} did not change the curve (anchors ${counts.join(" → ")})`,
+            })
+            .not.toBe(counts[counts.length - 1]);
+          counts.push(await anchors());
         }
-        await expect(final, `No final message after anchors ${counts.join(" → ")}`).toBeVisible();
+        await expect(again, `Simplify again still enabled after anchors ${counts.join(" → ")}`).toBeDisabled();
         assert.ok(
           counts.length >= 3,
           `Simplify could not be repeated: anchors ${counts.join(" → ")}`,
@@ -4935,16 +4916,20 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
-        // The text an author reads on a surface: its text nodes outside `outside`, in document order.
+        // The text an author reads on a surface, outside `outside`, in document order: the text
+        // nodes of each element joined, since React writes one label as several nodes.
         const texts = (surface: Locator, outside = "option, nav") =>
           surface.evaluate((root, outside) => {
             const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-            const found: string[] = [];
+            const runs: { parent: Element; text: string }[] = [];
             for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-              const text = node.textContent!.trim();
-              if (text && !node.parentElement!.closest(outside)) found.push(text);
+              const parent = node.parentElement!;
+              if (parent.closest(outside)) continue;
+              const last = runs.at(-1);
+              if (last?.parent === parent) last.text += node.textContent;
+              else runs.push({ parent, text: node.textContent! });
             }
-            return found;
+            return runs.map((run) => run.text.trim()).filter(Boolean);
           }, outside);
         // Inkscape's snapping popover lists the rules by name only (docs/prior-art/instructional-text.md, item 1).
         const snap = rail.getByRole("button", { name: /^Snap: / });
@@ -5029,6 +5014,7 @@ describe("standalone workbench host boundary", function () {
           "Simplify again",
           "Accept",
           "Cancel",
+          "Defaults",
         ]);
       },
     );
@@ -5528,7 +5514,10 @@ describe("standalone workbench host boundary", function () {
           Math.abs(Number(await field("Height").inputValue()) - 6) < 0.05,
           "Automatic height was converted to centimetres instead of lattice units",
         );
-        assert.doesNotMatch(await panel.innerText(), /\bcm\b|\bpx\b/);
+        const figureBounds = panel
+          .locator("section")
+          .filter({ has: frame.getByText("Figure Bounds", { exact: true }) });
+        assert.doesNotMatch(await figureBounds.innerText(), /\bcm\b|\bpx\b/);
         await field("Width").fill("6");
         await field("Width").press("Enter");
         await expect
@@ -5551,52 +5540,55 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `states the physical size of one lattice step from the figure's own options in ${tablet.name}`,
+      `shows the physical size of one lattice step from the figure's own options in Document Properties in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const trigger = frame
-          .locator("[data-diagram-tools]")
-          .getByRole("button", { name: /^Snap: / });
-        const popup = frame.getByRole("dialog", { name: "Tool options" });
-        // The Snap popup's text after the figure's options are set to `options`.
-        const snapPopupText = async (options: string) => {
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const dialog = frame.getByRole("dialog", { name: "Document Properties" });
+        // The lattice step Document Properties shows after the figure's options are set to `options`.
+        const latticeStep = async (options: string) => {
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}${options}
 \draw (0,0) -- (3,2);
 \end{tikzpicture}`);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await expect(frame.locator('svg [data-source-id="path:0"]').first()).toBeAttached();
-          await input.touch([await stableCenter(trigger)]);
-          await expect(popup).toBeVisible();
-          const text = await popup.innerText();
-          await input.touch([await stableCenter(trigger)]);
-          await expect(popup).toHaveCount(0);
-          return text;
+          await tap(page.getByRole("group", { name: "File" }).locator("summary"));
+          await tap(page.getByRole("button", { name: "Document Properties…", exact: true }));
+          await expect(dialog).toBeVisible();
+          const step = {
+            x: await dialog.getByRole("group", { name: "Lattice step X", exact: true }).innerText(),
+            y: await dialog.getByRole("group", { name: "Lattice step Y", exact: true }).innerText(),
+          };
+          await tap(dialog.getByRole("button", { name: "Close document properties", exact: true }));
+          await expect(dialog).toHaveCount(0);
+          return { x: step.x.replace(/\s+/g, " "), y: step.y.replace(/\s+/g, " ") };
         };
-        assert.match(
-          await snapPopupText(""),
-          /One lattice step is 1 cm\./,
-          "The default lattice step of one centimetre is not stated",
+        assert.deepEqual(
+          await latticeStep(""),
+          { x: "X 1 cm", y: "Y 1 cm" },
+          "The default lattice step is not one centimetre",
         );
-        assert.match(
-          await snapPopupText("[x=2cm,y=2cm]"),
-          /One lattice step is 2 cm\./,
+        assert.deepEqual(
+          await latticeStep("[x=2cm,y=2cm]"),
+          { x: "X 2 cm", y: "Y 2 cm" },
           "The step size does not follow the figure's x and y options",
         );
-        assert.match(
-          await snapPopupText("[scale=0.5]"),
-          /One lattice step is 0\.5 cm\./,
+        assert.deepEqual(
+          await latticeStep("[scale=0.5]"),
+          { x: "X 0.5 cm", y: "Y 0.5 cm" },
           "The step size does not follow the figure's scale option",
         );
-        assert.match(
-          await snapPopupText("[x=2cm,y=0.5cm]"),
-          /One lattice step is 2 cm along x and 0\.5 cm along y\./,
-          "Unequal x and y units are not stated per axis",
+        assert.deepEqual(
+          await latticeStep("[x=2cm,y=0.5cm]"),
+          { x: "X 2 cm", y: "Y 0.5 cm" },
+          "Unequal x and y units are not shown per axis",
         );
-        await input.touch([await stableCenter(trigger)]);
-        await expect(popup).toBeVisible();
+        await tap(page.getByRole("group", { name: "File" }).locator("summary"));
+        await tap(page.getByRole("button", { name: "Document Properties…", exact: true }));
+        await expect(dialog).toBeVisible();
         await storyScreenshot(page, `lattice-step-size-${tablet.name}`);
       },
     );

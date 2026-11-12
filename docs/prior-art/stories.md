@@ -37,7 +37,7 @@ WB 1153, 2236, 4092, 4156; WB 4205 `picks a drawing colour from saved swatches, 
 
 ### #30 Snap toggle with a rules popover
 
-WB 237, 332, 448, 598, 822, 904, 1232, 4819, 5089, 5287; WB 5233 `states the physical size of one lattice step from the figure's own options`; and every story that calls `setSnapRule`.
+WB 237, 332, 448, 598, 822, 904, 1232, 4819, 5089, 5287; WB `shows only labels, values, and button names on option surfaces` (added after `f507c1f`; a tap on "Snap: …" opens the rules); and every story that calls `setSnapRule`.
 
 ### #31 Step text to the status line
 
@@ -79,13 +79,9 @@ WF 290 (the conflict as status text "The file changed on disk").
 
 The selection name and the hints in the strip, Properties, and the canvas overlay: WB 1461; WB 3709 `smooths only the neighbours of a deleted curve point`; WB 5287; WB 6859 `highlights, locks, and keeps a curve selected by ${contact}`; WB 6953 `edits a point on a styled curve from its control`; WB 7029 `shows one selection strip whose actions follow the selection: …`; WB 7204 `leaves point editing with Escape and keeps the curve ready to edit`; WB 7241, 7342; WB 7467 `deletes a chosen subset of a curve's points by ${contact}`; WB 7571 `edits a curve point from the curve's own control by ${contact}`; WB 7652 `adds a curve point with a finger double tap, as its hint says`; WB 7684 `keeps an original stroke as an editable curve whose points are counted`.
 
-### #53 Labels and values only
-
-WB 3017 (the "Hold to move a point" slider shows "450" without "ms"); WB 3658 `shows every recorded sample and every fitted anchor the freehand result counts`; WB 3810 `refines a selected curve with Simplify, Simplify again, Cancel, Accept, and Restore original` ("already as simple"); WB 5233 (the lattice-step sentences).
-
 ### #54 Units
 
-WB 2072 ("2 units"); WB 4463 ("units", no cm).
+WB 2072 ("2 units"); WB 4463 ("units", no cm); WB `shows only labels, values, and button names on option surfaces` (added after `f507c1f`; "Center X (units)" and "lattice units").
 
 ### #55 One selection menu
 
@@ -97,7 +93,7 @@ The selection pin, the lock toggle, and Done: WB 2620, 3766, 3810, 4925, 5598, 6
 
 ### #57 Freehand options before drawing
 
-The Freehand result popover: WB 2312 `keeps the original stroke after an automatic fit`; WB 2405; WB 2871 `fits a stroke with anchors a pen can pick apart, also at its slow and hooked ends`; WB 2958 `keeps automatic fits when drawing continues and the tool changes, and one Undo restores the last original`; WB 3017, 3122 (Escape closes the result); WB 3335 `refines one stroke from one surface, with new-stroke scope behind Defaults`; WB 3457 `places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke`; WB 3526, 3658, 3766, 3810, 4925, 5946, 7684, 8555, 8930, 9084 `keeps palm contact out of pen drawing and supports finger pan and pinch afterward`, 9259, 9594; WF 397. WB 2367 `keeps every stroke drawn and erased in quick succession` and WB 2922 `starts a new stroke near a raw stroke's end and leaves that stroke unchanged` press Escape after a stroke, which closes the result today.
+The Freehand result popover: WB `shows only labels, values, and button names on option surfaces` (added after `f507c1f`); WB 2312 `keeps the original stroke after an automatic fit`; WB 2405; WB 2871 `fits a stroke with anchors a pen can pick apart, also at its slow and hooked ends`; WB 2958 `keeps automatic fits when drawing continues and the tool changes, and one Undo restores the last original`; WB 3017, 3122 (Escape closes the result); WB 3335 `refines one stroke from one surface, with new-stroke scope behind Defaults`; WB 3457 `places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke`; WB 3526, 3658, 3766, 3810, 4925, 5946, 7684, 8555, 8930, 9084 `keeps palm contact out of pen drawing and supports finger pan and pinch afterward`, 9259, 9594; WF 397. WB 2367 `keeps every stroke drawn and erased in quick succession` and WB 2922 `starts a new stroke near a raw stroke's end and leaves that stroke unchanged` press Escape after a stroke, which closes the result today.
 
 ### #58 Shapes on a hold
 
