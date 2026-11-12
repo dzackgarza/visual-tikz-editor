@@ -7107,7 +7107,7 @@ index 00000000..e45afbd7
 +  );
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-index cf4cf2cf..e13ee0d4 100644
+index cf4cf2cf..01c1747e 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 @@ -27,15 +27,19 @@
@@ -7136,7 +7136,20 @@ index cf4cf2cf..e13ee0d4 100644
  }
  
  .topRulerSlot {
-@@ -94,14 +98,14 @@
+@@ -45,6 +49,12 @@
+   background: var(--bg-app);
+ }
+ 
++/* The ruler's label font size; the label step reads it from here, as Inkscape's ruler reads its widget font. */
++.topRuler,
++.leftRuler {
++  font-size: calc(var(--app-ui-scale, 1) * 9px);
++}
++
+ .topRuler {
+   width: 100%;
+   height: 100%;
+@@ -94,20 +104,19 @@
  }
  
  .rulerTickMinor {
@@ -7154,7 +7167,13 @@ index cf4cf2cf..e13ee0d4 100644
    vector-effect: non-scaling-stroke;
  }
  
-@@ -123,9 +127,6 @@
+ .rulerLabel {
+   fill: var(--text-dim);
+-  font-size: calc(var(--app-ui-scale, 1) * 9px);
+   font-family: var(--font-mono);
+   text-transform: none;
+   pointer-events: none;
+@@ -123,9 +132,6 @@
    touch-action: none;
    outline: none;
    background-color: var(--bg-canvas-area);
@@ -7164,7 +7183,7 @@ index cf4cf2cf..e13ee0d4 100644
  }
  
  .viewportTool {
-@@ -162,8 +163,8 @@
+@@ -162,8 +168,8 @@
  .svgLayer {
    position: absolute;
    inset: 0;
@@ -7175,7 +7194,7 @@ index cf4cf2cf..e13ee0d4 100644
    pointer-events: none;
    -webkit-user-select: none;
    user-select: none;
-@@ -179,7 +180,7 @@
+@@ -179,7 +185,7 @@
  }
  
  .svgLayerTransparencyGrid {
@@ -7184,7 +7203,7 @@ index cf4cf2cf..e13ee0d4 100644
    background-image:
      linear-gradient(45deg, rgba(0, 0, 0, 0.08) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.08) 75%, rgba(0, 0, 0, 0.08)),
      linear-gradient(45deg, rgba(0, 0, 0, 0.08) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.08) 75%, rgba(0, 0, 0, 0.08));
-@@ -188,10 +189,18 @@
+@@ -188,10 +194,18 @@
  }
  
  .svgLayerNoDocumentBounds {
@@ -7204,7 +7223,7 @@ index cf4cf2cf..e13ee0d4 100644
  :global([data-canvas-invert]) .svgLayer {
    background: #e8e8e8;
    filter: invert(1) hue-rotate(180deg);
-@@ -205,6 +214,38 @@
+@@ -205,6 +219,38 @@
    background-image: none;
  }
  
@@ -7243,7 +7262,7 @@ index cf4cf2cf..e13ee0d4 100644
  .svgLayer :global(svg) {
    display: block;
    width: 100%;
-@@ -323,59 +364,34 @@
+@@ -323,59 +369,34 @@
  }
  
  .gridMinor {
@@ -7313,7 +7332,7 @@ index cf4cf2cf..e13ee0d4 100644
  }
  
  .hitRegions {
-@@ -390,6 +406,16 @@
+@@ -390,6 +411,16 @@
    fill: transparent;
  }
  
@@ -7330,7 +7349,7 @@ index cf4cf2cf..e13ee0d4 100644
  .selectionOverlay {
    pointer-events: none;
  }
-@@ -568,6 +594,14 @@
+@@ -568,6 +599,14 @@
    vector-effect: non-scaling-stroke;
  }
  
@@ -7345,7 +7364,7 @@ index cf4cf2cf..e13ee0d4 100644
  .marqueeRect {
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
-@@ -935,3 +969,16 @@
+@@ -935,3 +974,16 @@
      print-color-adjust: exact;
    }
  }
@@ -7363,7 +7382,7 @@ index cf4cf2cf..e13ee0d4 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..fc208659 100644
+index 4e22ccfa..24365fdb 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -8053,7 +8072,7 @@ index 4e22ccfa..fc208659 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,10 +2061,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,16 +2061,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -8069,7 +8088,15 @@ index 4e22ccfa..fc208659 100644
      gridMinorTargetPx,
      canvasTransform,
      svgResult,
-@@ -1857,44 +2084,50 @@ export const CanvasPanel = memo(function CanvasPanel({
+     visibleRanges,
+     showGrid,
++    showRulers,
+     viewportRef,
++    topRulerRef,
+     svgResultRef,
+     canvasTransformRef,
+     guideDragRef,
+@@ -1857,44 +2086,50 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -8130,7 +8157,7 @@ index 4e22ccfa..fc208659 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1921,15 +2154,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1921,15 +2156,19 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const applyActionWithFeedback = useCallback(
@@ -8159,7 +8186,7 @@ index 4e22ccfa..fc208659 100644
          evaluateOptions: { sourceFingerprint, textEngine: textEngineRef.current },
          parseOptions: { ...editParseOptions, propertyWriteMode: "drag-frame", sourceFingerprint }
        });
-@@ -1940,13 +2177,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1940,13 +2179,14 @@ export const CanvasPanel = memo(function CanvasPanel({
            setWarning(`${result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
          }
  
@@ -8175,7 +8202,7 @@ index 4e22ccfa..fc208659 100644
              precomputedResult: result
            });
          }
-@@ -1975,6 +2213,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2215,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -8419,7 +8446,7 @@ index 4e22ccfa..fc208659 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,69 +2530,290 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,69 +2532,290 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -8746,7 +8773,7 @@ index 4e22ccfa..fc208659 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2828,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2830,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -8754,7 +8781,7 @@ index 4e22ccfa..fc208659 100644
          return;
        }
  
-@@ -2141,7 +2836,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2838,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -8762,7 +8789,7 @@ index 4e22ccfa..fc208659 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2852,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2854,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -8770,7 +8797,7 @@ index 4e22ccfa..fc208659 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2866,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2868,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -8800,7 +8827,7 @@ index 4e22ccfa..fc208659 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3721,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3723,8 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -8809,7 +8836,7 @@ index 4e22ccfa..fc208659 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3049,12 +3761,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3049,12 +3763,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          setWarning(`${resolution.result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
        }
  
@@ -8826,7 +8853,7 @@ index 4e22ccfa..fc208659 100644
      },
      setSnapLines,
      logSnapDebug,
-@@ -3064,9 +3779,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3781,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -8836,7 +8863,7 @@ index 4e22ccfa..fc208659 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3789,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3791,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -8844,7 +8871,7 @@ index 4e22ccfa..fc208659 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3860,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3862,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -8855,7 +8882,7 @@ index 4e22ccfa..fc208659 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3886,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3888,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -8865,7 +8892,7 @@ index 4e22ccfa..fc208659 100644
      ]
    );
  
-@@ -3192,6 +3908,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3910,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -8944,7 +8971,7 @@ index 4e22ccfa..fc208659 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +4008,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +4010,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -8963,7 +8990,7 @@ index 4e22ccfa..fc208659 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +4042,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4044,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -8974,7 +9001,7 @@ index 4e22ccfa..fc208659 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4065,325 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4067,325 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -9302,7 +9329,7 @@ index 4e22ccfa..fc208659 100644
    const {
      onViewportKeyDown,
      onViewportPaste,
-@@ -3306,6 +4411,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4413,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -9310,7 +9337,7 @@ index 4e22ccfa..fc208659 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4436,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4438,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -9335,7 +9362,7 @@ index 4e22ccfa..fc208659 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4554,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4556,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -9370,7 +9397,7 @@ index 4e22ccfa..fc208659 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4575,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4577,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -9378,7 +9405,7 @@ index 4e22ccfa..fc208659 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4589,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4591,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -9386,7 +9413,7 @@ index 4e22ccfa..fc208659 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4665,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4667,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -9395,7 +9422,7 @@ index 4e22ccfa..fc208659 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4710,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4712,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -9404,7 +9431,7 @@ index 4e22ccfa..fc208659 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4789,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4791,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -9428,7 +9455,7 @@ index 4e22ccfa..fc208659 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4902,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4904,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -9436,7 +9463,7 @@ index 4e22ccfa..fc208659 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4915,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4917,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -9444,7 +9471,7 @@ index 4e22ccfa..fc208659 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4926,250 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4928,250 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -9695,7 +9722,7 @@ index 4e22ccfa..fc208659 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5189,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5191,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -9718,7 +9745,7 @@ index 4e22ccfa..fc208659 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5220,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5222,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -9734,7 +9761,7 @@ index 4e22ccfa..fc208659 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +5246,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5248,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -9768,7 +9795,7 @@ index 4e22ccfa..fc208659 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5278,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5280,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -9778,7 +9805,7 @@ index 4e22ccfa..fc208659 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5291,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5293,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -9813,7 +9840,7 @@ index 4e22ccfa..fc208659 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5345,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5347,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -9821,7 +9848,7 @@ index 4e22ccfa..fc208659 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5354,59 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5356,59 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -11566,7 +11593,7 @@ index a7b0a7e2..1510af8b 100644
 +}
 +
 diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
-index 5660d6d8..b932178c 100644
+index 5660d6d8..b1d7d5a5 100644
 --- a/packages/app/src/ui/canvas-panel/geometry.ts
 +++ b/packages/app/src/ui/canvas-panel/geometry.ts
 @@ -1,4 +1,5 @@
@@ -11583,7 +11610,7 @@ index 5660d6d8..b932178c 100644
    viewportPos: number;
    major: boolean;
    label?: string;
-@@ -71,15 +73,40 @@ export function buildTicks(
+@@ -71,15 +73,55 @@ export function buildTicks(
    for (const worldValue of values) {
      const major = isMultipleOfStep(worldValue, majorStep);
      ticks.push({
@@ -11598,35 +11625,50 @@ index 5660d6d8..b932178c 100644
    return ticks;
  }
  
-+/** The least screen distance between two ruler labels, in px. */
-+const RULER_LABEL_MIN_PX = 50;
++/**
++ * Inkscape's "general" ruler metric, the metric of its centimetre unit: label steps in units, and the
++ * subdivisions (`div="true"`) of a step. Inkscape `share/ui/units.xml:3-21,80-88` at 70feba2.
++ */
++const RULER_SCALE = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
++const RULER_SUBDIVIDE = [1, 5, 10, 50, 100];
 +
 +/**
-+ * Ruler ticks in world pt, labelled in centimetres. The label step is the smallest of 1, 2, 5 × 10ⁿ cm
-+ * that keeps adjacent labels RULER_LABEL_MIN_PX apart at this scale (px per pt); unlabelled ticks divide
-+ * each step in fifths (quarters for a step of 2 × 10ⁿ). This step rule has no reference; #66 replaces it
-+ * with Inkscape's (`src/ui/widget/ink-ruler.cpp:220-251`).
++ * Ruler ticks in world pt over the visible range [worldMinPt, worldMaxPt], labelled in whole centimetres
++ * at this scale (px per pt), by Inkscape's `Ruler::draw_scale` (`src/ui/widget/ink-ruler.cpp:217-247` at
++ * 70feba2). The label step is the first metric entry whose screen length exceeds twice the font size in
++ * pt times the digit count of the visible span plus one; the step is subdivided by the largest
++ * subdivision that keeps ticks 5 px apart.
 + */
 +export function buildRulerTicks(
 +  worldMinPt: number,
 +  worldMaxPt: number,
 +  scale: number,
++  labelFontPx: number,
 +  mapWorldToViewport: (value: number) => number
 +): RulerTick[] {
-+  const minCm = RULER_LABEL_MIN_PX / (Math.max(scale, 1e-6) * PT_PER_CM);
-+  const decade = 10 ** Math.floor(Math.log10(minCm));
-+  const mantissa = [1, 2, 5, 10].find((m) => m * decade >= minCm * (1 - 1e-9))!;
-+  const labelStepPt = mantissa * decade * PT_PER_CM;
-+  const tickStepPt = labelStepPt / (mantissa === 2 ? 4 : 5);
++  const spanCm = Math.abs(worldMaxPt - worldMinPt) / PT_PER_CM || 1;
++  const digits = String(Math.ceil(spanCm)).length + 1;
++  // Inkscape's `get_font_size` gives whole points; an absolute CSS size converts at 0.75 pt per px.
++  const minimum = digits * Math.trunc(labelFontPx * 0.75) * 2;
++  const pxPerCm = scale * PT_PER_CM;
++
++  let scaleIndex = 0;
++  while (scaleIndex < RULER_SCALE.length - 1 && !(RULER_SCALE[scaleIndex] * pxPerCm > minimum)) scaleIndex++;
++  const majorPx = RULER_SCALE[scaleIndex] * pxPerCm;
++  let divideIndex = 0;
++  while (divideIndex < RULER_SUBDIVIDE.length - 1 && !(majorPx < 5 * RULER_SUBDIVIDE[divideIndex + 1])) divideIndex++;
++
++  const labelStepPt = RULER_SCALE[scaleIndex] * PT_PER_CM;
++  const tickStepPt = labelStepPt / RULER_SUBDIVIDE[divideIndex];
 +  return buildTicks(worldMinPt, worldMaxPt, tickStepPt, labelStepPt, mapWorldToViewport).map((tick) =>
-+    tick.major ? { ...tick, label: formatCm(tick.worldValue / PT_PER_CM) } : tick
++    tick.major ? { ...tick, label: String(Math.round(tick.worldValue / PT_PER_CM)) } : tick
 +  );
 +}
 +
  export function buildValueSequence(min: number, max: number, step: number, maxCount: number): number[] {
    if (!(step > 0) || !Number.isFinite(min) || !Number.isFinite(max)) return [];
  
-@@ -210,20 +237,8 @@ export function svgToWorldPoint(point: SvgPoint, viewBox: Pick<SvgViewBox, "y" |
+@@ -210,20 +252,8 @@ export function svgToWorldPoint(point: SvgPoint, viewBox: Pick<SvgViewBox, "y" |
    return typedSvgToWorld(point, viewBox as SvgViewBox);
  }
  
@@ -11648,6 +11690,28 @@ index 5660d6d8..b932178c 100644
    return {
      minorStep,
      majorStep: minorStep * OVERLAY_MAJOR_STEP_MULTIPLE
+@@ -236,21 +266,6 @@ export function isMultipleOfStep(value: number, step: number): boolean {
+   return Math.abs(q - Math.round(q)) < 1e-4;
+ }
+ 
+-function formatCm(valueCm: number): string {
+-  if (Math.abs(valueCm) < 1e-8) return "0";
+-
+-  const rounded2 = Math.round(valueCm * 100) / 100;
+-  if (Math.abs(rounded2 - Math.round(rounded2)) < 1e-8) {
+-    return String(Math.round(rounded2));
+-  }
+-
+-  if (Math.abs(rounded2 * 10 - Math.round(rounded2 * 10)) < 1e-8) {
+-    return rounded2.toFixed(1);
+-  }
+-
+-  return rounded2.toFixed(2);
+-}
+-
+ export function clamp(value: number, min: number, max: number): number {
+   return Math.min(max, Math.max(min, value));
+ }
 @@ -291,3 +306,30 @@ export function distanceSquared(a: WorldPoint, b: WorldPoint): number {
    const dy = a.y - b.y;
    return dx * dx + dy * dy;
@@ -14801,15 +14865,16 @@ index c69a45af..ef721aa7 100644
 -  return handle ? handle.world : null;
 -}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
-index 7113da3e..31975d9f 100644
+index 7113da3e..084681aa 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
 @@ -1,9 +1,12 @@
+-import { useCallback, useMemo, type Dispatch, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
 +import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
 +import type { EditParseOptions } from "tikz-editor/edit/parse-options";
 +import { applyMatrix, inverseMatrix } from "tikz-editor/semantic/transform";
 +import { pt, worldPoint } from "tikz-editor/coords/index";
- import { useCallback, useMemo, type Dispatch, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
++import { useCallback, useLayoutEffect, useMemo, useState, type Dispatch, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
  import { viewportPoint as makeViewportPoint, clientPoint as makeClientPoint, px } from "tikz-editor/coords/index";
  import {
 +  buildRulerTicks,
@@ -14819,7 +14884,13 @@ index 7113da3e..31975d9f 100644
    resolveOverlayGridSteps,
    toViewportXFromWorld,
    toViewportYFromWorld,
-@@ -23,6 +26,9 @@ import type { GuideDragState, GuideOrientation, GuidePreview, GuidesState } from
+@@ -18,11 +21,15 @@ import {
+   upsertGuideValue
+ } from "./panel-helpers";
+ import type { CanvasTransform } from "../../store/types";
++import { useSettingsStore } from "../../settings/useSettingsStore";
+ import type { ClientPoint } from "../coords/types";
+ import type { GuideDragState, GuideOrientation, GuidePreview, GuidesState } from "./types";
  import type { SvgViewBox } from "tikz-editor/svg/index";
  
  export type GridLines = {
@@ -14829,7 +14900,7 @@ index 7113da3e..31975d9f 100644
    verticalMinor: number[];
    verticalMajor: number[];
    verticalAxisX: number | null;
-@@ -34,15 +40,14 @@ export type GridLines = {
+@@ -34,21 +41,22 @@ export type GridLines = {
  };
  
  export type UseCanvasGuidesAndRulersArgs = {
@@ -14850,7 +14921,15 @@ index 7113da3e..31975d9f 100644
    gridMinorTargetPx: number;
    canvasTransform: CanvasTransform;
    svgResult: { viewBox: SvgViewBox } | null;
-@@ -58,10 +63,14 @@ export type UseCanvasGuidesAndRulersArgs = {
+   visibleRanges: VisibleRanges | null;
+   showGrid: boolean;
++  showRulers: boolean;
+   viewportRef: RefObject<HTMLDivElement | null>;
++  topRulerRef: RefObject<SVGSVGElement | null>;
+   svgResultRef: MutableRefObject<{ viewBox: SvgViewBox } | null>;
+   canvasTransformRef: MutableRefObject<CanvasTransform>;
+   guideDragRef: MutableRefObject<GuideDragState | null>;
+@@ -58,16 +66,22 @@ export type UseCanvasGuidesAndRulersArgs = {
  
  export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
    const {
@@ -14866,7 +14945,15 @@ index 7113da3e..31975d9f 100644
      gridMinorTargetPx,
      canvasTransform,
      svgResult,
-@@ -75,28 +84,41 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+     visibleRanges,
+     showGrid,
++    showRulers,
+     viewportRef,
++    topRulerRef,
+     svgResultRef,
+     canvasTransformRef,
+     guideDragRef,
+@@ -75,28 +89,41 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
      LEFT_RULER_DRAG_SOURCE_WIDTH_PX
    } = args;
  
@@ -14917,7 +15004,7 @@ index 7113da3e..31975d9f 100644
    );
  
    const renderedGuides = useMemo(() => {
-@@ -132,8 +154,9 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -132,8 +159,9 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
      [canvasTransform.scale, gridMinorTargetPx]
    );
  
@@ -14929,7 +15016,7 @@ index 7113da3e..31975d9f 100644
        return {
          topTicks: [] as RulerTick[],
          leftTicks: [] as RulerTick[]
-@@ -142,74 +165,91 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -142,74 +170,100 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
  
      const { majorStep, minorStep } = overlayGridSteps;
      const topTicks = buildTicks(
@@ -14957,32 +15044,41 @@ index 7113da3e..31975d9f 100644
      return { topTicks, leftTicks };
 -  }, [canvasTransform, overlayGridSteps, svgResult, visibleRanges]);
 +  }, [latticeTransform, canvasTransform, overlayGridSteps, svgResult, latticeRanges]);
-+
+ 
+-  const gridLines = useMemo((): GridLines | null => {
+-    if (!svgResult || !visibleRanges || !showGrid) return null;
++  // The label font size the ruler's style gives, read as Inkscape's ruler reads its widget font; the
++  // interface font size setting and the host's stylesheet both set it.
++  const uiFontSizePx = useSettingsStore((s) => s.settings.general.uiFontSizePx);
++  const [labelFontPx, setLabelFontPx] = useState<number | null>(null);
++  useLayoutEffect(() => {
++    const ruler = topRulerRef.current;
++    setLabelFontPx(ruler ? parseFloat(getComputedStyle(ruler).fontSize) : null);
++  }, [topRulerRef, showRulers, uiFontSizePx]);
+ 
+-    const { minorStep, majorStep } = overlayGridSteps;
 +  const rulers = useMemo(() => {
-+    if (!svgResult || !visibleRanges) {
++    if (!svgResult || !visibleRanges || labelFontPx === null) {
 +      return {
 +        topTicks: [] as RulerTick[],
 +        leftTicks: [] as RulerTick[]
 +      };
 +    }
 +    return {
-+      topTicks: buildRulerTicks(visibleRanges.worldMinX, visibleRanges.worldMaxX, canvasTransform.scale, (value) =>
++      topTicks: buildRulerTicks(visibleRanges.worldMinX, visibleRanges.worldMaxX, canvasTransform.scale, labelFontPx, (value) =>
 +        toViewportXFromWorld(value, svgResult.viewBox, canvasTransform)
 +      ),
-+      leftTicks: buildRulerTicks(visibleRanges.worldMinY, visibleRanges.worldMaxY, canvasTransform.scale, (value) =>
++      leftTicks: buildRulerTicks(visibleRanges.worldMinY, visibleRanges.worldMaxY, canvasTransform.scale, labelFontPx, (value) =>
 +        toViewportYFromWorld(value, svgResult.viewBox, canvasTransform)
 +      )
 +    };
-+  }, [canvasTransform, svgResult, visibleRanges]);
++  }, [canvasTransform, svgResult, visibleRanges, labelFontPx]);
  
-   const gridLines = useMemo((): GridLines | null => {
-     if (!svgResult || !visibleRanges || !showGrid) return null;
- 
--    const { minorStep, majorStep } = overlayGridSteps;
--
 -    const worldXs = buildValueSequence(visibleRanges.worldMinX, visibleRanges.worldMaxX, minorStep, 1000);
 -    const worldYs = buildValueSequence(visibleRanges.worldMinY, visibleRanges.worldMaxY, minorStep, 1000);
--
++  const gridLines = useMemo((): GridLines | null => {
++    if (!svgResult || !visibleRanges || !showGrid) return null;
+ 
      const verticalMinor: number[] = [];
      const verticalMajor: number[] = [];
 -    const verticalAxisX = rangeContainsZero(visibleRanges.worldMinX, visibleRanges.worldMaxX) ? 0 : null;
@@ -15049,7 +15145,7 @@ index 7113da3e..31975d9f 100644
  
    const resolveGuideFromClient = useCallback(
      (orientation: GuideOrientation, clientPoint: ClientPoint): { value: number; overViewport: boolean } | null => {
-@@ -371,7 +411,3 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -371,7 +425,3 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
  function isZeroGridValue(value: number): boolean {
    return Math.abs(value) < 1e-8;
  }

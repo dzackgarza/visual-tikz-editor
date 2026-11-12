@@ -1305,13 +1305,15 @@ describe("standalone workbench host boundary", function () {
             if (Math.abs(tick.position - (origin[axis] + value * perCm)) > 2) return `label ${value} is not at its centimetre (${context})`;
             if (value % step !== 0) return `label ${value} is not a multiple of Inkscape's step (${context})`;
           }
+          const stepPx = Math.abs(perCm * step);
+          const spacing = stepPx / divide;
+          // A tick is on the step when it is nearer to a multiple of the step than to the next tick.
           const unlabelled = ticks.find((tick) => {
-            const steps = (tick.position - origin[axis]) / (perCm * step);
-            return tick.label === null && Math.abs(steps - Math.round(steps)) < 0.01;
+            const offset = (tick.position - origin[axis]) / stepPx;
+            return tick.label === null && Math.abs(offset - Math.round(offset)) * stepPx < spacing / 2;
           });
           if (unlabelled) return `the tick at ${unlabelled.position} px is on Inkscape's step but has no label (${context})`;
           const positions = ticks.map((tick) => tick.position).sort((a, b) => a - b);
-          const spacing = Math.abs(perCm * step) / divide;
           const uneven = positions.slice(1).find((position, index) => Math.abs(position - positions[index] - spacing) > 0.5);
           if (uneven !== undefined) return `ticks are not ${spacing.toFixed(2)} px apart, Inkscape's subdivision (${context}): ${positions}`;
           return null;
