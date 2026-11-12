@@ -103,4 +103,15 @@ Every control of the dock compared with the conventions above.
 
 ## Implementation issues
 
-Each item of the specification is an implementation issue linked from #19. No implementation issue starts before the audit it depends on (#20, #21, #22, #23) has its own specification, where the item names one.
+An issue that names a dependency starts after that audit has its specification.
+
+| Items | Issue | Depends on |
+| --- | --- | --- |
+| 8 | [#26](https://github.com/dzackgarza/visual-tikz-editor/issues/26) Buttons close what they opened; one popover at a time | — |
+| 4, 5 | [#27](https://github.com/dzackgarza/visual-tikz-editor/issues/27) One press rule and tool options | — |
+| 1–3 | [#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28) Dock contents as icons | #22 |
+| 6 | [#29](https://github.com/dzackgarza/visual-tikz-editor/issues/29) Unlabelled colour well | #20 |
+| 7 | [#30](https://github.com/dzackgarza/visual-tikz-editor/issues/30) Snap toggle with a rules popover | — |
+| 10 | [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31) Step text to a status line | #21 |
+| 9 | [#32](https://github.com/dzackgarza/visual-tikz-editor/issues/32) Drag from the edge; drop zones without words | — |
+| 11 | [#33](https://github.com/dzackgarza/visual-tikz-editor/issues/33) Delete `toolbar.items` | — |
