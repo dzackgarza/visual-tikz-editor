@@ -1232,6 +1232,113 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `labels both rulers in centimetres at a 1-2-5 step at least 50 px apart at every zoom, under the tooltip "cm", in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
+\draw (0,0) -- (5,0);
+\draw (0,0) -- (0,5);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        // Screen position of the origin and screen pixels per centimetre along x and y,
+        // from the segments of 5 figure units of 2 cm each.
+        const axes = () =>
+          Promise.all(
+            ["path:0", "path:1"].map((id) =>
+              frame
+                .locator(`svg [data-source-id="${id}"]`)
+                .first()
+                .evaluate((path: SVGGeometryElement) => {
+                  const m = path.getScreenCTM()!;
+                  const [start, end] = [0, path.getTotalLength()].map((length) => {
+                    const p = path.getPointAtLength(length);
+                    return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+                  });
+                  return { origin: start, perCm: { x: (end.x - start.x) / 10, y: (end.y - start.y) / 10 } };
+                }),
+            ),
+          );
+        // Each label of a ruler with its tick's screen position: the label's group is translated to the tick.
+        const labels = (testId: string) =>
+          frame
+            .getByTestId(testId)
+            .locator("text")
+            .evaluateAll((texts: SVGTextElement[]) =>
+              texts.map((text) => {
+                const m = (text.parentNode as SVGGElement).getScreenCTM()!;
+                return { text: text.textContent ?? "", x: m.e, y: m.f };
+              }),
+            );
+        const isOneTwoFive = (step: number) => {
+          const mantissa = step / 10 ** Math.floor(Math.log10(step) + 1e-9);
+          return [1, 2, 5].some((m) => Math.abs(mantissa - m) < 1e-6);
+        };
+        const smallerStep = (step: number) => {
+          const mantissa = Math.round(step / 10 ** Math.floor(Math.log10(step) + 1e-9));
+          return mantissa === 1 ? step / 2 : mantissa === 2 ? step / 2 : step * 0.4;
+        };
+        // The rule for one ruler, or the reason it is broken.
+        const ruleBroken = (
+          entries: { text: string; x: number; y: number }[],
+          axis: "x" | "y",
+          origin: { x: number; y: number },
+          perCm: number,
+        ) => {
+          if (entries.length < 2) return `fewer than two labels: ${JSON.stringify(entries)}`;
+          const values = entries.map((entry) => Number(entry.text));
+          if (values.some((value) => !Number.isFinite(value))) return `a label is not a number: ${JSON.stringify(entries)}`;
+          const misplaced = entries.filter(
+            (entry, index) => Math.abs(entry[axis] - (origin[axis] + values[index] * perCm)) > 2,
+          );
+          if (misplaced.length > 0) return `labels not at their centimetre: ${JSON.stringify({ misplaced, perCm })}`;
+          const sorted = [...values].sort((a, b) => a - b);
+          const steps = sorted.slice(1).map((value, index) => value - sorted[index]);
+          const step = steps[0];
+          if (steps.some((other) => Math.abs(other - step) > 1e-6 * step)) return `uneven label steps: ${sorted}`;
+          if (!isOneTwoFive(step)) return `step ${step} cm is not 1, 2, or 5 × 10ⁿ`;
+          const spacing = step * Math.abs(perCm);
+          if (spacing < 49.5) return `labels ${spacing.toFixed(1)} px apart at a step of ${step} cm`;
+          if (smallerStep(step) * Math.abs(perCm) >= 50) return `step ${step} cm is not the smallest that keeps 50 px`;
+          return null;
+        };
+        const zoom = frame
+          .locator("[data-diagram-tools]")
+          .getByRole("button", { name: "Zoom and display", exact: true });
+        const levels = ["5%", "8%", "100%", "400%", "Fit diagram"];
+        for (const level of levels) {
+          await input.touch([await stableCenter(zoom)]);
+          await input.touch([await stableCenter(frame.getByRole("button", { name: level, exact: true }))]);
+          await input.touch([await stableCenter(zoom)]);
+          await expect
+            .poll(async () => {
+              const [[x, y], top, left] = await Promise.all([
+                axes(),
+                labels("canvas-top-ruler"),
+                labels("canvas-left-ruler"),
+              ]);
+              const broken =
+                ruleBroken(top, "x", x.origin, x.perCm.x) ?? ruleBroken(left, "y", y.origin, y.perCm.y);
+              return broken === null ? "readable" : `${level}: ${broken}`;
+            })
+            .toBe("readable");
+        }
+        for (const testId of ["canvas-top-ruler", "canvas-left-ruler"]) {
+          await expect(frame.getByTitle("cm", { exact: true }).getByTestId(testId)).toHaveCount(1);
+        }
+        const corner = frame.locator('[class*="rulerCorner"]');
+        await expect(corner).toHaveText("");
+        await expect(corner).not.toHaveAttribute("title");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `labels the rulers in lattice steps when the figure scales its lattice in ${tablet.name}`,
       async function () {
         await editorReady(page);
