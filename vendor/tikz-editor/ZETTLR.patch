@@ -11566,7 +11566,7 @@ index a7b0a7e2..1510af8b 100644
 +}
 +
 diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
-index 5660d6d8..f7bc1c9c 100644
+index 5660d6d8..b932178c 100644
 --- a/packages/app/src/ui/canvas-panel/geometry.ts
 +++ b/packages/app/src/ui/canvas-panel/geometry.ts
 @@ -1,4 +1,5 @@
@@ -11603,9 +11603,9 @@ index 5660d6d8..f7bc1c9c 100644
 +
 +/**
 + * Ruler ticks in world pt, labelled in centimetres. The label step is the smallest of 1, 2, 5 × 10ⁿ cm
-+ * that keeps adjacent labels RULER_LABEL_MIN_PX apart at this scale (px per pt), as Inkscape's rulers
-+ * pick their step from the zoom (`src/ui/widget/ruler.cpp`); unlabelled ticks divide each step in fifths
-+ * (quarters for a step of 2 × 10ⁿ).
++ * that keeps adjacent labels RULER_LABEL_MIN_PX apart at this scale (px per pt); unlabelled ticks divide
++ * each step in fifths (quarters for a step of 2 × 10ⁿ). This step rule has no reference; #66 replaces it
++ * with Inkscape's (`src/ui/widget/ink-ruler.cpp:220-251`).
 + */
 +export function buildRulerTicks(
 +  worldMinPt: number,
