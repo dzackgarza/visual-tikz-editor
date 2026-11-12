@@ -635,14 +635,14 @@ index 00000000..d369d5af
 +  });
 +}
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
-index 4850a87e..a3379ea5 100644
+index 4850a87e..010ec0dc 100644
 --- a/packages/app/src/settings/storage.ts
 +++ b/packages/app/src/settings/storage.ts
 @@ -1,5 +1,6 @@
 +import { parseShortcutOverrides } from "./keybindings";
  import type { AppSettings } from "./types";
 -import { DEFAULT_SETTINGS } from "./types";
-+import { DEFAULT_SETTINGS, TOOLBAR_TOOL_IDS, type ToolbarItem, type ToolbarDock } from "./types";
++import { DEFAULT_SETTINGS, type ToolbarDock } from "./types";
  import { getActiveEditorPlatform } from "../platform/current";
  
  const STORAGE_KEY = "tikz-editor:settings";
@@ -654,7 +654,7 @@ index 4850a87e..a3379ea5 100644
        general: {
          ...DEFAULT_SETTINGS.general,
          ...parsed.general
-@@ -36,11 +38,43 @@ export function loadSettings(): AppSettings {
+@@ -36,11 +38,40 @@ export function loadSettings(): AppSettings {
        },
        canvas: {
          ...DEFAULT_SETTINGS.canvas,
@@ -693,14 +693,11 @@ index 4850a87e..a3379ea5 100644
 +        circleConstruction: parsed.toolbar?.circleConstruction === "diameter" || parsed.toolbar?.circleConstruction === "three-points" ? parsed.toolbar.circleConstruction : "centre",
 +        arcConstruction: parsed.toolbar?.arcConstruction === "three-points" ? "three-points" : "centre",
 +        x: typeof parsed.toolbar?.x === "number" && Number.isFinite(parsed.toolbar.x) ? parsed.toolbar.x : DEFAULT_SETTINGS.toolbar.x,
-+        y: typeof parsed.toolbar?.y === "number" && Number.isFinite(parsed.toolbar.y) ? parsed.toolbar.y : DEFAULT_SETTINGS.toolbar.y,
-+        items: Array.isArray(parsed.toolbar?.items)
-+          ? parsed.toolbar.items.filter(isToolbarItem)
-+          : DEFAULT_SETTINGS.toolbar.items
++        y: typeof parsed.toolbar?.y === "number" && Number.isFinite(parsed.toolbar.y) ? parsed.toolbar.y : DEFAULT_SETTINGS.toolbar.y
        },
        rendering: {
          ...DEFAULT_SETTINGS.rendering,
-@@ -52,6 +86,27 @@ export function loadSettings(): AppSettings {
+@@ -52,6 +83,21 @@ export function loadSettings(): AppSettings {
    }
  }
  
@@ -719,17 +716,11 @@ index 4850a87e..a3379ea5 100644
 +  return value === "left" || value === "right" || value === "top" || value === "bottom" || value === "floating";
 +}
 +
-+function isToolbarItem(value: ToolbarItem): value is ToolbarItem {
-+  if (!value || typeof value !== "object") return false;
-+  if (value.kind === "separator" || value.kind === "spacer") return true;
-+  return value.kind === "tool" && TOOLBAR_TOOL_IDS.some((id) => id === value.id);
-+}
-+
  function clampFormatterMaxLineLength(value: number): number {
    if (!Number.isFinite(value)) {
      return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
 diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
-index af0a7abe..b31b1d34 100644
+index af0a7abe..c24e9856 100644
 --- a/packages/app/src/settings/types.ts
 +++ b/packages/app/src/settings/types.ts
 @@ -1,3 +1,4 @@
@@ -737,7 +728,7 @@ index af0a7abe..b31b1d34 100644
  export type EditorSettings = {
    wordWrap: boolean;
    fontSize: number;
-@@ -9,6 +10,22 @@ export type EditorSettings = {
+@@ -9,6 +10,21 @@ export type EditorSettings = {
  
  export type ColorPickerAccuracy = "approximate" | "exact";
  
@@ -746,12 +737,11 @@ index af0a7abe..b31b1d34 100644
 +  "color", "shape", "addMatrix", "addImage", "addNode", "addGrid", "addBucket", "undo", "redo", "palette"
 +] as const;
 +export type ToolbarToolId = (typeof TOOLBAR_TOOL_IDS)[number];
-+export type ToolbarItem = { kind: "tool"; id: ToolbarToolId } | { kind: "separator" } | { kind: "spacer" };
 +export type ToolbarDock = "top" | "left" | "bottom" | "right" | "floating";
 +export type CircleConstruction = "centre" | "diameter" | "three-points";
 +export type ArcConstruction = "centre" | "three-points";
 +export type ToolbarSettings = {
-+  items: ToolbarItem[]; dock: ToolbarDock; x: number; y: number; lassoShape: "freehand" | "ellipse" | "rectangle";
++  dock: ToolbarDock; x: number; y: number; lassoShape: "freehand" | "ellipse" | "rectangle";
 +  /** How the Circle and Arc tools take their points: by centre, or through tapped points (IPE's constructions). */
 +  circleConstruction: CircleConstruction;
 +  arcConstruction: ArcConstruction;
@@ -760,7 +750,7 @@ index af0a7abe..b31b1d34 100644
  export type GridSize = "fine" | "standard" | "coarse";
  
  export type ColorScheme = "system" | "light" | "dark";
-@@ -20,10 +37,28 @@ export type GeneralSettings = {
+@@ -20,10 +36,28 @@ export type GeneralSettings = {
  };
  
  export type CanvasSettings = {
@@ -789,7 +779,7 @@ index af0a7abe..b31b1d34 100644
  };
  
  export type MathJaxFont =
-@@ -44,12 +79,17 @@ export type RenderingSettings = {
+@@ -44,12 +78,17 @@ export type RenderingSettings = {
  };
  
  export type AppSettings = {
@@ -807,7 +797,7 @@ index af0a7abe..b31b1d34 100644
    rendering: RenderingSettings;
  };
  
-@@ -67,6 +107,7 @@ export const EDITOR_FONT_SIZE_OPTIONS = Array.from(
+@@ -67,6 +106,7 @@ export const EDITOR_FONT_SIZE_OPTIONS = Array.from(
  );
  
  export const DEFAULT_SETTINGS: AppSettings = {
@@ -815,7 +805,7 @@ index af0a7abe..b31b1d34 100644
    general: {
      uiFontSizePx: 11,
      colorScheme: "system",
-@@ -81,15 +122,64 @@ export const DEFAULT_SETTINGS: AppSettings = {
+@@ -81,15 +121,49 @@ export const DEFAULT_SETTINGS: AppSettings = {
      formatterMaxLineLength: 100
    },
    canvas: {
@@ -852,22 +842,7 @@ index af0a7abe..b31b1d34 100644
 +    circleConstruction: "centre",
 +    arcConstruction: "centre",
 +    x: 0.5,
-+    y: 0.5,
-+    items: [
-+      { kind: "tool", id: "select" },
-+      { kind: "separator" },
-+      { kind: "tool", id: "addFreehand" }, { kind: "tool", id: "line" }, { kind: "tool", id: "addBezier" },
-+      { kind: "tool", id: "addArc" }, { kind: "tool", id: "addPoint" }, { kind: "tool", id: "color" },
-+      { kind: "separator" },
-+      { kind: "tool", id: "shape" }, { kind: "tool", id: "addMatrix" }, { kind: "tool", id: "addImage" },
-+      { kind: "separator" },
-+      { kind: "tool", id: "addBucket" },
-+      { kind: "spacer" },
-+      { kind: "tool", id: "undo" }, { kind: "tool", id: "redo" },
-+      { kind: "separator" },
-+      { kind: "tool", id: "lasso" }, { kind: "tool", id: "erase" },
-+      { kind: "tool", id: "palette" }
-+    ]
++    y: 0.5
    },
    rendering: {
      mathJaxFont: "mathjax-newcm"

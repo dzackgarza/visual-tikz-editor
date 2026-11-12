@@ -77,7 +77,7 @@ Every control of the dock compared with the conventions above.
 | Settings | The word, in the dock | App menu, not a toolbar | Place, word |
 | Tooltips | Hidden on touch; text such as "press again or hold for options" | Pointer only; short verb phrase | Instruction text in tooltips |
 | Step lane | Step text, Finish, Cancel in the dock | Step text in a status line; Done and Cancel in the toolbar while a construction runs | Step text in the dock |
-| Stored setting `toolbar.items` | Stored, never read (`settings/storage.ts:75`) | HIG suggests toolbar customisation | Dead setting |
+| Stored setting `toolbar.items` | Stored, never read (`settings/storage.ts:75`) | HIG suggests toolbar customisation | Deleted |
 
 ## Specification
 
@@ -99,7 +99,7 @@ Every control of the dock compared with the conventions above.
 8. **Panels toggle.** Every button that opens a popover or a panel closes it on the next press. One popover is open at a time; a press on another button closes the open one and opens the new one.
 9. **Moving the dock.** The dock moves by a drag from its edge to any screen edge. The drop zones show the target edge as a highlight, with no words.
 10. **Construction status.** The step text leaves the dock for a status line ([#21](https://github.com/dzackgarza/visual-tikz-editor/issues/21)). Finish and Cancel stay in the dock while a construction runs.
-11. **The setting `toolbar.items`** is deleted.
+11. **The setting `toolbar.items`** is deleted. Stored settings that hold it load, and the next save drops it. The present build meets this rule.
 
 ## Implementation issues
 
@@ -113,4 +113,3 @@ An issue that names a dependency starts after that audit has its specification.
 | 7 | [#30](https://github.com/dzackgarza/visual-tikz-editor/issues/30) Snap toggle with a rules popover | — |
 | 10 | [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31) Step text to a status line | #21 |
 | 9 | [#32](https://github.com/dzackgarza/visual-tikz-editor/issues/32) Drag from the edge; drop zones without words | — |
-| 11 | [#33](https://github.com/dzackgarza/visual-tikz-editor/issues/33) Delete `toolbar.items` | — |
