@@ -1232,7 +1232,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `labels both rulers in centimetres at a 1-2-5 step at least 50 px apart at every zoom, under the tooltip "cm", in ${tablet.name}`,
+      `labels both rulers in whole centimetres at Inkscape's step and subdivision for every zoom, under the tooltip "cm", in ${tablet.name}`,
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -1273,13 +1273,30 @@ describe("standalone workbench host boundary", function () {
                 return { text: text.textContent ?? "", x: m.e, y: m.f };
               }),
             );
-        const isOneTwoFive = (step: number) => {
-          const mantissa = step / 10 ** Math.floor(Math.log10(step) + 1e-9);
-          return [1, 2, 5].some((m) => Math.abs(mantissa - m) < 1e-6);
-        };
-        const smallerStep = (step: number) => {
-          const mantissa = Math.round(step / 10 ** Math.floor(Math.log10(step) + 1e-9));
-          return mantissa === 1 ? step / 2 : mantissa === 2 ? step / 2 : step * 0.4;
+        // The ruler's length, its label font size, and the screen position of every tick.
+        const ruler = (testId: string, axis: "x" | "y") =>
+          frame.getByTestId(testId).evaluate((svg: SVGSVGElement, along) => {
+            const box = svg.getBoundingClientRect();
+            const label = svg.querySelector("text");
+            return {
+              lengthPx: along === "x" ? box.width : box.height,
+              fontPx: label ? parseFloat(getComputedStyle(label).fontSize) : NaN,
+              ticks: [...svg.querySelectorAll(":scope > g")].map((group) => {
+                const m = (group as SVGGElement).getScreenCTM()!;
+                return along === "x" ? m.e : m.f;
+              }),
+            };
+          }, axis);
+        // Inkscape's label step in cm and its subdivision for a ruler lengthPx long at perCm px per cm
+        // with labels of fontPx: the "general" metric of share/ui/units.xml:3-21 and the selection of
+        // src/ui/widget/ink-ruler.cpp:217-247, both at Inkscape 70feba2.
+        const inkscapeStep = (lengthPx: number, perCm: number, fontPx: number) => {
+          const metric = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+          const digits = String(Math.ceil(lengthPx / perCm)).length + 1;
+          const minimum = digits * Math.trunc(fontPx * 0.75) * 2;
+          const step = metric.find((entry) => entry * perCm > minimum) ?? metric[metric.length - 1];
+          const divide = [100, 50, 10, 5, 1].find((entry) => step * perCm >= 5 * entry)!;
+          return { step, divide };
         };
         // The rule for one ruler, or the reason it is broken.
         const ruleBroken = (
@@ -1287,22 +1304,26 @@ describe("standalone workbench host boundary", function () {
           axis: "x" | "y",
           origin: { x: number; y: number },
           perCm: number,
+          { lengthPx, fontPx, ticks }: { lengthPx: number; fontPx: number; ticks: number[] },
         ) => {
           if (entries.length < 2) return `fewer than two labels: ${JSON.stringify(entries)}`;
           const values = entries.map((entry) => Number(entry.text));
-          if (values.some((value) => !Number.isFinite(value))) return `a label is not a number: ${JSON.stringify(entries)}`;
+          if (values.some((value) => !Number.isInteger(value))) return `a label is not whole centimetres: ${JSON.stringify(entries)}`;
           const misplaced = entries.filter(
             (entry, index) => Math.abs(entry[axis] - (origin[axis] + values[index] * perCm)) > 2,
           );
           if (misplaced.length > 0) return `labels not at their centimetre: ${JSON.stringify({ misplaced, perCm })}`;
           const sorted = [...values].sort((a, b) => a - b);
           const steps = sorted.slice(1).map((value, index) => value - sorted[index]);
-          const step = steps[0];
-          if (steps.some((other) => Math.abs(other - step) > 1e-6 * step)) return `uneven label steps: ${sorted}`;
-          if (!isOneTwoFive(step)) return `step ${step} cm is not 1, 2, or 5 × 10ⁿ`;
-          const spacing = step * Math.abs(perCm);
-          if (spacing < 49.5) return `labels ${spacing.toFixed(1)} px apart at a step of ${step} cm`;
-          if (smallerStep(step) * Math.abs(perCm) >= 50) return `step ${step} cm is not the smallest that keeps 50 px`;
+          const expected = inkscapeStep(lengthPx, Math.abs(perCm), fontPx);
+          if (steps.some((step) => step !== expected.step)) {
+            return `label steps ${steps} cm where Inkscape's rule gives ${expected.step} cm (${JSON.stringify({ lengthPx, perCm, fontPx })})`;
+          }
+          const [from, to] = [sorted[0], sorted[1]].map((value) => origin[axis] + value * perCm).sort((a, b) => a - b);
+          const between = ticks.filter((tick) => tick > from + 0.5 && tick < to - 0.5).length;
+          if (between + 1 !== expected.divide) {
+            return `${between + 1} subdivisions of ${expected.step} cm where Inkscape's rule gives ${expected.divide}`;
+          }
           return null;
         };
         const zoom = frame
@@ -1315,13 +1336,16 @@ describe("standalone workbench host boundary", function () {
           await input.touch([await stableCenter(zoom)]);
           await expect
             .poll(async () => {
-              const [[x, y], top, left] = await Promise.all([
+              const [[x, y], top, left, topRuler, leftRuler] = await Promise.all([
                 axes(),
                 labels("canvas-top-ruler"),
                 labels("canvas-left-ruler"),
+                ruler("canvas-top-ruler", "x"),
+                ruler("canvas-left-ruler", "y"),
               ]);
               const broken =
-                ruleBroken(top, "x", x.origin, x.perCm.x) ?? ruleBroken(left, "y", y.origin, y.perCm.y);
+                ruleBroken(top, "x", x.origin, x.perCm.x, topRuler) ??
+                ruleBroken(left, "y", y.origin, y.perCm.y, leftRuler);
               return broken === null ? "readable" : `${level}: ${broken}`;
             })
             .toBe("readable");
