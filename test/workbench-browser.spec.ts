@@ -5126,6 +5126,133 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `lists each command under its menu and moves a shortcut to another command with a warning in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page
+          .locator(".cm-content")
+          .fill(String.raw`\begin{tikzpicture}\node at (2,1) {$x^2$};\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        const settings = frame.getByTestId("settings-modal");
+        const search = settings.getByRole("searchbox", { name: "Find command", exact: true });
+        const rows = settings.getByRole("list", { name: "Commands", exact: true }).getByRole("listitem");
+        // Each row reads its command name, then its keys.
+        const rowTexts = () =>
+          rows.evaluateAll((items) =>
+            items.map((item) =>
+              [...item.querySelectorAll("button *")]
+                .filter((node) => node.children.length === 0)
+                .map((node) => node.textContent!.trim())
+                .filter(Boolean),
+            ),
+          );
+        const row = (name: string) =>
+          rows.filter({ has: frame.getByText(name, { exact: true }) }).getByRole("button");
+        const keysOf = async (name: string) => {
+          await search.fill(name);
+          const entry = (await rowTexts()).find((texts) => texts[0] === name);
+          assert.ok(entry, `No row is named ${name}`);
+          return entry.slice(1);
+        };
+        await tap(rail.getByRole("button", { name: "Settings", exact: true }));
+        await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
+        // VS Code prefixes each command with its category; the category here is the command's menu.
+        const all = await rowTexts();
+        const names = all.map((texts) => texts[0]);
+        for (const name of ["Align: Left", "Insert: Grid", "View: Grid", "Insert: Equation"]) {
+          assert.ok(names.includes(name), `${name} is missing: ${names.join(", ")}`);
+        }
+        for (const name of names) assert.match(name, /^[A-Z][^:]*: \S/, `${name} has no menu`);
+        assert.equal(new Set(names).size, names.length, "Two rows share a name");
+        const defaults = all.flatMap((texts) => texts.slice(1));
+        assert.deepEqual(
+          defaults.filter((keys, index) => defaults.indexOf(keys) !== index),
+          [],
+          "Two commands share a default shortcut",
+        );
+        assert.deepEqual(await keysOf("Node: Edit Equation"), [], "Edit Equation has a default shortcut");
+        await expect(settings.getByRole("button", { name: /^(Set|Clear|Reset) shortcut for / })).toHaveCount(0);
+        // The search field finds a command by name.
+        await search.fill("left");
+        assert.ok((await rowTexts()).some((texts) => texts[0] === "Align: Left"), "Typing left did not find Align: Left");
+        // A press on the row records; keys that another command has move with a warning, as GNOME moves them.
+        await tap(row("Align: Left"));
+        assert.deepEqual((await rowTexts()).find((texts) => texts[0] === "Align: Left"), ["Align: Left", "Press the new shortcut"]);
+        await page.keyboard.press("Control+Shift+E");
+        await expect(settings.getByRole("alert")).toHaveText(
+          "Ctrl+Shift+E is used by Insert: Equation. It will be removed from there.",
+        );
+        await page.keyboard.press("Enter");
+        await expect(settings.getByRole("alert")).toHaveCount(0);
+        assert.deepEqual(await keysOf("Align: Left"), ["Ctrl+Shift+E"]);
+        assert.deepEqual(await keysOf("Insert: Equation"), []);
+        // The search field finds a command by the keys pressed while it records keys.
+        await search.fill("");
+        await tap(settings.getByRole("button", { name: "Record keys", exact: true }));
+        await search.press("Control+Shift+E");
+        await expect(search).toHaveValue("Ctrl+Shift+E");
+        assert.deepEqual(await rowTexts(), [["Align: Left", "Ctrl+Shift+E"]]);
+        await tap(settings.getByRole("button", { name: "Record keys", exact: true }));
+        // Moving one of two keys leaves the other with its command.
+        assert.deepEqual(await keysOf("View: Zoom In"), ["Ctrl+=", "Ctrl+Shift+="]);
+        await search.fill("Align: Left");
+        await tap(row("Align: Left"));
+        await page.keyboard.press("Control+Shift+=");
+        await expect(settings.getByRole("alert")).toHaveText(
+          "Ctrl+Shift+= is used by View: Zoom In. It will be removed from there.",
+        );
+        await page.keyboard.press("Enter");
+        assert.deepEqual(await keysOf("Align: Left"), ["Ctrl+Shift+="]);
+        assert.deepEqual(await keysOf("View: Zoom In"), ["Ctrl+="]);
+        // Escape cancels a pending move.
+        await search.fill("Insert: Grid");
+        await tap(row("Insert: Grid"));
+        await page.keyboard.press("Control+z");
+        await expect(settings.getByRole("alert")).toHaveText(
+          "Ctrl+Z is used by Edit: Undo. It will be removed from there.",
+        );
+        await page.keyboard.press("Escape");
+        await expect(settings.getByRole("alert")).toHaveCount(0);
+        assert.deepEqual(await keysOf("Insert: Grid"), []);
+        assert.deepEqual(await keysOf("Edit: Undo"), ["Ctrl+Z"]);
+        // The row menu, by long press or right-click, removes or resets the row's keys.
+        const menu = settings.getByRole("menu");
+        const menuItems = () => menu.getByRole("menuitem").allInnerTexts();
+        await search.fill("Align: Left");
+        await input.longPress(await stableCenter(row("Align: Left")));
+        assert.deepEqual(await menuItems(), ["Remove Shortcut", "Reset Shortcut"]);
+        await tap(menu.getByRole("menuitem", { name: "Remove Shortcut", exact: true }));
+        await expect(menu).toHaveCount(0);
+        assert.deepEqual(await keysOf("Align: Left"), []);
+        await search.fill("Insert: Equation");
+        await row("Insert: Equation").click({ button: "right" });
+        assert.deepEqual(await menuItems(), ["Remove Shortcut", "Reset Shortcut"]);
+        await expect(menu.getByRole("menuitem", { name: "Remove Shortcut", exact: true })).toBeDisabled();
+        await tap(menu.getByRole("menuitem", { name: "Reset Shortcut", exact: true }));
+        assert.deepEqual(await keysOf("Insert: Equation"), ["Ctrl+Shift+E"]);
+        await row("Insert: Equation").click({ button: "right" });
+        assert.deepEqual(await menuItems(), ["Remove Shortcut"]);
+        await page.keyboard.press("Escape");
+        await expect(menu).toHaveCount(0);
+        await expect(settings).toBeVisible();
+        // A double tap on an equation opens its editor, as a double-click opens an equation in Word.
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
+        await fitDiagram(frame, input);
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await input.doubleTap(await stableCenter(frame.locator('svg [data-source-id="path:0"]').first()));
+        await expect(frame.getByRole("button", { name: "Close equation editor", exact: true })).toBeVisible();
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `persists canvas aids and grid controls after reload in ${tablet.name}`,
       async function () {
         await editorReady(page);
