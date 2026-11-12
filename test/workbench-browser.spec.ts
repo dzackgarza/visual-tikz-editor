@@ -19,6 +19,7 @@ import {
   editorReady,
   emptyCanvasGesture,
   fitDiagram,
+  layoutBox,
   type Point,
   settledCenter,
   stableCenter,
@@ -950,32 +951,24 @@ describe("standalone workbench host boundary", function () {
             await input.penMove(at(4, -5 + step / 2));
           }
           // The drag is live: the square's top edge is drawn at the circle's top.
-          await expect
-            .poll(async () =>
-              Math.abs(
-                (await frame.locator('svg [data-source-id="path:3"]').first().boundingBox())!.y -
-                  at(0, 2).y,
-              ),
-            )
-            .toBeLessThan(3);
+          await expect(async () => {
+            const top = (await layoutBox(frame.locator('svg [data-source-id="path:3"]').first())).y;
+            expect(Math.abs(top - at(0, 2).y)).toBeLessThan(3);
+          }).toPass({ timeout: 5_000 });
           // A horizontal guide has no height, so Playwright's area-based visibility cannot judge it; require a drawn length and stroke.
-          await expect
-            .poll(async () =>
-              guides
-                .first()
-                .evaluate((line) => {
-                  const box = line.getBoundingClientRect();
-                  const style = getComputedStyle(line);
-                  return (
-                    Math.max(box.width, box.height) > 20 &&
-                    style.visibility === "visible" &&
-                    style.stroke !== "none" &&
-                    Number(style.opacity) > 0
-                  );
-                })
-                .catch(() => false),
-            )
-            .toBe(true);
+          await expect(async () => {
+            const drawn = await guides.first().evaluate((line) => {
+              const box = line.getBoundingClientRect();
+              const style = getComputedStyle(line);
+              return (
+                Math.max(box.width, box.height) > 20 &&
+                style.visibility === "visible" &&
+                style.stroke !== "none" &&
+                Number(style.opacity) > 0
+              );
+            });
+            expect(drawn, "The alignment guide is drawn").toBe(true);
+          }).toPass({ timeout: 5_000 });
           await storyScreenshot(
             page,
             `alignment-guide-${locked ? "locked" : "free"}-${tablet.name}`,
@@ -995,14 +988,10 @@ describe("standalone workbench host boundary", function () {
         for (let step = 1; step <= 12; step++) {
           await input.penMove(at(4, -5 + step / 2));
         }
-        await expect
-          .poll(async () =>
-            Math.abs(
-              (await frame.locator('svg [data-source-id="path:3"]').first().boundingBox())!.y -
-                at(0, 2).y,
-            ),
-          )
-          .toBeLessThan(3);
+        await expect(async () => {
+          const top = (await layoutBox(frame.locator('svg [data-source-id="path:3"]').first())).y;
+          expect(Math.abs(top - at(0, 2).y)).toBeLessThan(3);
+        }).toPass({ timeout: 5_000 });
         await expect(guides).toHaveCount(0);
         await input.penUp(at(4, 1));
         await expect.poll(async () => (await editorDebug(page)).source).toMatch(/rectangle/);
@@ -1988,15 +1977,11 @@ describe("standalone workbench host boundary", function () {
         await input.penUp(target);
         // A shear that lifts the right edge by 2 keeps the width at 4 and makes the outline 6 tall.
         // The outline box includes the stroke, so allow a few tenths of a unit.
-        await expect
-          .poll(
-            async () => {
-              const box = (await square.boundingBox())!;
-              return Math.abs(box.width / unit - 4) < 0.3 && Math.abs(box.height / unit - 6) < 0.3;
-            },
-            { message: "The square is not 4 wide and 6 tall after the shear" },
-          )
-          .toBe(true);
+        await expect(async () => {
+          const box = await layoutBox(square);
+          expect(Math.abs(box.width / unit - 4), "The sheared square is 4 wide").toBeLessThan(0.3);
+          expect(Math.abs(box.height / unit - 6), "The sheared square is 6 tall").toBeLessThan(0.3);
+        }).toPass({ timeout: 5_000 });
         await input.penStroke([await stableCenter(frame.locator("[data-diagram-tools]").getByRole("button", { name: "Undo", exact: true }))]);
         await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
         await editorReady(page);
@@ -5672,12 +5657,15 @@ describe("standalone workbench host boundary", function () {
             /\\begin\{scope\}\[name=Ground\]\s*\\draw \(-14,-18\) -- \(-2,-12\);\s*\\end\{scope\}/,
           );
         assert.equal((await source()).match(/\\draw/g)!.length, 1);
-        const childIndent = async () =>
-          (await panel.getByRole("button", { name: "Line", exact: true }).boundingBox())!.x -
-          (await panel.getByRole("button", { name: "Ground Layer", exact: true }).boundingBox())!.x;
-        await expect
-          .poll(childIndent, { message: "The layer child is drawn to the left of its parent" })
-          .toBeGreaterThan(0);
+        await expect(async () => {
+          const child = await layoutBox(panel.getByRole("button", { name: "Line", exact: true }));
+          const parent = await layoutBox(
+            panel.getByRole("button", { name: "Ground Layer", exact: true }),
+          );
+          expect(child.x, "The layer child is indented to the right of its parent").toBeGreaterThan(
+            parent.x,
+          );
+        }).toPass({ timeout: 5_000 });
         const line = frame.locator("svg [data-source-id]").first();
         const drawnOpacity = () =>
           line.evaluate((element) => {
@@ -6022,12 +6010,12 @@ describe("standalone workbench host boundary", function () {
           Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
           Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
         const clearOfSubject = async (what: string) => {
-          await expect
-            .poll(
-              async () => overlap((await panel.boundingBox())!, (await corner.boundingBox())!),
+          await expect(async () => {
+            expect(
+              overlap(await layoutBox(panel), await layoutBox(corner)),
               `${what} covers the selected rectangle`,
-            )
-            .toBe(0);
+            ).toBe(0);
+          }).toPass({ timeout: 5_000 });
           const box = (await corner.boundingBox())!;
           assert.ok(
             box.x >= viewport.x &&
@@ -6066,13 +6054,13 @@ describe("standalone workbench host boundary", function () {
           await expect(expand).toHaveAttribute("aria-expanded", "false");
           await tap(expand);
           await expect(expand).toHaveAttribute("aria-expanded", "true");
-          await expect
-            .poll(async () => (await panel.boundingBox())!.height)
-            .toBeGreaterThan(viewport.height * 0.6);
+          await expect(async () => {
+            expect((await layoutBox(panel)).height).toBeGreaterThan(viewport.height * 0.6);
+          }).toPass({ timeout: 5_000 });
           await tap(expand);
-          await expect
-            .poll(async () => (await panel.boundingBox())!.height)
-            .toBeLessThan(viewport.height * 0.5);
+          await expect(async () => {
+            expect((await layoutBox(panel)).height).toBeLessThan(viewport.height * 0.5);
+          }).toPass({ timeout: 5_000 });
         }
         await storyScreenshot(page, `properties-space-${tablet.name}`);
       },
@@ -6120,24 +6108,26 @@ describe("standalone workbench host boundary", function () {
           }, height);
         await reportVisibleHeight(keyboardTop);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        await expect
-          .poll(async () => {
-            const box = (await corner.boundingBox())!;
-            return box.y + box.height;
-          }, "The keyboard covers the selected rectangle")
-          .toBeLessThanOrEqual(keyboardTop);
+        await expect(async () => {
+          const box = await layoutBox(corner);
+          expect(box.y + box.height, "The keyboard covers the selected rectangle").toBeLessThanOrEqual(
+            keyboardTop,
+          );
+        }).toPass({ timeout: 5_000 });
         assert.ok(
           (await corner.boundingBox())!.y >= viewport.y,
           "The selected rectangle left the top of the canvas",
         );
         const panelBottom = async () => {
-          const box = (await panel.boundingBox())!;
+          const box = await layoutBox(panel);
           return box.y + box.height;
         };
         if (tablet.name === "portrait") {
-          await expect
-            .poll(panelBottom, "The keyboard covers the bottom sheet")
-            .toBeLessThanOrEqual(keyboardTop);
+          await expect(async () => {
+            expect(await panelBottom(), "The keyboard covers the bottom sheet").toBeLessThanOrEqual(
+              keyboardTop,
+            );
+          }).toPass({ timeout: 5_000 });
         }
         const field = (await panel
           .getByRole("spinbutton", { name: "X shift", exact: true })
@@ -6149,12 +6139,12 @@ describe("standalone workbench host boundary", function () {
         const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
           Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
           Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-        await expect
-          .poll(
-            async () => overlap((await panel.boundingBox())!, (await corner.boundingBox())!),
+        await expect(async () => {
+          expect(
+            overlap(await layoutBox(panel), await layoutBox(corner)),
             "The raised panel covers the selected rectangle",
-          )
-          .toBe(0);
+          ).toBe(0);
+        }).toPass({ timeout: 5_000 });
         const control = frame.getByRole("toolbar", { name: "Selection", exact: true });
         assert.equal(
           overlap((await control.boundingBox())!, (await panel.boundingBox())!),
@@ -6169,9 +6159,12 @@ describe("standalone workbench host boundary", function () {
         await storyScreenshot(page, `properties-keyboard-${tablet.name}`);
         await reportVisibleHeight(tablet.height);
         if (tablet.name === "portrait") {
-          await expect
-            .poll(panelBottom, "The bottom sheet stays raised after the keyboard closes")
-            .toBeGreaterThan(keyboardTop);
+          await expect(async () => {
+            expect(
+              await panelBottom(),
+              "The bottom sheet stays raised after the keyboard closes",
+            ).toBeGreaterThan(keyboardTop);
+          }).toPass({ timeout: 5_000 });
         }
       },
     );
@@ -9235,7 +9228,7 @@ describe("standalone workbench host boundary", function () {
         '[data-canvas-viewport="true"] circle[data-source-id="path:0"]',
       );
       await expect(displayedCircle).toBeVisible();
-      const before = await displayedCircle.boundingBox();
+      const before = await layoutBox(displayedCircle);
       await page.reload();
       await expect(page.locator("#status")).toHaveText("Loaded");
       await page.getByLabel("Saved snapshot").fill(JSON.stringify(saved));
@@ -9252,18 +9245,14 @@ describe("standalone workbench host boundary", function () {
         await frame.locator("[data-canvas-scale]").getAttribute("data-canvas-scale"),
         String(saved.state.viewport.scale),
       );
-      await expect
-        .poll(async () => {
-          const after = await displayedCircle.boundingBox();
-          return after && before
-            ? Math.max(
-                ...["x", "y", "width", "height"].map((key) =>
-                  Math.abs(after[key as keyof typeof after] - before[key as keyof typeof before]),
-                ),
-              )
-            : Infinity;
-        })
-        .toBeLessThan(1);
+      await expect(async () => {
+        const after = await layoutBox(displayedCircle);
+        const keys = ["x", "y", "width", "height"] as const;
+        expect(
+          Math.max(...keys.map((key) => Math.abs(after[key] - before[key]))),
+          "The restored circle is drawn where it was saved",
+        ).toBeLessThan(1);
+      }).toPass({ timeout: 5_000 });
     },
   );
 

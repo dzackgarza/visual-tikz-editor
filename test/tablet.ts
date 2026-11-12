@@ -1,4 +1,5 @@
 /** Shared story harness: an isolated workbench server and tablet pen/touch input. */
+import { strict as assert } from "node:assert";
 import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
@@ -64,6 +65,20 @@ export async function startWorkbench(env: NodeJS.ProcessEnv, persistentHome?: st
 
 export const editorFrame = (page: Page): FrameLocator =>
   page.frameLocator('iframe[title="TikZ visual editor"]');
+
+export type Box = NonNullable<Awaited<ReturnType<Locator["boundingBox"]>>>;
+
+/**
+ * The layout box of `locator`. A re-rendered element has no box until its replacement is
+ * attached, and `expect.poll` stops at the first thrown error, so a reading taken while the
+ * layout changes retries inside `expect(...).toPass()`
+ * (https://playwright.dev/docs/test-assertions#expecttopass).
+ */
+export async function layoutBox(locator: Locator): Promise<Box> {
+  const box = await locator.boundingBox();
+  assert.ok(box, `${locator.toString()} has no layout box`);
+  return box;
+}
 
 /**
  * The centre of `locator` once its box has stopped moving, as Playwright's own
