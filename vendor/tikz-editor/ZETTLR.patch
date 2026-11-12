@@ -4622,13 +4622,13 @@ index 00000000..9632306f
 +}
 diff --git a/packages/app/src/ui/ExactRange.module.css b/packages/app/src/ui/ExactRange.module.css
 new file mode 100644
-index 00000000..6aaa84d7
+index 00000000..f9ca8e76
 --- /dev/null
 +++ b/packages/app/src/ui/ExactRange.module.css
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,24 @@
 +.field {
 +  display: grid;
-+  grid-template-columns: 1fr auto auto;
++  grid-template-columns: 1fr auto;
 +  align-items: center;
 +  gap: 6px;
 +}
@@ -4645,11 +4645,6 @@ index 00000000..6aaa84d7
 +  font: inherit;
 +}
 +
-+.unit {
-+  color: var(--text-muted);
-+  font-size: 13px;
-+}
-+
 +.range {
 +  grid-column: 1 / -1;
 +  width: 100%;
@@ -4657,23 +4652,23 @@ index 00000000..6aaa84d7
 +}
 diff --git a/packages/app/src/ui/ExactRange.tsx b/packages/app/src/ui/ExactRange.tsx
 new file mode 100644
-index 00000000..6fbb3f26
+index 00000000..19b4c2ff
 --- /dev/null
 +++ b/packages/app/src/ui/ExactRange.tsx
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,30 @@
 +import { useState } from "react";
 +import { formatNumber } from "tikz-editor/edit/format";
 +
 +import css from "./ExactRange.module.css";
 +
-+type ExactRangeProps = { label: string; unit: string; min: number; max: number; step: number; value: number; onChange: (value: number) => void };
++type ExactRangeProps = { label: string; min: number; max: number; step: number; value: number; onChange: (value: number) => void };
 +
 +/**
 + * A slider with an exact-value field beside it, the pairing Apple's Human Interface Guidelines (Sliders)
 + * recommend when a precise value matters.
 + * The field commits on Enter or when it loses focus, clamped to the slider's range.
 + */
-+export function ExactRange({ label, unit, min, max, step, value, onChange }: ExactRangeProps) {
++export function ExactRange({ label, min, max, step, value, onChange }: ExactRangeProps) {
 +  const [draft, setDraft] = useState<string | null>(null);
 +  const commit = () => {
 +    const next = Number(draft);
@@ -4686,7 +4681,6 @@ index 00000000..6fbb3f26
 +      <input className={css.value} type="number" inputMode="decimal" aria-label={`${label} value`} min={min} max={max} step={step}
 +        value={draft ?? formatNumber(value)} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={commit}
 +        onKeyDown={(event) => { if (event.key === "Enter") commit(); }} />
-+      <span className={css.unit}>{unit}</span>
 +      <input className={css.range} type="range" aria-label={label} min={min} max={max} step={step} value={value}
 +        onChange={(event) => onChange(Number(event.currentTarget.value))} />
 +    </div>
@@ -4886,11 +4880,11 @@ index 00000000..f261b64b
 +  </div>;
 +}
 diff --git a/packages/app/src/ui/RepeatModal.tsx b/packages/app/src/ui/RepeatModal.tsx
-index c1ad662b..6badc2f7 100644
+index c1ad662b..8786c7d5 100644
 --- a/packages/app/src/ui/RepeatModal.tsx
 +++ b/packages/app/src/ui/RepeatModal.tsx
 @@ -1,19 +1,20 @@
-+import { LATTICE_UNIT, type AxisLatticeScale } from "tikz-editor/edit/lattice-units";
++import type { AxisLatticeScale } from "tikz-editor/edit/lattice-units";
  import { Modal } from "./Modal";
  import css from "./RepeatModal.module.css";
  
@@ -4950,7 +4944,7 @@ index c1ad662b..6badc2f7 100644
            </label>
            <label className={css.field}>
 -            <span>H Step (cm)</span>
-+            <span>H step ({horizontal.unit})</span>
++            <span>{horizontal.label("H step")}</span>
              <input
                data-testid="repeat-horizontal-step-input"
                type="number"
@@ -4963,7 +4957,7 @@ index c1ad662b..6badc2f7 100644
            </label>
            <label className={css.field}>
 -            <span>V Step (cm)</span>
-+            <span>V step ({vertical.unit})</span>
++            <span>{vertical.label("V step")}</span>
              <input
                data-testid="repeat-vertical-step-input"
                type="number"
@@ -4999,14 +4993,14 @@ index c1ad662b..6badc2f7 100644
  
 -function formatMetric(value: number): string {
 -  return `${formatUiNumber(value)} cm`;
++// Steps along a lattice axis are figure coordinates, written as bare numbers; a skewed axis reads in pt.
 +function axisReading(ptPerUnit: number | null) {
-+  const unit = ptPerUnit === null ? "pt" : LATTICE_UNIT;
 +  const fromPt = (valuePt: number) => ptPerUnit === null ? valuePt : valuePt / ptPerUnit;
 +  return {
-+    unit,
++    label: (name: string) => ptPerUnit === null ? `${name} (pt)` : name,
 +    fromPt,
 +    toPt: (value: number) => !Number.isFinite(value) ? 0 : ptPerUnit === null ? value : value * ptPerUnit,
-+    format: (valuePt: number) => `${formatUiNumber(fromPt(valuePt))} ${unit}`
++    format: (valuePt: number) => ptPerUnit === null ? `${formatUiNumber(valuePt)} pt` : formatUiNumber(fromPt(valuePt))
 +  };
  }
  
@@ -7360,7 +7354,7 @@ index cf4cf2cf..f9ecfae9 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..18cf1202 100644
+index 4e22ccfa..fc208659 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -9851,9 +9845,9 @@ index 4e22ccfa..18cf1202 100644
 +        <div ref={measureFreehandPopup} style={freehandPopupPosition} className={freehandPopupCss.popup}
 +          role="dialog" aria-label={freehandResultOffer.curve ? "Curve refinement" : "Freehand result"} onPointerDown={(event) => event.stopPropagation()}>
 +          <strong>{freehandResultOffer.curve ? "Curve refinement" : "Freehand result"}</strong>
-+          <ExactRange label="Smoothing" unit="lattice units" min={0} max={1} step={0.01} value={freehandResultOffer.smoothing}
++          <ExactRange label="Smoothing" min={0} max={1} step={0.01} value={freehandResultOffer.smoothing}
 +            onChange={(value) => updateFreehandPreview(freehandResultOffer.toleranceUnits, value)} />
-+          <ExactRange label="Simplification" unit="lattice units" min={0.01} max={2} step={0.01} value={freehandResultOffer.toleranceUnits}
++          <ExactRange label="Simplification" min={0.01} max={2} step={0.01} value={freehandResultOffer.toleranceUnits}
 +            onChange={(value) => updateFreehandPreview(value, freehandResultOffer.smoothing)} />
 +          <div className={freehandPopupCss.actions}>
 +            <button type="button" disabled={!simplerRefinement} onClick={simplifyRefinementAgain}>Simplify again</button>
@@ -11629,20 +11623,23 @@ index 5660d6d8..8cfbb61d 100644
 +  return { startAngle, sweep: turn(angleOf(via) - startAngle) < counterclockwise ? counterclockwise : counterclockwise - 360 };
 +}
 diff --git a/packages/app/src/ui/canvas-panel/interaction-helpers.ts b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
-index f22aaafd..f64a7abb 100644
+index f22aaafd..bbf5e0c8 100644
 --- a/packages/app/src/ui/canvas-panel/interaction-helpers.ts
 +++ b/packages/app/src/ui/canvas-panel/interaction-helpers.ts
-@@ -1,5 +1,9 @@
+@@ -1,7 +1,11 @@
 +import { applyMatrix, inverseMatrix } from "tikz-editor/semantic/transform";
 +import { worldTransform } from "tikz-editor/coords/index";
-+import { snapToUnitLattice } from "tikz-editor/edit/snapping";
++import { LATTICE_UNIT_PT, snapToUnitLattice } from "tikz-editor/edit/snapping";
  import type { ElementTemplate } from "tikz-editor/edit/actions";
 -import type { SelectionGeometry } from "tikz-editor/edit/snapping";
 +import type { SelectionGeometry, LatticeTransform, SnapLine, SnapTarget } from "tikz-editor/edit/snapping";
 +import type { NodeAnchorTarget } from "tikz-editor/semantic/types";
  import type { EditHandle, SceneElement, ScenePathCommand } from "tikz-editor/semantic/types";
- import { CM_PER_PT, PT_PER_CM, formatNumber } from "tikz-editor/edit/format";
+-import { CM_PER_PT, PT_PER_CM, formatNumber } from "tikz-editor/edit/format";
++import { PT_PER_CM, formatNumber } from "tikz-editor/edit/format";
  import { worldPoint, worldVector, svgBounds, pt } from "tikz-editor/coords/index";
+ 
+ import { distanceSquared } from "./geometry";
 @@ -59,10 +63,11 @@ export function createTemplateForToolDrag(
    mode: ToolCreateMode,
    startWorld: WorldPoint,
@@ -11812,7 +11809,7 @@ index f22aaafd..f64a7abb 100644
  }
  
  export function snapPointDeltaToAxisStepMultiples(
-@@ -333,14 +390,22 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
+@@ -333,24 +390,40 @@ export function sourceIdAnchorWorld(elements: SceneElement[], sourceId: string):
    return worldPoint(pt(sumX / count), pt(sumY / count));
  }
  
@@ -11835,10 +11832,36 @@ index f22aaafd..f64a7abb 100644
 +    if (inverse) point = applyMatrix(inverse, point);
 +  }
    return [
-     { label: "X", value: formatTooltipLengthCm(point.x) },
-     { label: "Y", value: formatTooltipLengthCm(point.y) }
-@@ -481,8 +546,13 @@ export function projectResizeDimensionsFromOppositeCorner(
- export function resolveToolCreateSize(
+-    { label: "X", value: formatTooltipLengthCm(point.x) },
+-    { label: "Y", value: formatTooltipLengthCm(point.y) }
++    { label: "X", value: formatTooltipLength(point.x) },
++    { label: "Y", value: formatTooltipLength(point.y) }
+   ];
+ }
+ 
+-export function formatToolCreateLengthRows(
++// A drag that places a path point reads that point as the source will write it;
++// a drag that sizes a shape reads its size.
++const POINT_PLACING_MODES: ReadonlySet<ToolCreateMode> = new Set(["addPath", "addLine", "addArrow", "addBezier"]);
++
++export function formatToolCreateRows(
+   mode: ToolCreateMode,
+-  size: { width: number; height: number; radius?: number }
++  startWorld: WorldPoint,
++  currentWorld: WorldPoint,
++  transform?: LatticeTransform
+ ): DragTooltipRow[] {
++  if (POINT_PLACING_MODES.has(mode)) return formatTooltipCoordinateRows(currentWorld, transform);
++  const size = resolveToolCreateSize(mode, startWorld, currentWorld, transform);
+   if (mode === "addCircle") {
+     return [
+       { label: "Radius", value: formatTooltipLength(size.radius ?? size.width / 2) }
+@@ -478,11 +551,16 @@ export function projectResizeDimensionsFromOppositeCorner(
+   };
+ }
+ 
+-export function resolveToolCreateSize(
++function resolveToolCreateSize(
    mode: ToolCreateMode,
    startWorld: WorldPoint,
 -  currentWorld: WorldPoint
@@ -11852,17 +11875,19 @@ index f22aaafd..f64a7abb 100644
    if (mode === "addCircle") {
      const radius = Math.hypot(currentWorld.x - startWorld.x, currentWorld.y - startWorld.y);
      const diameter = clampTooltipScalar(radius * 2);
-@@ -506,11 +576,11 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
- 
- function formatTooltipLength(valuePt: number): string {
-   const clamped = clampTooltipScalar(valuePt);
--  return `${formatTooltipLengthCm(clamped)} (${formatNumber(clamped)}pt)`;
-+  return `${formatNumber(clamped * CM_PER_PT)} units`;
+@@ -504,13 +582,9 @@ export function resolveGridTooltipCounts(startWorld: WorldPoint, currentWorld: W
+   };
  }
  
- function formatTooltipLengthCm(valuePt: number): string {
++// Source points hold one lattice step in LATTICE_UNIT_PT; the figure writes the step count as a bare number.
+ function formatTooltipLength(valuePt: number): string {
+-  const clamped = clampTooltipScalar(valuePt);
+-  return `${formatTooltipLengthCm(clamped)} (${formatNumber(clamped)}pt)`;
+-}
+-
+-function formatTooltipLengthCm(valuePt: number): string {
 -  return `${formatNumber(clampTooltipScalar(valuePt) * CM_PER_PT)}cm`;
-+  return `${formatNumber(clampTooltipScalar(valuePt) * CM_PER_PT)} units`;
++  return formatNumber(clampTooltipScalar(valuePt) / LATTICE_UNIT_PT);
  }
  
  function clampTooltipScalar(value: number): number {
@@ -13707,7 +13732,7 @@ index de0ccae2..5905982b 100644
 +  }).join(" ");
 +}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
-index 0c9bdf4f..9c211d91 100644
+index 0c9bdf4f..5c485351 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDragController.ts
 @@ -1,3 +1,5 @@
@@ -13733,9 +13758,18 @@ index 0c9bdf4f..9c211d91 100644
    snapHandlePosition,
    snapSelectionTranslation,
    snapToolPointer,
-@@ -53,17 +58,22 @@ import {
+@@ -45,25 +50,29 @@ import {
+   formatTooltipAngleRow,
+   formatTooltipGridCountRow,
+   formatTooltipLengthRows,
+-  formatToolCreateLengthRows,
++  formatToolCreateRows,
+   projectResizeDimensionsFromCenter,
+   projectResizeDimensionsFromOppositeCorner,
+   resolveFrameBasis,
+   resolveHandleIdForDrag,
    resolveGridTooltipCounts,
-   resolveToolCreateSize,
+-  resolveToolCreateSize,
    snapPointDeltaToAxisStepMultiples,
 -  resolveToolCreateCurrentWorld
 +  resolveToolCreateCurrentWorld,
@@ -13758,7 +13792,7 @@ index 0c9bdf4f..9c211d91 100644
  import type {
    DragState,
    GridResizeSnapConfig
-@@ -156,14 +166,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -156,14 +165,22 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        world: WorldPoint,
        currentSvg: { viewBox: SvgViewBox }
      ) {
@@ -13786,7 +13820,7 @@ index 0c9bdf4f..9c211d91 100644
        });
        const nextIds = drag.additive
          ? [...new Set([...drag.baseSelectedIds, ...hitIds])]
-@@ -252,7 +270,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -252,7 +269,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            baselineSource: drag.preEditBaselineSource
          },
          drag.historyMergeKey,
@@ -13795,7 +13829,7 @@ index 0c9bdf4f..9c211d91 100644
        );
        if (ok.sourceChanged) {
          drag.lastAppliedRotateDeg = nextRotate;
-@@ -272,6 +290,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -272,6 +289,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        const drag = dragRef.current;
        if (event.pointerId !== drag?.pointerId) return;
        const ctrlOrMeta = event.ctrlKey || event.metaKey;
@@ -13803,7 +13837,7 @@ index 0c9bdf4f..9c211d91 100644
        const formatPrecision = event.altKey ? "fine" : undefined;
  
        if (drag.kind === "pan") {
-@@ -320,13 +339,13 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -320,13 +338,13 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
                context: drag.snapContext,
                pointer: world,
                kind: snapKind,
@@ -13820,7 +13854,7 @@ index 0c9bdf4f..9c211d91 100644
            endpointAnchorOverlay = resolveEndpointAnchorSnap({
              pointerWorld: world,
              zoom: drag.snapContext?.zoom ?? 1,
-@@ -336,6 +355,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -336,6 +354,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            drag.activeEndpointAnchor = endpointAnchorOverlay.snappedAnchor;
            if (endpointAnchorOverlay.snappedAnchor) {
              nextRawWorld = endpointAnchorOverlay.snappedAnchor.world;
@@ -13828,7 +13862,7 @@ index 0c9bdf4f..9c211d91 100644
            }
          } else {
            drag.activeEndpointAnchor = null;
-@@ -345,7 +365,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -345,7 +364,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            drag.startWorld,
            drag.rawCurrentWorld,
            drag.toolMode,
@@ -13838,7 +13872,7 @@ index 0c9bdf4f..9c211d91 100644
          );
          if (drag.toolMode === "addGrid" && !ctrlOrMeta) {
            drag.currentWorld = snapPointDeltaToAxisStepMultiples(
-@@ -355,13 +376,16 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -355,14 +375,16 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              DEFAULT_GRID_TOOL_STEP_PT
            );
          }
@@ -13852,11 +13886,12 @@ index 0c9bdf4f..9c211d91 100644
          );
          setToolDraft({ ...drag });
 -        const size = resolveToolCreateSize(drag.toolMode, drag.startWorld, drag.currentWorld);
-+        const size = resolveToolCreateSize(drag.toolMode, drag.startWorld, drag.currentWorld, drag.snapContext?.settings.latticeTransform);
-         const rows = formatToolCreateLengthRows(drag.toolMode, size);
+-        const rows = formatToolCreateLengthRows(drag.toolMode, size);
++        const rows = formatToolCreateRows(drag.toolMode, drag.startWorld, drag.currentWorld, drag.snapContext?.settings.latticeTransform);
          if (drag.toolMode === "addGrid") {
            const counts = resolveGridTooltipCounts(drag.startWorld, drag.currentWorld);
-@@ -373,8 +397,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+           rows.push(formatTooltipGridCountRow(counts.columns, counts.rows));
+@@ -373,8 +395,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            rows
          });
          setToolCursorWorld(drag.currentWorld);
@@ -13867,7 +13902,7 @@ index 0c9bdf4f..9c211d91 100644
          logSnapDebug({
            phase: "drag-tool-create-move",
            snapshotMatchesSource: snapshotSource === source,
-@@ -383,7 +407,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -383,7 +405,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            rawPoint: world,
            snappedPoint: drag.currentWorld,
            offset: snapped.offset,
@@ -13876,7 +13911,7 @@ index 0c9bdf4f..9c211d91 100644
          });
          return;
        }
-@@ -398,13 +422,13 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -398,13 +420,13 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
                kind: "line-end",
                modifiers: { ctrlOrMeta }
              })
@@ -13892,7 +13927,7 @@ index 0c9bdf4f..9c211d91 100644
          logSnapDebug({
            phase: "drag-bezier-bend-move",
            snapshotMatchesSource: snapshotSource === source,
-@@ -428,7 +452,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -428,7 +450,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
                kind: "line-end",
                modifiers: { ctrlOrMeta }
              })
@@ -13901,7 +13936,7 @@ index 0c9bdf4f..9c211d91 100644
          drag.rawBendWorld = snapped.snappedPoint ?? world;
          drag.bendWorld = drag.rawBendWorld;
          if (!drag.isBending) {
-@@ -438,7 +462,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -438,7 +460,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setPathSegmentDraft({ ...drag });
          setToolCursorWorld(drag.endWorld);
          setSnapLines(snapped.lines);
@@ -13910,7 +13945,7 @@ index 0c9bdf4f..9c211d91 100644
          logSnapDebug({
            phase: "drag-tool-path-segment-move",
            snapshotMatchesSource: snapshotSource === source,
-@@ -455,20 +479,19 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -455,20 +477,19 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        if (drag.kind === "tool-freehand") {
          setNodeAnchorOverlay(null);
          setDragTooltip(null);
@@ -13940,7 +13975,7 @@ index 0c9bdf4f..9c211d91 100644
          return;
        }
  
-@@ -476,8 +499,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -476,8 +497,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setNodeAnchorOverlay(null);
          setDragTooltip(null);
          drag.currentWorld = world;
@@ -13951,7 +13986,7 @@ index 0c9bdf4f..9c211d91 100644
            commitMarqueeSelection(drag, world, currentSvg);
          }
          setSnapLines([]);
-@@ -508,6 +532,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -508,6 +530,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        }
  
        if (drag.kind === "resize") {
@@ -13959,7 +13994,7 @@ index 0c9bdf4f..9c211d91 100644
          setNodeAnchorOverlay(null);
          setSnapLines([]);
          maybeTriggerSnapFeedback(false);
-@@ -517,28 +542,29 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -517,28 +540,29 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            ? { width: liveDimensions.width, height: liveDimensions.height }
            : drag.measurementMode === "opposite-corner"
              ? projectResizeDimensionsFromOppositeCorner(
@@ -13994,7 +14029,7 @@ index 0c9bdf4f..9c211d91 100644
            lines: []
          });
  
-@@ -547,8 +573,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -547,8 +571,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              kind: "resizeElement",
              elementId: drag.elementId,
              role: drag.role,
@@ -14005,7 +14040,7 @@ index 0c9bdf4f..9c211d91 100644
              preserveAspectRatio: drag.preserveAspectRatio ?? undefined,
              formatPrecision,
              referenceBounds: resizeFrameWorldBounds(drag.initialFrame),
-@@ -567,7 +593,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -567,7 +591,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          drag.lastPointerWorld = world;
          applyRotateDragUpdate(drag, {
            phase: "drag-rotate-move",
@@ -14014,7 +14049,7 @@ index 0c9bdf4f..9c211d91 100644
            ctrlOrMetaKey: ctrlOrMeta,
            altKey: event.altKey,
            tooltipAnchor: pointerClient,
-@@ -579,6 +605,12 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -579,6 +603,12 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        if (drag.kind === "element") {
          setNodeAnchorOverlay(null);
          setDragTooltip(null);
@@ -14027,7 +14062,7 @@ index 0c9bdf4f..9c211d91 100644
          if (drag.elementIds.length === 1) {
            const rawWorld = world;
            const dragStartWorld = drag.startWorld;
-@@ -802,26 +834,43 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -802,26 +832,43 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              return;
            }
          }
@@ -14078,7 +14113,7 @@ index 0c9bdf4f..9c211d91 100644
          logSnapDebug({
            phase: "drag-element-move",
            snapshotMatchesSource: true,
-@@ -830,25 +879,26 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -830,25 +877,26 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
            rawDelta: makeWorldPoint(rawTotalDelta.x, rawTotalDelta.y),
            snappedDelta: makeWorldPoint(totalDelta.x, totalDelta.y),
            offset: snapped.offset,
@@ -14113,7 +14148,7 @@ index 0c9bdf4f..9c211d91 100644
          return;
        }
  
-@@ -866,13 +916,15 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -866,13 +914,15 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          ? snapHandlePosition({
              context: drag.snapContext,
              point: world,
@@ -14131,7 +14166,7 @@ index 0c9bdf4f..9c211d91 100644
          endpointAnchorOverlay = resolveEndpointAnchorSnap({
            pointerWorld: world,
            zoom: drag.snapContext?.zoom ?? 1,
-@@ -882,6 +934,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -882,6 +932,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          drag.activeEndpointAnchor = endpointAnchorOverlay.snappedAnchor;
          if (endpointAnchorOverlay.snappedAnchor) {
            nextWorld = endpointAnchorOverlay.snappedAnchor.world;
@@ -14139,7 +14174,7 @@ index 0c9bdf4f..9c211d91 100644
          }
        } else {
          drag.activeEndpointAnchor = null;
-@@ -890,14 +943,12 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -890,14 +941,12 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        if (drag.gridResizeSnap && !ctrlOrMeta) {
          nextWorld = snapGridResizeWorldPoint(nextWorld, drag.gridResizeSnap);
        }
@@ -14158,7 +14193,7 @@ index 0c9bdf4f..9c211d91 100644
        logSnapDebug({
          phase: "drag-handle-move",
          snapshotMatchesSource: true,
-@@ -928,6 +979,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -928,6 +977,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        resetSnapFeedbackState();
        suppressNextBackgroundClickRef.current = true;
        const ctrlOrMeta = event.ctrlKey || event.metaKey;
@@ -14166,7 +14201,7 @@ index 0c9bdf4f..9c211d91 100644
  
        const currentSvg = svgResultRef.current;
        const world =
-@@ -940,7 +992,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -940,7 +990,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setDragTooltip(null);
          const finalWorld = world ?? drag.currentWorld;
          const deltaSq = distanceSquared(finalWorld, drag.startWorld);
@@ -14175,7 +14210,7 @@ index 0c9bdf4f..9c211d91 100644
  
          if (isClickOnly) {
            if (!drag.additive) {
-@@ -979,16 +1031,16 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -979,16 +1029,16 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
                context: drag.snapContext,
                pointer: finalWorldPointerWorld,
                kind: snapKind,
@@ -14195,7 +14230,7 @@ index 0c9bdf4f..9c211d91 100644
          );
          if (drag.toolMode === "addGrid" && !ctrlOrMeta) {
            finalWorld = snapPointDeltaToAxisStepMultiples(
-@@ -998,10 +1050,14 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -998,10 +1048,14 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
              DEFAULT_GRID_TOOL_STEP_PT
            );
          }
@@ -14212,7 +14247,7 @@ index 0c9bdf4f..9c211d91 100644
          setToolCursorWorld(finalWorld);
  
          if (drag.toolMode === "addBezier") {
-@@ -1020,7 +1076,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1020,7 +1074,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          const rawTemplate = createTemplateForToolDrag(drag.toolMode, drag.startWorld, finalWorld, {
            selectedAddShape,
            strokeColor: creationStrokeColor,
@@ -14222,7 +14257,7 @@ index 0c9bdf4f..9c211d91 100644
          });
          const template =
            rawTemplate.kind === "line"
-@@ -1064,7 +1121,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1064,7 +1119,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          }
  
          if (ok.sourceChanged) {
@@ -14230,7 +14265,7 @@ index 0c9bdf4f..9c211d91 100644
            setToolCursorWorld(null);
          }
          setToolDraft(null);
-@@ -1093,7 +1149,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1093,7 +1147,8 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
  
          queueSelectionForAddedElement(makeWorldPoint((drag.startWorld.x + drag.endWorld.x) / 2, (drag.startWorld.y + drag.endWorld.y) / 2));
          const template = createBezierTemplateFromBend(drag.startWorld, drag.endWorld, finalBend, {
@@ -14240,7 +14275,7 @@ index 0c9bdf4f..9c211d91 100644
          });
          const ok = applyActionWithFeedback({
            kind: "addElement",
-@@ -1105,7 +1162,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1105,7 +1160,6 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          }
  
          if (ok.sourceChanged) {
@@ -14248,7 +14283,7 @@ index 0c9bdf4f..9c211d91 100644
            setToolCursorWorld(null);
          }
          setPendingBezier(null);
-@@ -1143,7 +1199,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1143,7 +1197,9 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
                }
              : undefined,
            bendWorld: finalBend,
@@ -14259,7 +14294,7 @@ index 0c9bdf4f..9c211d91 100644
          });
          setPathSegmentDraft(null);
          setToolCursorWorld(drag.endWorld);
-@@ -1157,13 +1215,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1157,13 +1213,10 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
          setDragTooltip(null);
          let nextWorldPoints: WorldPoint[] | null = null;
          if (world) {
@@ -14275,7 +14310,7 @@ index 0c9bdf4f..9c211d91 100644
          finalizeFreehandDraft(nextWorldPoints ?? undefined);
          return;
        }
-@@ -1225,7 +1280,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
+@@ -1225,7 +1278,7 @@ export function useCanvasDragController(params: UseCanvasDragControllerParams) {
        event.preventDefault();
        applyRotateDragUpdate(drag, {
          phase: "drag-rotate-modifier",
@@ -14284,7 +14319,7 @@ index 0c9bdf4f..9c211d91 100644
          ctrlOrMetaKey: event.ctrlKey || event.metaKey,
          altKey,
          tooltipAnchor: drag.lastPointerClient,
-@@ -1919,7 +1974,7 @@ function normalizeDirectionKey(value: string): string {
+@@ -1919,7 +1972,7 @@ function normalizeDirectionKey(value: string): string {
  
  function elementBoundsInWorld(element: SceneElement): WorldBounds | null {
    if (element.kind === "Path") {
@@ -14293,7 +14328,7 @@ index 0c9bdf4f..9c211d91 100644
      return bounds ? applyTransformToBounds(bounds, element.transform) : null;
    }
    if (element.kind === "Circle") {
-@@ -1951,46 +2006,6 @@ function elementBoundsInWorld(element: SceneElement): WorldBounds | null {
+@@ -1951,46 +2004,6 @@ function elementBoundsInWorld(element: SceneElement): WorldBounds | null {
    );
  }
  
@@ -17030,10 +17065,10 @@ index e3ffc872..3a088d9c 100644
        if (!browserWrite) {
 diff --git a/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx b/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx
 new file mode 100644
-index 00000000..972c78ac
+index 00000000..9775511a
 --- /dev/null
 +++ b/packages/app/src/ui/inspector-panel/GeometryConstructionControls.tsx
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,103 @@
 +import { useState } from "react";
 +import { worldPoint, pt } from "tikz-editor/coords/index";
 +import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
@@ -17066,9 +17101,10 @@ index 00000000..972c78ac
 +    y2: String(INITIAL_VALUES.y2), x3: String(INITIAL_VALUES.x3), y3: String(INITIAL_VALUES.y3)
 +  });
 +  const [error, setError] = useState<string | null>(null);
-+  const numberField = (key: keyof GeometryValues, label: string, unit = "units") => (
++  // Positions and the radius are figure coordinates, which TikZ writes as bare numbers.
++  const numberField = (key: keyof GeometryValues, label: string) => (
 +    <label className={css.property} key={key}>
-+      <span className={css.propertyLabel}>{label} ({unit})</span>
++      <span className={css.propertyLabel}>{label}</span>
 +      <input className={css.numberInput} type="text" inputMode="decimal" aria-label={label} value={drafts[key]}
 +        onChange={(event) => { const value = event.currentTarget.value; setDrafts((previous) => ({ ...previous, [key]: value })); }} />
 +    </label>
@@ -17130,7 +17166,7 @@ index 00000000..972c78ac
 +      {numberField("y", construction === "radius" || arc ? "Center Y" : "Point 1 Y")}
 +      {arc || construction === "radius" ? numberField("radius", "Radius") : <>{numberField("x2", "Point 2 X")}{numberField("y2", "Point 2 Y")}</>}
 +      {!arc && construction === "three-points" && <>{numberField("x3", "Point 3 X")}{numberField("y3", "Point 3 Y")}</>}
-+      {arc && <>{numberField("start", "Start angle", "degrees")}{numberField("end", "End angle", "degrees")}</>}
++      {arc && <>{numberField("start", "Start angle (°)")}{numberField("end", "End angle (°)")}</>}
 +      <button type="button" onClick={insert}>Insert {arc ? "arc" : "circle"}</button>
 +      {error && <p role="alert">{error}</p>}
 +    </SidePanel.SectionBody>
@@ -17155,7 +17191,7 @@ index 3173d35f..cd3fcaa0 100644
    margin-top: 2px;
    font-size: calc(var(--app-ui-scale, 1) * 10px);
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..46e85b8c 100644
+index d5c65582..7f0f637d 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 @@ -1,3 +1,4 @@
@@ -17169,7 +17205,7 @@ index d5c65582..46e85b8c 100644
  import { useCallback,useEffect,useMemo,useState,type FocusEvent,type JSX } from "react";
 -import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
 +import { formatNumber } from "tikz-editor/edit/format";
-+import { boundsInLatticeUnits, LATTICE_UNIT, latticeStepCentimetres, type LatticeBounds } from "tikz-editor/edit/lattice-units";
++import { boundsInLatticeUnits, latticeStepCentimetres, type LatticeBounds } from "tikz-editor/edit/lattice-units";
  import {
  getInspectorDescriptor,
  NODE_INNER_SEP_DEFAULT,
@@ -17254,15 +17290,6 @@ index d5c65582..46e85b8c 100644
        );
        for (const mutation of mutations) {
          dispatch({
-@@ -321,7 +342,7 @@ export function InspectorPanel() {
-     value: number
-   ): string {
-     const formatted = formatNumber(value);
--    if (property.unit) {
-+    if (property.unit && property.unit !== LATTICE_UNIT) {
-       return `${formatted}${property.unit}`;
-     }
-     return formatted;
 @@ -886,6 +907,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
@@ -17345,7 +17372,7 @@ index d5c65582..46e85b8c 100644
              className={css.numberInput}
              type="number"
              step={0.1}
-@@ -1742,13 +1760,11 @@ export function InspectorPanel() {
+@@ -1742,13 +1760,10 @@ export function InspectorPanel() {
                if (!Number.isFinite(parsed)) {
                  return;
                }
@@ -17358,11 +17385,10 @@ index d5c65582..46e85b8c 100644
              }}
            />
 -          <span className={css.unitLabel}>cm</span>
-+          <span className={css.unitLabel}>{LATTICE_UNIT}</span>
          </div>
        </div>
      );
-@@ -1756,6 +1772,7 @@ export function InspectorPanel() {
+@@ -1756,6 +1771,7 @@ export function InspectorPanel() {
  
    function renderFigureBoundsControls(): JSX.Element {
      const values = currentFigureBoundsControlsValue();
@@ -17370,7 +17396,7 @@ index d5c65582..46e85b8c 100644
      const fixed = figureBoundsState.mode === "fixed";
      return (
        <>
-@@ -1797,42 +1814,63 @@ export function InspectorPanel() {
+@@ -1797,42 +1813,63 @@ export function InspectorPanel() {
      );
    }
  
@@ -17454,7 +17480,7 @@ index d5c65582..46e85b8c 100644
          <SidePanel.Content className={css.content}>
            <div className={css.elementInfo}>
              {hint ? (
-@@ -1842,7 +1880,7 @@ export function InspectorPanel() {
+@@ -1842,7 +1879,7 @@ export function InspectorPanel() {
              {showStroke || showFill ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
@@ -17463,7 +17489,7 @@ index d5c65582..46e85b8c 100644
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    {showStroke ? (
-@@ -1852,7 +1890,7 @@ export function InspectorPanel() {
+@@ -1852,7 +1889,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation stroke color"
                          value={creationStrokeColor}
                          syntaxValue={creationStrokeColor}
@@ -17472,7 +17498,7 @@ index d5c65582..46e85b8c 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
-@@ -1867,7 +1905,7 @@ export function InspectorPanel() {
+@@ -1867,7 +1904,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation fill color"
                          value={creationFillColor === "none" ? "" : creationFillColor}
                          syntaxValue={creationFillColor}
@@ -17481,7 +17507,7 @@ index d5c65582..46e85b8c 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
-@@ -1879,6 +1917,7 @@ export function InspectorPanel() {
+@@ -1879,6 +1916,7 @@ export function InspectorPanel() {
                </SidePanel.Section>
              ) : null}
  
@@ -17489,7 +17515,7 @@ index d5c65582..46e85b8c 100644
              {isFreehand ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
-@@ -1886,25 +1925,19 @@ export function InspectorPanel() {
+@@ -1886,25 +1924,19 @@ export function InspectorPanel() {
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
@@ -17520,14 +17546,14 @@ index d5c65582..46e85b8c 100644
 +                      { key: "freehandSimplificationUnits", label: "Simplification", min: 0.01, max: 2, step: 0.01, value: freehandSimplificationUnits },
 +                      { key: "freehandSmoothingUnits", label: "Smoothing", min: 0, max: 1, step: 0.01, value: freehandSmoothingUnits }
 +                    ] as const).map(({ key, label, min, max, step, value }) => (
-+                      <ExactRange key={key} label={label} unit="lattice units" min={min} max={max} step={step} value={value}
++                      <ExactRange key={key} label={label} min={min} max={max} step={step} value={value}
 +                        onChange={(next) => setNewStrokeSettings({ [key]: next })} />
 +                    ))}
 +                    <button type="button" onClick={saveNewStrokeDefaults}>Save as default</button>
                    </div>
                  </SidePanel.SectionBody>
                </SidePanel.Section>
-@@ -1970,22 +2003,22 @@ export function InspectorPanel() {
+@@ -1970,22 +2002,22 @@ export function InspectorPanel() {
      );
    }
  
@@ -17557,7 +17583,7 @@ index d5c65582..46e85b8c 100644
                  {renderedDescriptor.readOnlyReason ? (
                    <div className={css.globalNote}>{renderedDescriptor.readOnlyReason}</div>
                  ) : null}
-@@ -2016,13 +2049,14 @@ export function InspectorPanel() {
+@@ -2016,13 +2048,14 @@ export function InspectorPanel() {
              </SidePanel.Content>
            </>
          )
@@ -17574,7 +17600,7 @@ index d5c65582..46e85b8c 100644
                {renderMultiArrangeQuickActions()}
                {!renderedMultiModel || renderedMultiModel.sections.length === 0 ? (
                  <p className={css.hint}>No shared editable properties were found across the selected elements.</p>
-@@ -2050,7 +2084,7 @@ export function InspectorPanel() {
+@@ -2050,7 +2083,7 @@ export function InspectorPanel() {
              </div>
            </SidePanel.Content>
          </>
@@ -19737,12 +19763,12 @@ index 3f807ed2..5a582824 100644
 +  return turns === 0 ? expression : `${expression}${turns > 0 ? "+" : ""}${turns * 360}`;
 +}
 diff --git a/packages/core/src/edit/inspector.ts b/packages/core/src/edit/inspector.ts
-index 2746595a..d7e84291 100644
+index 2746595a..61af7c0a 100644
 --- a/packages/core/src/edit/inspector.ts
 +++ b/packages/core/src/edit/inspector.ts
 @@ -1,4 +1,6 @@
  import { TREE_CHILD_NODE_READONLY_KEYS } from "./tree-editing.js";
-+import { axisLatticeScale, LATTICE_UNIT, latticeShiftField } from "./lattice-units.js";
++import { axisLatticeScale, latticeShiftField } from "./lattice-units.js";
 +import { resolveFigureCoordinateFrame } from "./coordinate-frame.js";
  import {
    makeForeachTemplateTargetId,
@@ -19862,7 +19888,7 @@ index 2746595a..d7e84291 100644
          syntaxValue: fillColorSyntax,
          options: colorOptionsForValue(fillColor),
          write: makeSetPropertyWriteTarget(inlineTarget, "fill")
-@@ -1294,14 +1302,23 @@ export function getInspectorDescriptor(
+@@ -1294,14 +1302,22 @@ export function getInspectorDescriptor(
          id: "grid",
          title: "Grid",
          sourceLevel: "command",
@@ -19874,7 +19900,7 @@ index 2746595a..d7e84291 100644
 +            label: "Step",
 +            value: "Set in the source",
 +            write: gridWriteTarget,
-+            readOnlyReason: "This figure's lattice is skewed, so grid steps have no reading in lattice units."
++            readOnlyReason: "This figure's lattice is skewed; set grid steps in the source."
 +          }
 +        ] : [
            {
@@ -19884,29 +19910,26 @@ index 2746595a..d7e84291 100644
              value: gridInspectorState.step,
              step: 0.1,
 -            unit: "cm",
-+            unit: LATTICE_UNIT,
              minExclusive: 0,
              defaultValue: 1,
              clearKeys: uniqueStrings(GRID_STEP_CLEAR_KEYS),
-@@ -1313,7 +1330,7 @@ export function getInspectorDescriptor(
+@@ -1313,7 +1329,6 @@ export function getInspectorDescriptor(
              label: "X step",
              value: gridInspectorState.xstep,
              step: 0.1,
 -            unit: "cm",
-+            unit: LATTICE_UNIT,
              minExclusive: 0,
              defaultValue: 1,
              clearKeys: uniqueStrings(GRID_XSTEP_CLEAR_KEYS),
-@@ -1325,7 +1342,7 @@ export function getInspectorDescriptor(
+@@ -1325,7 +1340,6 @@ export function getInspectorDescriptor(
              label: "Y step",
              value: gridInspectorState.ystep,
              step: 0.1,
 -            unit: "cm",
-+            unit: LATTICE_UNIT,
              minExclusive: 0,
              defaultValue: 1,
              clearKeys: uniqueStrings(GRID_YSTEP_CLEAR_KEYS),
-@@ -1353,7 +1370,7 @@ export function getInspectorDescriptor(
+@@ -1353,7 +1367,7 @@ export function getInspectorDescriptor(
            kind: "color",
            id: "text-color",
            label: "Color",
@@ -19915,7 +19938,7 @@ index 2746595a..d7e84291 100644
            syntaxValue: textColorSyntax,
            options: colorOptionsForValue(textColor),
            write: makeSetPropertyWriteTarget(inlineTarget, "text")
-@@ -3330,3 +3347,12 @@ function canonicalDecorationName(raw: string | null | undefined): string | null
+@@ -3330,3 +3344,12 @@ function canonicalDecorationName(raw: string | null | undefined): string | null
    const normalized = raw.trim().toLowerCase().replace(/\s+/g, " ");
    return normalized.length > 0 ? normalized : null;
  }
@@ -20228,10 +20251,10 @@ index bc59eb6c..fd0fd1c6 100644
        write?: SetPropertyWriteTarget;
 diff --git a/packages/core/src/edit/lattice-units.ts b/packages/core/src/edit/lattice-units.ts
 new file mode 100644
-index 00000000..3557bb15
+index 00000000..08d9cb1c
 --- /dev/null
 +++ b/packages/core/src/edit/lattice-units.ts
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,59 @@
 +import { pt, worldPoint, type WorldBounds } from "../coords/index.js";
 +import { applyMatrix, inverseMatrix } from "../semantic/transform.js";
 +import type { WorldTransform } from "../coords/transforms.js";
@@ -20244,9 +20267,6 @@ index 00000000..3557bb15
 + * lattice vector for that axis is skewed off the canvas axis, so a canvas-axis
 + * length is not a whole number of lattice steps.
 + */
-+/** The unit label of a value stated in lattice units; such values are written to TikZ as bare numbers. */
-+export const LATTICE_UNIT = "units";
-+
 +export type AxisLatticeScale = { x: number | null; y: number | null };
 +
 +/** The frame maps source points, where one lattice step is LATTICE_UNIT_PT, to world points. */
@@ -20278,7 +20298,7 @@ index 00000000..3557bb15
 +  if (ptPerUnit === null) {
 +    return { ...rest, value: valuePt, defaultValue: defaultPt, step: 0.1, unit: "pt", readOnlyReason: "This figure's lattice is skewed on this axis; move the element on the canvas instead." };
 +  }
-+  return { ...rest, value: valuePt / ptPerUnit, defaultValue: defaultPt / ptPerUnit, step: 0.25, unit: LATTICE_UNIT, ptPerUnit };
++  return { ...rest, value: valuePt / ptPerUnit, defaultValue: defaultPt / ptPerUnit, step: 0.25, ptPerUnit };
 +}
 +
 +export type LatticeBounds = { x: number; y: number; width: number; height: number };

@@ -78,7 +78,7 @@ Attachments are TikZ references in the source. Moving a node, a line, or a point
 
 A circle or arc drawn from its centre takes the second point as its radius. An arc's end keeps the radius and lands on a lattice point of its ray when one is within reach, otherwise on a nearby multiple of 45 or 15 degrees.
 
-Coordinate fields, figure bounds, and Repeat use lattice units. File > Document Properties… shows the size of one lattice step along x and y in centimetres, from the figure's `x`, `y`, or `scale` options.
+Coordinate fields, figure bounds, Repeat, and the readout while you draw show figure coordinates: the numbers the source holds, with no unit word. A line, arrow, or curve readout shows the coordinates of the point you place; a shape readout shows its width and height. On a figure whose axes are not at right angles, Repeat steps read in pt. File > Document Properties… shows the size of one lattice step along x and y in centimetres, from the figure's `x`, `y`, or `scale` options.
 
 ## Freehand strokes
 

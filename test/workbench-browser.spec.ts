@@ -2364,7 +2364,7 @@ describe("standalone workbench host boundary", function () {
 
     story(
       { viewport: tablet },
-      `reads a drawn line's end in lattice units when the figure scales its lattice in ${tablet.name}`,
+      `reads a drawn rectangle's size in figure coordinates when the figure scales its lattice in ${tablet.name}`,
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -2402,7 +2402,7 @@ describe("standalone workbench host boundary", function () {
           await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
         ]);
         await input.touch([
-          await stableCenter(frame.getByRole("option", { name: "Line", exact: true })),
+          await stableCenter(frame.getByRole("option", { name: "Rectangle", exact: true })),
         ]);
         const [from, to] = [at(1, 1), at(3, 2)];
         await input.penDown(from);
@@ -2414,20 +2414,12 @@ describe("standalone workbench host boundary", function () {
         }
         const tooltip = frame.getByTestId("canvas-drag-tooltip");
         await expect(tooltip).toBeVisible();
-        const text = await tooltip.innerText();
+        const rows = await tooltip
+          .getByTestId("canvas-drag-tooltip-row")
+          .evaluateAll((elements) => elements.map((row) => row.textContent ?? ""));
         await input.penUp(to);
-        // From (1,1) to (3,2) the line spans 2 by 1 lattice units; in centimetres it would read 4 by 2.
-        assert.match(
-          text,
-          /Width:\s*2 units/,
-          `The drag readout does not state a width of 2 lattice units: ${text}`,
-        );
-        assert.match(
-          text,
-          /Height:\s*1 units/,
-          `The drag readout does not state a height of 1 lattice unit: ${text}`,
-        );
-        assert.doesNotMatch(text, /cm|px/, `The drag readout states physical lengths: ${text}`);
+        // From (1,1) to (3,2) the rectangle is 2 by 1 in figure coordinates; in centimetres it would read 4 by 2.
+        assert.deepEqual(rows, ["Width:2", "Height:1"], "The drag readout does not state the size");
       },
     );
   }
@@ -4828,7 +4820,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `states geometry in lattice units, never cm or px, in Properties and Repeat in ${tablet.name}`,
+      `states geometry in figure coordinates, with no unit word, in Properties and Repeat in ${tablet.name}`,
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -4847,7 +4839,8 @@ describe("standalone workbench host boundary", function () {
         await fitDiagram(frame, input);
         const rail = frame.locator("[data-diagram-tools]");
         const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
-        const physical = /\d\s*(cm|px)\b|\((cm|px)\)/;
+        // Figure coordinates are bare numbers in TikZ, so no unit word follows them.
+        const unitWord = /\d\s*(cm|px)\b|\((cm|px|units)\)|\bunits\b/;
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
         ]);
@@ -4859,13 +4852,8 @@ describe("standalone workbench host boundary", function () {
         await expect(panel).toBeVisible();
         await expect(panel.getByText("X shift", { exact: true })).toBeVisible();
         const lineText = await panel.innerText();
-        assert.doesNotMatch(lineText, physical, `Line inspector: ${lineText.match(physical)?.[0]}`);
-        assert.match(
-          lineText,
-          /X shift[\s\S]{0,40}units/,
-          "X shift is not stated in lattice units",
-        );
-        // Two lattice units of shift is two centimetres in the default frame.
+        assert.doesNotMatch(lineText, unitWord, `Line inspector: ${lineText.match(unitWord)?.[0]}`);
+        // A shift of two figure coordinates is two centimetres in the default frame.
         const xshift = panel
           .locator('[class*="compactNumberField"]', { hasText: "X shift" })
           .locator("input");
@@ -4876,7 +4864,7 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
         await expect(panel.getByText("Step", { exact: false }).first()).toBeVisible();
         const gridText = await panel.innerText();
-        assert.doesNotMatch(gridText, physical, `Grid inspector: ${gridText.match(physical)?.[0]}`);
+        assert.doesNotMatch(gridText, unitWord, `Grid inspector: ${gridText.match(unitWord)?.[0]}`);
         // In portrait the panel lies over the line; close it before reaching for the line.
         await input.touch([
           await stableCenter(frame.getByRole("button", { name: "Close properties", exact: true })),
@@ -4895,7 +4883,7 @@ describe("standalone workbench host boundary", function () {
         const repeat = frame.getByTestId("repeat-modal");
         await expect(repeat).toBeVisible();
         const repeatText = await repeat.innerText();
-        assert.doesNotMatch(repeatText, physical, `Repeat: ${repeatText.match(physical)?.[0]}`);
+        assert.doesNotMatch(repeatText, unitWord, `Repeat: ${repeatText.match(unitWord)?.[0]}`);
       },
     );
   }
@@ -5126,9 +5114,9 @@ describe("standalone workbench host boundary", function () {
         assert.deepEqual(await texts(construction), [
           "Circle construction",
           "Construction",
-          "Center X (units)",
-          "Center Y (units)",
-          "Radius (units)",
+          "Center X",
+          "Center Y",
+          "Radius",
           "Insert circle",
         ]);
         // Settings rows carry a label and, for a slider, its value in a user unit (item 5).
@@ -5172,7 +5160,7 @@ describe("standalone workbench host boundary", function () {
         assert.deepEqual(await texts(row), ["Insert: Line", "Ctrl+Alt+L"]);
         await storyScreenshot(page, `option-surface-text-${tablet.name}`);
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
-        // The Freehand result names its sliders, their unit, and its buttons (item 8).
+        // The Freehand result names its sliders and its buttons (item 8); its values are figure coordinates, with no unit word.
         await tap(rail.getByRole("button", { name: "Freehand", exact: true }));
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
@@ -5181,9 +5169,7 @@ describe("standalone workbench host boundary", function () {
         assert.deepEqual(await texts(result), [
           "Freehand result",
           "Smoothing",
-          "lattice units",
           "Simplification",
-          "lattice units",
           "Simplify again",
           "Accept",
           "Cancel",
