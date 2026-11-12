@@ -6754,6 +6754,85 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `moves the dock by a drag from its edge to each screen edge, with drop zones that hold no words, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const rail = frame.locator("[data-diagram-tools]");
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        // Apple Markup: "Drag from the edge of the toolbar closest to the center of the screen."
+        const edgePoint = async () => {
+          const box = (await rail.boundingBox())!;
+          const dock = await rail.getAttribute("data-dock");
+          const middle = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+          if (dock === "bottom") return { x: middle.x, y: box.y + 4 };
+          if (dock === "top") return { x: middle.x, y: box.y + box.height - 4 };
+          if (dock === "left") return { x: box.x + box.width - 4, y: middle.y };
+          return { x: box.x + 4, y: middle.y };
+        };
+        const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) =>
+          input.touch(
+            Array.from({ length: 13 }, (_, i) => ({
+              x: from.x + ((to.x - from.x) * i) / 12,
+              y: from.y + ((to.y - from.y) * i) / 12,
+            })),
+          );
+        const storedDock = async () => {
+          const response = await page.request.get(`${url}api/preferences`);
+          assert.equal(response.status(), 200);
+          const saved = ((await response.json()) as Record<string, string>)["tikz-editor:settings"];
+          return saved
+            ? (JSON.parse(saved) as { settings: { toolbar: { dock: string } } }).settings.toolbar.dock
+            : null;
+        };
+        const clearOfRulers = async () => {
+          const railBox = (await rail.boundingBox())!;
+          for (const ruler of ["canvas-top-ruler", "canvas-left-ruler"]) {
+            const box = (await frame.getByTestId(ruler).boundingBox())!;
+            const overlapX =
+              Math.min(railBox.x + railBox.width, box.x + box.width) - Math.max(railBox.x, box.x);
+            const overlapY =
+              Math.min(railBox.y + railBox.height, box.y + box.height) - Math.max(railBox.y, box.y);
+            assert.ok(overlapX <= 0 || overlapY <= 0, `The rail covers ${ruler}`);
+          }
+        };
+        const edges = {
+          right: { x: viewport.x + viewport.width - 10, y: viewport.y + viewport.height / 2 },
+          top: { x: viewport.x + viewport.width / 2, y: viewport.y + 10 },
+          left: { x: viewport.x + 10, y: viewport.y + viewport.height / 2 },
+          bottom: { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height - 10 },
+        };
+        await expect(rail).toHaveAttribute("data-dock", "bottom");
+        // A drag that starts on a tool is not a dock drag.
+        await drag(await stableCenter(rail.getByRole("button", { name: "Select", exact: true })), edges.right);
+        await expect(rail).toHaveAttribute("data-dock", "bottom");
+        for (const [dock, target] of Object.entries(edges)) {
+          await drag(await edgePoint(), target);
+          await expect(rail).toHaveAttribute("data-dock", dock);
+          await expect.poll(storedDock).toBe(dock);
+          await clearOfRulers();
+        }
+        // While a drag runs, each screen edge shows a drop zone, and no zone holds a word.
+        const from = await edgePoint();
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        await page.mouse.move(viewport.x + viewport.width / 2, viewport.y + viewport.height / 2, { steps: 6 });
+        const zones = frame.locator("[data-dock-target]");
+        await expect(zones).toHaveCount(4);
+        assert.deepEqual(
+          (await zones.allTextContents()).map((text) => text.trim()),
+          ["", "", "", ""],
+        );
+        await page.mouse.move(edges.right.x, edges.right.y, { steps: 6 });
+        await page.mouse.up();
+        await expect(rail).toHaveAttribute("data-dock", "right");
+        await expect(zones).toHaveCount(0);
+      },
+    );
+
+    story(
+      { viewport: tablet },
       `moves the drawing rail by its grip only and never over the rulers in ${tablet.name}`,
       async function () {
         await editorReady(page);
