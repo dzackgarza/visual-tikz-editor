@@ -75,6 +75,7 @@ The editor serves its page on `127.0.0.1` only, on a free port. It makes no requ
 
 - [User guide](docs/user-guide.md): drawing, construction, snapping, layers, views, export, and settings.
 - [Interaction model](docs/interaction-model.md): the rules for tools, selection, undo, snapping, and attachments.
+- [Prior art](docs/prior-art/): the interface specifications, each with the applications, documentation, and screenshots it follows.
 - [Embedding](docs/embedding.md): the host interface for programs that embed the editor.
 - [Development](docs/development.md): building, testing, the vendored editors, and releases.
 
