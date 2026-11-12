@@ -45,6 +45,13 @@ gh run list --workflow development.yml --branch main --limit 1
 
 Each push starts a run on a runner queue that other repositories share. Commit as you work and push when the work is complete.
 
+A failed story keeps its Playwright trace as `test-results/workbench/failed-<time>-<story>.zip`, beside the screenshot of every story. The run retains `test-results/` as its `test-results-<run>-<attempt>` artifact, so a story that fails only on the runner is read from its trace:
+
+```sh
+gh run download <run-id> --pattern 'test-results-*'
+bunx playwright show-trace test-results-*/workbench/failed-*.zip
+```
+
 `bun run coverage` (`scripts/coverage.mjs`) runs the suite with V8 coverage for Mocha and for every story page, and merges both into `coverage/lcov.info`. `standalone/server.ts` runs under Bun, which reports coverage only inside `bun test` ([oven-sh/bun#17867](https://github.com/oven-sh/bun/issues/17867)), so the report omits it.
 
 ### Writing a browser story

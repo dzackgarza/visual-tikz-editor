@@ -1,5 +1,4 @@
 import { strict as assert } from "node:assert";
-import { copyFile } from "node:fs/promises";
 import {
   type Browser,
   type BrowserContext,
@@ -151,15 +150,15 @@ describe("standalone workbench host boundary", function () {
     const name = this.currentTest!.title.replace(/[^a-z0-9]+/gi, "-");
     try {
       await storyScreenshot(page, name);
-      await context.tracing.stop({ path: `test-results/workbench/${name}.zip` });
+      // Only a failed story keeps its trace, as Playwright's retain-on-failure mode does
+      // (https://playwright.dev/docs/test-use-options#recording-options); the dated name
+      // keeps the trace of an intermittent failure when a later run of the story passes.
+      await context.tracing.stop(
+        this.currentTest!.state === "failed"
+          ? { path: `test-results/workbench/failed-${Date.now()}-${name}.zip` }
+          : {},
+      );
       await stopPageCoverage(page);
-      // A rerun overwrites the trace above, so a failure also keeps its own copy for intermittent failures.
-      if (this.currentTest!.state === "failed") {
-        await copyFile(
-          `test-results/workbench/${name}.zip`,
-          `test-results/workbench/failed-${Date.now()}-${name}.zip`,
-        );
-      }
     } finally {
       try {
         await context.close();
