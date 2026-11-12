@@ -450,6 +450,117 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `turns all snapping off with one tap and back on with the rules it had in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const rail = frame.locator("[data-diagram-tools]");
+        // Draws a line from (3.5, 2.5) to (6.5, 4.5), reads its numbers, and undoes it.
+        const drawLine = async () => {
+          const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+          const at = (x: number, y: number) => ({
+            x: frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+            y: frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+          });
+          await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+          await tap(frame.getByRole("option", { name: "Line", exact: true }));
+          const [from, to] = [at(3.5, 2.5), at(6.5, 4.5)];
+          await input.penStroke([from, { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }, to]);
+          const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+          await expect.poll(draws).toBe(3);
+          const added = (await editorDebug(page)).source
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("\\draw"))
+            .at(-1)!;
+          await tap(rail.getByRole("button", { name: "Undo", exact: true }));
+          await expect.poll(draws).toBe(2);
+          return [...added.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
+        };
+        // Inkscape's snap toolbar: one toggle (win.snap-global-toggle, "Snapping") and a popover button beside it.
+        const snapping = rail.getByRole("button", { name: "Snapping", exact: true });
+        const rulesButton = rail.getByRole("button", { name: "Snapping rules", exact: true });
+        const popup = frame.getByRole("dialog", { name: "Tool options" });
+        const rules = ["Lattice", "Objects", "Alignment", "Angle"] as const;
+        const ruleStates = async () => {
+          await tap(rulesButton);
+          await expect(popup).toBeVisible();
+          const states = [];
+          for (const name of rules) {
+            const rule = popup.getByRole("button", { name, exact: true });
+            states.push([name, await rule.getAttribute("aria-pressed"), await rule.isEnabled()]);
+          }
+          const text = await popup.evaluate((root) => root.textContent!.replace(/\s+/g, " ").trim());
+          await tap(rulesButton);
+          await expect(popup).toHaveCount(0);
+          return { states, text };
+        };
+        await expect(snapping).toHaveAttribute("aria-pressed", "true");
+        // Angle starts off and Objects is turned off, so the restore below is of the rules, not of the defaults.
+        await setSnapRule(frame, input, "Objects", false);
+        assert.deepEqual(await ruleStates(), {
+          states: [
+            ["Lattice", "true", true],
+            ["Objects", "false", true],
+            ["Alignment", "true", true],
+            ["Angle", "false", true],
+          ],
+          text: "Snapping Lattice Objects Alignment Angle",
+        });
+        const locked = await drawLine();
+        assert.ok(locked.length >= 4 && locked.every(Number.isInteger), `Snapping on leaves the lattice: ${locked}`);
+
+        await tap(snapping);
+        await expect(snapping).toHaveAttribute("aria-pressed", "false");
+        const free = await drawLine();
+        assert.ok(free.some((value) => !Number.isInteger(value)), `Snapping off still lands on the lattice: ${free}`);
+        // With snapping off the rules keep their states and cannot be changed, as Inkscape disables them.
+        assert.deepEqual((await ruleStates()).states, [
+          ["Lattice", "true", false],
+          ["Objects", "false", false],
+          ["Alignment", "true", false],
+          ["Angle", "false", false],
+        ]);
+
+        await tap(snapping);
+        await expect(snapping).toHaveAttribute("aria-pressed", "true");
+        assert.deepEqual((await ruleStates()).states, [
+          ["Lattice", "true", true],
+          ["Objects", "false", true],
+          ["Alignment", "true", true],
+          ["Angle", "false", true],
+        ]);
+        const restored = await drawLine();
+        assert.ok(restored.every(Number.isInteger), `Snapping back on leaves the lattice: ${restored}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `shows one snap control naming the active rule, with lattice, object, alignment and angle snapping behind it, in ${tablet.name}`,
       async function () {
         await editorReady(page);
