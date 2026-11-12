@@ -4555,7 +4555,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `states geometry in lattice units, never cm or px, in the inspector and Repeat in ${tablet.name}`,
+      `states geometry in lattice units, never cm or px, in Properties and Repeat in ${tablet.name}`,
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();

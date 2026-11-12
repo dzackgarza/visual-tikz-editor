@@ -18,7 +18,7 @@ Source: fork `packages/app/src/ui/DockLayout.tsx:694-718`, `inspector-panel/Insp
 
 - **One container.** One card holds two text tabs, "Properties" and "Layers", and a "×". In landscape the card floats over the right of the canvas; the canvas runs on beneath it. In portrait it is a bottom sheet with "⌃"/"⌄" to expand and "×" to close.
 - **Opening and closing.** The dock buttons Layers and Properties open the card on their tab; a second press of the same button, or "×", closes it. A tap on the canvas and Escape leave it open.
-- **Two names.** The embed calls the panel "Properties"; the desktop layouts and the message "Inspector data is unavailable for the current selection" call it "Inspector".
+- **Two names.** The embed calls the panel "Properties"; the desktop layouts and the message "Inspector data is unavailable for the current selection" call it "Inspector". The present build calls it "Properties" everywhere.
 - **Properties, nothing selected.** The header is the active tool's name ("SELECT"). Below it are Transform (X and Y scale of the whole figure) and Figure Bounds (Mode "Auto from content"). With a creation tool active, the panel shows a hint box and a "New strokes" section with stroke and fill pickers and the circle and arc construction controls.
 - **Properties, selection.** The header is the type ("CIRCLE"), followed by the line "Selected circle". Transform (X/Y shift, X/Y scale, rotate, X/Y shear) comes first; then Stroke (colour, line width, dash), Fill (colour, "more options..", "+ gradient", "+ pattern"), and Shadow. Colours are dropdowns that read "Color" and "No color" in italics.
 - **Layers.** The header row holds the word button "New layer" and icon buttons Group, Ungroup, Send to back, Send backward, Bring forward; the last is clipped by the panel edge. Every object in the figure is a row. Each row puts its name on one line and eye, lock, and pencil (rename) on a second line, about 93 px per row. Layer rows add Raise, Lower, "Move here", and Delete. A layer is a top-level `scope` with a `name=` option (fork `layers.ts`); that option compiles and does not name the nodes inside the scope.
@@ -70,7 +70,7 @@ Not verified from a primary source: how Procreate closes its Layers panel; the G
 | Landscape placement | A card over the canvas; the canvas runs on beneath it | A docked pane beside the canvas (Ipe, Inkscape, Keynote) | Covers the canvas |
 | Portrait placement | Bottom sheet with "⌃"/"⌄" and "×" | Nonmodal sheet with medium and large detents, a grabber, and swipe-down dismissal | Glyph buttons instead of a grabber; no swipe dismissal |
 | Opening and closing | Dock buttons open only; "×" is the only close | The opening button toggles | No toggle |
-| Name | "Properties" and "Inspector" | One title | Two names |
+| Name | "Properties" and "Inspector" | One title | Repaired |
 | Properties header, nothing selected | Active tool name | Next-object attributes (Ipe) or an empty state (Inkscape) | Tool name in a selection inspector |
 | Figure scale and bounds | In Properties when nothing is selected | Document properties dialog | Wrong surface |
 | Tool hint box and "New strokes" | In Properties while a creation tool is active | Next step in the status line; tool options on the tool (dock specification items 4, 5, 10) | Wrong surface |
@@ -92,7 +92,7 @@ Not verified from a primary source: how Procreate closes its Layers panel; the G
 1. **Two panels.** Properties and Layers are separate panels, each with its own title and close button. Each opens and closes from its own button (dock specification item 8, [#26](https://github.com/dzackgarza/visual-tikz-editor/issues/26)). The tab strip is deleted.
 2. **Landscape.** An open panel is a docked pane at the trailing edge of the canvas, and the canvas ends where the pane begins. With both open, Properties sits above Layers in one column, as in Ipe. A canvas tap and Escape do not close a docked pane.
 3. **Portrait.** An open panel is a nonmodal sheet above the dock, with medium and large detents and a grabber. A drag on the grabber resizes it, a tap on the grabber cycles the detents, and a swipe down closes it. One sheet is open at a time; opening the other panel replaces it. The "⌃"/"⌄" buttons are deleted.
-4. **One name.** The panel is "Properties" in every build, layout, label, and message. The word "Inspector" leaves the interface.
+4. **One name.** The panel is "Properties" in every build, layout, label, and message. The word "Inspector" leaves the interface. The present build meets this rule.
 5. **Properties with nothing selected.** Properties shows the attributes the next object gets: stroke colour, fill colour, line width, dash, and arrows, as in Ipe. It has no tool-name header. The figure's scale and bounds move to a Document properties dialog in the File menu ([#22](https://github.com/dzackgarza/visual-tikz-editor/issues/22)). The tool hint moves to the status line ([#21](https://github.com/dzackgarza/visual-tikz-editor/issues/21)); the construction controls move to the tool options ([#27](https://github.com/dzackgarza/visual-tikz-editor/issues/27)).
 6. **Properties with a selection.** One title, the selection's type. Sections in order: Stroke, Fill, Shadow, Transform. Stroke and fill colours are colour wells that open the colour picker with its exact `xcolor` field; fill has a none state. Fill paint type is a row of icon buttons (none, flat, gradient, pattern). "more options.." and "fewer options.." become a disclosure control.
 7. **Layers contents.** The panel lists the layers and objects of the figure as a tree, with a header toggle between the Layers view (layer rows only) and the Objects view (the full tree), as in Inkscape. A layer stays a top-level `scope` with a `name=` option, as an Inkscape layer is an SVG group marked `inkscape:groupmode="layer"`.
@@ -108,7 +108,6 @@ An issue that names a dependency starts after that audit has its specification.
 | --- | --- | --- |
 | 1, 2 | [#34](https://github.com/dzackgarza/visual-tikz-editor/issues/34) Separate Properties and Layers panels; docked pane in landscape | — |
 | 3 | [#35](https://github.com/dzackgarza/visual-tikz-editor/issues/35) Portrait panels as a nonmodal sheet with detents and a grabber | — |
-| 4 | [#36](https://github.com/dzackgarza/visual-tikz-editor/issues/36) One name, Properties | — |
 | 5 | [#37](https://github.com/dzackgarza/visual-tikz-editor/issues/37) Properties with nothing selected shows next-object attributes | #21, #27, #50 |
 | 6 | [#38](https://github.com/dzackgarza/visual-tikz-editor/issues/38) Properties sections, colour wells, and paint type | #29 |
 | 7, 9 | [#39](https://github.com/dzackgarza/visual-tikz-editor/issues/39) Layers view toggle and header | #24 |

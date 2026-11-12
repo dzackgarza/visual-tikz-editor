@@ -12,7 +12,9 @@ describe("vendored tikz-editor build", function () {
     for (const file of files) {
       const text = await readFile(path.join(root, file), "utf8");
       // The word on its own: identifiers such as showInspectorPanel join it to other words.
-      for (const match of text.matchAll(/.{0,40}\bInspector\b.{0,40}/gu)) found.push(`${file}: ${match[0]}`);
+      for (const match of text.matchAll(/\bInspector\b/gu)) {
+        found.push(`${file}: ${text.slice(Math.max(0, match.index - 40), match.index + 50)}`);
+      }
     }
     assert.deepEqual(found, [], "The build ships the panel name Inspector");
   });

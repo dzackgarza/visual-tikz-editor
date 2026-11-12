@@ -323,6 +323,27 @@ describe("standalone native file workflow", function () {
     assert.equal(await readFile(diagramPath, "utf8"), external);
   });
 
+  it("titles the window with the file name and a leading * while changes are unsaved", async function () {
+    diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-title-")), "figure.tikz");
+    await page.request.post(`${url}api/new`, { data: "tikzpicture" });
+    await page.goto(url);
+    await expect(page).toHaveTitle("Untitled.tikz - Visual TikZ Editor");
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    const original = String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`;
+    await page.locator(".cm-content").fill(original);
+    await expect(page).toHaveTitle("*Untitled.tikz - Visual TikZ Editor");
+    await fileMenu().click();
+    await page.getByRole("button", { name: "Save As…", exact: true }).click();
+    await chooseFile("save");
+    await expect.poll(() => readFile(diagramPath, "utf8")).toBe(original);
+    await expect(page).toHaveTitle("figure.tikz - Visual TikZ Editor");
+    // A change on disk holds the edit unsaved until the conflict ends.
+    await writeFile(diagramPath, original.replace("(1,1)", "(2,2)"), "utf8");
+    await page.locator(".cm-content").fill(original.replace("(1,1)", "(3,3)"));
+    await expect(page.locator(".tikz-standalone-status")).toContainText("The file changed on disk");
+    await expect(page).toHaveTitle("*figure.tikz - Visual TikZ Editor");
+  });
+
   it("autosaves an existing file and reopens its source and picture after interruption", async function () {
     diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-autosave-")), "autosaved.tikz");
     await page.request.post(`${url}api/new`, { data: "tikzpicture" });
