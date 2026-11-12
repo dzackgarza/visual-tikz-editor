@@ -9637,15 +9637,19 @@ describe("standalone workbench host boundary", function () {
       const frame = page.frameLocator("#editor");
       const hostSource = page.getByLabel("Authored source");
       const strokes = (source: string) => (source.match(/^[ \t]*% workbench-ink:/gm) ?? []).length;
+      // A bowed stroke, so its fit is a curve and not a straight line.
       const draw = async (across: number, down: number) => {
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        await page.mouse.move(bounds.x + bounds.width * across, bounds.y + bounds.height * down);
+        const x = bounds.x + bounds.width * across;
+        const y = bounds.y + bounds.height * down;
+        await page.mouse.move(x, y);
         await page.mouse.down();
-        await page.mouse.move(
-          bounds.x + bounds.width * across + 100,
-          bounds.y + bounds.height * down + 30,
-          { steps: 12 },
-        );
+        for (let step = 1; step <= 12; step++) {
+          await page.mouse.move(
+            x + (100 * step) / 12,
+            y + (30 * step) / 12 - 40 * Math.sin((Math.PI * step) / 12),
+          );
+        }
         await page.mouse.up();
         // Accepting the offered fit makes it a history step after the recorded stroke.
         const result = frame.getByRole("dialog", { name: "Freehand result" });
