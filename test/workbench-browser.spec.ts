@@ -2293,6 +2293,77 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `reads a drawn line's end as the coordinates the source gets, with no unit word, in a scaled and an unscaled figure in ${tablet.name}`,
+      async function () {
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const rail = frame.locator("[data-diagram-tools]");
+        const drawLine = async (options: string, from: [number, number], to: [number, number]) => {
+          await editorReady(page);
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}${options}
+\draw (0,0) -- (5,0);
+\draw (0,0) -- (0,5);
+\end{tikzpicture}`);
+          await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+          await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+          await fitDiagram(frame, input);
+          const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+          const ends = async (id: string) =>
+            frame
+              .locator(`svg [data-source-id="${id}"]`)
+              .first()
+              .evaluate((path: SVGGeometryElement) => {
+                const m = path.getScreenCTM()!;
+                return [0, path.getTotalLength()].map((length) => {
+                  const p = path.getPointAtLength(length);
+                  return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+                });
+              });
+          const [[origin, xFive], [, yFive]] = [await ends("path:0"), await ends("path:1")];
+          // Screen position of figure coordinate (x, y), from the two segments of length 5.
+          const at = ([x, y]: [number, number]) => ({
+            x: frameBox.x + origin.x + ((xFive.x - origin.x) * x) / 5 + ((yFive.x - origin.x) * y) / 5,
+            y: frameBox.y + origin.y + ((xFive.y - origin.y) * x) / 5 + ((yFive.y - origin.y) * y) / 5,
+          });
+          await input.touch([await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true }))]);
+          await input.touch([await stableCenter(frame.getByRole("option", { name: "Line", exact: true }))]);
+          const [start, end] = [at(from), at(to)];
+          await input.penDown(start);
+          for (let i = 1; i <= 10; i++) {
+            await input.penMove({
+              x: start.x + ((end.x - start.x) * i) / 10,
+              y: start.y + ((end.y - start.y) * i) / 10,
+            });
+          }
+          const tooltip = frame.getByTestId("canvas-drag-tooltip");
+          await expect(tooltip).toBeVisible();
+          const rows = await tooltip
+            .getByTestId("canvas-drag-tooltip-row")
+            .evaluateAll((elements) => elements.map((row) => row.textContent ?? ""));
+          await input.penUp(end);
+          const draws = (await editorDebug(page)).source
+            .split("\n")
+            .filter((line) => line.trim().startsWith("\\draw"));
+          return { rows, line: draws[draws.length - 1] };
+        };
+        // x=2cm, y=2cm: the end at figure coordinate (1,1) is 2 cm from the origin on each axis.
+        const scaled = await drawLine("[x=2cm,y=2cm]", [3, 2], [1, 1]);
+        assert.match(scaled.line, /-- \(1,\s*1\)/, `The line does not end at (1,1): ${scaled.line}`);
+        assert.deepEqual(scaled.rows, ["X:1", "Y:1"], "The readout does not show the end's coordinates");
+        // With no scaling the readout shows the numbers the source gets.
+        const plain = await drawLine("", [1, 1], [4, 3]);
+        const written = /-- \((-?[\d.]+),\s*(-?[\d.]+)\)/.exec(plain.line);
+        assert.ok(written, `The line has no end coordinate: ${plain.line}`);
+        assert.deepEqual(plain.rows, [`X:${written[1]}`, `Y:${written[2]}`], "The readout differs from the source");
+        for (const row of [...scaled.rows, ...plain.rows]) {
+          assert.doesNotMatch(row, /units|cm|pt|px/, `The readout names a unit for a figure coordinate: ${row}`);
+        }
+      },
+    );
+
+    story(
+      { viewport: tablet },
       `reads a drawn line's end in lattice units when the figure scales its lattice in ${tablet.name}`,
       async function () {
         await editorReady(page);
