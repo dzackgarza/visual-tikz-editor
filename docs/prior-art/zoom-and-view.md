@@ -73,3 +73,10 @@ An issue that names a dependency starts after that audit has its specification.
 
 | Items | Issue | Depends on |
 | --- | --- | --- |
+| 1 | [#63](https://github.com/dzackgarza/visual-tikz-editor/issues/63) 100 % is printed size; display calibration in Settings | — |
+| 2, 3 | [#64](https://github.com/dzackgarza/visual-tikz-editor/issues/64) A figure opens in Zoom to Fit; its view is restored when the file opens again | #63 |
+| 4; 5 in the embedded host | [#65](https://github.com/dzackgarza/visual-tikz-editor/issues/65) Zoom readout at the end of the status line with a zoom menu; delete the Zoom and display popover | #52, #59, #44, #63 |
+| 5 | [#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44) View menu; offer only the views the document supports; one name per view | — |
+| 7 | [#66](https://github.com/dzackgarza/visual-tikz-editor/issues/66) Rulers in centimetres with a label step that follows the zoom | #54 |
+
+Item 6 is the present behaviour and needs no issue.
