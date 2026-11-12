@@ -19,11 +19,11 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 
 | Inspected tracker | Recorded state | Required follow-up |
 | --- | --- | --- |
-| GitHub #1 | Closed on the immutable release `workbench-2e59d93` at green run 43198269710 | A device observation or a failing story opens a new issue under it |
+| GitHub #1 | Closed on the release `workbench-2e59d93` at green run 43198269710 | A device observation or a failing story opens a new issue under it |
 | GitHub #2–#5, #7–#9 | Closed | Retain their technical acceptance requirements |
 | Open pull requests | None | Establish review state for subsequent implementation |
 | PR #11 | Merged; live review threads all resolved on 2026-10-29 | Historical review record |
-| Latest listed release | Immutable release `workbench-<sha>` of a head of `main` whose Development diagnostics run is green; `gh release list --limit 1` names it. Assets: the source tree with the built page, the Debian package, the CI qualification evidence, and `SHA256SUMS` | The next green head that changes the product gets the next release |
+| Latest listed release | `workbench-<sha>` of a head of `main` whose Development diagnostics run is green; `gh release list --limit 1` names it. Assets: the source tree with the built page, the Debian package, the CI qualification evidence, and `SHA256SUMS` | The next green head that changes the product gets the next release |
 | Project cards, including archived | Workspace plan and its feature | Use the current card and this inventory |
 | GitHub #14 | Closed again on three consecutive green instrumented runs at `5e36766` (41078668784, 41078719334, 41078725991). Since `29aeaa6` the canvas marks its startup view installed (`data-canvas-view="ready"`) and the shared ready wait requires that mark before its two-frame stillness check | A story that fails only in the full suite reopens it with the run and the triage log |
 | GitHub #15 | Closed on green run 43080699277 at `6babb40`: the eraser cuts every drawn path; the story "erases only the swept part of a circle, an ellipse, an arc path, and a rectangle" holds it in both orientations | A sweep that erases a cuttable shape whole reopens it |
@@ -42,7 +42,7 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 | Slice 5: autosave and export | Interrupted untitled work recovers; existing files autosave with disk conflict checks; every figure exports to SVG/PNG and a multipage PDF | Focused browser and native stories pass, and the standalone-file session story holds them together. |
 | A/H/I and original complaints | Real standalone and mounted-host workflows retain source, picture, offline assets, editing, undo, save/reopen, and export | Every story passes alone, and the seven combined-session stories in ranked step 1 pass in both orientations. |
 | Software gate | Development diagnostics is green on the final source revision | The gate is the run on the head revision; ranked step 1 reads it. Green at `2e59d93`: [43198269710](https://github.com/dzackgarza/visual-tikz-editor/actions/runs/43198269710), 15 of 15 checks and 308 browser stories. |
-| Release | A green software gate and published artifacts at one revision; issues reconciled | Immutable [workbench-2e59d93](https://github.com/dzackgarza/visual-tikz-editor/releases/tag/workbench-2e59d93) at green run 43198269710 |
+| Release | A green software gate and published artifacts at one revision; issues reconciled | [workbench-2e59d93](https://github.com/dzackgarza/visual-tikz-editor/releases/tag/workbench-2e59d93) at green run 43198269710 |
 
 ### Implementation dependencies
 
