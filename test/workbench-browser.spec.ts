@@ -203,6 +203,35 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    { initialPage: "blank" },
+    "follows the system appearance in every view and offers no theme control of its own",
+    async function () {
+      await page.emulateMedia({ colorScheme: "dark" });
+      await page.goto(url);
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+      await editorReady(page);
+      const canvas = editorFrame(page).locator("html");
+      const views = async (scheme: "light" | "dark") => {
+        const dark = scheme === "dark" ? /\bdark\b/u : /^(?![\s\S]*\bdark\b)/u;
+        await expect(page.locator(".tikz-standalone")).toHaveClass(dark);
+        await expect(page.locator(".tikz-source-editor")).toHaveClass(dark);
+        await expect(canvas).toHaveAttribute("data-color-scheme", scheme);
+      };
+      await views("dark");
+      await page.emulateMedia({ colorScheme: "light" });
+      await views("light");
+      await expect(page.getByRole("button", { name: /\btheme\b/iu })).toHaveCount(0);
+      await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+      await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
+      const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]').locator("body");
+      await expect(quiver).not.toHaveClass(/\bdark-theme\b/u);
+      await page.emulateMedia({ colorScheme: "dark" });
+      await expect(quiver).toHaveClass(/\bdark-theme\b/u);
+      await expect(page.locator(".tikz-source-editor")).toHaveClass(/\bdark\b/u);
+    },
+  );
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
