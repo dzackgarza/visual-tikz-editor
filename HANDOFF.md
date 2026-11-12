@@ -4,6 +4,8 @@
 
 Deliver the complete standalone mathematical diagram editor and its reusable host API. Drawing, selection, correction, source editing, saving, export, and reopening form one coherent pen-and-touch workflow, and authored TikZ stays authoritative. The user reports needed function and defects as an end user; the maintainer repairs every defect found. The interface follows established notebook and vector-editor conventions, recorded with their prior art under [docs/prior-art](docs/prior-art/).
 
+The user's latest direction (2026-11-12) supersedes the repair mandate above: audit the interface against prior art, file the findings as issues, and report. No issue is implemented until the user says so.
+
 ## Completion condition
 
 The work is complete when all of these hold at the head of `main`:
