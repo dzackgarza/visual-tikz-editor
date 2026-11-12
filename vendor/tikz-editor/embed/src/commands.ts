@@ -19,6 +19,7 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('settings'), settings }),
   z.object({ ...identity, action: z.literal('display'), fullscreen: z.boolean() }),
   z.object({ ...identity, action: z.literal('inspector'), inspector: z.boolean() }),
+  z.object({ ...identity, action: z.literal('document-properties') }),
   z.object({ ...identity, action: z.literal('source') }),
   z.object({ ...identity, action: z.literal('zoom'), direction: z.enum(['in', 'out', 'reset']) }),
   // How far the host's on-screen keyboard reaches up from the bottom of this frame.

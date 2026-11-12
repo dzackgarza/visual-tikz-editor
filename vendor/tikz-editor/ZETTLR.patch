@@ -119,6 +119,19 @@ index 3ad73d51..a308f181 100644
    await expect(page.getByTestId("menu-cmd-view.toggle-rulers")).toHaveAttribute("aria-checked", "false");
    await expect(page.getByTestId("menu-cmd-view.toggle-guides")).toHaveAttribute("aria-checked", "false");
  });
+diff --git a/apps/web/e2e/view-and-panels.spec.ts b/apps/web/e2e/view-and-panels.spec.ts
+index 83a5f141..2912f27e 100644
+--- a/apps/web/e2e/view-and-panels.spec.ts
++++ b/apps/web/e2e/view-and-panels.spec.ts
+@@ -114,7 +114,7 @@ test("left and right splitters resize layout panes", async ({ page }) => {
+ test("developer panel toggles from shortcut and menu checked state", async ({ page }) => {
+   await gotoApp(page);
+ 
+-  await page.keyboard.press("ControlOrMeta+Shift+D");
++  await page.keyboard.press("ControlOrMeta+Alt+Shift+D");
+   await expect(page.getByTestId("developer-panel")).toBeVisible();
+   await expect(page.getByText("Developer Panel")).toBeVisible();
+ 
 diff --git a/packages/app/package.json b/packages/app/package.json
 index f20fa9c3..55168155 100644
 --- a/packages/app/package.json
@@ -175,10 +188,10 @@ index f20fa9c3..55168155 100644
    },
    "devDependencies": {
 diff --git a/packages/app/src/app-menu/default-menu.ts b/packages/app/src/app-menu/default-menu.ts
-index 59fab7a8..74874f6c 100644
+index 59fab7a8..df1e4c37 100644
 --- a/packages/app/src/app-menu/default-menu.ts
 +++ b/packages/app/src/app-menu/default-menu.ts
-@@ -112,7 +112,8 @@ export const APP_MENU_DEFINITION = [
+@@ -112,9 +112,17 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.SHOW_COMPILED_PICTURE,
@@ -187,8 +200,17 @@ index 59fab7a8..74874f6c 100644
 +        platforms: ["desktop"]
        },
        { kind: "separator" },
++      {
++        // Inkscape: File > Document Properties… (Ctrl+Shift+D) holds the figure-wide settings.
++        kind: "command",
++        commandId: APP_MENU_COMMAND_IDS.OPEN_DOCUMENT_PROPERTIES,
++        label: "Document Properties...",
++        accelerator: "CmdOrCtrl+Shift+D"
++      },
        {
-@@ -466,8 +467,7 @@ export const APP_MENU_DEFINITION = [
+         kind: "command",
+         commandId: APP_MENU_COMMAND_IDS.OPEN_SETTINGS,
+@@ -466,8 +474,7 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.FIT_TO_CONTENT,
@@ -198,7 +220,7 @@ index 59fab7a8..74874f6c 100644
        },
        {
          kind: "command",
-@@ -495,7 +495,7 @@ export const APP_MENU_DEFINITION = [
+@@ -495,7 +502,7 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.TOGGLE_GUIDES,
@@ -207,7 +229,7 @@ index 59fab7a8..74874f6c 100644
        },
        {
          kind: "command",
-@@ -504,8 +504,8 @@ export const APP_MENU_DEFINITION = [
+@@ -504,8 +511,8 @@ export const APP_MENU_DEFINITION = [
        },
        {
          kind: "command",
@@ -218,29 +240,29 @@ index 59fab7a8..74874f6c 100644
        },
        {
          kind: "submenu",
-@@ -513,23 +513,18 @@ export const APP_MENU_DEFINITION = [
+@@ -513,23 +520,18 @@ export const APP_MENU_DEFINITION = [
          items: [
            {
              kind: "command",
 -            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID,
 -            label: "Snap to Grid"
--          },
--          {
--            kind: "command",
--            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES,
--            label: "Snap to Guides"
 +            commandId: APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK,
 +            label: "Lock to Lattice"
            },
            {
              kind: "command",
--            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_POINTS,
--            label: "Snap to Object Points"
+-            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES,
+-            label: "Snap to Guides"
 +            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECTS,
 +            label: "Snap to Objects"
            },
            {
              kind: "command",
+-            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_POINTS,
+-            label: "Snap to Object Points"
+-          },
+-          {
+-            kind: "command",
 -            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_GAPS,
 -            label: "Snap to Object Gaps"
 +            commandId: APP_MENU_COMMAND_IDS.TOGGLE_SNAP_ALIGNMENT,
@@ -248,7 +270,7 @@ index 59fab7a8..74874f6c 100644
            },
            {
              kind: "command",
-@@ -548,12 +543,12 @@ export const APP_MENU_DEFINITION = [
+@@ -548,12 +550,12 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.TOGGLE_INSPECTOR_PANEL,
@@ -263,8 +285,17 @@ index 59fab7a8..74874f6c 100644
        },
        {
          kind: "command",
+@@ -595,7 +597,7 @@ export const APP_MENU_DEFINITION = [
+         kind: "command",
+         commandId: APP_MENU_COMMAND_IDS.TOGGLE_DEV_PANEL,
+         label: "Developer Panel",
+-        accelerator: "CmdOrCtrl+Shift+D"
++        accelerator: "CmdOrCtrl+Alt+Shift+D"
+       }
+     ]
+   },
 diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
-index af9d6c30..3bad28d5 100644
+index af9d6c30..3f00968f 100644
 --- a/packages/app/src/app-menu/types.ts
 +++ b/packages/app/src/app-menu/types.ts
 @@ -1,4 +1,12 @@
@@ -313,6 +344,14 @@ index af9d6c30..3bad28d5 100644
    TOGGLE_SNAP_HAPTICS: "view.toggle-snap-haptics",
    TOGGLE_RULERS: "view.toggle-rulers",
    TOGGLE_GUIDES: "view.toggle-guides",
+@@ -111,6 +121,7 @@ export const APP_MENU_COMMAND_IDS = {
+   SHOW_ABOUT: "help.show-about",
+   SHOW_COMPILED_PICTURE: "file.show-compiled-picture",
+   OPEN_SETTINGS: "file.open-settings",
++  OPEN_DOCUMENT_PROPERTIES: "file.open-document-properties",
+   CLEAR_RECENT_FILES: "file.clear-recent-files"
+ } as const;
+ 
 diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
 index bc368718..c6486f9c 100644
 --- a/packages/app/src/context-menu/canvas-context-menu.ts
@@ -506,10 +545,10 @@ index 20b8b673..faf832b4 100644
    readCustomText?: (
 diff --git a/packages/app/src/settings/keybindings.ts b/packages/app/src/settings/keybindings.ts
 new file mode 100644
-index 00000000..d369d5af
+index 00000000..f15821a0
 --- /dev/null
 +++ b/packages/app/src/settings/keybindings.ts
-@@ -0,0 +1,132 @@
+@@ -0,0 +1,133 @@
 +import { z } from "zod";
 +import { APP_MENU_COMMAND_IDS as ID, APP_MENU_DEFINITION, type AppMenuCommandId, type AppMenuItem } from "../app-menu";
 +
@@ -520,7 +559,8 @@ index 00000000..d369d5af
 +const embeddedViewCommands = new Set<AppMenuCommandId>([
 +  ID.FIT_TO_CONTENT, ID.ZOOM_IN, ID.ZOOM_OUT, ID.TOGGLE_GRID, ID.TOGGLE_OUTPUT_BOUNDS,
 +  ID.TOGGLE_LATTICE_LOCK, ID.TOGGLE_SNAP_OBJECTS, ID.TOGGLE_SNAP_ALIGNMENT,
-+  ID.TOGGLE_RULERS, ID.TOGGLE_GUIDES, ID.TOGGLE_INSPECTOR_PANEL, ID.TOGGLE_OBJECTS_PANEL, ID.OPEN_SETTINGS
++  ID.TOGGLE_RULERS, ID.TOGGLE_GUIDES, ID.TOGGLE_INSPECTOR_PANEL, ID.TOGGLE_OBJECTS_PANEL, ID.OPEN_SETTINGS,
++  ID.OPEN_DOCUMENT_PROPERTIES
 +]);
 +// App-owned shortcuts keep their existing routes, even without a canvas Settings row.
 +const GLOBAL_SHORTCUT_COMMAND_IDS = new Set<AppMenuCommandId>([
@@ -1783,7 +1823,7 @@ index 758bd611..9b38e672 100644
      selectedAddShape: state.selectedAddShape,
      selectedAddMatrixRows: state.selectedAddMatrixRows,
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..60743223 100644
+index 5818d92b..62f7e909 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
 @@ -12,7 +12,8 @@ import { computeSnapshot, makeEmptySnapshot, setMathJaxFont, type ComputeRequest
@@ -1811,7 +1851,15 @@ index 5818d92b..60743223 100644
  import { createSingleFlightScheduler } from "./compute-scheduler";
  import { computeTrigger } from "./compute-trigger";
  import { buildRepeatPreviewScene } from "./repeat-preview";
-@@ -167,7 +168,7 @@ function isEditableShortcutTarget(target: EventTarget | null): target is HTMLEle
+@@ -43,6 +44,7 @@ import { resolveOpenedFileForDocument, dataTransferHasFilePayload } from "./svg-
+ import type { AssistantComposerImageAttachment } from "./assistant-image-attachments";
+ import { formatEquationText, type EquationNodeTarget } from "./equation-utils";
+ import { useDebouncedEffect } from "./hooks/useDebouncedEffect";
++import { DocumentPropertiesDialog } from "./DocumentPropertiesDialog";
+ import { decideLinkedFileRefresh, isLinkedFileRef, type LinkedTextWriteResult } from "../linked-file-sync";
+ import type { DocumentFileRef, DocumentSession, FileRevision } from "../store/types";
+ import { createArxivVirtualFileName, type ArxivPaperSession, type ArxivTikzCandidate } from "../arxiv-source";
+@@ -167,7 +169,7 @@ function isEditableShortcutTarget(target: EventTarget | null): target is HTMLEle
    if (!(target instanceof HTMLElement)) {
      return false;
    }
@@ -1820,7 +1868,15 @@ index 5818d92b..60743223 100644
  }
  
  function selectAllInEditableTarget(target: HTMLElement): boolean {
-@@ -298,7 +299,6 @@ export function App() {
+@@ -273,6 +275,7 @@ export function App() {
+     selectedCandidateId: null
+   });
+   const [showSettingsModal, setShowSettingsModal] = useState(false);
++  const [showDocumentProperties, setShowDocumentProperties] = useState(false);
+   const [showSaveWorkspaceModal, setShowSaveWorkspaceModal] = useState(false);
+   const [showManageWorkspacesModal, setShowManageWorkspacesModal] = useState(false);
+   const [showAboutModal, setShowAboutModal] = useState(false);
+@@ -298,7 +301,6 @@ export function App() {
    } | null>(null);
    const [svgExportSvgResult, setSvgExportSvgResult] = useState<EmitSvgResult | null>(null);
    const [pngExportSvgResult, setPngExportSvgResult] = useState<EmitSvgResult | null>(null);
@@ -1828,7 +1884,34 @@ index 5818d92b..60743223 100644
    const [pendingClose, setPendingClose] = useState<{ intent: CloseIntent; dirtyDocumentIds: string[] } | null>(null);
    const [pendingFileConflict, setPendingFileConflict] = useState<PendingFileConflict | null>(null);
    const requestCloseIntentRef = useRef<(intent: CloseIntent) => void>(() => {});
-@@ -1534,7 +1534,6 @@ export function App() {
+@@ -605,6 +607,18 @@ export function App() {
+   const handleOpenSettingsCommand = useCallback(() => {
+     setShowSettingsModal(true);
+   }, []);
++  const handleOpenDocumentPropertiesCommand = useCallback(() => {
++    setShowDocumentProperties(true);
++  }, []);
++  // A host menu opens the dialog by event, as it opens Properties; the host learns of the close the same way.
++  useEffect(() => {
++    window.addEventListener("tikz-embed-document-properties", handleOpenDocumentPropertiesCommand);
++    return () => window.removeEventListener("tikz-embed-document-properties", handleOpenDocumentPropertiesCommand);
++  }, [handleOpenDocumentPropertiesCommand]);
++  const closeDocumentProperties = useCallback(() => {
++    setShowDocumentProperties(false);
++    window.dispatchEvent(new Event("tikz-embed-document-properties-closed"));
++  }, []);
+   const handleCheckForUpdatesCommand = useCallback(() => {
+     void handleManualUpdateCheck();
+   }, [handleManualUpdateCheck]);
+@@ -658,6 +672,7 @@ export function App() {
+     onOpenPngExport: handleOpenPngExportCommand,
+     onShowCompiledPicture: handleShowCompiledPictureCommand,
+     onOpenSettings: handleOpenSettingsCommand,
++    onOpenDocumentProperties: handleOpenDocumentPropertiesCommand,
+     onCheckForUpdates: handleCheckForUpdatesCommand,
+     updateCheckBusy: updateCheckBusy || updateModalPhase.status === "installing",
+     onOpenInsertEquation: handleOpenInsertEquationCommand,
+@@ -1534,7 +1549,6 @@ export function App() {
          };
        },
        setCanvasTransform: (transform) => {
@@ -1836,7 +1919,7 @@ index 5818d92b..60743223 100644
          requestAnimationFrame(() => {
            dispatch({ type: "SET_CANVAS_TRANSFORM", transform });
          });
-@@ -1596,17 +1595,6 @@ export function App() {
+@@ -1596,17 +1610,6 @@ export function App() {
      });
    }, [platform.id, snapshot.source, source]);
  
@@ -1854,7 +1937,7 @@ index 5818d92b..60743223 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1648,216 +1636,49 @@ export function App() {
+@@ -1648,216 +1651,49 @@ export function App() {
        }
  
        const runtime = commandRuntimeRef.current;
@@ -2103,7 +2186,7 @@ index 5818d92b..60743223 100644
      }
  
      window.addEventListener("keydown", onKeyDown);
-@@ -1872,7 +1693,6 @@ export function App() {
+@@ -1872,7 +1708,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -2111,7 +2194,7 @@ index 5818d92b..60743223 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1711,6 @@ export function App() {
+@@ -1891,7 +1726,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -2119,7 +2202,7 @@ index 5818d92b..60743223 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +1849,17 @@ export function App() {
+@@ -2030,13 +1864,17 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -2138,7 +2221,7 @@ index 5818d92b..60743223 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,22 +1872,23 @@ export function App() {
+@@ -2049,22 +1887,23 @@ export function App() {
              : null
          }
        />
@@ -2166,7 +2249,15 @@ index 5818d92b..60743223 100644
        </Suspense>
        {showOpenExampleModal ? (
          <Suspense fallback={null}>
-@@ -2150,12 +1974,11 @@ export function App() {
+@@ -2102,6 +1941,7 @@ export function App() {
+           <SettingsModal onClose={() => { setShowSettingsModal(false); }} />
+         </Suspense>
+       ) : null}
++      {showDocumentProperties ? <DocumentPropertiesDialog onClose={closeDocumentProperties} /> : null}
+       {equationModalState ? (
+         <Suspense fallback={null}>
+           <EquationModal
+@@ -2150,12 +1990,11 @@ export function App() {
            <RepeatModal
              columns={repeatModalState.columns}
              rows={repeatModalState.rows}
@@ -2184,7 +2275,7 @@ index 5818d92b..60743223 100644
              onColumnsChange={(columns) => {
                setRepeatModalState((current) => current == null ? current : {
                  ...current,
-@@ -2168,17 +1991,11 @@ export function App() {
+@@ -2168,17 +2007,11 @@ export function App() {
                  rows: clampRepeatCount(rows)
                });
              }}
@@ -2206,7 +2297,7 @@ index 5818d92b..60743223 100644
              }}
              onClose={() => {
                setRepeatModalState(null);
-@@ -2345,13 +2162,6 @@ function clampRepeatCount(value: number): number {
+@@ -2345,13 +2178,6 @@ function clampRepeatCount(value: number): number {
    return Math.max(1, Math.floor(value));
  }
  
@@ -4364,6 +4455,37 @@ index ba28ddb9..8d220574 100644
 +    </div>
    );
  }
+diff --git a/packages/app/src/ui/DocumentPropertiesDialog.tsx b/packages/app/src/ui/DocumentPropertiesDialog.tsx
+new file mode 100644
+index 00000000..9632306f
+--- /dev/null
++++ b/packages/app/src/ui/DocumentPropertiesDialog.tsx
+@@ -0,0 +1,25 @@
++import { InspectorPanel } from "./inspector-panel/InspectorPanel";
++import { Modal } from "./Modal";
++
++/** File > Document Properties, after Inkscape: the figure's scale and bounds, apart from any selection. */
++export function DocumentPropertiesDialog({ onClose }: { onClose: () => void }) {
++  return (
++    <Modal
++      onClose={onClose}
++      size="md"
++      labelledBy="document-properties-title"
++      dataTestId="document-properties"
++    >
++      <Modal.Header
++        title="Document Properties"
++        titleId="document-properties-title"
++        showCloseButton
++        onClose={onClose}
++        closeAriaLabel="Close document properties"
++      />
++      <Modal.Body>
++        <InspectorPanel figure />
++      </Modal.Body>
++    </Modal>
++  );
++}
 diff --git a/packages/app/src/ui/ExactRange.module.css b/packages/app/src/ui/ExactRange.module.css
 new file mode 100644
 index 00000000..6aaa84d7
@@ -16286,7 +16408,7 @@ index 44b105be..f1cfbce3 100644
      logClipboardDebug("Clipboard write unavailable: navigator.clipboard missing.");
      return false;
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
-index 3ab44838..7396794a 100644
+index 3ab44838..b08719f7 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts
 +++ b/packages/app/src/ui/editor-command-runtime.ts
 @@ -11,7 +11,7 @@ import type { AppSettings } from "../settings/types";
@@ -16314,15 +16436,18 @@ index 3ab44838..7396794a 100644
    showRulers: boolean;
    showGuides: boolean;
    showDocumentBounds: boolean;
-@@ -129,6 +131,7 @@ type RuntimeInput = {
+@@ -129,8 +131,10 @@ type RuntimeInput = {
    onAddNodeAdornment?: (kind: "label" | "pin") => void;
    onPositionNodeRelativeTo?: () => void;
    onConvertNodePositionToAbsolute?: () => void;
 +  onSimplifySelectedPath?: () => void;
    onShowCompiledPicture?: () => void;
    onOpenSettings?: () => void;
++  onOpenDocumentProperties?: () => void;
    onFocusAssistant?: () => void;
-@@ -147,6 +150,20 @@ export type EditorCommandRuntime = {
+   onOpenInsertEquation?: () => void;
+   onOpenEditEquation?: (target: EquationNodeTarget) => void;
+@@ -147,6 +151,20 @@ export type EditorCommandRuntime = {
    runCommand: (commandId: AppMenuCommandId, origin: CommandOrigin) => boolean;
  };
  
@@ -16343,7 +16468,7 @@ index 3ab44838..7396794a 100644
  const PGF_TIKZ_MANUAL_URL = "https://tikz.dev";
  const GITHUB_REPOSITORY_URL = "https://github.com/DominikPeters/tikz-editor";
  const GITHUB_ISSUES_URL = "https://github.com/DominikPeters/tikz-editor/issues";
-@@ -167,11 +184,13 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -167,11 +185,13 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      tabCount,
      dirty,
      fileRef,
@@ -16359,15 +16484,18 @@ index 3ab44838..7396794a 100644
      showRulers,
      showGuides,
      showDocumentBounds,
-@@ -198,6 +217,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -198,8 +218,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      onAddNodeAdornment,
      onPositionNodeRelativeTo,
      onConvertNodePositionToAbsolute,
 +    onSimplifySelectedPath,
      onShowCompiledPicture,
      onOpenSettings,
++    onOpenDocumentProperties,
      onFocusAssistant,
-@@ -799,6 +819,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+     onOpenInsertEquation,
+     onOpenEditEquation,
+@@ -799,6 +821,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
          splitSelectedPath(commandContext);
        }
      },
@@ -16378,7 +16506,7 @@ index 3ab44838..7396794a 100644
      [APP_MENU_COMMAND_IDS.PATH_JOIN]: {
        enabled: availability["path-join"].enabled,
        run: () => {
-@@ -841,6 +865,14 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -841,6 +867,14 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
          setSelectedPathPointKind(commandContext, "smooth");
        }
      },
@@ -16393,7 +16521,7 @@ index 3ab44838..7396794a 100644
      [APP_MENU_COMMAND_IDS.INSERT_NODE]: insertBinding("addNode"),
      [APP_MENU_COMMAND_IDS.INSERT_MATRIX]: insertBinding("addMatrix"),
      [APP_MENU_COMMAND_IDS.INSERT_SHAPE]: insertBinding("addShape"),
-@@ -882,14 +914,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -882,14 +916,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        enabled: nodePositioningAction === "convert-absolute" && onConvertNodePositionToAbsolute != null,
        run: () => onConvertNodePositionToAbsolute?.()
      },
@@ -16414,7 +16542,7 @@ index 3ab44838..7396794a 100644
          dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
        }
      },
-@@ -911,30 +944,30 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -911,30 +946,30 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        checked: showTransparencyGrid,
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" }); }
      },
@@ -16459,15 +16587,29 @@ index 3ab44838..7396794a 100644
      },
      [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_HAPTICS]: {
        enabled: isMacDesktop,
-@@ -1098,6 +1131,7 @@ export function useEditorCommandRuntime(
+@@ -1044,6 +1079,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+       enabled: onOpenSettings != null,
+       run: () => onOpenSettings?.()
+     },
++    [APP_MENU_COMMAND_IDS.OPEN_DOCUMENT_PROPERTIES]: {
++      enabled: onOpenDocumentProperties != null,
++      run: () => onOpenDocumentProperties?.()
++    },
+     [APP_MENU_COMMAND_IDS.CHECK_FOR_UPDATES]: {
+       enabled: canCheckForUpdates && !updateCheckBusy,
+       run: () => onCheckForUpdates?.()
+@@ -1098,8 +1137,10 @@ export function useEditorCommandRuntime(
      onAddNodeAdornment?: (kind: "label" | "pin") => void;
      onPositionNodeRelativeTo?: () => void;
      onConvertNodePositionToAbsolute?: () => void;
 +    onSimplifySelectedPath?: () => void;
      onShowCompiledPicture?: () => void;
      onOpenSettings?: () => void;
++    onOpenDocumentProperties?: () => void;
      onFocusAssistant?: () => void;
-@@ -1126,11 +1160,13 @@ export function useEditorCommandRuntime(
+     onOpenInsertEquation?: () => void;
+     onOpenEditEquation?: (target: EquationNodeTarget) => void;
+@@ -1126,11 +1167,13 @@ export function useEditorCommandRuntime(
    const tabCount = useEditorStore((s) => s.tabOrder.length);
    const dirty = useEditorStore((s) => s.documents[s.activeDocumentId]?.dirty ?? false);
    const fileRef = useEditorStore((s) => s.documents[s.activeDocumentId]?.fileRef ?? null);
@@ -16483,7 +16625,7 @@ index 3ab44838..7396794a 100644
    const showRulers = useEditorStore((s) => s.showRulers);
    const showGuides = useEditorStore((s) => s.showGuides);
    const showDocumentBounds = useEditorStore((s) => s.showDocumentBounds);
-@@ -1203,11 +1239,13 @@ export function useEditorCommandRuntime(
+@@ -1203,11 +1246,13 @@ export function useEditorCommandRuntime(
          tabCount,
          dirty,
          fileRef,
@@ -16499,15 +16641,18 @@ index 3ab44838..7396794a 100644
          showRulers,
          showGuides,
          showDocumentBounds,
-@@ -1234,6 +1272,7 @@ export function useEditorCommandRuntime(
+@@ -1234,8 +1279,10 @@ export function useEditorCommandRuntime(
          onAddNodeAdornment: options.onAddNodeAdornment,
          onPositionNodeRelativeTo: options.onPositionNodeRelativeTo,
          onConvertNodePositionToAbsolute: options.onConvertNodePositionToAbsolute,
 +        onSimplifySelectedPath: options.onSimplifySelectedPath,
          onShowCompiledPicture: options.onShowCompiledPicture,
          onOpenSettings: options.onOpenSettings,
++        onOpenDocumentProperties: options.onOpenDocumentProperties,
          onCheckForUpdates: options.onCheckForUpdates,
-@@ -1256,11 +1295,13 @@ export function useEditorCommandRuntime(
+         onShowAbout: options.onShowAbout,
+         updateCheckBusy: options.updateCheckBusy,
+@@ -1256,11 +1303,13 @@ export function useEditorCommandRuntime(
        tabCount,
        dirty,
        fileRef,
@@ -16523,14 +16668,17 @@ index 3ab44838..7396794a 100644
        showRulers,
        showGuides,
        showDocumentBounds,
-@@ -1287,6 +1328,7 @@ export function useEditorCommandRuntime(
+@@ -1287,8 +1336,10 @@ export function useEditorCommandRuntime(
        options.onAddNodeAdornment,
        options.onPositionNodeRelativeTo,
        options.onConvertNodePositionToAbsolute,
 +      options.onSimplifySelectedPath,
        options.onShowCompiledPicture,
        options.onOpenSettings,
++      options.onOpenDocumentProperties,
        options.onCheckForUpdates,
+       options.onShowAbout,
+       options.updateCheckBusy,
 diff --git a/packages/app/src/ui/editor-commands.ts b/packages/app/src/ui/editor-commands.ts
 index e3ffc872..3a088d9c 100644
 --- a/packages/app/src/ui/editor-commands.ts
@@ -16685,7 +16833,7 @@ index 3173d35f..cd3fcaa0 100644
    margin-top: 2px;
    font-size: calc(var(--app-ui-scale, 1) * 10px);
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..62c6eda4 100644
+index d5c65582..a99fe62c 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 @@ -1,3 +1,4 @@
@@ -16693,18 +16841,17 @@ index d5c65582..62c6eda4 100644
  import {
  RiAlignCenter,
  RiAlignJustify,
-@@ -10,7 +11,9 @@ RiFontSerif,
+@@ -10,7 +11,8 @@ RiFontSerif,
  RiItalic
  } from "@remixicon/react";
  import { useCallback,useEffect,useMemo,useState,type FocusEvent,type JSX } from "react";
 -import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
 +import { formatNumber } from "tikz-editor/edit/format";
-+import { useShallow } from "zustand/react/shallow";
 +import { boundsInLatticeUnits, LATTICE_UNIT, type LatticeBounds } from "tikz-editor/edit/lattice-units";
  import {
  getInspectorDescriptor,
  NODE_INNER_SEP_DEFAULT,
-@@ -31,9 +34,9 @@ type NodeMinimumDimensionKey,
+@@ -31,9 +33,9 @@ type NodeMinimumDimensionKey,
  type ShadowMutationContext
  } from "tikz-editor/edit/property-write-builders";
  import { propertyIdForWriteKey } from "tikz-editor/edit/property-registry";
@@ -16715,7 +16862,7 @@ index d5c65582..62c6eda4 100644
  import { getInspectorPropertyCapabilityStatus } from "../capabilities";
  import { ColorPickerField } from "../ColorPicker";
  import { MULTI_ARRANGE_ACTIONS,type MultiArrangeAction } from "./arrange-actions";
-@@ -58,7 +61,11 @@ import { useInspectorMutations } from "./useInspectorMutations";
+@@ -58,7 +60,11 @@ import { useInspectorMutations } from "./useInspectorMutations";
  import { useInspectorPreviewScrub } from "./useInspectorPreviewScrub";
  import css from "./InspectorPanel.module.css";
  import { RenderedTooltip } from "../RenderedTooltip";
@@ -16727,7 +16874,14 @@ index d5c65582..62c6eda4 100644
  import {
  getToolLabel,
  isCreationToolMode,
-@@ -91,7 +98,11 @@ export function InspectorPanel() {
+@@ -85,13 +91,17 @@ type NumberLabelScrubBinding = {
+   onCommit: (value: number) => void;
+ };
+ 
+-export function InspectorPanel() {
++export function InspectorPanel({ figure = false }: { figure?: boolean }) {
+   const selectedIds = useEditorStore((s) => s.selectedElementIds);
+   const dispatch = useEditorStore((s) => s.dispatch);
    const toolMode = useEditorStore((s) => s.toolMode);
    const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
    const creationFillColor = useEditorStore((s) => s.creationFillColor);
@@ -16740,7 +16894,7 @@ index d5c65582..62c6eda4 100644
    const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
  
    const {
-@@ -116,7 +127,18 @@ export function InspectorPanel() {
+@@ -116,7 +126,18 @@ export function InspectorPanel() {
      dispatch,
      getInspectorDescriptor
    });
@@ -16760,7 +16914,7 @@ index d5c65582..62c6eda4 100644
    const [manualLineWidthCustomKeys, setManualLineWidthCustomKeys] = useState<Set<string>>(
      () => new Set()
    );
-@@ -208,7 +230,7 @@ export function InspectorPanel() {
+@@ -208,7 +229,7 @@ export function InspectorPanel() {
      const mutations = buildTransformSetPropertyMutations(
        write.transformContext,
        write.transformContext.key,
@@ -16769,7 +16923,7 @@ index d5c65582..62c6eda4 100644
      );
      if (mutations.length === 0) {
        return;
-@@ -295,7 +317,7 @@ export function InspectorPanel() {
+@@ -295,7 +316,7 @@ export function InspectorPanel() {
        const mutations = buildTransformSetPropertyMutations(
          write.transformContext,
          write.transformContext.key,
@@ -16778,7 +16932,7 @@ index d5c65582..62c6eda4 100644
        );
        for (const mutation of mutations) {
          dispatch({
-@@ -321,7 +343,7 @@ export function InspectorPanel() {
+@@ -321,7 +342,7 @@ export function InspectorPanel() {
      value: number
    ): string {
      const formatted = formatNumber(value);
@@ -16787,7 +16941,7 @@ index d5c65582..62c6eda4 100644
        return `${formatted}${property.unit}`;
      }
      return formatted;
-@@ -886,6 +908,7 @@ export function InspectorPanel() {
+@@ -886,6 +907,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -16795,7 +16949,7 @@ index d5c65582..62c6eda4 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -958,6 +981,7 @@ export function InspectorPanel() {
+@@ -958,6 +980,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -16803,7 +16957,7 @@ index d5c65582..62c6eda4 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1034,6 +1058,7 @@ export function InspectorPanel() {
+@@ -1034,6 +1057,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -16811,7 +16965,7 @@ index d5c65582..62c6eda4 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1107,6 +1132,7 @@ export function InspectorPanel() {
+@@ -1107,6 +1131,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -16819,7 +16973,7 @@ index d5c65582..62c6eda4 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1183,6 +1209,7 @@ export function InspectorPanel() {
+@@ -1183,6 +1208,7 @@ export function InspectorPanel() {
      const inputValue = draftValue ?? (property.value == null ? "" : formatNumber(property.value));
      const input = (
        <input
@@ -16827,7 +16981,7 @@ index d5c65582..62c6eda4 100644
          className={withValueProvenanceClass(css.numberInput, provenance)}
          type="number"
          step={property.step}
-@@ -1249,6 +1276,7 @@ export function InspectorPanel() {
+@@ -1249,6 +1275,7 @@ export function InspectorPanel() {
      const inputValue = draftValue ?? (property.mixed || property.value == null ? "" : formatNumber(property.value));
      const input = (
        <input
@@ -16835,7 +16989,7 @@ index d5c65582..62c6eda4 100644
          className={withValueProvenanceClass(css.numberInput, provenance)}
          type="number"
          step={property.step}
-@@ -1689,21 +1717,11 @@ export function InspectorPanel() {
+@@ -1689,21 +1716,11 @@ export function InspectorPanel() {
      };
    }
  
@@ -16861,7 +17015,7 @@ index d5c65582..62c6eda4 100644
    }
  
    function applyFigureBoundsValue(next: { x: number; y: number; width: number; height: number }): void {
-@@ -1731,6 +1749,7 @@ export function InspectorPanel() {
+@@ -1731,6 +1748,7 @@ export function InspectorPanel() {
          <div className={css.propertyLabel}>{label}</div>
          <div className={css.controlRow}>
            <input
@@ -16869,7 +17023,7 @@ index d5c65582..62c6eda4 100644
              className={css.numberInput}
              type="number"
              step={0.1}
-@@ -1742,13 +1761,11 @@ export function InspectorPanel() {
+@@ -1742,13 +1760,11 @@ export function InspectorPanel() {
                if (!Number.isFinite(parsed)) {
                  return;
                }
@@ -16886,7 +17040,7 @@ index d5c65582..62c6eda4 100644
          </div>
        </div>
      );
-@@ -1756,6 +1773,7 @@ export function InspectorPanel() {
+@@ -1756,6 +1772,7 @@ export function InspectorPanel() {
  
    function renderFigureBoundsControls(): JSX.Element {
      const values = currentFigureBoundsControlsValue();
@@ -16894,16 +17048,57 @@ index d5c65582..62c6eda4 100644
      const fixed = figureBoundsState.mode === "fixed";
      return (
        <>
-@@ -1802,7 +1820,7 @@ export function InspectorPanel() {
+@@ -1797,42 +1814,46 @@ export function InspectorPanel() {
+     );
+   }
+ 
+-  function renderGlobalTransformPanel() {
++  function renderFigureSections() {
+     const xscale = makeGlobalTransformNumberProperty("xscale", "X scale");
      const yscale = makeGlobalTransformNumberProperty("yscale", "Y scale");
++    return (
++      <div className={css.elementInfo}>
++        <SidePanel.Section>
++          <SidePanel.SectionHeader>
++            <span>Transform</span>
++          </SidePanel.SectionHeader>
++          <SidePanel.SectionBody>{renderSingleNumberPair(xscale, yscale)}</SidePanel.SectionBody>
++        </SidePanel.Section>
++        <SidePanel.Section>
++          <SidePanel.SectionHeader>
++            <span>Figure Bounds</span>
++          </SidePanel.SectionHeader>
++          <SidePanel.SectionBody>{renderFigureBoundsControls()}</SidePanel.SectionBody>
++        </SidePanel.Section>
++      </div>
++    );
++  }
++
++  function renderGlobalTransformPanel() {
      return (
        <>
 -        <SidePanel.Header>tikzpicture</SidePanel.Header>
+-        <SidePanel.Content className={css.content}>
+-          <div className={css.elementInfo}>
+-            <SidePanel.Section>
+-              <SidePanel.SectionHeader>
+-                <span>Transform</span>
+-              </SidePanel.SectionHeader>
+-              <SidePanel.SectionBody>{renderSingleNumberPair(xscale, yscale)}</SidePanel.SectionBody>
+-            </SidePanel.Section>
+-            <SidePanel.Section>
+-              <SidePanel.SectionHeader>
+-                <span>Figure Bounds</span>
+-              </SidePanel.SectionHeader>
+-              <SidePanel.SectionBody>{renderFigureBoundsControls()}</SidePanel.SectionBody>
+-            </SidePanel.Section>
+-          </div>
+-        </SidePanel.Content>
 +        <SidePanel.Header>{getToolLabel(toolMode)}</SidePanel.Header>
-         <SidePanel.Content className={css.content}>
-           <div className={css.elementInfo}>
-             <SidePanel.Section>
-@@ -1825,14 +1843,14 @@ export function InspectorPanel() {
++        <SidePanel.Content className={css.content}>{renderFigureSections()}</SidePanel.Content>
+       </>
+     );
+   }
  
    function renderToolOptionsPanel() {
      const toolLabel = getToolLabel(toolMode);
@@ -16920,7 +17115,7 @@ index d5c65582..62c6eda4 100644
          <SidePanel.Content className={css.content}>
            <div className={css.elementInfo}>
              {hint ? (
-@@ -1842,7 +1860,7 @@ export function InspectorPanel() {
+@@ -1842,7 +1863,7 @@ export function InspectorPanel() {
              {showStroke || showFill ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
@@ -16929,7 +17124,7 @@ index d5c65582..62c6eda4 100644
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    {showStroke ? (
-@@ -1852,7 +1870,7 @@ export function InspectorPanel() {
+@@ -1852,7 +1873,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation stroke color"
                          value={creationStrokeColor}
                          syntaxValue={creationStrokeColor}
@@ -16938,7 +17133,7 @@ index d5c65582..62c6eda4 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
-@@ -1867,7 +1885,7 @@ export function InspectorPanel() {
+@@ -1867,7 +1888,7 @@ export function InspectorPanel() {
                          ariaLabel="Creation fill color"
                          value={creationFillColor === "none" ? "" : creationFillColor}
                          syntaxValue={creationFillColor}
@@ -16947,7 +17142,7 @@ index d5c65582..62c6eda4 100644
                          namedColorSwatches={toolProjectNamedColorSwatches}
                          onChange={(nextValue) => {
                            dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
-@@ -1879,6 +1897,7 @@ export function InspectorPanel() {
+@@ -1879,6 +1900,7 @@ export function InspectorPanel() {
                </SidePanel.Section>
              ) : null}
  
@@ -16955,7 +17150,7 @@ index d5c65582..62c6eda4 100644
              {isFreehand ? (
                <SidePanel.Section>
                  <SidePanel.SectionHeader>
-@@ -1886,25 +1905,19 @@ export function InspectorPanel() {
+@@ -1886,25 +1908,19 @@ export function InspectorPanel() {
                  </SidePanel.SectionHeader>
                  <SidePanel.SectionBody>
                    <div className={css.property}>
@@ -16993,8 +17188,13 @@ index d5c65582..62c6eda4 100644
                    </div>
                  </SidePanel.SectionBody>
                </SidePanel.Section>
-@@ -1972,20 +1985,17 @@ export function InspectorPanel() {
+@@ -1970,22 +1986,22 @@ export function InspectorPanel() {
+     );
+   }
  
++  // Document Properties shows the figure's own settings with the same controls and edits.
++  if (figure) return renderFigureSections();
++
    return (
      <SidePanel className={css.panel}>
 -      {isCreationToolMode(toolMode) ? (
@@ -17018,7 +17218,7 @@ index d5c65582..62c6eda4 100644
                  {renderedDescriptor.readOnlyReason ? (
                    <div className={css.globalNote}>{renderedDescriptor.readOnlyReason}</div>
                  ) : null}
-@@ -2016,13 +2026,14 @@ export function InspectorPanel() {
+@@ -2016,13 +2032,14 @@ export function InspectorPanel() {
              </SidePanel.Content>
            </>
          )
@@ -17035,7 +17235,7 @@ index d5c65582..62c6eda4 100644
                {renderMultiArrangeQuickActions()}
                {!renderedMultiModel || renderedMultiModel.sections.length === 0 ? (
                  <p className={css.hint}>No shared editable properties were found across the selected elements.</p>
-@@ -2050,7 +2061,7 @@ export function InspectorPanel() {
+@@ -2050,7 +2067,7 @@ export function InspectorPanel() {
              </div>
            </SidePanel.Content>
          </>

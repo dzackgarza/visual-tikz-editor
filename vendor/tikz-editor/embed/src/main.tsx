@@ -478,11 +478,16 @@ function HostBridge() {
 					window.dispatchEvent(new Event('tikz-embed-inspector'));
 					reply(command);
 					return;
+				case 'document-properties':
+					window.dispatchEvent(new Event('tikz-embed-document-properties'));
+					reply(command);
+					return;
 			}
 		};
 
 		const handleKeydown = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape' || !fullscreenRef.current) return;
+			// An open dialog takes Escape first (WAI-ARIA APG, Dialog (Modal) pattern).
+			if (event.key !== 'Escape' || !fullscreenRef.current || document.querySelector('dialog[open]')) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			postToHost({ event: 'close-request' });
@@ -490,6 +495,8 @@ function HostBridge() {
 
 		const inspectorClosed = () => postToHost({ event: 'inspector-closed' });
 		window.addEventListener('tikz-embed-inspector-closed', inspectorClosed);
+		const documentPropertiesClosed = () => postToHost({ event: 'document-properties-closed' });
+		window.addEventListener('tikz-embed-document-properties-closed', documentPropertiesClosed);
 		window.addEventListener('message', handleMessage);
 		const imageObserver = new MutationObserver(() => {
 			const images = document.querySelectorAll<SVGImageElement>('image[data-image-file]');
@@ -516,6 +523,7 @@ function HostBridge() {
 			imageObserver.disconnect();
 			unsubscribe();
 			window.removeEventListener('tikz-embed-inspector-closed', inspectorClosed);
+			window.removeEventListener('tikz-embed-document-properties-closed', documentPropertiesClosed);
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('keydown', handleKeydown, true);
 			if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);

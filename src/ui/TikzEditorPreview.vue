@@ -69,6 +69,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "exitFullscreen"): void;
   (e: "inspectorClosed"): void;
+  (e: "documentPropertiesClosed"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
 }>();
@@ -155,7 +156,17 @@ function zoom(direction: "in" | "out" | "reset"): void {
   if (loaded.value) postToEditor({ action: "zoom", direction });
 }
 
-defineExpose({ snapshot, currentSource, zoom });
+// A request made before the editor has loaded opens the dialog once it has.
+let documentPropertiesRequested = false;
+function documentProperties(): void {
+  documentPropertiesRequested = !loaded.value;
+  if (!loaded.value) return;
+  // The dialog lives in the editor frame, so keyboard focus moves into the frame with it.
+  frame.value?.focus();
+  postToEditor({ action: "document-properties" });
+}
+
+defineExpose({ snapshot, currentSource, zoom, documentProperties });
 
 function sendFullLoad(): void {
   if (!hostReady.value) {
@@ -339,6 +350,7 @@ function onMessage(event: MessageEvent): void {
       errorMessage.value = "";
       sendTheme();
       reportKeyboard(true);
+      if (documentPropertiesRequested) documentProperties();
       break;
     case "change": {
       applyEditorSource(message.source, message.revision);
@@ -365,6 +377,9 @@ function onMessage(event: MessageEvent): void {
       break;
     case "inspector-closed":
       emit("inspectorClosed");
+      break;
+    case "document-properties-closed":
+      emit("documentPropertiesClosed");
       break;
     case "source-selection": {
       if (message.revision !== session.value.revision || typeof message.source !== "string") break;

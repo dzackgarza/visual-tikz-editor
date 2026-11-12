@@ -4,7 +4,7 @@ This guide describes the standalone editor's controls. The [interaction model](i
 
 ## Documents
 
-The **File** menu holds New tikzpicture, New tikzcd, Open, Save, and Save As. A launch without a file opens an untitled tikzpicture. Each kind opens its own view:
+The **File** menu holds New tikzpicture, New tikzcd, Open, Save, Save As, and Document Properties. A launch without a file opens an untitled tikzpicture. Each kind opens its own view:
 
 | Item | View that opens |
 | --- | --- |
@@ -12,6 +12,8 @@ The **File** menu holds New tikzpicture, New tikzcd, Open, Save, and Save As. A 
 | New tikzcd | Quiver, the commutative-diagram editor |
 
 Each accepted edit to a saved file writes the file. An untitled diagram keeps a recovery draft until **Save** or Ctrl+S opens the native Save As dialog. If the file changes on disk, the editor stops saving, keeps your edits as a recovery draft, and reports the conflict. After a restart the editor restores the last diagram.
+
+**Document Properties** (Ctrl+Shift+D) sets the X and Y scale and the bounds of a tikzpicture. It opens the drawing canvas if that view is closed; Escape closes the dialog.
 
 **Copy source** copies the TikZ source to the clipboard without saving the file. The editor follows the light or dark appearance of the system.
 

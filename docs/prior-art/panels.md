@@ -72,7 +72,7 @@ Not verified from a primary source: how Procreate closes its Layers panel; the G
 | Opening and closing | Dock buttons open only; "×" is the only close | The opening button toggles | No toggle |
 | Name | "Properties" and "Inspector" | One title | Repaired |
 | Properties header, nothing selected | Active tool name | Next-object attributes (Ipe) or an empty state (Inkscape) | Tool name in a selection inspector |
-| Figure scale and bounds | In Properties when nothing is selected | Document properties dialog | Wrong surface |
+| Figure scale and bounds | In Properties when nothing is selected, and in File > Document Properties… | Document properties dialog only | Also on the wrong surface |
 | Tool hint box and "New strokes" | In Properties while a creation tool is active | Next step in the status line; tool options on the tool (dock specification items 4, 5, 10) | Wrong surface |
 | Properties header, selection | "CIRCLE" and "Selected circle" | One title | Repeated title |
 | Section order | Transform first | Style first | Order |

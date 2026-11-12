@@ -105,6 +105,7 @@
         :show-inspector="props.showInspector"
         @exit-fullscreen="fullscreen = false"
         @inspector-closed="emit('inspectorClosed')"
+        @document-properties-closed="emit('documentPropertiesClosed')"
         @status="onProviderStatus(provider.id, $event)"
         @busy="onProviderBusy(provider.id, $event)"
       />
@@ -161,6 +162,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
   (e: "inspectorClosed"): void;
+  (e: "documentPropertiesClosed"): void;
   (e: "status", status: string): void;
 }>();
 
@@ -197,6 +199,7 @@ const sourceEditor = ref<TikzPreviewModeId>(requestedMode.value);
 type EditorHandle = {
   currentSource?: (signal: AbortSignal) => Promise<string>;
   zoom?: (direction: "in" | "out" | "reset") => void;
+  documentProperties?: () => void;
 };
 const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
 function setEditorHandle(id: TikzPreviewModeId, handle: unknown): void {
@@ -212,7 +215,10 @@ async function currentSource(signal: AbortSignal): Promise<string> {
 function zoom(direction: "in" | "out" | "reset"): void {
   editorHandles.get("visual")?.zoom?.(direction);
 }
-defineExpose({ currentSource, zoom });
+function documentProperties(): void {
+  editorHandles.get("visual")?.documentProperties?.();
+}
+defineExpose({ currentSource, zoom, documentProperties });
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const providers: readonly TikzPreviewProvider[] = TIKZ_PREVIEW_PROVIDERS;
 const displayMode = requestedMode;

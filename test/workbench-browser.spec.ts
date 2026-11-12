@@ -284,7 +284,7 @@ describe("standalone workbench host boundary", function () {
       await rail.getByRole("button", { name: "Properties", exact: true }).click();
       const properties = frame.getByRole("complementary", { name: "Properties", exact: true });
       await properties.getByLabel("X scale", { exact: true }).fill("2");
-      await properties.getByLabel("X scale", { exact: true }).press("Enter");
+      await properties.getByLabel("X scale", { exact: true }).press("Tab");
       await expect.poll(async () => (await editorDebug(page)).source).not.toBe(figure);
       const scaled = (await editorDebug(page)).source;
 
@@ -302,8 +302,12 @@ describe("standalone workbench host boundary", function () {
       await expect(fileMenu).toBeFocused();
       assert.equal((await editorDebug(page)).source, scaled);
 
+      const canvas = page.getByRole("button", { name: "Canvas: right sidebar", exact: true });
+      await canvas.click();
+      await expect(canvas).toHaveAttribute("aria-pressed", "false");
       await page.locator(".cm-content").click();
       await page.keyboard.press("Control+Shift+D");
+      await expect(canvas).toHaveAttribute("aria-pressed", "true");
       await expect(dialog).toBeVisible();
       await expect(dialog.getByLabel("X scale", { exact: true })).toHaveValue("2");
       await page.keyboard.press("Escape");
@@ -5399,11 +5403,10 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
-        const rail = frame.locator("[data-diagram-tools]");
-        await tap(rail.getByRole("button", { name: "Select", exact: true }));
-        await fitDiagram(frame, input);
-        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
-        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
+        await expect(frame.locator('svg [data-source-id="path:0"]').first()).toBeAttached();
+        await tap(page.getByRole("group", { name: "File" }).locator("summary"));
+        await tap(page.getByRole("button", { name: "Document Properties…", exact: true }));
+        const panel = frame.getByRole("dialog", { name: "Document Properties" });
         await expect(panel.getByText("Figure Bounds", { exact: true })).toBeVisible();
         await panel.locator("select").selectOption("fixed");
         const field = (name: string) =>

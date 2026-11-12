@@ -75,10 +75,6 @@ WB 176 `keeps authored source through a render error and recovers in the dark ta
 
 WF 290 (the conflict as status text "The file changed on disk").
 
-### #50 Document Properties
-
-WB 5183 (Figure Bounds), WB 5233 (the lattice step in the snap popover).
-
 ### #52 Status line
 
 The selection name and the hints in the strip, Properties, and the canvas overlay: WB 1461; WB 3709 `smooths only the neighbours of a deleted curve point`; WB 5287; WB 6859 `highlights, locks, and keeps a curve selected by ${contact}`; WB 6953 `edits a point on a styled curve from its control`; WB 7029 `shows one selection strip whose actions follow the selection: …`; WB 7204 `leaves point editing with Escape and keeps the curve ready to edit`; WB 7241, 7342; WB 7467 `deletes a chosen subset of a curve's points by ${contact}`; WB 7571 `edits a curve point from the curve's own control by ${contact}`; WB 7652 `adds a curve point with a finger double tap, as its hint says`; WB 7684 `keeps an original stroke as an editable curve whose points are counted`.

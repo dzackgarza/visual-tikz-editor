@@ -9,7 +9,7 @@ export const commandFailureSchema = z.enum([
 ]);
 export type CommandFailure = z.infer<typeof commandFailureSchema>;
 
-const action = z.enum(['load', 'settings', 'display', 'inspector', 'source',
+const action = z.enum(['load', 'settings', 'display', 'inspector', 'document-properties', 'source',
   'zoom', 'keyboard', 'clipboard-result', 'import-ink', 'interpret-ink', 'restore-ink', 'cancel']);
 const identity = commandIdentitySchema.shape;
 export const commandReplySchema = z.discriminatedUnion('status', [
@@ -40,6 +40,7 @@ export const editorNotificationSchema = z.discriminatedUnion('event', [
   z.object({ ...notificationIdentity, event: z.literal('error'), message: z.string() }),
   z.object({ ...notificationIdentity, event: z.literal('close-request') }),
   z.object({ ...notificationIdentity, event: z.literal('inspector-closed') }),
+  z.object({ ...notificationIdentity, event: z.literal('document-properties-closed') }),
   z.object({ ...notificationIdentity, event: z.literal('source-selection'), source: z.string(), from: z.number().int().nonnegative(), to: z.number().int().nonnegative() }),
   z.object({ ...notificationIdentity, event: z.literal('clipboard-read'), requestId: z.string().min(1) }),
   z.object({ ...notificationIdentity, event: z.literal('clipboard-write'), requestId: z.string().min(1), text: z.string() }),
