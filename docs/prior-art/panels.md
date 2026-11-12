@@ -106,11 +106,11 @@ An issue that names a dependency starts after that audit has its specification.
 
 | Items | Issue | Depends on |
 | --- | --- | --- |
-| 1, 2 | Separate Properties and Layers panels; docked pane in landscape | — |
-| 3 | Portrait panels as a nonmodal sheet with detents and a grabber | — |
-| 4 | One name, Properties | — |
-| 5 | Properties with nothing selected shows next-object attributes | #21, #22, #27 |
-| 6 | Properties sections, colour wells, and paint type | #29 |
-| 7, 9 | Layers view toggle and header | #24 |
-| 8 | Layers rows on one line; rename and row menu | — |
-| 10 | Host listens for the TikZ panel-closed event | — |
+| 1, 2 | [#34](https://github.com/dzackgarza/visual-tikz-editor/issues/34) Separate Properties and Layers panels; docked pane in landscape | — |
+| 3 | [#35](https://github.com/dzackgarza/visual-tikz-editor/issues/35) Portrait panels as a nonmodal sheet with detents and a grabber | — |
+| 4 | [#36](https://github.com/dzackgarza/visual-tikz-editor/issues/36) One name, Properties | — |
+| 5 | [#37](https://github.com/dzackgarza/visual-tikz-editor/issues/37) Properties with nothing selected shows next-object attributes | #21, #22, #27 |
+| 6 | [#38](https://github.com/dzackgarza/visual-tikz-editor/issues/38) Properties sections, colour wells, and paint type | #29 |
+| 7, 9 | [#39](https://github.com/dzackgarza/visual-tikz-editor/issues/39) Layers view toggle and header | #24 |
+| 8 | [#40](https://github.com/dzackgarza/visual-tikz-editor/issues/40) Layers rows on one line; rename and row menu | — |
+| 10 | [#41](https://github.com/dzackgarza/visual-tikz-editor/issues/41) Host listens for the TikZ panel-closed event | — |
