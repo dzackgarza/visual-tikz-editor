@@ -2920,6 +2920,59 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `keeps a fitted stroke's ends where the pen drew them when no point is within reach, in ${tablet.name}`,
+      async function () {
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (4,0);
+\draw (0,3) -- (4,3);
+\end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const reference = frame.locator('svg [data-source-id="path:0"]').first();
+        const origin = await strokePoint(page, reference, 0);
+        const pxPerCm = ((await strokePoint(page, reference, 1)).x - origin.x) / 4;
+        // The pen ends lie 0.5 cm or more from every lattice point and 1.1 cm from both lines.
+        const start = { x: 0.4, y: 1.4 },
+          end = { x: 3.5, y: 1.9 };
+        const points = Array.from({ length: 22 }, (_, i) => {
+          const t = i / 21;
+          const x = start.x + (end.x - start.x) * t;
+          const y = start.y + (end.y - start.y) * t - 0.2 * Math.sin(Math.PI * t);
+          return { x: origin.x + x * pxPerCm, y: origin.y - y * pxPerCm };
+        });
+        await input.penStroke(points);
+        const result = frame.getByRole("dialog", { name: "Freehand result" });
+        await expect(result).toBeVisible();
+        await input.touch([
+          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
+        ]);
+        await expect(result).toHaveCount(0);
+        const draw = (await editorDebug(page)).source.match(/\\draw[^;]*;/g)!.at(-1)!;
+        const ends = [...draw.matchAll(/\((-?[\d.]+),\s*(-?[\d.]+)\)/g)].map((match) => ({
+          x: Number(match[1]),
+          y: Number(match[2]),
+        }));
+        for (const [name, drawn, fitted] of [
+          ["start", start, ends[0]],
+          ["end", end, ends.at(-1)!],
+        ] as const) {
+          const offset = Math.hypot(fitted.x - drawn.x, fitted.y - drawn.y);
+          assert.ok(
+            offset <= 0.1,
+            `The fitted ${name} moved ${offset.toFixed(2)} cm from where the pen drew it: ${draw}`,
+          );
+        }
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `starts a new stroke near a raw stroke's end and leaves that stroke unchanged in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
