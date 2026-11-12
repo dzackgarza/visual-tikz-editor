@@ -87,9 +87,9 @@ An issue that names a dependency starts after that audit has its specification.
 
 | Items | Issue | Depends on |
 | --- | --- | --- |
-| 1–3 | Status line under the Canvas view | — |
-| 1, 5, 6, 8 | Labels and values only on option surfaces | #50 |
-| 7 | Name the unit of every displayed measurement | — |
+| 1–3 | [#52](https://github.com/dzackgarza/visual-tikz-editor/issues/52) Status line under the Canvas view | — |
+| 1, 5, 6, 8 | [#53](https://github.com/dzackgarza/visual-tikz-editor/issues/53) Labels and values only on option surfaces | #50 |
+| 7 | [#54](https://github.com/dzackgarza/visual-tikz-editor/issues/54) Name the unit of every displayed measurement | — |
 | 4 | [#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28) Dock contents as icons (tooltip format) | #22 |
-| 3 | [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31) Step text to a status line | this audit |
+| 3 | [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31) Step text to a status line | #52 |
 | 9 | [#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44), [#47](https://github.com/dzackgarza/visual-tikz-editor/issues/47) | #23, this audit |
