@@ -21,7 +21,7 @@ The work is complete when all of these hold at the head of `main`:
 | I. Fidelity and export | Supported figures match their compiled output; PDF, SVG, and PNG export of every figure | Held by the render and export stories |
 | Software gate | Development diagnostics is green at the head | Green at `2e59d93` ([43198269710](https://github.com/dzackgarza/visual-tikz-editor/actions/runs/43198269710)); later heads are test and documentation changes |
 | Release | Each green head that changes the product has a release | [workbench-2e59d93](https://github.com/dzackgarza/visual-tikz-editor/releases/tag/workbench-2e59d93) |
-| Issues | No open issue | None open |
+| Issues | No open issue | Open: #17 and its sub-issues #18–#25 |
 
 No stub is permitted. The user's use of the editor on a physical tablet is continuing feedback, not a gate: an observation opens or reopens an issue, and that issue is ordinary work under step 1.
 
@@ -29,6 +29,7 @@ The rules behind A–G and the product decisions are in [the interaction model](
 
 ## Next work, ranked
 
+0. The interface audit comes before any interface code. The user reports that the interface departs from established notebook and vector-editor conventions throughout. The audit files one issue per departure. Each issue first records prior art: named applications, their documented behaviour, links, and screenshots. Its acceptance follows from that prior art. No interface code is written until its issue has this research. The audit issues are ranked on [#17](https://github.com/dzackgarza/visual-tikz-editor/issues/17).
 1. Read the software gate on the head of `main` (`gh run list --workflow development.yml --branch main --limit 1`). A red run is the first work: reproduce the failing story with `bun run test:browser --grep '<story>'`, commit the red story, then repair it. A story that fails in a run made during a session is that session's work. Commit as the work goes and push once, when it is complete. [Development](docs/development.md) covers the story helpers and the traps of the fonts and the native file dialogs.
 2. Work each open issue the same way: a failing story that reproduces the report, then the repair. Record decisions on the issue. Decide established interface questions from prior art and cite it.
 3. Publish a release for each green head that changes the product (`just release-assets <run-id>`, then `gh release create`; see [Development](docs/development.md#releases)). Reconcile [#1](https://github.com/dzackgarza/visual-tikz-editor/issues/1) and #2 against the release.
