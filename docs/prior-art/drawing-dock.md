@@ -58,7 +58,7 @@ Every control of the dock compared with the conventions above.
 
 | Control | Today | Convention | Departure |
 | --- | --- | --- | --- |
-| Grip `⋮⋮` | A grip button; drop zones labelled with the words left, top, right, bottom | Drag the toolbar from its edge to any screen edge | Small: a separate grip glyph and word labels on the drop zones |
+| Grip `⋮⋮` | A grip button; drop zones labelled with the words left, top, right, bottom | Drag the toolbar from its edge to any screen edge | Repaired |
 | Select | Arrow icon; activates | Same (Inkscape, Ipe) | None |
 | Lasso | `RiDragDropLine` (a dashed rectangle with a cursor) and the word "Lasso"; first press activates, second press or a 420 ms hold opens Freehand / Ellipse / Rectangle | A loop icon; options on the second tap | Icon and word |
 | Freehand | Custom icon; activates; no options | Second tap opens line weight and opacity | No tool options |
@@ -97,7 +97,7 @@ Every control of the dock compared with the conventions above.
 6. **Colour.** The colour well shows the current colour and has no label. A choice recolours the stroke of the selection when one exists, and sets the colour of the next strokes when none does. Fill colour is set in Properties ([#20](https://github.com/dzackgarza/visual-tikz-editor/issues/20)) and with the Bucket. The picker keeps the exact `xcolor` field.
 7. **Snapping.** A tap on the snap icon turns snapping on or off. The arrow beside it opens the rules (Lattice, Objects, Alignment, Angle) as named toggles, with no sentences. The lattice step is a value in Document Properties ([instructional-text specification](instructional-text.md) item 6). The present build meets this rule; the magnet icon is item 3.
 8. **Panels toggle.** Every button that opens a popover or a panel closes it on the next press. One popover is open at a time; a press on another button closes the open one and opens the new one.
-9. **Moving the dock.** The dock moves by a drag from its edge to any screen edge. The drop zones show the target edge as a highlight, with no words.
+9. **Moving the dock.** The dock moves by a drag from its edge to any screen edge. The drop zones show the target edge as a highlight, with no words. The present build meets this rule.
 10. **Construction status.** The step text leaves the dock for a status line ([#21](https://github.com/dzackgarza/visual-tikz-editor/issues/21)). Finish and Cancel stay in the dock while a construction runs.
 11. **The setting `toolbar.items`** is deleted. Stored settings that hold it load, and the next save drops it. The present build meets this rule.
 
@@ -111,4 +111,3 @@ An issue that names a dependency starts after that audit has its specification.
 | 1–3 | [#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28) Dock contents as icons | #22 |
 | 6 | [#29](https://github.com/dzackgarza/visual-tikz-editor/issues/29) Unlabelled colour well | #20 |
 | 10 | [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31) Step text to a status line | #21 |
-| 9 | [#32](https://github.com/dzackgarza/visual-tikz-editor/issues/32) Drag from the edge; drop zones without words | — |

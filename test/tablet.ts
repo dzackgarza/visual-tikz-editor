@@ -95,6 +95,20 @@ export async function stableCenter(locator: Locator): Promise<Point> {
   return unmoved ? settled : settledCenter(locator);
 }
 
+/**
+ * A point on the dock's edge that faces the canvas centre, where a finger starts a dock
+ * drag. Apple Markup: "Drag from the edge of the toolbar closest to the center of the screen."
+ */
+export async function dockEdgePoint(rail: Locator): Promise<Point> {
+  const middle = await settledCenter(rail);
+  const box = await layoutBox(rail);
+  const dock = await rail.getAttribute("data-dock");
+  if (dock === "bottom") return { x: middle.x, y: box.y + 4 };
+  if (dock === "top") return { x: middle.x, y: box.y + box.height - 4 };
+  if (dock === "left") return { x: box.x + box.width - 4, y: middle.y };
+  return { x: box.x + 4, y: middle.y };
+}
+
 /** The centre of a canvas item once its box stops moving; never scrolls its container. */
 export async function settledCenter(locator: Locator): Promise<Point> {
   // Settled means the same box on three reads 100 ms apart.

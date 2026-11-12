@@ -5800,7 +5800,7 @@ index 4fba726b..16c1c9f8 100644
            disabled={!writable}
            onChange={(value) => { onPropertyChange(declaration, property, value); }}
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..45f657c9 100644
+index 0ddde08e..a5441b1d 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
 @@ -96,38 +96,6 @@
@@ -5842,12 +5842,10 @@ index 0ddde08e..45f657c9 100644
  /* ── Legacy classes (keep for compatibility) ─────────────────────────────── */
  
  .icon {
-@@ -144,6 +112,50 @@
+@@ -144,6 +112,43 @@
    flex: 1;
  }
  
-+.toolbarGrip { border: 0; background: transparent; color: var(--text-muted); cursor: grab; touch-action: none; user-select: none; }
-+.toolbarGrip:active { cursor: grabbing; }
 +.dockGuide { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
 +.dockZone {
 +  position: absolute;
@@ -5857,10 +5855,6 @@ index 0ddde08e..45f657c9 100644
 +  border: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent);
 +  border-radius: 10px;
 +  background: color-mix(in srgb, var(--accent) 7%, transparent);
-+  color: var(--text);
-+  font-size: 11px;
-+  font-weight: 600;
-+  text-transform: capitalize;
 +  opacity: .55;
 +}
 +.dockZoneActive { opacity: 1; border-style: solid; background: color-mix(in srgb, var(--accent) 16%, transparent); }
@@ -5870,7 +5864,6 @@ index 0ddde08e..45f657c9 100644
 +.dockZoneTop, .dockZoneBottom { left: 84px; right: 84px; height: 54px; }
 +.dockZoneTop { top: 60px; }
 +.dockZoneBottom { bottom: 32px; }
-+.dockZoneLeft span, .dockZoneRight span { writing-mode: vertical-rl; }
 +:global(#root > div > [data-toolbar-preview]) {
 +  z-index: 19;
 +  pointer-events: none;
@@ -5893,7 +5886,7 @@ index 0ddde08e..45f657c9 100644
  .updateChip {
    display: inline-flex;
    align-items: center;
-@@ -224,3 +236,44 @@
+@@ -224,3 +229,43 @@
      padding: 8px;
    }
  }
@@ -5904,7 +5897,6 @@ index 0ddde08e..45f657c9 100644
 +.embeddedTools .toolLabel { font-size: 10px; line-height: 1; }
 +.embeddedTools .lassoButton { flex-direction: column; gap: 1px; padding: 3px; }
 +.embeddedTools .zoomTrigger { width: 44px; padding: 0; font-size: 12px; }
-+.toolbarGrip { min-width: 44px; min-height: 44px; flex-shrink: 0; }
 +.paletteSwatch { width: 44px; height: 44px; }
 +
 +/* The rail lays its tools on a 44 px grid; a short canvas adds columns (docked
@@ -5939,7 +5931,7 @@ index 0ddde08e..45f657c9 100644
 +[data-dock="bottom"] .stepLane { bottom: calc(100% + 8px); left: 0; }
 +.stepText { padding: 4px 8px; font-size: 13px; line-height: 1.3; color: var(--text); }
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..6f95da3a 100644
+index a3293df2..0cddff2c 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,4 +1,7 @@
@@ -5981,7 +5973,7 @@ index a3293df2..6f95da3a 100644
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    id: option.value,
-@@ -26,27 +37,92 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,27 +37,93 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -6069,7 +6061,8 @@ index a3293df2..6f95da3a 100644
 +  const dragReady = useRef(false);
 +  const dragOffset = useRef({ x: 0, y: 0 });
 +  const dragPointer = useRef<{ x: number; y: number } | null>(null);
-+  const dragGripAnchor = useRef({ x: 0, y: 0 });
++  // The contacted point as a fraction of the dock, so it stays under the pointer when docking reshapes the dock.
++  const dragAnchor = useRef({ x: 0.5, y: 0.5 });
 +  const dockGhost = useRef<HTMLElement | null>(null);
 +  const suppressDragClick = useRef(false);
 +  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -6077,7 +6070,7 @@ index a3293df2..6f95da3a 100644
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
    const matrixPreviewColumns = matrixHoverSize?.columns ?? selectedAddMatrixColumns;
-@@ -56,63 +132,153 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,63 +133,151 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -6086,18 +6079,16 @@ index a3293df2..6f95da3a 100644
 +  const [safeRect, setSafeRect] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
 +  const refreshDragOffset = () => {
 +    const toolbar = toolbarRef.current?.closest<HTMLElement>("[data-diagram-tools]");
-+    const grip = toolbar?.querySelector<HTMLElement>("[data-toolbar-grip]");
-+    if (!toolbar || !grip) return;
++    if (!toolbar) return;
 +    const bounds = toolbar.getBoundingClientRect();
-+    const gripBounds = grip.getBoundingClientRect();
 +    dragOffset.current = {
-+      x: bounds.width / 2 - (gripBounds.left - bounds.left) - dragGripAnchor.current.x,
-+      y: bounds.height / 2 - (gripBounds.top - bounds.top) - dragGripAnchor.current.y
++      x: bounds.width * (0.5 - dragAnchor.current.x),
++      y: bounds.height * (0.5 - dragAnchor.current.y)
 +    };
 +  };
 +  useLayoutEffect(() => {
 +    if (!dragPoint || !dragReady.current || !dragPointer.current) return;
-+    // Docking changes the strip orientation. Keep the contacted point of the grip
++    // Docking changes the strip orientation. Keep the contacted point of the dock
 +    // under the pointer using the geometry of the newly committed layout.
 +    refreshDragOffset();
 +    const next = { x: dragPointer.current.x + dragOffset.current.x, y: dragPointer.current.y + dragOffset.current.y };
@@ -6272,7 +6263,7 @@ index a3293df2..6f95da3a 100644
              choices={SHAPE_POPUP_CHOICES}
              selectedId={selectedAddShape}
              onSelect={(id) => {
-@@ -126,15 +292,29 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -126,15 +291,29 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
          </ToolbarPopupSection>
        );
      }
@@ -6303,7 +6294,7 @@ index a3293df2..6f95da3a 100644
              data-testid="toolbar-matrix-picker-grid"
              onMouseLeave={() => { setMatrixHoverSize(null); }}
            >
-@@ -144,6 +324,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -144,6 +323,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                    <button
                      key={`${row}-${column}`}
                      type="button"
@@ -6311,7 +6302,7 @@ index a3293df2..6f95da3a 100644
                      className={[
                        popupCss.matrixPickerCell,
                        isSelected(row, column) ? popupCss.matrixPickerCellSelected : ""
-@@ -170,69 +351,225 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,69 +350,226 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -6587,10 +6578,11 @@ index a3293df2..6f95da3a 100644
 +  };
 +  const verticalDock = dock === "left" || dock === "right";
 +  // The strip adds columns (vertical dock) or wraps to rows (horizontal dock) once
-+  // its controls exceed the canvas cell, so this one bound is all it needs.
++  // its controls exceed the canvas cell, so this one bound is all it needs. The
++  // bound leaves room for the dock edge and border (apps/zettlr-embed styles.css).
 +  const toolStripSize = safeRect ? (verticalDock
-+    ? { maxHeight: Math.max(44, safeRect.bottom - safeRect.top - 56) }
-+    : { maxWidth: Math.max(44, safeRect.right - safeRect.left - 56) }) : undefined;
++    ? { maxHeight: Math.max(44, safeRect.bottom - safeRect.top - 22) }
++    : { maxWidth: Math.max(44, safeRect.right - safeRect.left - 22) }) : undefined;
 +
    const renderShapeButton = () => {
      const mode = "addShape" as const;
@@ -6653,7 +6645,7 @@ index a3293df2..6f95da3a 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +696,78 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +696,77 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -6661,9 +6653,13 @@ index a3293df2..6f95da3a 100644
 -    <div className={`${css.toolbar}${isMacDesktop ? ` ${css.toolbarDesktop}` : ""}`} data-tauri-drag-region data-select="chrome">
 +  if (embedded) return <><div data-diagram-tools data-dock={dragPoint ? "floating" : settings.toolbar.dock} style={toolbarPosition}
 +    onPointerDown={(event) => {
-+      if (event.button !== 0 || !(event.target as HTMLElement).closest('[data-toolbar-grip]')) return;
-+      const gripBounds = event.currentTarget.querySelector<HTMLElement>("[data-toolbar-grip]")!.getBoundingClientRect();
-+      dragGripAnchor.current = { x: event.clientX - gripBounds.left, y: event.clientY - gripBounds.top };
++      // Apple Markup moves its toolbar by a drag from the toolbar's edge, not from a
++      // control on it. Popups are React children but not DOM children of the dock.
++      const target = event.target as HTMLElement;
++      if (event.button !== 0 || !event.currentTarget.contains(target) ||
++        target.closest(`button, input, select, textarea, .${css.paletteLane}`)) return;
++      const bounds = event.currentTarget.getBoundingClientRect();
++      dragAnchor.current = { x: (event.clientX - bounds.left) / bounds.width, y: (event.clientY - bounds.top) / bounds.height };
 +      dragPointer.current = { x: event.clientX, y: event.clientY };
 +      refreshDragOffset();
 +      const toolbar = event.currentTarget;
@@ -6691,9 +6687,6 @@ index a3293df2..6f95da3a 100644
 +      setDockPreview(null);
 +    }}
 +    onClickCapture={(event) => { if (suppressDragClick.current) { event.preventDefault(); event.stopPropagation(); suppressDragClick.current = false; } }}>
-+    <button type="button" data-toolbar-grip className={css.toolbarGrip} aria-label="Move toolbar" title="Drag toolbar">
-+      ⋮⋮
-+    </button>
 +    <div ref={toolbarRef} className={css.embeddedTools}>
 +      <div className={css.toolGrid} style={toolStripSize}>
 +      {renderEmbeddedTool("select")}{renderEmbeddedTool("lasso")}{renderEmbeddedTool("addFreehand")}
@@ -6718,9 +6711,7 @@ index a3293df2..6f95da3a 100644
 +  </div>{dockPreview ? createPortal(<div className={css.dockGuide} aria-hidden="true">
 +    {(["left", "top", "right", "bottom"] as const).map((dock) => <div key={dock}
 +      className={[css.dockZone, css[`dockZone${dock[0].toUpperCase()}${dock.slice(1)}`], dockPreview.dock === dock ? css.dockZoneActive : ""].filter(Boolean).join(" ")}
-+      data-dock-target={dock}>
-+      <span>{dock}</span>
-+    </div>)}
++      data-dock-target={dock} />)}
 +  </div>, document.body) : null}</>;
 +
 +  const toolbar = (
@@ -6734,7 +6725,7 @@ index a3293df2..6f95da3a 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -354,16 +778,22 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -354,16 +777,22 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
  
        <div className={css.group}>
@@ -6760,7 +6751,7 @@ index a3293df2..6f95da3a 100644
            } else {
              button = renderStandardButton(toolDef);
            }
-@@ -387,4 +817,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +816,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );

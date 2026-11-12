@@ -25,7 +25,7 @@ Four views show the same source: Code, the drawing canvas, Quiver, and TeX rende
 
 ## Drawing dock
 
-The dock holds these controls in this order: Select, Lasso, Pen, Eraser, Geometry, Label, Bucket, Color with saved swatches, Undo, Redo, Layers, Properties, and Settings. Drag its grip to move it or dock it at an edge.
+The dock holds these controls in this order: Select, Lasso, Pen, Eraser, Geometry, Label, Bucket, Color with saved swatches, Undo, Redo, Layers, Properties, and Settings. Drag the dock from its edge to move it: drop it on a screen edge to dock it there, or anywhere else to let it float.
 
 | Control | Action |
 | --- | --- |

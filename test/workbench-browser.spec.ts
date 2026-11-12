@@ -17,6 +17,7 @@ import {
   editorFrame,
   editorReady,
   emptyCanvasGesture,
+  dockEdgePoint,
   fitDiagram,
   layoutBox,
   type Point,
@@ -1405,9 +1406,7 @@ describe("standalone workbench host boundary", function () {
           }
         };
         const drag = async (to: { x: number; y: number }) => {
-          const from = await stableCenter(
-            rail.getByRole("button", { name: "Move toolbar", exact: true }),
-          );
+          const from = await dockEdgePoint(rail);
           await input.touch(
             Array.from({ length: 13 }, (_, i) => ({
               x: from.x + ((to.x - from.x) * i) / 12,
@@ -3852,9 +3851,7 @@ describe("standalone workbench host boundary", function () {
           left: { x: viewport.x + 10, y: viewport.y + viewport.height / 2 },
         };
         for (const [dock, target] of Object.entries(dockTargets)) {
-          const from = await stableCenter(
-            rail.getByRole("button", { name: "Move toolbar", exact: true }),
-          );
+          const from = await dockEdgePoint(rail);
           await input.touch(
             Array.from({ length: 13 }, (_, i) => ({
               x: from.x + ((target.x - from.x) * i) / 12,
@@ -6761,16 +6758,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const rail = frame.locator("[data-diagram-tools]");
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        // Apple Markup: "Drag from the edge of the toolbar closest to the center of the screen."
-        const edgePoint = async () => {
-          const box = (await rail.boundingBox())!;
-          const dock = await rail.getAttribute("data-dock");
-          const middle = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-          if (dock === "bottom") return { x: middle.x, y: box.y + 4 };
-          if (dock === "top") return { x: middle.x, y: box.y + box.height - 4 };
-          if (dock === "left") return { x: box.x + box.width - 4, y: middle.y };
-          return { x: box.x + 4, y: middle.y };
-        };
+        const edgePoint = () => dockEdgePoint(rail);
         const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) =>
           input.touch(
             Array.from({ length: 13 }, (_, i) => ({
@@ -6828,75 +6816,6 @@ describe("standalone workbench host boundary", function () {
         await page.mouse.up();
         await expect(rail).toHaveAttribute("data-dock", "right");
         await expect(zones).toHaveCount(0);
-      },
-    );
-
-    story(
-      { viewport: tablet },
-      `moves the drawing rail by its grip only and never over the rulers in ${tablet.name}`,
-      async function () {
-        await editorReady(page);
-        const frame = editorFrame(page);
-        const input = await TabletInput.attach(page);
-        const rail = frame.locator("[data-diagram-tools]");
-        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) =>
-          input.touch(
-            Array.from({ length: 13 }, (_, i) => ({
-              x: from.x + ((to.x - from.x) * i) / 12,
-              y: from.y + ((to.y - from.y) * i) / 12,
-            })),
-          );
-        const clearOfRulers = async () => {
-          const railBox = (await rail.boundingBox())!;
-          for (const ruler of ["canvas-top-ruler", "canvas-left-ruler"]) {
-            const box = (await frame.getByTestId(ruler).boundingBox())!;
-            const overlapX =
-              Math.min(railBox.x + railBox.width, box.x + box.width) - Math.max(railBox.x, box.x);
-            const overlapY =
-              Math.min(railBox.y + railBox.height, box.y + box.height) - Math.max(railBox.y, box.y);
-            assert.ok(overlapX <= 0 || overlapY <= 0, `The rail covers ${ruler}`);
-          }
-        };
-        // The dock sits at the lower edge by default (docs/interaction-model.md, Space).
-        await expect(rail).toHaveAttribute("data-dock", "bottom");
-        await clearOfRulers();
-        const names = await rail
-          .getByRole("button")
-          .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
-        assert.ok(names.indexOf("Lasso") < 8 && names.indexOf("Eraser") < 8, names.join(", "));
-        await drag(await stableCenter(rail.getByRole("button", { name: "Select", exact: true })), {
-          x: viewport.x + viewport.width - 10,
-          y: viewport.y + viewport.height / 2,
-        });
-        await expect(rail).toHaveAttribute("data-dock", "bottom");
-        await drag(
-          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
-          {
-            x: viewport.x + viewport.width - 10,
-            y: viewport.y + viewport.height / 2,
-          },
-        );
-        await expect(rail).toHaveAttribute("data-dock", "right");
-        await clearOfRulers();
-        await drag(
-          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
-          {
-            x: viewport.x + viewport.width / 2,
-            y: viewport.y + 10,
-          },
-        );
-        await expect(rail).toHaveAttribute("data-dock", "top");
-        await clearOfRulers();
-        await drag(
-          await stableCenter(rail.getByRole("button", { name: "Move toolbar", exact: true })),
-          {
-            x: viewport.x + 10,
-            y: viewport.y + viewport.height / 2,
-          },
-        );
-        await expect(rail).toHaveAttribute("data-dock", "left");
-        await clearOfRulers();
       },
     );
 
