@@ -4057,7 +4057,7 @@ index 67578882..51b779d9 100644
    /* Map to app design tokens */
    --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb9..cd47eb0f 100644
+index ba28ddb9..a9af48ef 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
 @@ -1,4 +1,5 @@
@@ -4167,7 +4167,7 @@ index ba28ddb9..cd47eb0f 100644
    try {
      return Model.fromJson(json);
    } catch {
-@@ -404,9 +420,68 @@ function createInitialModel(): Model {
+@@ -404,9 +420,70 @@ function createInitialModel(): Model {
    }
  }
  
@@ -4191,6 +4191,8 @@ index ba28ddb9..cd47eb0f 100644
 +  const [inspectorOpen, setInspectorOpen] = useState(() => document.documentElement.dataset.embedInspector === "open");
 +  const canvasCommandHandle = useRef<CanvasCommandHandle | null>(null);
 +  const [inspectorTab, setInspectorTab] = useState<"inspector" | "objects">("inspector");
++  const inspectorTabRef = useRef(inspectorTab);
++  inspectorTabRef.current = inspectorTab;
 +  // Properties is a side panel in landscape and a bottom sheet in portrait, as in iPadOS apps.
 +  const portrait = useSyncExternalStore(subscribePortrait, isPortrait);
 +  const [sheetExpanded, setSheetExpanded] = useState(false);
@@ -4237,7 +4239,7 @@ index ba28ddb9..cd47eb0f 100644
  
    // Factory — renders panel content for each tab
    const factory = useCallback(
-@@ -422,7 +497,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -422,7 +499,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
          case "canvas":
            return (
              <Suspense fallback={<div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading canvas…</div>}>
@@ -4246,7 +4248,7 @@ index ba28ddb9..cd47eb0f 100644
              </Suspense>
            );
          case "figure-navigator":
-@@ -445,7 +520,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -445,7 +522,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
            return <div>Unknown panel: {component}</div>;
        }
      },
@@ -4255,24 +4257,29 @@ index ba28ddb9..cd47eb0f 100644
    );
  
    // On model change: persist + sync to Zustand
-@@ -471,7 +546,16 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -471,7 +548,21 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    const handle = useMemo<DockLayoutHandle>(() => ({
      getModel: () => modelRef.current,
      getCurrentJson: () => modelRef.current.toJson(),
 +    runCanvasCommand: (id, origin) => canvasCommandHandle.current?.runCommand(id, origin) ?? false,
      togglePanel(panelId: string) {
 +      if (embedded) {
-+        if (panelId === PANEL_IDS.inspector || panelId === PANEL_IDS.objects) {
-+          setInspectorTab(panelId);
-+          setInspectorOpen(true);
-+          document.documentElement.dataset.embedInspector = "open";
++        if (panelId !== PANEL_IDS.inspector && panelId !== PANEL_IDS.objects) return;
++        // A bar button closes the panel it opened on its next press (UIKit popover
++        // dismissal by its bar button item; HIG Popovers).
++        if (document.documentElement.dataset.embedInspector === "open" && inspectorTabRef.current === panelId) {
++          closeInspector();
++          return;
 +        }
++        setInspectorTab(panelId);
++        setInspectorOpen(true);
++        document.documentElement.dataset.embedInspector = "open";
 +        return;
 +      }
        const m = modelRef.current;
        const existing = m.getNodeById(panelId);
        if (existing) {
-@@ -483,7 +567,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -483,7 +574,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
            canvas: "Canvas",
            "figure-navigator": "Figures",
            inspector: "Inspector",
@@ -4281,12 +4288,13 @@ index ba28ddb9..cd47eb0f 100644
            styles: "Styles",
            assistant: "Assistant",
          };
-@@ -522,11 +606,21 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -522,11 +613,22 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
        saveDockLayout(m.toJson());
        syncLayoutStateToStore(m, dispatchRef.current);
      },
 +    showPanel(panelId: string) {
 +      const m = modelRef.current;
++      if (embedded && document.documentElement.dataset.embedInspector === "open" && inspectorTabRef.current === panelId) return;
 +      if (!embedded && m.getNodeById(panelId)) {
 +        m.doAction(Actions.selectTab(panelId));
 +        return;
@@ -4303,7 +4311,7 @@ index ba28ddb9..cd47eb0f 100644
        const sanitized = sanitizeLayout(json);
        const newModel = Model.fromJson(sanitized);
        saveDockLayout(sanitized);
-@@ -536,7 +630,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -536,7 +638,7 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
      resetLayout() {
        this.applyPreset("default");
      },
@@ -4312,7 +4320,7 @@ index ba28ddb9..cd47eb0f 100644
  
    useEffect(() => {
      activeDockHandle = handle;
-@@ -590,11 +684,38 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -590,11 +692,38 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    }, [figureCount]);
  
    return (

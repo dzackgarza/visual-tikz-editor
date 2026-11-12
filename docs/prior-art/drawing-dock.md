@@ -72,8 +72,8 @@ Every control of the dock compared with the conventions above.
 | Undo, Redo | Unicode glyphs `↶` `↷` | `arrow.uturn.backward`, `arrow.uturn.forward` | Glyphs, not the standard symbols |
 | Snap | The words "Snap" and the first active rule; popover of four rules, each with a sentence | One icon toggle with an arrow that opens the rules; rule names as labels | Words; sentences in the popover; no one-tap toggle |
 | Zoom | The percentage in the dock; popover with Fit, slider, presets, and the canvas aids Grid, Rulers, Ruler guides, Output bounds | Zoom readout in a status bar or corner; canvas aids in the View menu | Wrong place; canvas aids under Zoom |
-| Layers | The word, in the dock; opens the panel, a second press does not close it | Separate panel, opened from the window toolbar's trailing edge, toggled by its button | Place, word, no toggle |
-| Properties | The same as Layers | The same as Layers | Place, word, no toggle |
+| Layers | The word, in the dock; opens the panel, and a second press closes it | Separate panel, opened from the window toolbar's trailing edge, toggled by its button | Place, word |
+| Properties | The same as Layers | The same as Layers | Place, word |
 | Settings | The word, in the dock | App menu, not a toolbar | Place, word |
 | Tooltips | Hidden on touch; text such as "press again or hold for options" | Pointer only; short verb phrase | Instruction text in tooltips |
 | Step lane | Step text, Finish, Cancel in the dock | Step text in a status line; Done and Cancel in the toolbar while a construction runs | Step text in the dock |
@@ -107,7 +107,6 @@ An issue that names a dependency starts after that audit has its specification.
 
 | Items | Issue | Depends on |
 | --- | --- | --- |
-| 8 | [#26](https://github.com/dzackgarza/visual-tikz-editor/issues/26) Buttons close what they opened; one popover at a time | — |
 | 4, 5 | [#27](https://github.com/dzackgarza/visual-tikz-editor/issues/27) One press rule and tool options | — |
 | 1–3 | [#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28) Dock contents as icons | #22 |
 | 6 | [#29](https://github.com/dzackgarza/visual-tikz-editor/issues/29) Unlabelled colour well | #20 |

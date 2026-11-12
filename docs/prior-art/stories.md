@@ -143,4 +143,4 @@ The dock's zoom button and the "Zoom and display" popover: WB 208, 237, 332, 448
 
 WB 1009 `labels the rulers in lattice steps when the figure scales its lattice`.
 
-No story asserts the behaviour that #26, #33, #38, #39, #43, #46, #60, or #62 replace; their acceptance stories are new. The storage-status stories (WB 3438, WB 9622, and the "Saved" checks in WF) assert a rule the [interaction model](../interaction-model.md) keeps.
+No story asserts the behaviour that #33, #38, #39, #43, #46, #60, or #62 replace; their acceptance stories are new. The storage-status stories (WB 3438, WB 9622, and the "Saved" checks in WF) assert a rule the [interaction model](../interaction-model.md) keeps.
