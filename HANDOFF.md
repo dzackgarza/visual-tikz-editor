@@ -32,7 +32,7 @@ The rules behind A–J and the product decisions are in [the interaction model](
 
 ## Next work, ranked
 
-1. Write the design audit of the user's reports (Task), then repair the reports in this order. The issues the audits found without a report wait behind them. The reports and the issues that carry them:
+1. Write the design audit of the user's reports (Task). The user sets the priorities of the repairs from the audit. The reports and the issues filed for them:
 
    | User report | Issues |
    | --- | --- |
