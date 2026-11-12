@@ -4979,24 +4979,24 @@ describe("standalone workbench host boundary", function () {
         ]);
         // VS Code prompts for the keys only once recording starts (item 6).
         await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
-        await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Line");
-        const row = settings.getByRole("group", { name: "Line shortcut", exact: true });
-        const rowTexts = (shortcut: string) => ["Line", shortcut, "Set keys", "Clear", "Reset"];
-        assert.deepEqual(await texts(settings, "option, nav, [role=group]"), [
+        await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Insert: Line");
+        const row = settings.getByRole("list", { name: "Commands", exact: true }).getByRole("listitem");
+        assert.deepEqual(await texts(settings, "option, nav, li"), [
           "Settings",
           "Keyboard shortcuts",
           "Find command",
+          "Record keys",
           "Reset all shortcuts",
         ]);
-        assert.deepEqual(await texts(row), rowTexts("L"));
-        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
-        assert.deepEqual(await texts(row), rowTexts("Press the new shortcut"));
+        assert.deepEqual(await texts(row), ["Insert: Line", "L"]);
+        await tap(row.getByRole("button"));
+        assert.deepEqual(await texts(row), ["Insert: Line", "Press the new shortcut"]);
         await page.keyboard.press("Escape");
-        assert.deepEqual(await texts(row), rowTexts("L"));
+        assert.deepEqual(await texts(row), ["Insert: Line", "L"]);
         await expect(settings).toBeVisible();
-        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
+        await tap(row.getByRole("button"));
         await page.keyboard.press("Control+Alt+l");
-        assert.deepEqual(await texts(row), rowTexts("Ctrl+Alt+L"));
+        assert.deepEqual(await texts(row), ["Insert: Line", "Ctrl+Alt+L"]);
         await storyScreenshot(page, `option-surface-text-${tablet.name}`);
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         // The Freehand result names its sliders, their unit, and its buttons (item 8).
@@ -5061,7 +5061,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `sets, persists, clears and resets command shortcuts in Settings in ${tablet.name}`,
+      `sets, persists, removes and resets command shortcuts in Settings in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -5071,15 +5071,19 @@ describe("standalone workbench host boundary", function () {
         const openShortcuts = async () => {
           await tap(rail.getByRole("button", { name: "Settings", exact: true }));
           await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
-          await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Line");
+          await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Insert: Line");
         };
         // The shipped default acts before we replace it.
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await page.keyboard.press("l");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
         await openShortcuts();
-        const row = settings.getByRole("group", { name: "Line shortcut", exact: true });
-        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
+        const row = settings.getByRole("list", { name: "Commands", exact: true }).getByRole("listitem");
+        const rowMenu = async (item: string) => {
+          await input.longPress(await stableCenter(row.getByRole("button")));
+          await tap(settings.getByRole("menu").getByRole("menuitem", { name: item, exact: true }));
+        };
+        await tap(row.getByRole("button"));
         await page.keyboard.press("Control+Alt+l");
         await expect(row).toContainText("Ctrl+Alt+L");
         await storyScreenshot(page, `keyboard-shortcuts-${tablet.name}`);
@@ -5095,26 +5099,20 @@ describe("standalone workbench host boundary", function () {
         await page.keyboard.press("Control+Alt+l");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
         await openShortcuts();
-        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
+        await tap(row.getByRole("button"));
         await page.keyboard.press("Control+z");
-        await expect(settings.getByRole("alert")).toContainText("Undo");
+        await expect(settings.getByRole("alert")).toContainText("Edit: Undo");
         await page.keyboard.press("Escape");
         await expect(row).toContainText("Ctrl+Alt+L");
-        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
-        await page.keyboard.press("Control+s");
-        await expect(settings.getByRole("alert")).toContainText("Save");
-        await expect(settings.getByRole("alert")).toContainText("reserved");
-        await page.keyboard.press("Escape");
-        await expect(row).toContainText("Ctrl+Alt+L");
-        await tap(row.getByRole("button", { name: "Clear shortcut for Line", exact: true }));
-        await expect(row).toContainText("Unassigned");
+        await rowMenu("Remove Shortcut");
+        await expect(row.locator("kbd")).toHaveCount(0);
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await page.keyboard.press("Control+Alt+l");
         await page.keyboard.press("l");
-        assert.equal((await editorDebug(page)).tool, "select", "A cleared shortcut still ran");
+        assert.equal((await editorDebug(page)).tool, "select", "A removed shortcut still ran");
         await openShortcuts();
-        await tap(row.getByRole("button", { name: "Reset shortcut for Line", exact: true }));
+        await rowMenu("Reset Shortcut");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await page.keyboard.press("l");
@@ -5323,8 +5321,8 @@ describe("standalone workbench host boundary", function () {
         );
         await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
         const search = settings.getByRole("searchbox", { name: "Find command", exact: true });
-        await search.fill("Settings");
-        await tap(settings.getByRole("button", { name: "Set shortcut for Settings", exact: true }));
+        await search.fill("File: Settings");
+        await tap(settings.getByRole("list", { name: "Commands", exact: true }).getByRole("button"));
         await page.keyboard.press("q");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await page.keyboard.press("q");
@@ -5368,10 +5366,8 @@ describe("standalone workbench host boundary", function () {
         await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
         await settings
           .getByRole("searchbox", { name: "Find command", exact: true })
-          .fill("Simplify Path");
-        await tap(
-          settings.getByRole("button", { name: "Set shortcut for Simplify Path", exact: true }),
-        );
+          .fill("Path: Simplify Path");
+        await tap(settings.getByRole("list", { name: "Commands", exact: true }).getByRole("button"));
         await page.keyboard.press("Control+Alt+p");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await tap(rail.getByRole("button", { name: "Freehand", exact: true }));
@@ -5455,17 +5451,14 @@ describe("standalone workbench host boundary", function () {
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));
         const settings = frame.getByTestId("settings-modal");
         await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
+        const commandRow = settings.getByRole("list", { name: "Commands", exact: true }).getByRole("button");
         for (const [name, shortcut] of [
-          ["Delete", "Control+Alt+d"],
-          ["Undo", "Control+Alt+u"],
-          ["Layers", "Control+Alt+j"],
+          ["Edit: Delete", "Control+Alt+d"],
+          ["Edit: Undo", "Control+Alt+u"],
+          ["View: Layers Panel", "Control+Alt+j"],
         ]) {
           await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill(name);
-          await tap(
-            settings
-              .getByRole("group", { name: `${name} shortcut`, exact: true })
-              .getByRole("button", { name: `Set shortcut for ${name}`, exact: true }),
-          );
+          await tap(commandRow);
           await page.keyboard.press(shortcut);
         }
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
@@ -5495,8 +5488,8 @@ describe("standalone workbench host boundary", function () {
         ).toBeVisible();
         await tap(frame.getByRole("button", { name: "Close properties", exact: true }));
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));
-        await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Layers");
-        await tap(settings.getByRole("button", { name: "Set shortcut for Layers", exact: true }));
+        await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("View: Layers Panel");
+        await tap(commandRow);
         await page.keyboard.press("ArrowLeft");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await fitDiagram(frame, input);

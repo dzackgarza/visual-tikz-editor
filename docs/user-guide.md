@@ -53,7 +53,7 @@ A palm on the screen while the pen draws makes no second stroke.
 
 ## Selection
 
-The selection strip names the selected object and offers only the actions that apply to it, for example Edit points, Simplify, Style, and Duplicate for a curve. Its **Lock** control keeps the selection while you work: a tap that misses keeps a locked selection. Selection locks last only for the open session.
+The selection strip names the selected object and offers only the actions that apply to it, for example Edit points, Simplify, Style, and Duplicate for a curve. Its **Lock** control keeps the selection while you work: a tap that misses keeps a locked selection. Selection locks last only for the open session. Double-click or double-tap an equation to edit it.
 
 **Style** saves the selected object's appearance as a named TikZ style in the figure, and applies an existing style to the selection.
 
@@ -90,8 +90,7 @@ A layer is a named top-level TikZ `scope`. In **Layers**, you can create and ren
 
 ## Settings and shortcuts
 
-Settings has three categories: canvas settings, named colour collections, and keyboard shortcuts. In **Keyboard shortcuts**, search for a command, choose **Set keys**, and press the new shortcut; the row shows "Press the new shortcut" while it records, and Escape cancels. **Clear** removes a command's bindings, **Reset** restores its defaults, and **Reset all shortcuts** restores the whole set. A shortcut that another command uses is refused with an alert that names that command. Settings and shortcuts persist across restarts.
-
+Settings has three categories: canvas settings, named colour collections, and keyboard shortcuts. **Keyboard shortcuts** lists every command under its menu ("Align: Left", "View: Grid") with its keys. Type in **Find command** to filter by name or key, or turn on **Record keys** and press keys to find the command that has them. Press a row and then the new shortcut; the row shows "Press the new shortcut" while it records, and Escape cancels. When another command has the keys, an alert names it, and Enter moves the keys to this command and removes them from that one. Right-click or hold a row for **Remove Shortcut** and, on a changed row, **Reset Shortcut**; **Reset all shortcuts** restores the whole set. Settings and shortcuts persist across restarts.
 ## Export
 
 **Export** compiles each figure in the source with TeX:

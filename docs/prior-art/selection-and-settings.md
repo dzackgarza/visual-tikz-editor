@@ -72,8 +72,8 @@ Source: fork `.cache/tikz-editor/packages/app/src/` unless a path says otherwise
 | Freehand result | A popover with counts, two sliders, five buttons, and a disclosure after every stroke | Smoothing set before drawing; Simplify a later command; shapes on a hold | Decision demanded after every stroke |
 | Freehand fit | Ends moved to the nearest lattice points, 0.25 cm and 0.57 cm away; the rising stroke became a symmetric dip | The interaction model attaches a stroke end only to an existing point within reach | Repaired: the ends follow the pen |
 | Settings reset | One button resets 21 settings, 13 of them not on the page, with no confirmation | Per-setting reset; one confirmed reset of everything | Silent reset of unseen settings |
-| Shortcut list | Cards of three buttons per command; bare labels "Left", "Top", two rows "Grid" | One row per command, prefixed by its category; remove from a row menu | Ambiguous names, four commands per screen |
-| Shortcut conflicts | Two default commands share Ctrl+Shift+E; a recorded conflict is refused | Accept and say what is removed (GNOME), or accept and show (VS Code) | Conflict in defaults; refusal |
+| Shortcut list | Cards of three buttons per command; bare labels "Left", "Top", two rows "Grid" | One row per command, prefixed by its category; remove from a row menu | Repaired |
+| Shortcut conflicts | Two default commands share Ctrl+Shift+E; a recorded conflict is refused | Accept and say what is removed (GNOME), or accept and show (VS Code) | Repaired |
 
 ## Specification
 
@@ -86,8 +86,8 @@ Source: fork `.cache/tikz-editor/packages/app/src/` unless a path says otherwise
 7. **Shapes on a hold.** A stroke becomes a line, rectangle, circle, or ellipse only when it ends with the pen held still, as in GoodNotes, Notability, Apple Markup, and Procreate. Undo after the change returns the freehand stroke, as in Apple Markup. A stroke without a hold stays a curve.
 8. **Popovers.** Every anchored popover (tool options, colour, zoom, context menu) uses one placement: above or below its anchor, pointing at it, inside the canvas. A choice, Escape, or a press outside closes it; one is open at a time ([dock specification](drawing-dock.md) item 8).
 9. **Settings reset.** A changed setting shows a reset control on its row; an unchanged one shows none, as GNOME's "Reset Shortcut". The page button "Reset to Defaults" is deleted. One "Reset All Settings…" at the end of the page list asks "Reset all settings?", "All changes to settings will be lost", with Cancel and Reset All, as GNOME's "Reset All Shortcuts?". The Keyboard shortcuts page has its own "Reset All…" for shortcuts with the same confirmation.
-10. **Shortcut list.** One row per command: its name prefixed by its menu ("Align: Left", "Insert: Grid", "View: Grid"), as VS Code prefixes a command with its category, then its shortcut or nothing. A search field filters by name and by key. A press on a row records; the row then shows "Press the new shortcut" ([instructional text](instructional-text.md) item 8). The row menu has Remove Shortcut and, when changed, Reset Shortcut. The per-row Set keys, Clear, and Reset buttons are deleted.
-11. **Shortcut conflicts.** No two default commands share a shortcut: Edit Equation has no default shortcut, and a double-click or double-tap on an equation opens its editor. Recording keys that another command has shows "Ctrl+Shift+E is used by Insert: Equation. It will be removed from there." and Enter assigns it and removes it from the other command only, as GNOME does. The refusal is deleted.
+10. **Shortcut list.** One row per command: its name prefixed by its menu ("Align: Left", "Insert: Grid", "View: Grid"), as VS Code prefixes a command with its category, then its shortcut or nothing. A search field filters by name and by key. A press on a row records; the row then shows "Press the new shortcut" ([instructional text](instructional-text.md) item 8). The row menu has Remove Shortcut and, when changed, Reset Shortcut. The per-row Set keys, Clear, and Reset buttons are deleted. The present build meets this rule.
+11. **Shortcut conflicts.** No two default commands share a shortcut: Edit Equation has no default shortcut, and a double-click or double-tap on an equation opens its editor. Recording keys that another command has shows "Ctrl+Shift+E is used by Insert: Equation. It will be removed from there." and Enter assigns it and removes it from the other command only, as GNOME does. The refusal is deleted. The present build meets this rule.
 
 ## Implementation issues
 
@@ -101,6 +101,5 @@ An issue that names a dependency starts after that audit has its specification.
 | 7 | [#58](https://github.com/dzackgarza/visual-tikz-editor/issues/58) Recognise a shape only when a stroke ends in a hold | #57 |
 | 8 | [#59](https://github.com/dzackgarza/visual-tikz-editor/issues/59) One placement and closing rule for anchored popovers | — |
 | 9 | [#60](https://github.com/dzackgarza/visual-tikz-editor/issues/60) Per-setting reset and one confirmed Reset All Settings | — |
-| 10, 11 | [#61](https://github.com/dzackgarza/visual-tikz-editor/issues/61) Shortcut list: one row per command with its menu, reassign with a warning, no duplicate defaults | #53 |
 | 3 | [#52](https://github.com/dzackgarza/visual-tikz-editor/issues/52) Status line (selection name) | — |
 | 2 | [#43](https://github.com/dzackgarza/visual-tikz-editor/issues/43) Edit and Object menus (Group and Ungroup also in the selection menu) | #24 |

@@ -353,7 +353,7 @@ index af9d6c30..3f00968f 100644
  } as const;
  
 diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
-index bc368718..c6486f9c 100644
+index bc368718..e8589de3 100644
 --- a/packages/app/src/context-menu/canvas-context-menu.ts
 +++ b/packages/app/src/context-menu/canvas-context-menu.ts
 @@ -24,7 +24,7 @@ const REORDER_ITEMS: readonly AppMenuItem[] = [
@@ -383,7 +383,7 @@ index bc368718..c6486f9c 100644
    {
      kind: "command",
      commandId: APP_MENU_COMMAND_IDS.ROTATE_LEFT_90,
-@@ -152,23 +152,18 @@ const PATH_ITEMS: readonly AppMenuItem[] = [
+@@ -152,31 +152,25 @@ const PATH_ITEMS: readonly AppMenuItem[] = [
  const SNAP_ITEMS: readonly AppMenuItem[] = [
    {
      kind: "command",
@@ -413,7 +413,16 @@ index bc368718..c6486f9c 100644
    }
  ];
  
-@@ -393,27 +388,17 @@ function buildSingleSelectionSubmenuItems(includePathSubmenu: boolean): readonly
+ const EDIT_EQUATION_ITEM: AppMenuItem = {
+   kind: "command",
+   commandId: APP_MENU_COMMAND_IDS.EDIT_EQUATION,
+-  label: "Edit Equation...",
+-  accelerator: "CmdOrCtrl+Shift+E"
++  label: "Edit Equation..."
+ };
+ 
+ const TREE_ITEMS: readonly AppMenuItem[] = [
+@@ -393,27 +387,17 @@ function buildSingleSelectionSubmenuItems(includePathSubmenu: boolean): readonly
    return items;
  }
  
@@ -448,7 +457,7 @@ index bc368718..c6486f9c 100644
      ...buildSingleSelectionSubmenuItems(includePathSubmenu)
    ];
  }
-@@ -492,6 +477,7 @@ export function buildCanvasContextMenuDefinition(
+@@ -492,6 +476,7 @@ export function buildCanvasContextMenuDefinition(
      includeEditEquationForSingleNode?: boolean;
      nodePositioningAction?: "position-relative" | "convert-absolute" | null;
      includePathSubmenuForSingleSelection?: boolean;
@@ -456,7 +465,7 @@ index bc368718..c6486f9c 100644
      includeFlattenForeach?: boolean;
      includeMatrixMultiRemoveRow?: boolean;
      includeMatrixMultiRemoveColumn?: boolean;
-@@ -503,13 +489,13 @@ export function buildCanvasContextMenuDefinition(
+@@ -503,13 +488,13 @@ export function buildCanvasContextMenuDefinition(
  ) {
    const includeFlattenForeach = options.includeFlattenForeach === true;
    const includePathSubmenuForSingleSelection = options.includePathSubmenuForSingleSelection === true;
@@ -472,7 +481,7 @@ index bc368718..c6486f9c 100644
    const selectionMultiItems = withMatrixMultiItems(buildMultiSelectionItems(includeFlattenForeach), options);
    const singleMatrixItems = buildSingleSelectionItems(includeFlattenForeach, false);
  
-@@ -534,6 +520,12 @@ export function buildCanvasContextMenuDefinition(
+@@ -534,6 +519,12 @@ export function buildCanvasContextMenuDefinition(
          label: "Paste",
          accelerator: "CmdOrCtrl+V"
        },
@@ -485,7 +494,7 @@ index bc368718..c6486f9c 100644
        { kind: "separator" },
        {
          kind: "command",
-@@ -554,7 +546,7 @@ export function buildCanvasContextMenuDefinition(
+@@ -554,7 +545,7 @@ export function buildCanvasContextMenuDefinition(
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.TOGGLE_GUIDES,
@@ -545,10 +554,10 @@ index 20b8b673..faf832b4 100644
    readCustomText?: (
 diff --git a/packages/app/src/settings/keybindings.ts b/packages/app/src/settings/keybindings.ts
 new file mode 100644
-index 00000000..f15821a0
+index 00000000..38278daa
 --- /dev/null
 +++ b/packages/app/src/settings/keybindings.ts
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,153 @@
 +import { z } from "zod";
 +import { APP_MENU_COMMAND_IDS as ID, APP_MENU_DEFINITION, type AppMenuCommandId, type AppMenuItem } from "../app-menu";
 +
@@ -572,9 +581,10 @@ index 00000000..f15821a0
 +}
 +
 +const commands = new Map<AppMenuCommandId, ShortcutCommand>();
-+function collect(items: readonly AppMenuItem[]): void {
++// A command is named by its innermost menu, as VS Code's Command Palette prefixes a command with its category.
++function collect(items: readonly AppMenuItem[], menu: string): void {
 +  for (const item of items) {
-+    if (item.kind === "submenu") { collect(item.items); continue; }
++    if (item.kind === "submenu") { collect(item.items, item.label); continue; }
 +    if (item.kind !== "command") continue;
 +    const existing = commands.get(item.commandId);
 +    if (existing) {
@@ -583,44 +593,38 @@ index 00000000..f15821a0
 +    }
 +    const embedded = /^(edit|path|tree|matrix|node|insert)\./.test(item.commandId) && item.commandId !== ID.FORMAT_TIKZ || embeddedViewCommands.has(item.commandId);
 +    commands.set(item.commandId, {
-+      id: item.commandId, label: item.label.replace(/\.\.\.$|…$/u, ""),
++      id: item.commandId, label: `${menu}: ${item.label.replace(/\.\.\.$|…$/u, "")}`,
 +      defaults: item.accelerator ? [item.accelerator] : [], embedded
 +    });
 +  }
 +}
-+for (const section of APP_MENU_DEFINITION) collect(section.items);
++for (const section of APP_MENU_DEFINITION) collect(section.items, section.label);
++// Commands outside the menu bar are named by the context menu or dock that offers them.
 +const contextCommands: readonly [AppMenuCommandId, string, readonly string[]][] = [
-+  [ID.SELECT_ALL, "Select All", ["CmdOrCtrl+A"]], [ID.EDIT_EQUATION, "Edit Equation", ["CmdOrCtrl+Shift+E"]],
-+  [ID.ADD_LABEL, "Add Label", []], [ID.ADD_PIN, "Add Pin", []],
-+  [ID.PATH_SIMPLIFY, "Simplify Path", []],
-+  [ID.TREE_ADD_CHILD, "Add Tree Child", []], [ID.TREE_ADD_SIBLING_BEFORE, "Add Tree Sibling Before", []],
-+  [ID.TREE_ADD_SIBLING_AFTER, "Add Tree Sibling After", []],
-+  [ID.MATRIX_ADD_ROW_END, "Add Matrix Row", []], [ID.MATRIX_ADD_COLUMN_END, "Add Matrix Column", []],
-+  [ID.MATRIX_INSERT_ROW_ABOVE, "Insert Matrix Row Above", []], [ID.MATRIX_INSERT_ROW_BELOW, "Insert Matrix Row Below", []],
-+  [ID.MATRIX_INSERT_COLUMN_LEFT, "Insert Matrix Column Left", []], [ID.MATRIX_INSERT_COLUMN_RIGHT, "Insert Matrix Column Right", []],
-+  [ID.MATRIX_REMOVE_ROW, "Remove Matrix Row", []], [ID.MATRIX_REMOVE_COLUMN, "Remove Matrix Column", []],
-+  [ID.MATRIX_TRANSPOSE, "Transpose Matrix", []],
-+  [ID.NODE_POSITION_RELATIVE_TO, "Position Node Relative To", []], [ID.NODE_CONVERT_TO_ABSOLUTE, "Convert Node to Absolute Position", []],
-+  [ID.TOGGLE_GEOMETRY_CONSTRAINT, "Constrain geometry", []],
-+  [ID.TOOL_SELECT, "Select", ["V"]], [ID.TOOL_LASSO, "Lasso", []], [ID.TOOL_ERASER, "Eraser", []],
-+  [ID.TOOL_MAGNIFY, "Magnify", ["M"]], [ID.TOOL_BUCKET, "Bucket", []],
-+  [ID.INSERT_ARC, "Arc", []], [ID.INSERT_POINT, "Point", []], [ID.INSERT_IMAGE, "Image", []]
++  [ID.SELECT_ALL, "Edit: Select All", ["CmdOrCtrl+A"]], [ID.EDIT_EQUATION, "Node: Edit Equation", []],
++  [ID.ADD_LABEL, "Node: Add Label", []], [ID.ADD_PIN, "Node: Add Pin", []],
++  [ID.PATH_SIMPLIFY, "Path: Simplify Path", []],
++  [ID.TREE_ADD_CHILD, "Tree: Add Child", []], [ID.TREE_ADD_SIBLING_BEFORE, "Tree: Add Sibling Before", []],
++  [ID.TREE_ADD_SIBLING_AFTER, "Tree: Add Sibling After", []],
++  [ID.MATRIX_ADD_ROW_END, "Matrix: Add Row", []], [ID.MATRIX_ADD_COLUMN_END, "Matrix: Add Column", []],
++  [ID.MATRIX_INSERT_ROW_ABOVE, "Matrix: Insert Row Above", []], [ID.MATRIX_INSERT_ROW_BELOW, "Matrix: Insert Row Below", []],
++  [ID.MATRIX_INSERT_COLUMN_LEFT, "Matrix: Insert Column Left", []], [ID.MATRIX_INSERT_COLUMN_RIGHT, "Matrix: Insert Column Right", []],
++  [ID.MATRIX_REMOVE_ROW, "Matrix: Remove Row", []], [ID.MATRIX_REMOVE_COLUMN, "Matrix: Remove Column", []],
++  [ID.MATRIX_TRANSPOSE, "Matrix: Transpose", []],
++  [ID.NODE_POSITION_RELATIVE_TO, "Node: Position Relative To", []], [ID.NODE_CONVERT_TO_ABSOLUTE, "Node: Convert to Absolute Position", []],
++  [ID.TOGGLE_GEOMETRY_CONSTRAINT, "Tool: Constrain Geometry", []],
++  [ID.TOOL_SELECT, "Tool: Select", ["V"]], [ID.TOOL_LASSO, "Tool: Lasso", []], [ID.TOOL_ERASER, "Tool: Eraser", []],
++  [ID.TOOL_MAGNIFY, "Tool: Magnify", ["M"]], [ID.TOOL_BUCKET, "Tool: Bucket", []],
++  [ID.INSERT_ARC, "Insert: Arc", []], [ID.INSERT_POINT, "Insert: Point", []], [ID.INSERT_IMAGE, "Insert: Image", []]
 +];
 +for (const [id, label, defaults] of contextCommands) commands.set(id, { id, label, defaults: [...defaults], embedded: id !== ID.TOOL_MAGNIFY });
-+commands.set(ID.CLEAR_RECENT_FILES, { id: ID.CLEAR_RECENT_FILES, label: "Clear Recent Files", defaults: [], embedded: false });
-+// Context commands without a menu accelerator keep the same common defaults.
-+for (const [id, shortcuts] of [[ID.SELECT_ALL, ["CmdOrCtrl+A"]], [ID.FIT_TO_CONTENT, ["CmdOrCtrl+0"]],
-+  [ID.OPEN_DOCUMENT, ["CmdOrCtrl+O"]], [ID.ZOOM_IN, ["CmdOrCtrl+=", "CmdOrCtrl+Shift+="]], [ID.DELETE, ["Delete", "Backspace"]],
-+  [ID.EDIT_EQUATION, ["CmdOrCtrl+Shift+E"]]] as const) {
++commands.set(ID.CLEAR_RECENT_FILES, { id: ID.CLEAR_RECENT_FILES, label: "File: Clear Recent Files", defaults: [], embedded: false });
++// Commands whose menu item names no accelerator keep the same common defaults.
++for (const [id, shortcuts] of [[ID.FIT_TO_CONTENT, ["CmdOrCtrl+0"]],
++  [ID.OPEN_DOCUMENT, ["CmdOrCtrl+O"]], [ID.ZOOM_IN, ["CmdOrCtrl+=", "CmdOrCtrl+Shift+="]], [ID.DELETE, ["Delete", "Backspace"]]] as const) {
 +  const command = commands.get(id);
 +  if (command) command.defaults = [...shortcuts];
 +}
-+const layers = commands.get(ID.TOGGLE_OBJECTS_PANEL);
-+if (layers) layers.label = "Layers";
-+const properties = commands.get(ID.TOGGLE_INSPECTOR_PANEL);
-+if (properties) properties.label = "Properties";
-+const curve = commands.get(ID.INSERT_BEZIER);
-+if (curve) curve.label = "Curve";
 +
 +export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [...commands.values()];
 +const overrideSchema = z.record(z.string(), z.array(z.string().min(1)));
@@ -663,24 +667,49 @@ index 00000000..f15821a0
 +  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
 +  return shortcut.replace("CmdOrCtrl", mac ? "Cmd" : "Ctrl");
 +}
-+export function shortcutConflict(id: AppMenuCommandId, shortcut: string, overrides: ShortcutOverrides, embedded: boolean): ShortcutCommand | undefined {
++/** The key presses a shortcut names: CmdOrCtrl stands for Ctrl and for Cmd. */
++function shortcutEvents(shortcut: string): ShortcutEvent[] {
 +  const parts = shortcutParts(shortcut);
-+  if (!parts) return undefined;
++  if (!parts) return [];
 +  const controlKeys = parts.modifiers.has("CmdOrCtrl")
 +    ? [{ ctrlKey: true, metaKey: false }, { ctrlKey: false, metaKey: true }]
 +    : [{ ctrlKey: parts.modifiers.has("Ctrl"), metaKey: parts.modifiers.has("Meta") }];
-+  const events = controlKeys.map(keys => ({ key: parts.key, ...keys,
++  return controlKeys.map(keys => ({ key: parts.key, ...keys,
 +    altKey: parts.modifiers.has("Alt"), shiftKey: parts.modifiers.has("Shift") }));
-+  return SHORTCUT_COMMANDS.find(command => {
-+    if (command.id === id || !isShortcutCommandInScope(command, embedded)) return false;
-+    return events.some(event => {
-+      if (!matchesCommand(command.id, event, overrides)) return false;
-+      // Edit and Insert Equation intentionally share their shipped contextual shortcut.
-+      const sharedDefault = commands.get(id)?.defaults.some(binding => matchesShortcut(binding, event)) &&
-+        overrides[command.id] === undefined && command.defaults.some(binding => matchesShortcut(binding, event));
-+      return !sharedDefault;
-+    });
-+  });
++}
++export function sameShortcut(first: string, second: string): boolean {
++  return shortcutEvents(first).some(event => matchesShortcut(second, event));
++}
++/** The other command in scope that `shortcut` runs now. */
++export function shortcutConflict(id: AppMenuCommandId, shortcut: string, overrides: ShortcutOverrides, embedded: boolean): ShortcutCommand | undefined {
++  return SHORTCUT_COMMANDS.find(command => command.id !== id && isShortcutCommandInScope(command, embedded) &&
++    shortcutsFor(command.id, overrides).some(binding => sameShortcut(binding, shortcut)));
++}
++function withShortcuts(overrides: ShortcutOverrides, id: AppMenuCommandId, shortcuts: readonly string[]): ShortcutOverrides {
++  const defaults = commands.get(id)?.defaults ?? [];
++  const next = { ...overrides };
++  if (shortcuts.length === defaults.length && shortcuts.every((shortcut, index) => sameShortcut(shortcut, defaults[index]))) delete next[id];
++  else next[id] = [...shortcuts];
++  return next;
++}
++/**
++ * Gives `id` the shortcuts (its defaults when undefined) and removes each of them from
++ * the other command that has it, as GNOME Settings moves a key combination
++ * (cc-keyboard-manager.c, cc_keyboard_manager_reset_shortcut).
++ */
++export function assignShortcuts(id: AppMenuCommandId, shortcuts: readonly string[] | undefined, overrides: ShortcutOverrides, embedded: boolean): ShortcutOverrides {
++  const assigned = shortcuts ?? commands.get(id)?.defaults ?? [];
++  let next = overrides;
++  for (const shortcut of assigned) {
++    const other = shortcutConflict(id, shortcut, next, embedded);
++    if (other) next = withShortcuts(next, other.id, shortcutsFor(other.id, next).filter(binding => !sameShortcut(binding, shortcut)));
++  }
++  return withShortcuts(next, id, assigned);
++}
++/** The shortcut a menu item shows: the first one its command has now. */
++export function menuShortcutLabel(id: AppMenuCommandId, overrides: ShortcutOverrides): string {
++  const [shortcut] = shortcutsFor(id, overrides);
++  return shortcut ? shortcutLabel(shortcut) : "";
 +}
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
 index 4850a87e..010ec0dc 100644
@@ -906,11 +935,11 @@ index af0a7abe..c24e9856 100644
 +  return collection.colors;
 +}
 diff --git a/packages/app/src/settings/useSettingsStore.ts b/packages/app/src/settings/useSettingsStore.ts
-index 6d5ddef2..05c7ef8b 100644
+index 6d5ddef2..5a528038 100644
 --- a/packages/app/src/settings/useSettingsStore.ts
 +++ b/packages/app/src/settings/useSettingsStore.ts
-@@ -1,88 +1,121 @@
-+import type { AppMenuCommandId } from "../app-menu";
+@@ -1,88 +1,118 @@
++import type { ShortcutOverrides } from "./keybindings";
  import { create } from "zustand";
  import type { AppSettings } from "./types";
 -import { DEFAULT_SETTINGS } from "./types";
@@ -919,7 +948,7 @@ index 6d5ddef2..05c7ef8b 100644
  
  type SettingsStore = {
    settings: AppSettings;
-+  setCommandShortcuts: (id: AppMenuCommandId, shortcuts: string[] | undefined) => void;
++  setKeybindings: (keybindings: ShortcutOverrides) => void;
 +  resetKeybindings: () => void;
    updateGeneralSettings: (patch: Partial<AppSettings["general"]>) => void;
    updateEditorSettings: (patch: Partial<AppSettings["editor"]>) => void;
@@ -950,15 +979,12 @@ index 6d5ddef2..05c7ef8b 100644
  export const useSettingsStore = create<SettingsStore>((set) => ({
    settings: loadSettings(),
 -  updateGeneralSettings: (patch) => {
-+  setCommandShortcuts: (id, shortcuts) => {
++  setKeybindings: (keybindings) => {
      set((state) => {
 -      const next: AppSettings = {
 -        ...state.settings,
 -        general: { ...state.settings.general, ...patch }
 -      };
-+      const keybindings = { ...state.settings.keybindings };
-+      if (shortcuts === undefined) delete keybindings[id];
-+      else keybindings[id] = shortcuts;
 +      const next = { ...state.settings, keybindings };
        saveSettings(next);
        return { settings: next };
@@ -1063,7 +1089,7 @@ index 6d5ddef2..05c7ef8b 100644
        };
        saveSettings(next);
        return { settings: next };
-@@ -99,3 +132,18 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
+@@ -99,3 +129,18 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
      });
    }
  }));
@@ -1823,7 +1849,7 @@ index 758bd611..9b38e672 100644
      selectedAddShape: state.selectedAddShape,
      selectedAddMatrixRows: state.selectedAddMatrixRows,
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..62f7e909 100644
+index 5818d92b..8b93ab5f 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
 @@ -12,7 +12,8 @@ import { computeSnapshot, makeEmptySnapshot, setMathJaxFont, type ComputeRequest
@@ -1937,7 +1963,7 @@ index 5818d92b..62f7e909 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1648,216 +1651,49 @@ export function App() {
+@@ -1648,216 +1651,48 @@ export function App() {
        }
  
        const runtime = commandRuntimeRef.current;
@@ -2158,10 +2184,9 @@ index 5818d92b..62f7e909 100644
 -      if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && key === "z") || (!e.shiftKey && key === "y"))) {
 -        runtime.runCommand(APP_MENU_COMMAND_IDS.REDO, "shortcut");
 -        e.preventDefault();
-+      // Equation editing takes precedence over insertion when both have their shipped binding.
-+      const candidates = [APP_MENU_COMMAND_IDS.EDIT_EQUATION, ...SHORTCUT_COMMANDS
++      const candidates = SHORTCUT_COMMANDS
 +        .filter(command => isShortcutCommandInScope(command, platform.id === "zettlr-embed"))
-+        .map(command => command.id)];
++        .map(command => command.id);
 +      let matchedCommand = false;
 +      for (const id of candidates) {
 +        if (!matchesCommand(id, e, overrides)) continue;
@@ -2186,7 +2211,7 @@ index 5818d92b..62f7e909 100644
      }
  
      window.addEventListener("keydown", onKeyDown);
-@@ -1872,7 +1708,6 @@ export function App() {
+@@ -1872,7 +1707,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -2194,7 +2219,7 @@ index 5818d92b..62f7e909 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1726,6 @@ export function App() {
+@@ -1891,7 +1725,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -2202,7 +2227,7 @@ index 5818d92b..62f7e909 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +1864,17 @@ export function App() {
+@@ -2030,13 +1863,17 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -2221,7 +2246,7 @@ index 5818d92b..62f7e909 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,22 +1887,23 @@ export function App() {
+@@ -2049,22 +1886,23 @@ export function App() {
              : null
          }
        />
@@ -2249,7 +2274,7 @@ index 5818d92b..62f7e909 100644
        </Suspense>
        {showOpenExampleModal ? (
          <Suspense fallback={null}>
-@@ -2102,6 +1941,7 @@ export function App() {
+@@ -2102,6 +1940,7 @@ export function App() {
            <SettingsModal onClose={() => { setShowSettingsModal(false); }} />
          </Suspense>
        ) : null}
@@ -2257,7 +2282,7 @@ index 5818d92b..62f7e909 100644
        {equationModalState ? (
          <Suspense fallback={null}>
            <EquationModal
-@@ -2150,12 +1990,11 @@ export function App() {
+@@ -2150,12 +1989,11 @@ export function App() {
            <RepeatModal
              columns={repeatModalState.columns}
              rows={repeatModalState.rows}
@@ -2275,7 +2300,7 @@ index 5818d92b..62f7e909 100644
              onColumnsChange={(columns) => {
                setRepeatModalState((current) => current == null ? current : {
                  ...current,
-@@ -2168,17 +2007,11 @@ export function App() {
+@@ -2168,17 +2006,11 @@ export function App() {
                  rows: clampRepeatCount(rows)
                });
              }}
@@ -2297,7 +2322,7 @@ index 5818d92b..62f7e909 100644
              }}
              onClose={() => {
                setRepeatModalState(null);
-@@ -2345,13 +2178,6 @@ function clampRepeatCount(value: number): number {
+@@ -2345,13 +2177,6 @@ function clampRepeatCount(value: number): number {
    return Math.max(1, Math.floor(value));
  }
  
@@ -2311,6 +2336,60 @@ index 5818d92b..62f7e909 100644
  async function blobToBase64(blob: Blob): Promise<string> {
    const arrayBuffer = await blob.arrayBuffer();
    const bytes = new Uint8Array(arrayBuffer);
+diff --git a/packages/app/src/ui/AppMenuBar.tsx b/packages/app/src/ui/AppMenuBar.tsx
+index 746d7c3b..3d08b995 100644
+--- a/packages/app/src/ui/AppMenuBar.tsx
++++ b/packages/app/src/ui/AppMenuBar.tsx
+@@ -2,30 +2,12 @@ import { useEffect, useRef, useState } from "react";
+ import type { AppMenuDefinition, AppMenuItem } from "../app-menu";
+ import type { CommandBindings } from "./editor-command-runtime";
+ import { useWorkspaceListStore } from "../store/workspace-list-store";
++import { menuShortcutLabel } from "../settings/keybindings";
++import { useSettingsStore } from "../settings/useSettingsStore";
+ import { BUILT_IN_WORKSPACES } from "./DockLayout";
+ import { applyWorkspace, findActiveWorkspaceId } from "./workspace-apply";
+ import css from "./AppMenuBar.module.css";
+ 
+-const IS_MAC_PLATFORM =
+-  typeof navigator !== "undefined" &&
+-  /(mac|iphone|ipad)/i.test(navigator.platform);
+-
+-function formatAccelerator(accelerator: string | undefined): string {
+-  if (!accelerator) {
+-    return "";
+-  }
+-
+-  return accelerator
+-    .split("+")
+-    .map((part) => {
+-      if (part === "CmdOrCtrl") {
+-        return IS_MAC_PLATFORM ? "Cmd" : "Ctrl";
+-      }
+-      return part;
+-    })
+-    .join(IS_MAC_PLATFORM ? " " : "+");
+-}
+-
+ function MenuPopup({
+   items,
+   path,
+@@ -39,6 +21,7 @@ function MenuPopup({
+   bindings: CommandBindings;
+   onCommandRun: () => void;
+ }) {
++  const keybindings = useSettingsStore((state) => state.settings.keybindings);
+   const userWorkspaces = useWorkspaceListStore((s) => s.userWorkspaces);
+   const activeWorkspaceId = findActiveWorkspaceId();
+   const hasWorkspaceList = items.some((item) => item.kind === "workspace-list");
+@@ -150,7 +133,7 @@ function MenuPopup({
+           >
+             {hasCheckItems ? <span className={css.check}>{binding.checked ? "✓" : ""}</span> : null}
+             <span className={css.label}>{item.label}</span>
+-            <span className={css.shortcut}>{formatAccelerator(item.accelerator)}</span>
++            <span className={css.shortcut}>{menuShortcutLabel(item.commandId, keybindings)}</span>
+           </button>
+         );
+       })}
 diff --git a/packages/app/src/ui/CanvasContextMenu.module.css b/packages/app/src/ui/CanvasContextMenu.module.css
 index 558a0a1b..edefd456 100644
 --- a/packages/app/src/ui/CanvasContextMenu.module.css
@@ -2336,22 +2415,30 @@ index 558a0a1b..edefd456 100644
 +  .submenu:focus-within > .submenuExpanded { display: block; }
 +}
 diff --git a/packages/app/src/ui/CanvasContextMenu.tsx b/packages/app/src/ui/CanvasContextMenu.tsx
-index 0e491d69..bc7250a0 100644
+index 0e491d69..4217e724 100644
 --- a/packages/app/src/ui/CanvasContextMenu.tsx
 +++ b/packages/app/src/ui/CanvasContextMenu.tsx
-@@ -17,6 +17,7 @@ const IS_MAC_PLATFORM =
+@@ -8,34 +8,30 @@ import {
+ import type { AppMenuCommandId, AppMenuItem } from "../app-menu";
+ import type { CommandOrigin, CommandBindings } from "./editor-command-runtime";
+ import { clampContextMenuAnchor, type ContextMenuAnchor } from "./canvas-panel/context-menu-target";
++import { menuShortcutLabel } from "../settings/keybindings";
++import { useSettingsStore } from "../settings/useSettingsStore";
+ import css from "./CanvasContextMenu.module.css";
+ 
+-const IS_MAC_PLATFORM =
+-  typeof navigator !== "undefined" &&
+-  /(mac|iphone|ipad)/i.test(navigator.platform);
+-
  type ContextMenuInheritedStyle = CSSProperties & {
    "--app-ui-font-size"?: string;
    "--app-ui-scale"?: string;
 +  "--context-menu-max-height"?: string;
  };
  
- function formatAccelerator(accelerator: string | undefined): string {
-@@ -35,7 +36,20 @@ function formatAccelerator(accelerator: string | undefined): string {
-     .join(IS_MAC_PLATFORM ? " " : "+");
- }
- 
--function ContextMenuPopup({
+-function formatAccelerator(accelerator: string | undefined): string {
+-  if (!accelerator) {
+-    return "";
 +export function applicableContextItems(items: readonly AppMenuItem[], bindings: CommandBindings): AppMenuItem[] {
 +  const result: AppMenuItem[] = [];
 +  for (const item of items) {
@@ -2360,20 +2447,32 @@ index 0e491d69..bc7250a0 100644
 +      const children = applicableContextItems(item.items, bindings);
 +      if (children.length > 0) result.push({ ...item, items: children });
 +    } else if (item.kind === "separator" && result.length > 0 && result[result.length - 1].kind !== "separator") result.push(item);
-+  }
+   }
+-
+-  return accelerator
+-    .split("+")
+-    .map((part) => {
+-      if (part === "CmdOrCtrl") {
+-        return IS_MAC_PLATFORM ? "Cmd" : "Ctrl";
+-      }
+-      return part;
+-    })
+-    .join(IS_MAC_PLATFORM ? " " : "+");
 +  if (result[result.length - 1]?.kind === "separator") result.pop();
 +  return result;
-+}
-+
+ }
+ 
+-function ContextMenuPopup({
 +export function ContextMenuPopup({
    items,
    path,
    bindings,
-@@ -48,13 +62,15 @@ function ContextMenuPopup({
+@@ -48,13 +44,16 @@ function ContextMenuPopup({
    origin: CommandOrigin;
    onCommandRun: (commandId: AppMenuCommandId, origin: CommandOrigin) => void;
  }) {
 -  const hasCheckItems = items.some(
++  const keybindings = useSettingsStore((state) => state.settings.keybindings);
 +  const [expandedSubmenu, setExpandedSubmenu] = useState<string | null>(null);
 +  const visibleItems = applicableContextItems(items, bindings);
 +  const hasCheckItems = visibleItems.some(
@@ -2387,7 +2486,7 @@ index 0e491d69..bc7250a0 100644
          const itemKey = `${path}-${index}`;
          if (item.kind === "separator") {
            return <div key={`${itemKey}-separator`} className={css.separator} role="separator" />;
-@@ -63,19 +79,22 @@ function ContextMenuPopup({
+@@ -63,19 +62,22 @@ function ContextMenuPopup({
          if (item.kind === "submenu") {
            return (
              <div key={`${itemKey}-submenu`} className={css.submenu}>
@@ -2413,7 +2512,7 @@ index 0e491d69..bc7250a0 100644
                  <ContextMenuPopup
                    items={item.items}
                    path={`${itemKey}-submenu`}
-@@ -99,7 +118,6 @@ function ContextMenuPopup({
+@@ -99,7 +101,6 @@ function ContextMenuPopup({
              type="button"
              role={role}
              aria-checked={binding.checked}
@@ -2421,7 +2520,16 @@ index 0e491d69..bc7250a0 100644
              className={[css.item, hasCheckItems ? "" : css.itemNoCheck].filter(Boolean).join(" ")}
              data-testid={`canvas-context-cmd-${item.commandId}`}
              onClick={() => {
-@@ -144,15 +162,6 @@ export function CanvasContextMenu({
+@@ -111,7 +112,7 @@ function ContextMenuPopup({
+           >
+             {hasCheckItems ? <span className={css.check}>{binding.checked ? "✓" : ""}</span> : null}
+             <span className={css.label}>{item.label}</span>
+-            <span className={css.shortcut}>{formatAccelerator(item.accelerator)}</span>
++            <span className={css.shortcut}>{menuShortcutLabel(item.commandId, keybindings)}</span>
+           </button>
+         );
+       })}
+@@ -144,15 +145,6 @@ export function CanvasContextMenu({
    const [position, setPosition] = useState<ContextMenuAnchor>(anchor);
    const [inheritedStyle, setInheritedStyle] = useState<ContextMenuInheritedStyle>({});
  
@@ -2437,7 +2545,7 @@ index 0e491d69..bc7250a0 100644
    useLayoutEffect(() => {
      if (!open) {
        return;
-@@ -164,23 +173,24 @@ export function CanvasContextMenu({
+@@ -164,23 +156,24 @@ export function CanvasContextMenu({
        return;
      }
  
@@ -2479,7 +2587,7 @@ index 0e491d69..bc7250a0 100644
  
      const computedStyle = getComputedStyle(container);
      const nextInheritedStyle: ContextMenuInheritedStyle = {
-@@ -193,7 +203,11 @@ export function CanvasContextMenu({
+@@ -193,7 +186,11 @@ export function CanvasContextMenu({
          ? current
          : nextInheritedStyle
      );
@@ -2492,7 +2600,7 @@ index 0e491d69..bc7250a0 100644
  
    useEffect(() => {
      if (!open) {
-@@ -242,15 +256,20 @@ export function CanvasContextMenu({
+@@ -242,15 +239,20 @@ export function CanvasContextMenu({
          y: containerRect.top + position.y
        }
      : position;
@@ -4560,79 +4668,195 @@ index 00000000..6fbb3f26
 +}
 diff --git a/packages/app/src/ui/KeyboardShortcutsSettings.tsx b/packages/app/src/ui/KeyboardShortcutsSettings.tsx
 new file mode 100644
-index 00000000..c10642fb
+index 00000000..f261b64b
 --- /dev/null
 +++ b/packages/app/src/ui/KeyboardShortcutsSettings.tsx
-@@ -0,0 +1,71 @@
-+import { useEffect, useState } from "react";
+@@ -0,0 +1,187 @@
++import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 +import type { AppMenuCommandId } from "../app-menu";
 +import { getActiveEditorPlatform } from "../platform/current";
-+import { SHORTCUT_COMMANDS, recordShortcut, shortcutConflict, shortcutLabel, shortcutsFor } from "../settings/keybindings";
++import {
++  SHORTCUT_COMMANDS, assignShortcuts, isShortcutCommandInScope, recordShortcut, sameShortcut, shortcutConflict,
++  shortcutLabel, shortcutsFor, type ShortcutCommand
++} from "../settings/keybindings";
 +import { useSettingsStore } from "../settings/useSettingsStore";
++import { clampContextMenuAnchor, type ContextMenuAnchor } from "./canvas-panel/context-menu-target";
++import menuCss from "./CanvasContextMenu.module.css";
 +import css from "./SettingsModal.module.css";
 +
++// The canvas opens its context menu after the same hold (CanvasPanel).
++const LONG_PRESS_MS = 550;
++
++type PendingMove = { shortcut: string; from: ShortcutCommand };
++type RowMenu = { id: AppMenuCommandId; anchor: ContextMenuAnchor };
++
++/**
++ * The shortcut list follows VS Code's keybindings editor: one row per command, a
++ * press on the row records, the row menu removes or resets, and the search field
++ * finds a command by name or, with Record keys on, by the keys pressed.
++ */
 +export function KeyboardShortcutsSettings() {
 +  const overrides = useSettingsStore(state => state.settings.keybindings);
-+  const setCommandShortcuts = useSettingsStore(state => state.setCommandShortcuts);
++  const setKeybindings = useSettingsStore(state => state.setKeybindings);
 +  const resetKeybindings = useSettingsStore(state => state.resetKeybindings);
 +  const [query, setQuery] = useState("");
++  const [searchKeys, setSearchKeys] = useState<string | null>(null);
++  const [recordingSearch, setRecordingSearch] = useState(false);
 +  const [recording, setRecording] = useState<AppMenuCommandId | null>(null);
-+  const [error, setError] = useState<string | null>(null);
++  const [pending, setPending] = useState<PendingMove | null>(null);
++  const [menu, setMenu] = useState<RowMenu | null>(null);
++  const searchRef = useRef<HTMLInputElement | null>(null);
++  const holdRef = useRef<{ timer: number; opened: boolean } | null>(null);
 +  const embedded = getActiveEditorPlatform().id === "zettlr-embed";
++  const assign = (id: AppMenuCommandId, shortcuts: readonly string[] | undefined) =>
++    setKeybindings(assignShortcuts(id, shortcuts, overrides, embedded));
++  const stopRecording = () => { setRecording(null); setPending(null); };
++
 +  useEffect(() => {
 +    if (!recording) return;
 +    const onKeyDown = (event: KeyboardEvent) => {
 +      event.preventDefault();
 +      event.stopImmediatePropagation();
-+      if (event.key === "Escape") { setRecording(null); setError(null); return; }
-+      const shortcut = recordShortcut(event);
-+      if (!shortcut) return;
-+      const conflict = shortcutConflict(recording, shortcut, overrides, embedded);
-+      if (conflict) {
-+        setError(embedded && !conflict.embedded
-+          ? `${shortcutLabel(shortcut)} is reserved for ${conflict.label}. Choose different keys.`
-+          : `${shortcutLabel(shortcut)} is already assigned to ${conflict.label}. Clear or change that shortcut first.`);
++      if (event.key === "Escape") { stopRecording(); return; }
++      if (event.key === "Enter" && pending) {
++        assign(recording, [pending.shortcut]);
++        stopRecording();
 +        return;
 +      }
-+      setCommandShortcuts(recording, [shortcut]);
-+      setRecording(null);
-+      setError(null);
++      const shortcut = recordShortcut(event);
++      if (!shortcut) return;
++      const from = shortcutConflict(recording, shortcut, overrides, embedded);
++      if (from) { setPending({ shortcut, from }); return; }
++      assign(recording, [shortcut]);
++      stopRecording();
 +    };
 +    window.addEventListener("keydown", onKeyDown, true);
 +    return () => window.removeEventListener("keydown", onKeyDown, true);
-+  }, [embedded, overrides, recording, setCommandShortcuts]);
-+  const commands = SHORTCUT_COMMANDS.filter(command => (!embedded || command.embedded) && command.label.toLowerCase().includes(query.toLowerCase()));
++  });
++
++  useEffect(() => {
++    if (!recordingSearch) return;
++    const onKeyDown = (event: KeyboardEvent) => {
++      event.preventDefault();
++      event.stopImmediatePropagation();
++      if (event.key === "Escape") { setRecordingSearch(false); return; }
++      const shortcut = recordShortcut(event);
++      if (!shortcut) return;
++      setSearchKeys(shortcut);
++      setQuery(shortcutLabel(shortcut));
++    };
++    window.addEventListener("keydown", onKeyDown, true);
++    return () => window.removeEventListener("keydown", onKeyDown, true);
++  }, [recordingSearch]);
++
++  const name = query.trim().toLowerCase();
++  const commands = SHORTCUT_COMMANDS.filter(command => {
++    if (!isShortcutCommandInScope(command, embedded)) return false;
++    const shortcuts = shortcutsFor(command.id, overrides);
++    if (searchKeys) return shortcuts.some(shortcut => sameShortcut(shortcut, searchKeys));
++    return command.label.toLowerCase().includes(name) ||
++      shortcuts.some(shortcut => shortcutLabel(shortcut).toLowerCase().includes(name));
++  });
++  const keysShown = (command: ShortcutCommand): string[] => {
++    if (recording !== command.id) return shortcutsFor(command.id, overrides).map(shortcutLabel);
++    return [pending ? shortcutLabel(pending.shortcut) : "Press the new shortcut"];
++  };
++  const openMenu = (id: AppMenuCommandId, anchor: ContextMenuAnchor) => { stopRecording(); setMenu({ id, anchor }); };
++  const startHold = (event: ReactPointerEvent<HTMLButtonElement>, id: AppMenuCommandId) => {
++    holdRef.current = null;
++    if (event.pointerType === "mouse") return;
++    const anchor = { x: event.clientX, y: event.clientY };
++    const hold = { opened: false, timer: window.setTimeout(() => { hold.opened = true; openMenu(id, anchor); }, LONG_PRESS_MS) };
++    holdRef.current = hold;
++  };
++  const endHold = () => { if (holdRef.current) window.clearTimeout(holdRef.current.timer); };
++
 +  return <div className={css.panel}>
 +    <div className={css.panelTitle}>Keyboard shortcuts</div>
 +    <label htmlFor="shortcut-search">Find command</label>
-+    <input id="shortcut-search" type="search" value={query} onChange={event => setQuery(event.currentTarget.value)} />
-+    {error ? <div role="alert">{error}</div> : null}
-+    {commands.map(command => <div key={command.id} role="group" aria-label={`${command.label} shortcut`} className={css.shortcutRow}>
-+      <strong>{command.label}</strong>
-+      {/* VS Code prompts for the keys only while recording (keybindingWidgets.ts). */}
-+      <span>{recording === command.id ? "Press the new shortcut" : shortcutsFor(command.id, overrides).map(shortcutLabel).join(" or ") || "Unassigned"}</span>
-+      <div className={css.shortcutActions}>
-+        <button type="button" aria-label={`Set shortcut for ${command.label}`} aria-pressed={recording === command.id}
-+          onClick={() => { setError(null); setRecording(command.id); }}>Set keys</button>
-+        <button type="button" aria-label={`Clear shortcut for ${command.label}`} disabled={shortcutsFor(command.id, overrides).length === 0}
-+          onClick={() => { setRecording(null); setError(null); setCommandShortcuts(command.id, []); }}>Clear</button>
-+        <button type="button" aria-label={`Reset shortcut for ${command.label}`} disabled={overrides[command.id] === undefined}
++    <div className={css.shortcutSearch}>
++      <input id="shortcut-search" ref={searchRef} type="search" value={query}
++        onChange={event => { setSearchKeys(null); setQuery(event.currentTarget.value); }} />
++      <button type="button" aria-pressed={recordingSearch} onClick={() => {
++        setRecordingSearch(!recordingSearch);
++        searchRef.current?.focus();
++      }}>Record keys</button>
++    </div>
++    {pending ? <div role="alert">
++      {`${shortcutLabel(pending.shortcut)} is used by ${pending.from.label}. It will be removed from there.`}
++    </div> : null}
++    <ul aria-label="Commands" className={css.shortcutList}>
++      {commands.map(command => <li key={command.id}>
++        <button type="button" className={css.shortcutRow} aria-pressed={recording === command.id}
 +          onClick={() => {
-+            const conflict = command.defaults.map(shortcut => shortcutConflict(command.id, shortcut, overrides, embedded)).find(entry => entry !== undefined);
-+            if (conflict) {
-+              setError(embedded && !conflict.embedded
-+                ? `The default shortcut is reserved for ${conflict.label}. Choose different keys.`
-+                : `The default shortcut is assigned to ${conflict.label}. Clear or change that shortcut first.`);
-+              return;
-+            }
-+            setRecording(null); setError(null); setCommandShortcuts(command.id, undefined);
-+          }}>Reset</button>
-+      </div>
-+    </div>)}
++            if (holdRef.current?.opened) { holdRef.current = null; return; }
++            setPending(null);
++            setRecording(command.id);
++          }}
++          onContextMenu={event => { event.preventDefault(); endHold(); openMenu(command.id, { x: event.clientX, y: event.clientY }); }}
++          onPointerDown={event => startHold(event, command.id)}
++          onPointerUp={endHold} onPointerCancel={endHold} onPointerLeave={endHold}>
++          <span>{command.label}</span>
++          <span className={css.shortcutKeys}>{keysShown(command).map(keys => <kbd key={keys}>{keys}</kbd>)}</span>
++        </button>
++      </li>)}
++    </ul>
 +    {commands.length === 0 ? <p>No matching commands.</p> : null}
++    {menu ? <ShortcutRowMenu anchor={menu.anchor}
++      canRemove={shortcutsFor(menu.id, overrides).length > 0}
++      changed={overrides[menu.id] !== undefined}
++      onRemove={() => assign(menu.id, [])}
++      onReset={() => assign(menu.id, undefined)}
++      onClose={() => setMenu(null)} /> : null}
 +    <div className={css.resetRow}><button type="button" className={css.resetButton} onClick={() => {
-+      setRecording(null); setError(null); resetKeybindings();
++      stopRecording(); resetKeybindings();
 +    }}>Reset all shortcuts</button></div>
++  </div>;
++}
++
++function ShortcutRowMenu({ anchor, canRemove, changed, onRemove, onReset, onClose }: {
++  anchor: ContextMenuAnchor;
++  canRemove: boolean;
++  changed: boolean;
++  onRemove: () => void;
++  onReset: () => void;
++  onClose: () => void;
++}) {
++  const rootRef = useRef<HTMLDivElement | null>(null);
++  const [position, setPosition] = useState(anchor);
++  useLayoutEffect(() => {
++    const root = rootRef.current;
++    if (!root) return;
++    setPosition(clampContextMenuAnchor(anchor, { width: root.offsetWidth, height: root.offsetHeight },
++      { width: window.innerWidth, height: window.innerHeight }));
++  }, [anchor]);
++  useEffect(() => {
++    const onPointerDown = (event: PointerEvent) => {
++      if (!rootRef.current?.contains(event.target as Node)) onClose();
++    };
++    const onKeyDown = (event: KeyboardEvent) => {
++      if (event.key !== "Escape") return;
++      // Escape closes the menu, not the Settings dialog around it.
++      event.preventDefault();
++      event.stopImmediatePropagation();
++      onClose();
++    };
++    window.addEventListener("pointerdown", onPointerDown, true);
++    window.addEventListener("keydown", onKeyDown, true);
++    return () => {
++      window.removeEventListener("pointerdown", onPointerDown, true);
++      window.removeEventListener("keydown", onKeyDown, true);
++    };
++  }, [onClose]);
++  const item = (label: string, run: () => void, disabled = false) =>
++    <button type="button" role="menuitem" className={`${menuCss.item} ${menuCss.itemNoCheck}`} disabled={disabled}
++      onClick={() => { run(); onClose(); }}><span className={menuCss.label}>{label}</span></button>;
++  // Inside the modal dialog: content outside it is inert.
++  return <div ref={rootRef} className={menuCss.root} style={{ left: position.x, top: position.y }}>
++    <div className={menuCss.menu} role="menu">
++      {item("Remove Shortcut", onRemove, !canRemove)}
++      {changed ? item("Reset Shortcut", onReset) : null}
++    </div>
 +  </div>;
 +}
 diff --git a/packages/app/src/ui/RepeatModal.tsx b/packages/app/src/ui/RepeatModal.tsx
@@ -4762,7 +4986,7 @@ index c1ad662b..6badc2f7 100644
  
  function formatUiNumber(value: number): string {
 diff --git a/packages/app/src/ui/SettingsModal.module.css b/packages/app/src/ui/SettingsModal.module.css
-index dd056fad..f27bc8dc 100644
+index dd056fad..f8d4f504 100644
 --- a/packages/app/src/ui/SettingsModal.module.css
 +++ b/packages/app/src/ui/SettingsModal.module.css
 @@ -104,7 +104,7 @@
@@ -4774,7 +4998,7 @@ index dd056fad..f27bc8dc 100644
    font-size: calc(var(--app-ui-scale, 1) * 11px);
    color: var(--text-faint);
    cursor: default;
-@@ -245,3 +245,41 @@
+@@ -245,3 +245,68 @@
    border-color: var(--border);
    color: var(--text);
  }
@@ -4795,20 +5019,47 @@ index dd056fad..f27bc8dc 100644
 +  .navItem { width: 100%; }
 +}
 +
++.shortcutSearch {
++  display: flex;
++  gap: 8px;
++}
++.shortcutSearch button {
++  flex: 0 0 auto;
++  min-height: 44px;
++}
++.shortcutList {
++  margin: 0;
++  padding: 0;
++  list-style: none;
++  border-top: 1px solid var(--border-lighter);
++}
 +.shortcutRow {
 +  display: flex;
-+  flex-direction: column;
-+  gap: 8px;
-+  padding: 12px;
-+  border: 1px solid var(--border-light);
-+  border-radius: 6px;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++  width: 100%;
++  min-height: 44px;
++  padding: 0 8px;
++  border: 0;
++  border-bottom: 1px solid var(--border-lighter);
++  background: transparent;
++  color: var(--text);
++  font: inherit;
++  text-align: left;
++  -webkit-touch-callout: none;
++  user-select: none;
 +}
-+.shortcutActions {
++.shortcutRow[aria-pressed="true"] {
++  background: var(--btn-hover-bg);
++}
++.shortcutKeys {
 +  display: flex;
-+  flex-wrap: wrap;
-+  gap: 8px;
++  gap: 6px;
++  font-family: var(--font-mono);
++  color: var(--text-dim);
 +}
-+.shortcutActions button, .navItem {
++.navItem {
 +  min-height: 44px;
 +}
 +.content input[type="search"] {
@@ -7099,7 +7350,7 @@ index cf4cf2cf..f9ecfae9 100644
 +  to { stroke-dashoffset: 0; }
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..ff919928 100644
+index 4e22ccfa..1c58f46a 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -8537,15 +8788,16 @@ index 4e22ccfa..ff919928 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3723,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3723,8 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
++    onOpenEquationEditor: handleOpenEditEquationCommand,
 +    onSelectedElementPress: handleSelectedElementPress,
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3049,12 +3762,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3049,12 +3763,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          setWarning(`${resolution.result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
        }
  
@@ -8562,7 +8814,7 @@ index 4e22ccfa..ff919928 100644
      },
      setSnapLines,
      logSnapDebug,
-@@ -3064,9 +3780,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3781,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -8572,7 +8824,7 @@ index 4e22ccfa..ff919928 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3790,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3791,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -8580,7 +8832,7 @@ index 4e22ccfa..ff919928 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3861,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3862,9 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -8591,7 +8843,7 @@ index 4e22ccfa..ff919928 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3887,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3888,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -8601,7 +8853,7 @@ index 4e22ccfa..ff919928 100644
      ]
    );
  
-@@ -3192,6 +3909,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3910,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -8680,7 +8932,7 @@ index 4e22ccfa..ff919928 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +4009,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +4010,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -8699,7 +8951,7 @@ index 4e22ccfa..ff919928 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +4043,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4044,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -8710,7 +8962,7 @@ index 4e22ccfa..ff919928 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4066,325 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4067,325 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -9038,7 +9290,7 @@ index 4e22ccfa..ff919928 100644
    const {
      onViewportKeyDown,
      onViewportPaste,
-@@ -3306,6 +4412,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4413,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -9046,7 +9298,7 @@ index 4e22ccfa..ff919928 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4437,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4438,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -9071,7 +9323,7 @@ index 4e22ccfa..ff919928 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4555,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4556,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -9106,7 +9358,7 @@ index 4e22ccfa..ff919928 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4576,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4577,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -9114,7 +9366,7 @@ index 4e22ccfa..ff919928 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4590,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4591,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -9122,7 +9374,7 @@ index 4e22ccfa..ff919928 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4666,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4667,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -9131,7 +9383,7 @@ index 4e22ccfa..ff919928 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4711,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4712,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -9140,7 +9392,7 @@ index 4e22ccfa..ff919928 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4790,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4791,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -9164,7 +9416,7 @@ index 4e22ccfa..ff919928 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4903,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4904,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -9172,7 +9424,7 @@ index 4e22ccfa..ff919928 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4916,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4917,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -9180,7 +9432,7 @@ index 4e22ccfa..ff919928 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4927,250 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4928,250 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -9431,7 +9683,7 @@ index 4e22ccfa..ff919928 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5190,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5191,21 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -9454,7 +9706,7 @@ index 4e22ccfa..ff919928 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5221,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5222,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -9470,7 +9722,7 @@ index 4e22ccfa..ff919928 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3904,15 +5247,31 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3904,15 +5248,31 @@ export const CanvasPanel = memo(function CanvasPanel({
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
          hoveredElementId={hoveredElementId}
@@ -9504,7 +9756,7 @@ index 4e22ccfa..ff919928 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5279,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5280,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -9514,7 +9766,7 @@ index 4e22ccfa..ff919928 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5292,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5293,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -9549,7 +9801,7 @@ index 4e22ccfa..ff919928 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5346,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5347,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -9557,7 +9809,7 @@ index 4e22ccfa..ff919928 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5355,59 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5356,59 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -14116,7 +14368,7 @@ index fbf3023a..325cf8cf 100644
    setPendingBezier: (pending: PendingBezier | null) => void;
    setToolCursorWorld: (point: WorldPoint | null) => void;
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
-index c69a45af..39fc4455 100644
+index c69a45af..ef721aa7 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasElementInteractions.ts
 @@ -3,8 +3,7 @@ import { clientPoint, px, pt, worldBounds, worldVector } from "tikz-editor/coord
@@ -14129,7 +14381,15 @@ index c69a45af..39fc4455 100644
  import type { CanvasTransform, ToolMode } from "../../store/types";
  import { clientToWorldPoint } from "./geometry";
  import { makeMergeKey, selectionAnchorRatioFromPoint } from "./panel-helpers";
-@@ -38,6 +37,8 @@ export type UseCanvasElementInteractionsArgs = {
+@@ -27,6 +26,7 @@ import type {
+   ValueSetter
+ } from "./types";
+ import type { HitRegion } from "./hit-regions";
++import { resolveEquationNodeTarget, type EquationNodeTarget } from "../equation-utils";
+ 
+ export type UseCanvasElementInteractionsArgs = {
+   svgResult: CanvasSnapshot["svg"];
+@@ -38,6 +38,8 @@ export type UseCanvasElementInteractionsArgs = {
    closeTextEditingSession: () => void;
    interactionSvgRef: RefObject<SVGSVGElement | null>;
    dispatch: CanvasDispatch;
@@ -14138,7 +14398,7 @@ index c69a45af..39fc4455 100644
    draggableSourceIds: ReadonlySet<string>;
    directManipulationDisabledReasonBySourceId?: ReadonlyMap<string, string>;
    snapshot: CanvasSnapshot;
-@@ -52,9 +53,6 @@ export type UseCanvasElementInteractionsArgs = {
+@@ -52,15 +54,14 @@ export type UseCanvasElementInteractionsArgs = {
    viewportWorldBounds: WorldBounds | null;
    setDragState: ValueSetter<DragState | null>;
    resolveEditableTextTarget: (targetId: string, region?: HitRegion) => EditableTextTarget | null;
@@ -14148,7 +14408,15 @@ index c69a45af..39fc4455 100644
    scopeOverlay: ScopeOverlayIndex;
    focusedScopeId: string | null;
    applyActionWithFeedback: ApplyActionWithFeedbackFn;
-@@ -78,6 +76,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+   activeFigureId: string | null;
+   parseOptions: CanvasEditParseOptions;
+   onNodePositionTargetPick?: (targetId: string) => boolean;
++  // A double-click on an equation opens its editor, as a double-click opens an equation in Word.
++  onOpenEquationEditor: (target: EquationNodeTarget) => void;
+ };
+ 
+ function clientPointFromEvent(event: Pick<PointerEvent | ReactPointerEvent<SVGElement> | ReactMouseEvent<SVGElement>, "clientX" | "clientY">): ClientPoint {
+@@ -78,6 +79,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
      closeTextEditingSession,
      interactionSvgRef,
      dispatch,
@@ -14156,7 +14424,7 @@ index c69a45af..39fc4455 100644
      draggableSourceIds,
      directManipulationDisabledReasonBySourceId,
      snapshot,
-@@ -92,9 +91,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -92,15 +94,13 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -14166,7 +14434,15 @@ index c69a45af..39fc4455 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -128,6 +124,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+     activeFigureId,
+     parseOptions,
+-    onNodePositionTargetPick
++    onNodePositionTargetPick,
++    onOpenEquationEditor
+   } = args;
+ 
+   const pendingScopeDrillRef = useRef<{
+@@ -128,6 +128,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        pointerId: number,
        world: WorldPoint,
        draggedIds: string[],
@@ -14174,7 +14450,7 @@ index c69a45af..39fc4455 100644
        options: { adornmentDragFromText?: boolean } = {}
      ) => {
        if (draggedIds.some((id) => !draggableSourceIds.has(id))) {
-@@ -198,7 +195,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -198,7 +199,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
          ), { sourceId: scopeId }));
        }
  
@@ -14183,7 +14459,7 @@ index c69a45af..39fc4455 100644
        const selectionAnchorRatio = initialSelection
          ? selectionAnchorRatioFromPoint(initialSelection.bounds, world)
          : null;
-@@ -209,10 +206,12 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -209,10 +210,12 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
          pointerId,
          elementIds: draggedIds,
          startWorld: world,
@@ -14196,7 +14472,7 @@ index c69a45af..39fc4455 100644
          lastAppliedTotalDelta: worldVector(pt(0), pt(0)),
          snapContext,
          initialSelection,
-@@ -270,7 +269,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -270,7 +273,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        if (!world) {
          return;
        }
@@ -14205,7 +14481,7 @@ index c69a45af..39fc4455 100644
        pending.dragStarted = true;
      }
  
-@@ -332,7 +331,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -332,7 +335,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
          });
        }
        closeTextEditingSession();
@@ -14214,7 +14490,7 @@ index c69a45af..39fc4455 100644
        pending.dragStarted = true;
      }
  
-@@ -435,7 +434,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -435,7 +438,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
  
        if (!additiveSelection && matrixEdgeSelection && event.button === 0) {
          closeTextEditingSession();
@@ -14222,7 +14498,7 @@ index c69a45af..39fc4455 100644
          dispatch({ type: "SELECT_RANGE", ids: matrixEdgeSelection.selectionIds });
          dispatch({
            type: "SET_FOCUSED_SCOPE",
-@@ -445,7 +443,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -445,7 +447,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
          return;
        }
  
@@ -14234,7 +14510,7 @@ index c69a45af..39fc4455 100644
        if (!additiveSelection && textTarget) {
          const draggedIds = alreadySelected && selectedElementIds.size > 0 ? [...selectedElementIds] : [resolvedTargetId];
          const supportsDeferredTextDrag = snapshot.editHandles.some(
-@@ -483,14 +484,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -483,14 +488,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        const isAdornmentTarget = resolvedTargetId.startsWith("node-adornment:");
        closeTextEditingSession();
  
@@ -14249,7 +14525,7 @@ index c69a45af..39fc4455 100644
        const singleSelectedId = selectedElementIds.size === 1
          ? (selectedElementIds.values().next().value ?? null)
          : null;
-@@ -539,6 +532,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -539,6 +536,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
            return;
          }
        } else if (selectedElementIds.size === 1 && selectedElementIds.has(resolvedTargetId)) {
@@ -14257,7 +14533,7 @@ index c69a45af..39fc4455 100644
          dispatch({
            type: "SET_FOCUSED_SCOPE",
            scopeId: resolveFocusedScopeIdForSelection(resolvedTargetId, scopeOverlay)
-@@ -549,26 +543,26 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -549,26 +547,26 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
          isAdornmentTarget &&
          region?.shape === "rect" &&
          typeof region.sceneTextKey === "string";
@@ -14287,7 +14563,7 @@ index c69a45af..39fc4455 100644
        svgResult,
        toolMode,
        viewportRef
-@@ -593,7 +587,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -593,7 +591,7 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
        const world = clientToWorldPoint(clientPointFromEvent(event), interactionSvgRef.current, svgResult.viewBox);
        if (!world) return false;
  
@@ -14296,10 +14572,14 @@ index c69a45af..39fc4455 100644
        if (!result) return false;
  
        // Threshold: 12px screen distance
-@@ -625,25 +619,6 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
-       }
-       viewportRef.current?.focus({ preventScroll: true });
- 
+@@ -621,28 +619,14 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+       event.preventDefault();
+       event.stopPropagation();
+       if (textTarget) {
+-        return;
+-      }
+-      viewportRef.current?.focus({ preventScroll: true });
+-
 -      if (densePathSourceIds.has(sourceId)) {
 -        if (expandedDensePathSourceId === sourceId) {
 -          // Expanded dense paths should use double-click for point insertion first.
@@ -14308,7 +14588,11 @@ index c69a45af..39fc4455 100644
 -          }
 -          // Missed insertion is a no-op; keep dense path expanded.
 -          return;
--        }
++        const equation = resolveEquationNodeTarget(source, sourceId, parseOptions);
++        if (equation) {
++          closeTextEditingSession();
++          onOpenEquationEditor(equation);
+         }
 -        dispatch({ type: "SELECT", id: sourceId, additive: false });
 -        dispatch({
 -          type: "SET_FOCUSED_SCOPE",
@@ -14316,13 +14600,13 @@ index c69a45af..39fc4455 100644
 -        });
 -        setExpandedDensePathSourceId(sourceId);
 -        closeTextEditingSession();
--        return;
--      }
--
+         return;
+       }
++      viewportRef.current?.focus({ preventScroll: true });
+ 
        // Try to insert a point on a path segment
        if (tryInsertPathWorldPoint(event, sourceId)) {
-         return;
-@@ -651,13 +626,10 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
+@@ -651,15 +635,15 @@ export function useCanvasElementInteractions(args: UseCanvasElementInteractionsA
      },
      [
        dispatch,
@@ -14334,9 +14618,15 @@ index c69a45af..39fc4455 100644
        viewportRef,
 -      expandedDensePathSourceId,
        resolveEditableTextTarget,
-       tryInsertPathWorldPoint
+-      tryInsertPathWorldPoint
++      tryInsertPathWorldPoint,
++      source,
++      parseOptions,
++      onOpenEquationEditor
      ]
-@@ -706,71 +678,3 @@ export function collectSnapExcludedSourceIds(
+   );
+ 
+@@ -706,71 +690,3 @@ export function collectSnapExcludedSourceIds(
  function isSyntheticTreeDescendantSourceId(candidateSourceId: string, selectedSourceId: string): boolean {
    return candidateSourceId.startsWith(`${selectedSourceId}:tree-child:`);
  }
@@ -22953,10 +23243,10 @@ index f4e310bc..075e80d3 100644
      expect(initial.fitToContentRequestToken).toBe(0);
 diff --git a/test/tablet-logic.spec.ts b/test/tablet-logic.spec.ts
 new file mode 100644
-index 00000000..de875845
+index 00000000..3d793653
 --- /dev/null
 +++ b/test/tablet-logic.spec.ts
-@@ -0,0 +1,418 @@
+@@ -0,0 +1,424 @@
 +import { boundsInLatticeUnits, latticeStepCentimetres } from '../packages/core/src/edit/lattice-units';
 +import { resolveFigureCoordinateFrame } from '../packages/core/src/edit/coordinate-frame';
 +import { worldBounds, worldTransform, worldVector, pt } from '../packages/core/src/coords/index';
@@ -22964,7 +23254,7 @@ index 00000000..de875845
 +import { resolveArcToolPoint } from '../packages/app/src/ui/canvas-panel/arc-tool';
 +import { editorReducer, makeInitialState } from '../packages/app/src/store/reducer';
 +import { APP_MENU_COMMAND_IDS as ID } from '../packages/app/src/app-menu/types';
-+import { SHORTCUT_COMMANDS, matchesCommand, parseShortcutOverrides, recordShortcut, shortcutConflict } from '../packages/app/src/settings/keybindings';
++import { SHORTCUT_COMMANDS, assignShortcuts, matchesCommand, parseShortcutOverrides, recordShortcut, shortcutConflict, shortcutLabel, shortcutsFor } from '../packages/app/src/settings/keybindings';
 +import { describe, expect, it } from 'vitest';
 +import { tikzColorOptions, tikzColorValue } from '../packages/core/src/edit/color-value.js';
 +import { applyAddLayerAction, applyMoveIntoScopeAction } from '../packages/core/src/edit/actions/layer-actions.js';
@@ -23088,14 +23378,20 @@ index 00000000..de875845
 +    expect(matchesCommand(ID.ZOOM_IN, key('+', { ctrlKey: true, shiftKey: true }), { [ID.ZOOM_IN]: [plus] })).toBe(true);
 +  });
 +
-+  it('permits restoring the shipped contextual equation binding without allowing a new conflict', () => {
-+    expect(matchesCommand(ID.EDIT_EQUATION, key('e', { ctrlKey: true, shiftKey: true }), {})).toBe(true);
-+    expect(matchesCommand(ID.INSERT_EQUATION, key('e', { ctrlKey: true, shiftKey: true }), {})).toBe(true);
-+    expect(shortcutConflict(ID.INSERT_EQUATION, 'CmdOrCtrl+Shift+E', {}, true)).toBeUndefined();
-+    expect(shortcutConflict(ID.INSERT_LINE, 'CmdOrCtrl+Shift+E', {}, true)).toBeDefined();
++  it('gives no two commands the same default and moves a taken shortcut as GNOME Settings does', () => {
++    const defaults = SHORTCUT_COMMANDS.flatMap(command => command.defaults.map(shortcut => shortcutLabel(shortcut)));
++    expect(new Set(defaults).size).toBe(defaults.length);
++    expect(matchesCommand(ID.EDIT_EQUATION, key('e', { ctrlKey: true, shiftKey: true }), {})).toBe(false);
++    const moved = assignShortcuts(ID.ALIGN_LEFT, ['CmdOrCtrl+Shift+='], {}, true);
++    expect(shortcutsFor(ID.ALIGN_LEFT, moved)).toEqual(['CmdOrCtrl+Shift+=']);
++    expect(shortcutsFor(ID.ZOOM_IN, moved)).toEqual(['CmdOrCtrl+=']);
++    const reset = assignShortcuts(ID.ZOOM_IN, undefined, moved, true);
++    expect(shortcutsFor(ID.ZOOM_IN, reset)).toEqual(shortcutsFor(ID.ZOOM_IN, {}));
++    expect(shortcutsFor(ID.ALIGN_LEFT, reset)).toEqual([]);
++    expect(reset[ID.ZOOM_IN]).toBeUndefined();
 +  });
 +
-+  it('reserves active application shortcuts while ignoring inactive desktop-only commands', () => {
++  it('names the active command that owns a shortcut and ignores inactive desktop-only commands', () => {
 +    expect(shortcutConflict(ID.INSERT_LINE, 'CmdOrCtrl+S', {}, true)?.id).toBe(ID.SAVE_DOCUMENT);
 +    expect(shortcutConflict(ID.INSERT_LINE, 'CmdOrCtrl+Q', {}, true)).toBeUndefined();
 +  });
