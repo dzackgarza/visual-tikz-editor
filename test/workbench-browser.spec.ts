@@ -43,7 +43,11 @@ describe("standalone workbench host boundary", function () {
   let page: Page;
   let url: string;
 
-  type StorySetup = { viewport?: { width: number; height: number }; initialPage?: "blank" };
+  type StorySetup = {
+    viewport?: { width: number; height: number };
+    initialPage?: "blank";
+    launch?: "no-file";
+  };
   const storySetups = new Map<string, StorySetup>();
   function story(setup: StorySetup, title: string, run: Mocha.AsyncFunc): void {
     storySetups.set(title, setup);
@@ -134,7 +138,9 @@ describe("standalone workbench host boundary", function () {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
     await startPageCoverage(page);
-    await page.request.post(`${url}api/new`, { data: "tikzpicture" });
+    if (setup?.launch !== "no-file") {
+      await page.request.post(`${url}api/new`, { data: "tikzpicture" });
+    }
     if (setup?.initialPage === "blank") {
       return;
     }
@@ -229,6 +235,37 @@ describe("standalone workbench host boundary", function () {
       await page.emulateMedia({ colorScheme: "dark" });
       await expect(quiver).toHaveClass(/\bdark-theme\b/u);
       await expect(page.locator(".tikz-source-editor")).toHaveClass(/\bdark\b/u);
+    },
+  );
+
+  story(
+    { initialPage: "blank", launch: "no-file" },
+    "opens an untitled tikzpicture at launch, starts each kind from File, and closes Save changes on Escape",
+    async function () {
+      await page.goto(url);
+      await expect(page.locator(".document-bar strong")).toHaveText("Untitled.tikz");
+      await expect(page.locator('iframe[title="TikZ visual editor"]')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await editorReady(page);
+      const fileMenu = page.getByRole("group", { name: "File" }).locator("summary");
+      await fileMenu.click();
+      await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
+      await expect(page.locator(".document-bar strong")).toHaveText("Untitled.tikzcd");
+      await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+      const edited = String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`;
+      await page.locator(".cm-content").fill(edited);
+      await fileMenu.click();
+      await page.getByRole("button", { name: "New tikzpicture", exact: true }).click();
+      const prompt = page.getByRole("dialog", { name: "Save changes?" });
+      await expect(prompt).toBeVisible();
+      await expect(page.locator(".workspace")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(prompt).toHaveCount(0);
+      await expect(fileMenu).toBeFocused();
+      await expect(page).toHaveTitle("*Untitled.tikzcd - Visual TikZ Editor");
+      assert.equal(await page.locator(".cm-content").innerText(), edited);
+      await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible();
     },
   );
 
