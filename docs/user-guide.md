@@ -63,7 +63,7 @@ The eraser removes the part of each path that a sweep crosses and keeps the rema
 
 ## Snapping
 
-The **Snap** control names the active rule, for example "Snap: lattice", and opens four rules:
+Tap **Snap** on the dock to turn all snapping off or on; on a keyboard, press %. Snapping comes back on with the rules it had. The arrow beside it opens the four rules, which you can change while snapping is on:
 
 | Rule | Effect |
 | --- | --- |

@@ -70,7 +70,7 @@ Every control of the dock compared with the conventions above.
 | Exact `xcolor` field | Text field in the colour popover | No counterpart | Justified: `xcolor` expressions (`red!50!blue`) are a TikZ concept that no picker shows |
 | Swatches | Eight swatches always shown | Swatches in the toolbar (Apple, Xournal++) | None |
 | Undo, Redo | Unicode glyphs `↶` `↷` | `arrow.uturn.backward`, `arrow.uturn.forward` | Glyphs, not the standard symbols |
-| Snap | The words "Snap" and the first active rule; popover of four rules, each with a sentence | One icon toggle with an arrow that opens the rules; rule names as labels | Words; sentences in the popover; no one-tap toggle |
+| Snap | The words "Snap" and the first active rule; popover of four rules, each with a sentence | One icon toggle with an arrow that opens the rules; rule names as labels | The word "Snap" ([#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28)); the toggle and the named rules are repaired |
 | Zoom | The percentage in the dock; popover with Fit, slider, presets, and the canvas aids Grid, Rulers, Ruler guides, Output bounds | Zoom readout in a status bar or corner; canvas aids in the View menu | Wrong place; canvas aids under Zoom |
 | Layers | The word, in the dock; opens the panel, and a second press closes it | Separate panel, opened from the window toolbar's trailing edge, toggled by its button | Place, word |
 | Properties | The same as Layers | The same as Layers | Place, word |
@@ -95,7 +95,7 @@ Every control of the dock compared with the conventions above.
    - Geometry: the construction picker.
    - Text: Text and Equation.
 6. **Colour.** The colour well shows the current colour and has no label. A choice recolours the stroke of the selection when one exists, and sets the colour of the next strokes when none does. Fill colour is set in Properties ([#20](https://github.com/dzackgarza/visual-tikz-editor/issues/20)) and with the Bucket. The picker keeps the exact `xcolor` field.
-7. **Snapping.** A tap on the snap icon turns snapping on or off. The arrow beside it opens the rules (Lattice, Objects, Alignment, Angle) as named toggles, with no sentences. The lattice step is a value in Document Properties ([instructional-text specification](instructional-text.md) item 6).
+7. **Snapping.** A tap on the snap icon turns snapping on or off. The arrow beside it opens the rules (Lattice, Objects, Alignment, Angle) as named toggles, with no sentences. The lattice step is a value in Document Properties ([instructional-text specification](instructional-text.md) item 6). The present build meets this rule; the magnet icon is item 3.
 8. **Panels toggle.** Every button that opens a popover or a panel closes it on the next press. One popover is open at a time; a press on another button closes the open one and opens the new one.
 9. **Moving the dock.** The dock moves by a drag from its edge to any screen edge. The drop zones show the target edge as a highlight, with no words.
 10. **Construction status.** The step text leaves the dock for a status line ([#21](https://github.com/dzackgarza/visual-tikz-editor/issues/21)). Finish and Cancel stay in the dock while a construction runs.
@@ -110,6 +110,5 @@ An issue that names a dependency starts after that audit has its specification.
 | 4, 5 | [#27](https://github.com/dzackgarza/visual-tikz-editor/issues/27) One press rule and tool options | — |
 | 1–3 | [#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28) Dock contents as icons | #22 |
 | 6 | [#29](https://github.com/dzackgarza/visual-tikz-editor/issues/29) Unlabelled colour well | #20 |
-| 7 | [#30](https://github.com/dzackgarza/visual-tikz-editor/issues/30) Snap toggle with a rules popover | — |
 | 10 | [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31) Step text to a status line | #21 |
 | 9 | [#32](https://github.com/dzackgarza/visual-tikz-editor/issues/32) Drag from the edge; drop zones without words | — |

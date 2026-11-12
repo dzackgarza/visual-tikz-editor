@@ -52,14 +52,16 @@ describe("standalone workbench host boundary", function () {
 
   type SnapRule = "Lattice" | "Objects" | "Alignment" | "Angle";
 
-  /** Opens the rail's snap control, puts one rule in the wanted state, and closes it. */
+  /** Opens the rail's snapping rules, puts one rule in the wanted state, and closes them. */
   async function setSnapRule(
     frame: FrameLocator,
     input: TabletInput,
     rule: SnapRule,
     on: boolean,
   ): Promise<void> {
-    const trigger = frame.locator("[data-diagram-tools]").getByRole("button", { name: /^Snap: / });
+    const trigger = frame
+      .locator("[data-diagram-tools]")
+      .getByRole("button", { name: "Snapping rules", exact: true });
     await input.touch([await stableCenter(trigger)]);
     const popup = frame.getByRole("dialog", { name: "Tool options" });
     const toggle = popup.getByRole("button", { name: rule, exact: true });
@@ -426,10 +428,7 @@ describe("standalone workbench host boundary", function () {
           locked.length >= 4 && locked.every(Number.isInteger),
           `A line drawn with default settings leaves the lattice: ${locked}`,
         );
-        const snap = rail.getByRole("button", { name: /^Snap: / });
-        await expect(snap).toHaveAccessibleName("Snap: lattice");
         await setSnapRule(frame, input, "Lattice", false);
-        await expect(snap).toHaveAccessibleName("Snap: objects");
         // Zoomed out, a lattice cell is a few pixels wide: points still move freely.
         const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
         await input.touch([await stableCenter(zoom)]);
@@ -512,7 +511,7 @@ describe("standalone workbench host boundary", function () {
             const rule = popup.getByRole("button", { name, exact: true });
             states.push([name, await rule.getAttribute("aria-pressed"), await rule.isEnabled()]);
           }
-          const text = await popup.evaluate((root) => root.textContent!.replace(/\s+/g, " ").trim());
+          const text = (await popup.innerText()).replace(/\s+/g, " ").trim();
           await tap(rulesButton);
           await expect(popup).toHaveCount(0);
           return { states, text };
@@ -561,7 +560,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `shows one snap control naming the active rule, with lattice, object, alignment and angle snapping behind it, in ${tablet.name}`,
+      `shows one snapping toggle, with lattice, object, alignment and angle rules behind it, in ${tablet.name}`,
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -579,9 +578,9 @@ describe("standalone workbench host boundary", function () {
         await fitDiagram(frame, input);
         const rail = frame.locator("[data-diagram-tools]");
         const popup = frame.getByRole("dialog", { name: "Tool options" });
-        // At rest the rail names the active rule and holds no separate lattice or angle toggles.
-        const snap = rail.getByRole("button", { name: /^Snap: / });
-        await expect(snap).toHaveAccessibleName("Snap: lattice");
+        // At rest snapping is on, and the rail holds no separate lattice or angle toggles.
+        await expect(rail.getByRole("button", { name: "Snapping", exact: true })).toHaveAttribute("aria-pressed", "true");
+        const snap = rail.getByRole("button", { name: "Snapping rules", exact: true });
         await expect(
           rail.getByRole("button", { name: "Lock to lattice", exact: true }),
         ).toHaveCount(0);
@@ -597,7 +596,7 @@ describe("standalone workbench host boundary", function () {
         }
         await tap(zoom);
         await expect(popup).toHaveCount(0);
-        // The snap control shows every rule with its state.
+        // The rules button shows every rule with its state.
         await tap(snap);
         const rule = (name: SnapRule) => popup.getByRole("button", { name, exact: true });
         for (const [name, pressed] of [
@@ -609,15 +608,11 @@ describe("standalone workbench host boundary", function () {
           await expect(rule(name)).toHaveAttribute("aria-pressed", pressed);
         }
         await storyScreenshot(page, `snap-control-${tablet.name}`);
-        // Turning rules off walks the name down the precedence order, and the settings follow.
+        // Each rule turns on and off by itself, and the settings follow.
         await tap(rule("Lattice"));
-        await expect(snap).toHaveAccessibleName("Snap: objects");
         await tap(rule("Objects"));
-        await expect(snap).toHaveAccessibleName("Snap: alignment");
         await tap(rule("Alignment"));
-        await expect(snap).toHaveAccessibleName("Snap: off");
         await tap(rule("Angle"));
-        await expect(snap).toHaveAccessibleName("Snap: angle");
         const canvas = (await editorDebug(page)).settings.canvas;
         assert.deepEqual(
           {
@@ -630,7 +625,7 @@ describe("standalone workbench host boundary", function () {
         );
         await tap(rule("Angle"));
         await tap(rule("Objects"));
-        await expect(snap).toHaveAccessibleName("Snap: objects");
+        await expect(rule("Objects")).toHaveAttribute("aria-pressed", "true");
         await tap(snap);
         await expect(popup).toHaveCount(0);
         // Object snapping: a line started at the node's edge is attached to the node in the source.
@@ -663,7 +658,6 @@ describe("standalone workbench host boundary", function () {
           `With Objects on, the line is not attached to the node: ${attached}`,
         );
         await setSnapRule(frame, input, "Objects", false);
-        await expect(snap).toHaveAccessibleName("Snap: off");
         const loose = await drawFromNodeEdge();
         assert.doesNotMatch(
           loose,
@@ -762,8 +756,6 @@ describe("standalone workbench host boundary", function () {
         };
         await fitDiagram(frame, input);
         let at = await lattice();
-        const snap = rail.getByRole("button", { name: /^Snap: / });
-        await expect(snap).toHaveAccessibleName("Snap: lattice");
         // An endpoint beats the alignment guide 0.1 units away and the lattice; the far end lands on the lattice.
         assert.deepEqual(
           await draw(at(2.3, 1.4), "Endpoint", at(6, 1), "Lattice"),
@@ -1084,8 +1076,9 @@ describe("standalone workbench host boundary", function () {
             frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        await expect(rail.getByRole("button", { name: /^Snap: / })).toHaveAccessibleName(
-          "Snap: lattice",
+        await expect(rail.getByRole("button", { name: "Snapping", exact: true })).toHaveAttribute(
+          "aria-pressed",
+          "true",
         );
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Geometry", exact: true })),
@@ -4864,7 +4857,8 @@ describe("standalone workbench host boundary", function () {
             "Properties",
             "Settings",
             "Zoom and display",
-            /^Snap: /,
+            "Snapping",
+            "Snapping rules",
             "Select",
             "Lasso",
             "Eraser",
@@ -5043,7 +5037,7 @@ describe("standalone workbench host boundary", function () {
             return runs.map((run) => run.text.trim()).filter(Boolean);
           }, outside);
         // Inkscape's snapping popover lists the rules by name only (docs/prior-art/instructional-text.md, item 1).
-        const snap = rail.getByRole("button", { name: /^Snap: / });
+        const snap = rail.getByRole("button", { name: "Snapping rules", exact: true });
         const snapping = frame.getByRole("dialog", { name: "Tool options" });
         await tap(snap);
         await expect(snapping).toBeVisible();
@@ -5392,14 +5386,14 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const reopened = editorFrame(page);
         const reopenedRail = reopened.locator("[data-diagram-tools]");
-        await expect(reopenedRail.getByRole("button", { name: "Snap: angle" })).toBeVisible();
-        await tap(reopenedRail.getByRole("button", { name: "Snap: angle" }));
+        const reopenedRules = reopenedRail.getByRole("button", { name: "Snapping rules", exact: true });
+        await tap(reopenedRules);
         const snapPopup = reopened.getByRole("dialog", { name: "Tool options" });
         for (const rule of ["Lattice", "Objects", "Alignment"]) {
           await expect(snapPopup.getByRole("button", { name: rule, exact: true })).toHaveAttribute("aria-pressed", "false");
         }
         await expect(snapPopup.getByRole("button", { name: "Angle", exact: true })).toHaveAttribute("aria-pressed", "true");
-        await tap(reopenedRail.getByRole("button", { name: "Snap: angle" }));
+        await tap(reopenedRules);
         await tap(reopenedRail.getByRole("button", { name: "Zoom and display", exact: true }));
         const reopenedPopup = reopened.getByRole("dialog", { name: "Tool options" });
         for (const aid of ["Grid", "Rulers", "Ruler guides"]) {
@@ -5863,8 +5857,9 @@ describe("standalone workbench host boundary", function () {
             frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
         const rail = frame.locator("[data-diagram-tools]");
-        await expect(rail.getByRole("button", { name: /^Snap: / })).toHaveAccessibleName(
-          "Snap: lattice",
+        await expect(rail.getByRole("button", { name: "Snapping", exact: true })).toHaveAttribute(
+          "aria-pressed",
+          "true",
         );
         const numbers = (line: string) =>
           [...line.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
@@ -5952,7 +5947,7 @@ describe("standalone workbench host boundary", function () {
         }
 
         const options = frame.getByRole("dialog", { name: "Tool options" });
-        const snap = rail.getByRole("button", { name: /^Snap: / });
+        const snap = rail.getByRole("button", { name: "Snapping rules", exact: true });
         const color = rail.getByRole("button", { name: /^Color: / });
         for (const trigger of [
           snap,
