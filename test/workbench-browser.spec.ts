@@ -4928,6 +4928,115 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `shows only labels, values, and button names on option surfaces in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        // The text an author reads on a surface: its text nodes outside `outside`, in document order.
+        const texts = (surface: Locator, outside = "option, nav") =>
+          surface.evaluate((root, outside) => {
+            const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            const found: string[] = [];
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              const text = node.textContent!.trim();
+              if (text && !node.parentElement!.closest(outside)) found.push(text);
+            }
+            return found;
+          }, outside);
+        // Inkscape's snapping popover lists the rules by name only (docs/prior-art/instructional-text.md, item 1).
+        const snap = rail.getByRole("button", { name: /^Snap: / });
+        const snapping = frame.getByRole("dialog", { name: "Tool options" });
+        await tap(snap);
+        await expect(snapping).toBeVisible();
+        assert.deepEqual(await texts(snapping), ["Snapping", "Lattice", "Objects", "Alignment", "Angle"]);
+        await expect(snapping.locator("[aria-description]")).toHaveCount(0);
+        await tap(snap);
+        await expect(snapping).toHaveCount(0);
+        // The circle construction controls with lattice lock on: field labels and the insert button.
+        await setSnapRule(frame, input, "Lattice", true);
+        await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
+        await tap(frame.getByRole("option", { name: "Circle", exact: true }));
+        await tap(rail.getByRole("button", { name: "Properties", exact: true }));
+        const construction = frame
+          .getByRole("complementary", { name: "Properties", exact: true })
+          .locator("section")
+          .filter({ has: frame.getByText("Circle construction", { exact: true }) });
+        await expect(construction).toBeVisible();
+        assert.deepEqual(await texts(construction), [
+          "Circle construction",
+          "Construction",
+          "Center X (units)",
+          "Center Y (units)",
+          "Radius (units)",
+          "Insert circle",
+        ]);
+        // Settings rows carry a label and, for a slider, its value in a user unit (item 5).
+        const settings = frame.getByTestId("settings-modal");
+        await tap(rail.getByRole("button", { name: "Settings", exact: true }));
+        await tap(settings.getByTestId("settings-category-canvas"));
+        assert.deepEqual(await texts(settings), [
+          "Settings",
+          "Canvas",
+          "Grid Size",
+          "Grid Opacity",
+          "70%",
+          "Edit Handle Size",
+          "Hold to move a point",
+          "450 ms",
+          "Smooth surviving points",
+          "Zoom Speed",
+          "Toolbar Position",
+          "Generated Source Indent",
+          "Reset to Defaults",
+        ]);
+        // VS Code prompts for the keys only once recording starts (item 6).
+        await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
+        await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Line");
+        const row = settings.getByRole("group", { name: "Line shortcut", exact: true });
+        const rowTexts = (shortcut: string) => ["Line", shortcut, "Set keys", "Clear", "Reset"];
+        assert.deepEqual(await texts(settings, "option, nav, [role=group]"), [
+          "Settings",
+          "Keyboard shortcuts",
+          "Find command",
+          "Reset all shortcuts",
+        ]);
+        assert.deepEqual(await texts(row), rowTexts("L"));
+        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
+        assert.deepEqual(await texts(row), rowTexts("Press the new shortcut"));
+        await page.keyboard.press("Escape");
+        assert.deepEqual(await texts(row), rowTexts("L"));
+        await expect(settings).toBeVisible();
+        await tap(row.getByRole("button", { name: "Set shortcut for Line", exact: true }));
+        await page.keyboard.press("Control+Alt+l");
+        assert.deepEqual(await texts(row), rowTexts("Ctrl+Alt+L"));
+        await storyScreenshot(page, `option-surface-text-${tablet.name}`);
+        await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
+        // The Freehand result names its sliders, their unit, and its buttons (item 8).
+        await tap(rail.getByRole("button", { name: "Freehand", exact: true }));
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        const result = frame.getByRole("dialog", { name: "Freehand result" });
+        await input.penStroke(waveAcross(viewport, 0.45, 0.4, 160));
+        await expect(result).toBeVisible();
+        assert.deepEqual(await texts(result), [
+          "Freehand result",
+          "Smoothing",
+          "lattice units",
+          "Simplification",
+          "lattice units",
+          "Simplify again",
+          "Accept",
+          "Cancel",
+        ]);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `selects every element from the empty-canvas long press in ${tablet.name}`,
       async function () {
         await editorReady(page);
