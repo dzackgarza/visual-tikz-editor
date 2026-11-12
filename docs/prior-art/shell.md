@@ -107,13 +107,13 @@ An issue that names a dependency starts after that audit has its specification.
 
 | Items | Issue | Depends on |
 | --- | --- | --- |
-| 1, 2, 6 | Menu bar with File and Help menus | — |
-| 3, 5 | Edit and Object menus send commands to the focused view | #24, #39 |
-| 4, 7 | View menu; views offered by document kind; one name per view | #23 |
-| 8 | Theme follows the system appearance | — |
-| 9 | Window title with file name and unsaved marker | — |
-| 10 | Fixed-height document bar; banners and toasts | #21 |
-| 11 | Save conflict: Compare and Overwrite | — |
-| 11 | Save after a disk conflict: reproduce, then fix | — |
-| 2 | Document Properties dialog | — |
-| 12 | New without a kind dialog; untitled tikzpicture at launch; dialogs close on Escape | — |
+| 1, 2, 6 | [#42](https://github.com/dzackgarza/visual-tikz-editor/issues/42) Menu bar with File and Help menus | — |
+| 3, 5 | [#43](https://github.com/dzackgarza/visual-tikz-editor/issues/43) Edit and Object menus send commands to the focused view | #24, #39 |
+| 4, 7 | [#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44) View menu; views offered by document kind; one name per view | #23 |
+| 8 | [#45](https://github.com/dzackgarza/visual-tikz-editor/issues/45) Theme follows the system appearance | — |
+| 9 | [#46](https://github.com/dzackgarza/visual-tikz-editor/issues/46) Window title with file name and unsaved marker | — |
+| 10 | [#47](https://github.com/dzackgarza/visual-tikz-editor/issues/47) Fixed-height document bar; banners and toasts | #21 |
+| 11 | [#48](https://github.com/dzackgarza/visual-tikz-editor/issues/48) Save conflict: Compare and Overwrite | — |
+| 11 | [#49](https://github.com/dzackgarza/visual-tikz-editor/issues/49) Save after a disk conflict: reproduce, then fix | — |
+| 2 | [#50](https://github.com/dzackgarza/visual-tikz-editor/issues/50) Document Properties dialog | — |
+| 12 | [#51](https://github.com/dzackgarza/visual-tikz-editor/issues/51) New without a kind dialog; untitled tikzpicture at launch; dialogs close on Escape | — |
