@@ -72,7 +72,7 @@ const stateHome = process.env.XDG_STATE_HOME || path.join(home, ".local", "state
 if (!path.isAbsolute(stateHome)) throw new Error("XDG_STATE_HOME must be an absolute path");
 const recoveryPath = path.join(stateHome, "visual-tikz-editor", "recovery.json");
 const RecoveryRecord = z.object({
-  documentId: z.string().uuid(),
+  documentId: z.uuid(),
   path: z.string().nullable(),
   extension: z.enum([".tikz", ".tikzcd"]),
   source: z.string(),
