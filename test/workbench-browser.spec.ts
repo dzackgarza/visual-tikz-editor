@@ -5393,6 +5393,50 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `closes each panel and popover on a second press of its dock button, and keeps one popover open, in ${tablet.name}`,
+      async function () {
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const rail = frame.locator("[data-diagram-tools]");
+        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        for (const name of ["Properties", "Layers"]) {
+          const button = rail.getByRole("button", { name, exact: true });
+          await tap(button);
+          await expect(panel.getByRole("tab", { name, exact: true })).toHaveAttribute("aria-selected", "true");
+          await tap(button);
+          await expect(panel).toBeHidden();
+        }
+
+        const options = frame.getByRole("dialog", { name: "Tool options" });
+        const snap = rail.getByRole("button", { name: /^Snap: / });
+        const color = rail.getByRole("button", { name: /^Color: / });
+        for (const trigger of [
+          snap,
+          rail.getByRole("button", { name: "Zoom and display", exact: true }),
+          color,
+          rail.getByRole("button", { name: "Geometry", exact: true }),
+          rail.getByRole("button", { name: "Label", exact: true }),
+        ]) {
+          await tap(trigger);
+          await expect(trigger).toHaveAttribute("aria-expanded", "true");
+          await expect(options).toHaveCount(1);
+          await tap(trigger);
+          await expect(trigger).toHaveAttribute("aria-expanded", "false");
+          await expect(options).toHaveCount(0);
+        }
+        await tap(snap);
+        await tap(color);
+        await expect(snap).toHaveAttribute("aria-expanded", "false");
+        await expect(color).toHaveAttribute("aria-expanded", "true");
+        await expect(options).toHaveCount(1);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `offers touch-sized floating Properties controls and only mounted tabs in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
