@@ -39,19 +39,23 @@ package:
 install-desktop: package
     bash scripts/install-desktop.sh
 
+# Write the release assets of HEAD, qualified by a green Development diagnostics run.
+release-assets run: package
+    bash scripts/release-assets.sh "{{run}}"
+
 [private]
 build-desktop-assets: build
     bun build --compile standalone/server.ts --outfile "src-tauri/binaries/workbench-host-${TAURI_ENV_TARGET_TRIPLE}"
 
-# Commit gate: syntax and type checks through the global QC justfile.
+# Commit gate: the syntax check of staged files, through the global QC justfile.
 test-commit:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
 
-# Push gate: the commit checks plus the logic tests and the workbench browser suite.
+# Push gate: the syntax check of outgoing commits.
 test-push:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
-# CI gate: the push checks under coverage plus the policy-sensitive gates.
+# CI gate: the commit check, the whole suite under coverage, and the lint and debt checks.
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
 
