@@ -1262,18 +1262,8 @@ describe("standalone workbench host boundary", function () {
                 }),
             ),
           );
-        // Each label of a ruler with its tick's screen position: the label's group is translated to the tick.
-        const labels = (testId: string) =>
-          frame
-            .getByTestId(testId)
-            .locator("text")
-            .evaluateAll((texts: SVGTextElement[]) =>
-              texts.map((text) => {
-                const m = (text.parentNode as SVGGElement).getScreenCTM()!;
-                return { text: text.textContent ?? "", x: m.e, y: m.f };
-              }),
-            );
-        // The ruler's length, its label font size, and the screen position of every tick.
+        // The ruler's length, its label font size, and every tick's screen position with its label:
+        // each tick's group is translated to the tick.
         const ruler = (testId: string, axis: "x" | "y") =>
           frame.getByTestId(testId).evaluate((svg: SVGSVGElement, along) => {
             const box = svg.getBoundingClientRect();
@@ -1283,7 +1273,7 @@ describe("standalone workbench host boundary", function () {
               fontPx: label ? parseFloat(getComputedStyle(label).fontSize) : NaN,
               ticks: [...svg.querySelectorAll(":scope > g")].map((group) => {
                 const m = (group as SVGGElement).getScreenCTM()!;
-                return along === "x" ? m.e : m.f;
+                return { position: along === "x" ? m.e : m.f, label: group.querySelector("text")?.textContent ?? null };
               }),
             };
           }, axis);
@@ -1300,30 +1290,30 @@ describe("standalone workbench host boundary", function () {
         };
         // The rule for one ruler, or the reason it is broken.
         const ruleBroken = (
-          entries: { text: string; x: number; y: number }[],
           axis: "x" | "y",
           origin: { x: number; y: number },
           perCm: number,
-          { lengthPx, fontPx, ticks }: { lengthPx: number; fontPx: number; ticks: number[] },
+          { lengthPx, fontPx, ticks }: { lengthPx: number; fontPx: number; ticks: { position: number; label: string | null }[] },
         ) => {
-          if (entries.length < 2) return `fewer than two labels: ${JSON.stringify(entries)}`;
-          const values = entries.map((entry) => Number(entry.text));
-          if (values.some((value) => !Number.isInteger(value))) return `a label is not whole centimetres: ${JSON.stringify(entries)}`;
-          const misplaced = entries.filter(
-            (entry, index) => Math.abs(entry[axis] - (origin[axis] + values[index] * perCm)) > 2,
-          );
-          if (misplaced.length > 0) return `labels not at their centimetre: ${JSON.stringify({ misplaced, perCm })}`;
-          const sorted = [...values].sort((a, b) => a - b);
-          const steps = sorted.slice(1).map((value, index) => value - sorted[index]);
-          const expected = inkscapeStep(lengthPx, Math.abs(perCm), fontPx);
-          if (steps.some((step) => step !== expected.step)) {
-            return `label steps ${steps} cm where Inkscape's rule gives ${expected.step} cm (${JSON.stringify({ lengthPx, perCm, fontPx })})`;
+          const labelled = ticks.filter((tick) => tick.label !== null);
+          if (labelled.length === 0) return "no label";
+          const { step, divide } = inkscapeStep(lengthPx, Math.abs(perCm), fontPx);
+          const context = JSON.stringify({ step, divide, lengthPx, perCm, fontPx });
+          for (const tick of labelled) {
+            const value = Number(tick.label);
+            if (!Number.isInteger(value)) return `label ${tick.label} is not whole centimetres`;
+            if (Math.abs(tick.position - (origin[axis] + value * perCm)) > 2) return `label ${value} is not at its centimetre (${context})`;
+            if (value % step !== 0) return `label ${value} is not a multiple of Inkscape's step (${context})`;
           }
-          const [from, to] = [sorted[0], sorted[1]].map((value) => origin[axis] + value * perCm).sort((a, b) => a - b);
-          const between = ticks.filter((tick) => tick > from + 0.5 && tick < to - 0.5).length;
-          if (between + 1 !== expected.divide) {
-            return `${between + 1} subdivisions of ${expected.step} cm where Inkscape's rule gives ${expected.divide}`;
-          }
+          const unlabelled = ticks.find((tick) => {
+            const steps = (tick.position - origin[axis]) / (perCm * step);
+            return tick.label === null && Math.abs(steps - Math.round(steps)) < 0.01;
+          });
+          if (unlabelled) return `the tick at ${unlabelled.position} px is on Inkscape's step but has no label (${context})`;
+          const positions = ticks.map((tick) => tick.position).sort((a, b) => a - b);
+          const spacing = Math.abs(perCm * step) / divide;
+          const uneven = positions.slice(1).find((position, index) => Math.abs(position - positions[index] - spacing) > 0.5);
+          if (uneven !== undefined) return `ticks are not ${spacing.toFixed(2)} px apart, Inkscape's subdivision (${context}): ${positions}`;
           return null;
         };
         const zoom = frame
@@ -1336,16 +1326,13 @@ describe("standalone workbench host boundary", function () {
           await input.touch([await stableCenter(zoom)]);
           await expect
             .poll(async () => {
-              const [[x, y], top, left, topRuler, leftRuler] = await Promise.all([
+              const [[x, y], top, left] = await Promise.all([
                 axes(),
-                labels("canvas-top-ruler"),
-                labels("canvas-left-ruler"),
                 ruler("canvas-top-ruler", "x"),
                 ruler("canvas-left-ruler", "y"),
               ]);
               const broken =
-                ruleBroken(top, "x", x.origin, x.perCm.x, topRuler) ??
-                ruleBroken(left, "y", y.origin, y.perCm.y, leftRuler);
+                ruleBroken("x", x.origin, x.perCm.x, top) ?? ruleBroken("y", y.origin, y.perCm.y, left);
               return broken === null ? "readable" : `${level}: ${broken}`;
             })
             .toBe("readable");
