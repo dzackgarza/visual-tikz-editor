@@ -259,12 +259,17 @@ function followSystemAppearance(event: MediaQueryListEvent): void {
 
 const dirty = computed(() => document.value !== null && (source.value !== savedSource.value ||
   document.value.recovery === "conflict" || (!document.value.saved && recoverySaved.value)));
-const fileName = computed(() => document.value?.path.split("/").pop() ?? "TikZ workbench");
-// "*ref.svg - Inkscape": the file name, a leading * while changes are unsaved, then the app name. The desktop shell copies it to the window.
+// A document with no file is "Unsaved Document", as Xournal++ names it (Control.cpp:1974-1975 at v1.3.8).
+const fileName = computed(() => {
+  if (document.value === null) return "TikZ workbench";
+  return document.value.saved ? document.value.path.split("/").pop() ?? "" : "Unsaved Document";
+});
+// "*ref.svg - Inkscape": the file name, a leading * while changes are unsaved, then the app name. A document
+// with no file is always unsaved and has no *, as in Xournal++. The desktop shell copies the title to the window.
 watch([fileName, dirty, document], () => {
   window.document.title = document.value === null
     ? "Visual TikZ Editor"
-    : `${dirty.value ? "*" : ""}${fileName.value} - Visual TikZ Editor`;
+    : `${dirty.value && document.value.saved ? "*" : ""}${fileName.value} - Visual TikZ Editor`;
 }, { immediate: true });
 const status = computed(() => {
   if (hostError.value !== "") return hostError.value;
@@ -425,8 +430,9 @@ async function mayLeaveDocument(action: "closing" | "continuing"): Promise<boole
     unsavedPrompt.value = action;
     void nextTick(() => window.document.querySelector<HTMLButtonElement>(".unsaved-actions button:last-child")?.focus());
   });
-  // The APG dialog pattern returns focus to the invoking control; a menu item's menu has closed,
-  // so focus goes to the menu's title, where the APG menubar pattern leaves it after a choice.
+  // The APG dialog pattern returns focus to the invoking control unless it no longer exists. A menu item
+  // is gone once its menu closes, so focus goes to the menu's title, as the APG menu button example
+  // sets focus on the menu button after a choice.
   const invoker = opener instanceof HTMLElement ? opener.closest("details")?.querySelector("summary") ?? opener : null;
   invoker?.focus();
   if (choice === "cancel") return false;
