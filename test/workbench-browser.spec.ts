@@ -1339,7 +1339,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `labels the rulers in lattice steps when the figure scales its lattice in ${tablet.name}`,
+      `labels the rulers in centimetres when the figure scales its lattice in ${tablet.name}`,
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -1352,14 +1352,14 @@ describe("standalone workbench host boundary", function () {
         await expect(axis).toBeAttached();
         // The startup view depends on the canvas size at mount; the user fits the figure through the zoom popup.
         await fitDiagram(frame, await TabletInput.attach(page));
-        // Screen x of lattice x = 0 and the screen width of one lattice step, from the segment (0,0) -- (10,0).
-        const lattice = () =>
+        // Screen x of x = 0 and the screen width of one centimetre, from the segment (0,0) -- (10,0) of 20 cm.
+        const centimetre = () =>
           axis.evaluate((path: SVGGeometryElement) => {
             const m = path.getScreenCTM()!;
             const start = path.getPointAtLength(0);
             const end = path.getPointAtLength(path.getTotalLength());
             const origin = start.x * m.a + start.y * m.c + m.e;
-            return { origin, unit: (end.x * m.a + end.y * m.c + m.e - origin) / 10 };
+            return { origin, unit: (end.x * m.a + end.y * m.c + m.e - origin) / 20 };
           });
         // Each label with its tick's screen x: the label's group is translated to the tick.
         const labels = () =>
@@ -1372,10 +1372,10 @@ describe("standalone workbench host boundary", function () {
                 x: text.parentElement!.getBoundingClientRect().left,
               })),
             );
-        // Every ruler label sits at its own lattice coordinate once the fitted view has rendered its labels.
+        // Every ruler label sits at its own centimetre once the fitted view has rendered its labels.
         await expect
           .poll(async () => {
-            const [{ origin, unit }, entries] = await Promise.all([lattice(), labels()]);
+            const [{ origin, unit }, entries] = await Promise.all([centimetre(), labels()]);
             const misplaced = entries.filter(
               (entry) => Math.abs(entry.x - (origin + entry.label * unit)) > 2,
             );

@@ -102,8 +102,4 @@ WB 1101 (the opening range); WB 7536 `starts with the origin visible and clear o
 
 The dock's zoom button and the "Zoom and display" popover: WB 208, 237, 332, 448, 1101, 1153; WB 1994 `creates, hides, and deletes a ruler guide by finger from one Ruler guides control`; WB 4538, 4819, 5826; and every story that calls `fitDiagram`.
 
-### #66 Rulers in centimetres
-
-WB 1009 `labels the rulers in lattice steps when the figure scales its lattice`.
-
 No story asserts the behaviour that #38, #39, #43, or #60 replace; their acceptance stories are new. The storage-status stories (WB 3438, WB 9622, and the "Saved" checks in WF) assert a rule the [interaction model](../interaction-model.md) keeps.

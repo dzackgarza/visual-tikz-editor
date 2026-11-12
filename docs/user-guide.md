@@ -35,7 +35,7 @@ The dock holds these controls in this order: Select, Lasso, Pen, Eraser, Geometr
 | Color | Sets the colour of its named target: new strokes, the selected stroke, the selected fill, or the bucket fill. |
 | Properties | Opens the fields of the selected object, or of the active tool when nothing is selected. A side panel in landscape; a bottom sheet in portrait. |
 
-The zoom readout opens Fit diagram, zoom presets, and the grid, ruler, guide, and output-bounds settings.
+The zoom readout opens Fit diagram, zoom presets, and the grid, ruler, guide, and output-bounds settings. The rulers measure centimetres from the figure's origin, and their labels stay at least 50 px apart at every zoom.
 
 ## Touch and pen
 

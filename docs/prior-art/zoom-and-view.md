@@ -56,7 +56,7 @@ Source: fork `.cache/tikz-editor/packages/app/src/` unless a path says otherwise
 | 100 % | 3.76 times printed size | Printed size at 96 px per inch (Inkscape, Xournal++ Normal Size, upstream) | Every percentage misreports the size |
 | Zoom control | A dock button opening a popover of fifteen buttons, a slider, and four display toggles; the popover stays open and ignores Escape | A readout at the right end of the status bar; zoom commands in View; display toggles in View | Wrong place; display toggles under zoom |
 | Normal size | No command; Ctrl+0 fits the content | Normal Size on Ctrl+0 (GNOME, Xournal++, Ipe), Zoom to 1:1 (Inkscape) | Missing command |
-| Rulers | No unit; corner "x,y"; label step fixed, no label at 115 % | Document unit; label step follows the zoom | No readable coordinate at some zooms |
+| Rulers | No unit; corner "x,y"; label step fixed, no label at 115 % | Document unit; label step follows the zoom | Repaired |
 
 ## Specification
 
@@ -66,7 +66,7 @@ Source: fork `.cache/tikz-editor/packages/app/src/` unless a path says otherwise
 4. **Zoom readout.** The zoom percentage sits at the right end of the status line ([#52](https://github.com/dzackgarza/visual-tikz-editor/issues/52)), after the pointer position, as Inkscape's "Z:" field and Ipe's resolution. It is a field: typing a number and Enter sets the zoom, as in Inkscape; a tap or click on its menu button opens Zoom to Fit, Zoom to Selection, Normal Size, then 10, 20, 50, 100, 200, 500, 1000 % as in Inkscape's zoom menu. The menu follows the [selection specification](selection-and-settings.md) item 8. The dock's zoom button and the "Zoom and display" popover with its slider and preset grid are deleted.
 5. **View menu.** View has Zoom In (Ctrl+=), Zoom Out (Ctrl+−), Normal Size (Ctrl+0), Zoom to Fit as a check item, and Zoom to Selection, as GNOME's shortcuts and Xournal++'s and Ipe's menus; then the check items Grid, Rulers (Ctrl+R), Guides, and Output Bounds, as Inkscape's View menu. Show Magnifier is a check item: while it is on, a press and drag shows the loupe of upstream tikz-editor (300 px at 2.25×) under the pointer, and Escape or the item turns it off, as Preview's Tools › Show Magnifier. The Magnifier tool leaves the dock. Fit to Content and the Ctrl+0 binding to it are deleted. In the embedded host, which has no menu bar, the same commands are in the readout's menu after a separator.
 6. **Pointer and touch.** Ctrl+wheel with a mouse and a pinch on a touchpad or touchscreen zoom about the pointer or the pinch centre, as today and as the GNOME HIG. Zoom In and Zoom Out from the keyboard or the menu zoom about the centre of the canvas by a factor of 1.15, as today.
-7. **Rulers.** Ruler labels are in centimetres, the unit of every displayed measurement ([#54](https://github.com/dzackgarza/visual-tikz-editor/issues/54)), with "cm" as the ruler tooltip, as Inkscape names its unit. The label step follows the zoom: the smallest of 1, 2, 5 × 10ⁿ cm that keeps adjacent labels at least 50 px apart, so each ruler shows at least two labels at every zoom. The corner text "x,y" and its tooltip are deleted.
+7. **Rulers.** Ruler labels are in centimetres, the unit of every displayed measurement ([#54](https://github.com/dzackgarza/visual-tikz-editor/issues/54)), with "cm" as the ruler tooltip, as Inkscape names its unit. The label step follows the zoom: the smallest of 1, 2, 5 × 10ⁿ cm that keeps adjacent labels at least 50 px apart, so each ruler shows at least two labels at every zoom. The corner text "x,y" and its tooltip are deleted. The present build meets this rule.
 
 ## Implementation issues
 
@@ -78,6 +78,5 @@ An issue that names a dependency starts after that audit has its specification.
 | 2, 3 | [#64](https://github.com/dzackgarza/visual-tikz-editor/issues/64) A figure opens in Zoom to Fit; its view is restored when the file opens again | #63 |
 | 4; 5 in the embedded host | [#65](https://github.com/dzackgarza/visual-tikz-editor/issues/65) Zoom readout at the end of the status line with a zoom menu; delete the Zoom and display popover | #52, #59, #44, #63 |
 | 5 | [#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44) View menu; offer only the views the document supports; one name per view | — |
-| 7 | [#66](https://github.com/dzackgarza/visual-tikz-editor/issues/66) Rulers in centimetres with a label step that follows the zoom | #54 |
 
 Item 6 is the present behaviour and needs no issue.

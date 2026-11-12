@@ -7107,13 +7107,24 @@ index 00000000..e45afbd7
 +  );
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-index cf4cf2cf..f9ecfae9 100644
+index cf4cf2cf..e13ee0d4 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-@@ -38,6 +38,16 @@
-   user-select: none;
- }
- 
+@@ -27,15 +27,19 @@
+ .rulerCorner {
+   grid-column: 1;
+   grid-row: 1;
+-  display: flex;
+-  align-items: center;
+-  justify-content: center;
+   border-right: 1px solid var(--border);
+   border-bottom: 1px solid var(--border);
+   background: var(--bg-app);
+-  color: var(--text-faint);
+-  font-size: calc(var(--app-ui-scale, 1) * 9px);
+-  user-select: none;
++}
++
 +.rulerCorner,
 +.topRulerSlot,
 +.leftRulerSlot {
@@ -7122,12 +7133,10 @@ index cf4cf2cf..f9ecfae9 100644
 +  position: relative;
 +  z-index: 2;
 +  touch-action: none;
-+}
-+
+ }
+ 
  .topRulerSlot {
-   grid-column: 2;
-   grid-row: 1;
-@@ -94,14 +104,14 @@
+@@ -94,14 +98,14 @@
  }
  
  .rulerTickMinor {
@@ -7145,7 +7154,7 @@ index cf4cf2cf..f9ecfae9 100644
    vector-effect: non-scaling-stroke;
  }
  
-@@ -123,9 +133,6 @@
+@@ -123,9 +127,6 @@
    touch-action: none;
    outline: none;
    background-color: var(--bg-canvas-area);
@@ -7155,7 +7164,7 @@ index cf4cf2cf..f9ecfae9 100644
  }
  
  .viewportTool {
-@@ -162,8 +169,8 @@
+@@ -162,8 +163,8 @@
  .svgLayer {
    position: absolute;
    inset: 0;
@@ -7166,7 +7175,7 @@ index cf4cf2cf..f9ecfae9 100644
    pointer-events: none;
    -webkit-user-select: none;
    user-select: none;
-@@ -179,7 +186,7 @@
+@@ -179,7 +180,7 @@
  }
  
  .svgLayerTransparencyGrid {
@@ -7175,7 +7184,7 @@ index cf4cf2cf..f9ecfae9 100644
    background-image:
      linear-gradient(45deg, rgba(0, 0, 0, 0.08) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.08) 75%, rgba(0, 0, 0, 0.08)),
      linear-gradient(45deg, rgba(0, 0, 0, 0.08) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.08) 75%, rgba(0, 0, 0, 0.08));
-@@ -188,10 +195,18 @@
+@@ -188,10 +189,18 @@
  }
  
  .svgLayerNoDocumentBounds {
@@ -7195,7 +7204,7 @@ index cf4cf2cf..f9ecfae9 100644
  :global([data-canvas-invert]) .svgLayer {
    background: #e8e8e8;
    filter: invert(1) hue-rotate(180deg);
-@@ -205,6 +220,38 @@
+@@ -205,6 +214,38 @@
    background-image: none;
  }
  
@@ -7234,7 +7243,7 @@ index cf4cf2cf..f9ecfae9 100644
  .svgLayer :global(svg) {
    display: block;
    width: 100%;
-@@ -323,59 +370,34 @@
+@@ -323,59 +364,34 @@
  }
  
  .gridMinor {
@@ -7304,7 +7313,7 @@ index cf4cf2cf..f9ecfae9 100644
  }
  
  .hitRegions {
-@@ -390,6 +412,16 @@
+@@ -390,6 +406,16 @@
    fill: transparent;
  }
  
@@ -7321,7 +7330,7 @@ index cf4cf2cf..f9ecfae9 100644
  .selectionOverlay {
    pointer-events: none;
  }
-@@ -568,6 +600,14 @@
+@@ -568,6 +594,14 @@
    vector-effect: non-scaling-stroke;
  }
  
@@ -7336,7 +7345,7 @@ index cf4cf2cf..f9ecfae9 100644
  .marqueeRect {
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
-@@ -935,3 +975,16 @@
+@@ -935,3 +969,16 @@
      print-color-adjust: exact;
    }
  }
@@ -9873,7 +9882,7 @@ index 4e22ccfa..fc208659 100644
          <Suspense fallback={null}>
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
-index f0ff59f8..7e221135 100644
+index f0ff59f8..f1e81809 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 @@ -14,6 +14,7 @@ import type { CanvasContextMenuDefinition } from "../../context-menu";
@@ -10044,15 +10053,28 @@ index f0ff59f8..7e221135 100644
      showDevPanel,
      snapDebugRect,
      onSnapDebugMovePointerDown,
-@@ -383,7 +421,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+@@ -383,10 +421,10 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
    return (
      <div className={css.panel}>
        <div className={[css.canvasGrid, showRulers ? "" : css.canvasGridNoRulers].filter(Boolean).join(" ")}>
 -        {showRulers ? <div className={css.rulerCorner} data-select="chrome">cm</div> : null}
-+        {showRulers ? <div className={css.rulerCorner} data-select="chrome" aria-label="Source lattice coordinates" title="Source lattice coordinates">x,y</div> : null}
++        {showRulers ? <div className={css.rulerCorner} data-select="chrome" /> : null}
  
          {showRulers ? (
-           <div className={css.topRulerSlot} data-select="chrome">
+-          <div className={css.topRulerSlot} data-select="chrome">
++          <div className={css.topRulerSlot} data-select="chrome" title="cm">
+             <svg
+               ref={topRulerRef}
+               className={css.topRuler}
+@@ -419,7 +457,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
+         ) : null}
+ 
+         {showRulers ? (
+-          <div className={css.leftRulerSlot} data-select="chrome">
++          <div className={css.leftRulerSlot} data-select="chrome" title="cm">
+             <svg
+               ref={leftRulerRef}
+               className={css.leftRuler}
 @@ -463,6 +501,7 @@ export function CanvasPanelView(props: CanvasPanelViewProps) {
            className={[css.viewport, viewportCursorClass].filter(Boolean).join(" ")}
            ref={viewportRef}
@@ -11544,7 +11566,7 @@ index a7b0a7e2..1510af8b 100644
 +}
 +
 diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
-index 5660d6d8..8cfbb61d 100644
+index 5660d6d8..f7bc1c9c 100644
 --- a/packages/app/src/ui/canvas-panel/geometry.ts
 +++ b/packages/app/src/ui/canvas-panel/geometry.ts
 @@ -1,4 +1,5 @@
@@ -11561,15 +11583,50 @@ index 5660d6d8..8cfbb61d 100644
    viewportPos: number;
    major: boolean;
    label?: string;
-@@ -71,6 +73,7 @@ export function buildTicks(
+@@ -71,15 +73,40 @@ export function buildTicks(
    for (const worldValue of values) {
      const major = isMultipleOfStep(worldValue, majorStep);
      ticks.push({
 +      worldValue,
        viewportPos: mapWorldToViewport(worldValue),
-       major,
-       label: major ? formatCm(worldValue / PT_PER_CM) : undefined
-@@ -210,20 +213,8 @@ export function svgToWorldPoint(point: SvgPoint, viewBox: Pick<SvgViewBox, "y" |
+-      major,
+-      label: major ? formatCm(worldValue / PT_PER_CM) : undefined
++      major
+     });
+   }
+ 
+   return ticks;
+ }
+ 
++/** The least screen distance between two ruler labels, in px. */
++const RULER_LABEL_MIN_PX = 50;
++
++/**
++ * Ruler ticks in world pt, labelled in centimetres. The label step is the smallest of 1, 2, 5 × 10ⁿ cm
++ * that keeps adjacent labels RULER_LABEL_MIN_PX apart at this scale (px per pt), as Inkscape's rulers
++ * pick their step from the zoom (`src/ui/widget/ruler.cpp`); unlabelled ticks divide each step in fifths
++ * (quarters for a step of 2 × 10ⁿ).
++ */
++export function buildRulerTicks(
++  worldMinPt: number,
++  worldMaxPt: number,
++  scale: number,
++  mapWorldToViewport: (value: number) => number
++): RulerTick[] {
++  const minCm = RULER_LABEL_MIN_PX / (Math.max(scale, 1e-6) * PT_PER_CM);
++  const decade = 10 ** Math.floor(Math.log10(minCm));
++  const mantissa = [1, 2, 5, 10].find((m) => m * decade >= minCm * (1 - 1e-9))!;
++  const labelStepPt = mantissa * decade * PT_PER_CM;
++  const tickStepPt = labelStepPt / (mantissa === 2 ? 4 : 5);
++  return buildTicks(worldMinPt, worldMaxPt, tickStepPt, labelStepPt, mapWorldToViewport).map((tick) =>
++    tick.major ? { ...tick, label: formatCm(tick.worldValue / PT_PER_CM) } : tick
++  );
++}
++
+ export function buildValueSequence(min: number, max: number, step: number, maxCount: number): number[] {
+   if (!(step > 0) || !Number.isFinite(min) || !Number.isFinite(max)) return [];
+ 
+@@ -210,20 +237,8 @@ export function svgToWorldPoint(point: SvgPoint, viewBox: Pick<SvgViewBox, "y" |
    return typedSvgToWorld(point, viewBox as SvgViewBox);
  }
  
@@ -11591,7 +11648,7 @@ index 5660d6d8..8cfbb61d 100644
    return {
      minorStep,
      majorStep: minorStep * OVERLAY_MAJOR_STEP_MULTIPLE
-@@ -291,3 +282,30 @@ export function distanceSquared(a: WorldPoint, b: WorldPoint): number {
+@@ -291,3 +306,30 @@ export function distanceSquared(a: WorldPoint, b: WorldPoint): number {
    const dy = a.y - b.y;
    return dx * dx + dy * dy;
  }
@@ -14744,10 +14801,10 @@ index c69a45af..ef721aa7 100644
 -  return handle ? handle.world : null;
 -}
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
-index 7113da3e..0e1cdccc 100644
+index 7113da3e..31975d9f 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasGuidesAndRulers.ts
-@@ -1,9 +1,11 @@
+@@ -1,9 +1,12 @@
 +import { resolveFigureCoordinateFrame } from "tikz-editor/edit/coordinate-frame";
 +import type { EditParseOptions } from "tikz-editor/edit/parse-options";
 +import { applyMatrix, inverseMatrix } from "tikz-editor/semantic/transform";
@@ -14755,13 +14812,14 @@ index 7113da3e..0e1cdccc 100644
  import { useCallback, useMemo, type Dispatch, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
  import { viewportPoint as makeViewportPoint, clientPoint as makeClientPoint, px } from "tikz-editor/coords/index";
  import {
++  buildRulerTicks,
    buildTicks,
 -  buildValueSequence,
 -  isMultipleOfStep,
    resolveOverlayGridSteps,
    toViewportXFromWorld,
    toViewportYFromWorld,
-@@ -23,6 +25,9 @@ import type { GuideDragState, GuideOrientation, GuidePreview, GuidesState } from
+@@ -23,6 +26,9 @@ import type { GuideDragState, GuideOrientation, GuidePreview, GuidesState } from
  import type { SvgViewBox } from "tikz-editor/svg/index";
  
  export type GridLines = {
@@ -14771,7 +14829,7 @@ index 7113da3e..0e1cdccc 100644
    verticalMinor: number[];
    verticalMajor: number[];
    verticalAxisX: number | null;
-@@ -34,15 +39,14 @@ export type GridLines = {
+@@ -34,15 +40,14 @@ export type GridLines = {
  };
  
  export type UseCanvasGuidesAndRulersArgs = {
@@ -14792,7 +14850,7 @@ index 7113da3e..0e1cdccc 100644
    gridMinorTargetPx: number;
    canvasTransform: CanvasTransform;
    svgResult: { viewBox: SvgViewBox } | null;
-@@ -58,10 +62,14 @@ export type UseCanvasGuidesAndRulersArgs = {
+@@ -58,10 +63,14 @@ export type UseCanvasGuidesAndRulersArgs = {
  
  export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
    const {
@@ -14808,7 +14866,7 @@ index 7113da3e..0e1cdccc 100644
      gridMinorTargetPx,
      canvasTransform,
      svgResult,
-@@ -75,28 +83,41 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -75,28 +84,41 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
      LEFT_RULER_DRAG_SOURCE_WIDTH_PX
    } = args;
  
@@ -14859,16 +14917,19 @@ index 7113da3e..0e1cdccc 100644
    );
  
    const renderedGuides = useMemo(() => {
-@@ -133,7 +154,7 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -132,8 +154,9 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+     [canvasTransform.scale, gridMinorTargetPx]
    );
  
-   const rulers = useMemo(() => {
+-  const rulers = useMemo(() => {
 -    if (!svgResult || !visibleRanges) {
++  // The grid follows the figure's lattice; the rulers measure centimetres.
++  const latticeTicks = useMemo(() => {
 +    if (!svgResult || !latticeRanges) {
        return {
          topTicks: [] as RulerTick[],
          leftTicks: [] as RulerTick[]
-@@ -142,74 +163,74 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -142,74 +165,91 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
  
      const { majorStep, minorStep } = overlayGridSteps;
      const topTicks = buildTicks(
@@ -14896,6 +14957,23 @@ index 7113da3e..0e1cdccc 100644
      return { topTicks, leftTicks };
 -  }, [canvasTransform, overlayGridSteps, svgResult, visibleRanges]);
 +  }, [latticeTransform, canvasTransform, overlayGridSteps, svgResult, latticeRanges]);
++
++  const rulers = useMemo(() => {
++    if (!svgResult || !visibleRanges) {
++      return {
++        topTicks: [] as RulerTick[],
++        leftTicks: [] as RulerTick[]
++      };
++    }
++    return {
++      topTicks: buildRulerTicks(visibleRanges.worldMinX, visibleRanges.worldMaxX, canvasTransform.scale, (value) =>
++        toViewportXFromWorld(value, svgResult.viewBox, canvasTransform)
++      ),
++      leftTicks: buildRulerTicks(visibleRanges.worldMinY, visibleRanges.worldMaxY, canvasTransform.scale, (value) =>
++        toViewportYFromWorld(value, svgResult.viewBox, canvasTransform)
++      )
++    };
++  }, [canvasTransform, svgResult, visibleRanges]);
  
    const gridLines = useMemo((): GridLines | null => {
      if (!svgResult || !visibleRanges || !showGrid) return null;
@@ -14911,7 +14989,7 @@ index 7113da3e..0e1cdccc 100644
 -    for (const worldX of worldXs) {
 -      if (isZeroGridValue(worldX)) {
 +    let verticalAxisX: number | null = null;
-+    for (const tick of rulers.topTicks) {
++    for (const tick of latticeTicks.topTicks) {
 +      if (isZeroGridValue(tick.worldValue)) {
 +        verticalAxisX = tick.worldValue;
          continue;
@@ -14935,7 +15013,7 @@ index 7113da3e..0e1cdccc 100644
 -      const svgY = worldToSvgY(worldY, svgResult.viewBox);
 -      if (isZeroGridValue(worldY)) {
 +    let horizontalAxisY: number | null = null;
-+    for (const tick of rulers.leftTicks) {
++    for (const tick of latticeTicks.leftTicks) {
 +      const svgY = worldToSvgY(tick.worldValue, svgResult.viewBox);
 +      if (isZeroGridValue(tick.worldValue)) {
 +        horizontalAxisY = svgY;
@@ -14967,11 +15045,11 @@ index 7113da3e..0e1cdccc 100644
 +      yMax: worldToSvgY(latticeRanges?.worldMinY ?? visibleRanges.worldMinY, svgResult.viewBox)
      };
 -  }, [overlayGridSteps, showGrid, svgResult, visibleRanges]);
-+  }, [latticeTransform, latticeRanges, rulers, showGrid, svgResult, visibleRanges]);
++  }, [latticeTransform, latticeRanges, latticeTicks, showGrid, svgResult, visibleRanges]);
  
    const resolveGuideFromClient = useCallback(
      (orientation: GuideOrientation, clientPoint: ClientPoint): { value: number; overViewport: boolean } | null => {
-@@ -371,7 +392,3 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
+@@ -371,7 +411,3 @@ export function useCanvasGuidesAndRulers(args: UseCanvasGuidesAndRulersArgs) {
  function isZeroGridValue(value: number): boolean {
    return Math.abs(value) < 1e-8;
  }
