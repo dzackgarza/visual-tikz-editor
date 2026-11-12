@@ -33,7 +33,21 @@ The rules behind A–J and the product decisions are in [the interaction model](
 ## Next work, ranked
 
 1. Read the software gate on the head of `main` (`gh run list --workflow development.yml --branch main --limit 1`). A red run is the first work: read the failed story's trace from the run's `test-results` artifact ([Development](docs/development.md#tests)), reproduce the cause it shows with `bun run test:browser --grep '<story>'`, commit the red story, then repair it. A story that fails on the runner only is [#67](https://github.com/dzackgarza/visual-tikz-editor/issues/67) work; its body lists the hypotheses already falsified. Commit as the work goes and push once, when it is complete. [Development](docs/development.md) covers the story helpers and the traps of the fonts and the native file dialogs.
-2. Work the implementation issues #27–#66 in the order of their dependencies: each names the specification items it implements and the issues it depends on. An issue starts with its acceptance story, committed red against the present build; the stories that assert the rule it replaces are rewritten in the same change ([stories that assert replaced rules](docs/prior-art/stories.md) lists them per issue). Then the repair. Record decisions on the issue, from prior art.
+2. Implementation starts only on the user's instruction. The user's own reports come first; the issues the audits found without a report wait behind them. The reports and the issues that carry them:
+
+   | User report | Issues |
+   | --- | --- |
+   | Zooming in or out makes the renderer fail | [#18](https://github.com/dzackgarza/visual-tikz-editor/issues/18) |
+   | Default zoom is 15 % | [#63](https://github.com/dzackgarza/visual-tikz-editor/issues/63), [#64](https://github.com/dzackgarza/visual-tikz-editor/issues/64) |
+   | The drawing toolbar holds a Layers button; Settings is a word, not an icon; the lasso icon is a rectangle | [#27](https://github.com/dzackgarza/visual-tikz-editor/issues/27), [#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28) |
+   | Properties and Layers share one popup | [#34](https://github.com/dzackgarza/visual-tikz-editor/issues/34) |
+   | Menus for File, Export and others are not attached to their buttons | [#42](https://github.com/dzackgarza/visual-tikz-editor/issues/42), [#59](https://github.com/dzackgarza/visual-tikz-editor/issues/59) |
+   | A tikzpicture can switch to Quiver, with help text on why Quiver is unavailable | [#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44), [#47](https://github.com/dzackgarza/visual-tikz-editor/issues/47) |
+   | The app teaches at every step | [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31), [#52](https://github.com/dzackgarza/visual-tikz-editor/issues/52) |
+   | "New strokes" on what should be a standard colour selector | [#29](https://github.com/dzackgarza/visual-tikz-editor/issues/29) |
+   | Buttons open but do not close; a Dark Theme button; help text on the eraser | Repaired locally: #26, #45, #53 |
+
+   Each issue names the specification items it implements and the issues it depends on. An issue starts with its acceptance story, committed red against the present build; the stories that assert the rule it replaces are rewritten in the same change ([stories that assert replaced rules](docs/prior-art/stories.md) lists them per issue). Then the repair. Record decisions on the issue, from prior art.
 3. A question no specification answers is answered first from prior art in the owning specification, then in code. A new interface issue follows the template's Prior art section.
 4. Publish a release for each green head that changes the product (`just release-assets <run-id>`, then `gh release create`; see [Development](docs/development.md#releases)). Reconcile [#1](https://github.com/dzackgarza/visual-tikz-editor/issues/1) and #2 against the release.
 
