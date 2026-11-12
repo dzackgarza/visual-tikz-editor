@@ -4,7 +4,7 @@
 
 Deliver the complete standalone mathematical diagram editor and its reusable host API. Drawing, selection, correction, source editing, saving, export, and reopening form one coherent pen-and-touch workflow, and authored TikZ stays authoritative. The user reports needed function and defects as an end user; the maintainer repairs every defect found. The interface follows established notebook and vector-editor conventions, recorded with their prior art under [docs/prior-art](docs/prior-art/).
 
-The present work starts from the user's report of 2026-11-12: basic design and usability defects, each listed with its issues under Next work, item 1. The first deliverable is the audit of what those defects imply about the app's design: which design process produced them, which other decisions share that cause, and what in the design must change. Audits #19–#25 were opened for it and closed within two hours, 10 to 18 minutes each. They answer it only in the Cause section of #17; their specifications replace each surface rule by rule, and several of those rules have no source or contradict the source they cite. Repairs follow the audit. A rule-by-rule check of the prior-art specifications is not that audit.
+The present work starts from the user's report of 2026-11-12: basic design and usability defects, each listed with its issues under Next work, item 1. The [design audit](specs/001-product-design/audit.md) states what those defects imply about the app's design. The [constitution](.specify/memory/constitution.md) states the principles, each with its prior art. The [product design specification](specs/001-product-design/spec.md) states the users, workflows, and information architecture that the repairs implement. Work follows Spec Kit from that specification: clarify, plan, tasks, implement.
 
 ## Completion condition
 
@@ -32,7 +32,7 @@ The rules behind A–J and the product decisions are in [the interaction model](
 
 ## Next work, ranked
 
-1. Write the design audit of the user's reports (Task). The user sets the priorities of the repairs from the audit. The reports and the issues filed for them:
+1. Resolve the open question of the [specification](specs/001-product-design/spec.md) (FR-041) with the user, then run `/speckit-plan` and `/speckit-tasks` against it; each plan passes the constitution's Constitution Check. The per-surface specifications under docs/prior-art and their issues are corrected where they disagree with the specification. The user sets the priorities of the repairs. The reports and the issues filed for them:
 
    | User report | Issues |
    | --- | --- |
