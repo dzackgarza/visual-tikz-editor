@@ -47,7 +47,8 @@ if (input !== undefined && input !== "" && !DIAGRAM_EXTENSIONS.has(path.extname(
 }
 
 let documentPath = input === undefined || input === "" ? null : await realpath(input);
-let untitledSource = "";
+// A launch with no file opens an untitled tikzpicture, as Ipe and Xournal++ open an untitled document.
+let untitledSource = NEW_TIKZ;
 let untitledExtension: ".tikz" | ".tikzcd" = ".tikz";
 let documentId: string = randomUUID();
 let conflictSource: string | null = null;

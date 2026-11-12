@@ -43,11 +43,7 @@ describe("standalone workbench host boundary", function () {
   let page: Page;
   let url: string;
 
-  type StorySetup = {
-    viewport?: { width: number; height: number };
-    initialPage?: "blank";
-    launch?: "no-file";
-  };
+  type StorySetup = { viewport?: { width: number; height: number }; initialPage?: "blank" };
   const storySetups = new Map<string, StorySetup>();
   function story(setup: StorySetup, title: string, run: Mocha.AsyncFunc): void {
     storySetups.set(title, setup);
@@ -138,9 +134,6 @@ describe("standalone workbench host boundary", function () {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
     await startPageCoverage(page);
-    if (setup?.launch !== "no-file") {
-      await page.request.post(`${url}api/new`, { data: "tikzpicture" });
-    }
     if (setup?.initialPage === "blank") {
       return;
     }
@@ -239,7 +232,7 @@ describe("standalone workbench host boundary", function () {
   );
 
   story(
-    { initialPage: "blank", launch: "no-file" },
+    { initialPage: "blank" },
     "opens an untitled tikzpicture at launch, starts each kind from File, and closes Save changes on Escape",
     async function () {
       await page.goto(url);
@@ -6493,16 +6486,11 @@ describe("standalone workbench host boundary", function () {
         };
         for (const kind of ["tikzcd", "tikzpicture"] as const) {
           await tap(page.getByRole("group", { name: "File" }).locator("summary"));
-          await tap(page.getByRole("button", { name: "New tikzpicture or tikzcd…", exact: true }));
+          await tap(page.getByRole("button", { name: `New ${kind}`, exact: true }));
           await expect(
             page.getByRole("dialog", { name: "Save changes?" }),
             "An untouched new diagram has no changes to save",
           ).toHaveCount(0);
-          const dialog = page.getByRole("dialog");
-          await expect(
-            dialog.getByRole("button", { name: "tikzpicture", exact: true }),
-          ).toBeVisible();
-          await tap(dialog.getByRole("button", { name: kind, exact: true }));
           await expect(
             page.locator(
               kind === "tikzcd"

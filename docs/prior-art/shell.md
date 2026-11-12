@@ -82,9 +82,9 @@ Not verified from a primary source: how long a GNOME toast stays; the GNOME wind
 | Error display | Replaces status, wraps to three lines, moves the bar | Banner for a state, toast for an event | Layout shift; no distinction |
 | Confirmation | None for Copy source and Export | Toast | Silent |
 | Save conflict | Status text; Save keeps failing | Compare or Overwrite | No resolution; repeated failure |
-| New | Modal kind chooser, workspace unmounted | New per kind in the menu | Extra dialog |
-| Start-up without a file | Kind chooser | Untitled document of the default kind | Extra dialog |
-| Dialog dismissal | New dialog ignores Escape | Escape closes; focus returns | No Escape |
+| New | Modal kind chooser, workspace unmounted | New per kind in the menu | Repaired |
+| Start-up without a file | Kind chooser | Untitled document of the default kind | Repaired |
+| Dialog dismissal | New dialog ignores Escape | Escape closes; focus returns | Repaired |
 
 ## Specification
 
@@ -99,7 +99,7 @@ Not verified from a primary source: how long a GNOME toast stays; the GNOME wind
 9. **Window title.** "figure.tikz - Visual TikZ Editor", with a leading "\*" while there are unsaved changes, as in Inkscape. The browser build sets the page title the same way. An untitled document is titled by its file name, "Untitled.tikz - Visual TikZ Editor". The present build meets this rule.
 10. **Messages.** The document bar is one row of fixed height; no message changes its height or moves its controls. A persistent state (the file changed on disk, the renderer is unavailable) shows as a banner at the top of the workspace with one title and at most one button, and leaves when the state ends. A single event shows as a toast: "Copied TikZ source", "Exported figure.pdf", or the failed command and its reason. Where the status text sits belongs to #21.
 11. **Save conflict.** When the file changed on disk, a banner reads "figure.tikz changed on disk" with the actions Compare and Overwrite, as in VS Code. Compare shows the disk text against the editor text; Overwrite writes the editor text over the file. A Save after the conflict shows the same banner and leaves the file unchanged until Compare or Overwrite ends the conflict, as in VS Code; the present build already does this (WF 290).
-12. **New and start-up.** File > New tikzpicture and New tikzcd create the document directly. A launch with no file opens an untitled tikzpicture, as Ipe and Xournal++ open an untitled document. The kind chooser dialog is deleted. Every dialog (Save changes, Document Properties) closes on Escape, returns focus to the control that opened it, and leaves the workspace mounted behind it.
+12. **New and start-up.** File > New tikzpicture and New tikzcd create the document directly. A launch with no file opens an untitled tikzpicture, as Ipe and Xournal++ open an untitled document. Every dialog (Save changes, Document Properties) closes on Escape, returns focus to the control that opened it, and leaves the workspace mounted behind it; for a menu item, that control is the menu title. The present build meets this rule; Document Properties (#50) is not built yet.
 
 ## Implementation issues
 
@@ -113,4 +113,3 @@ An issue that names a dependency starts after that audit has its specification.
 | 10 | [#47](https://github.com/dzackgarza/visual-tikz-editor/issues/47) Fixed-height document bar; banners and toasts | #21 |
 | 11 | [#48](https://github.com/dzackgarza/visual-tikz-editor/issues/48) Save conflict: Compare and Overwrite | — |
 | 2 | [#50](https://github.com/dzackgarza/visual-tikz-editor/issues/50) Document Properties dialog | — |
-| 12 | [#51](https://github.com/dzackgarza/visual-tikz-editor/issues/51) New without a kind dialog; untitled tikzpicture at launch; dialogs close on Escape | — |

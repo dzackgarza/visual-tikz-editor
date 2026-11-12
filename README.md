@@ -65,7 +65,7 @@ To edit an existing file, pass its path: `visual-tikz-editor figure.tikz` or `ju
 | --- | --- | --- |
 | Diagram | The `.tikz` or `.tikzcd` file you open | Each accepted edit saves to the file. A change on disk stops the save and reports a conflict. |
 | Recovery draft | `$XDG_STATE_HOME/visual-tikz-editor/recovery.json` (default `~/.local/state`) | Holds an untitled diagram until Save As, and the edits that a disk conflict stopped. The editor restores the last diagram after a restart. |
-| Preferences | `$XDG_CONFIG_HOME/visual-tikz-editor/preferences.json` (default `~/.config`) | Theme, canvas settings, snapping rules, shortcuts, and colour collections. |
+| Preferences | `$XDG_CONFIG_HOME/visual-tikz-editor/preferences.json` (default `~/.config`) | Canvas settings, snapping rules, shortcuts, and colour collections. |
 | Render cache | `$XDG_CACHE_HOME/visual-tikz-editor` (default `~/.cache`) | Compiled TeX output for the render view and export. |
 | Images | Relative to the diagram's directory | `\includegraphics` paths and TeX inputs resolve there. |
 

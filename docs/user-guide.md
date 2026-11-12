@@ -4,16 +4,16 @@ This guide describes the standalone editor's controls. The [interaction model](i
 
 ## Documents
 
-The **File** menu holds New, Open, Save, and Save As. New offers two diagram types:
+The **File** menu holds New tikzpicture, New tikzcd, Open, Save, and Save As. A launch without a file opens an untitled tikzpicture. Each kind opens its own view:
 
-| Type | View that opens |
+| Item | View that opens |
 | --- | --- |
-| `tikzpicture` | The drawing canvas |
-| `tikzcd` | Quiver, the commutative-diagram editor |
+| New tikzpicture | The drawing canvas |
+| New tikzcd | Quiver, the commutative-diagram editor |
 
 Each accepted edit to a saved file writes the file. An untitled diagram keeps a recovery draft until **Save** or Ctrl+S opens the native Save As dialog. If the file changes on disk, the editor stops saving, keeps your edits as a recovery draft, and reports the conflict. After a restart the editor restores the last diagram.
 
-**Copy source** copies the TikZ source to the clipboard without saving the file. The theme button switches between the light and dark themes and keeps the choice.
+**Copy source** copies the TikZ source to the clipboard without saving the file. The editor follows the light or dark appearance of the system.
 
 ## Views
 

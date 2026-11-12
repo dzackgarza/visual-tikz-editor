@@ -133,7 +133,6 @@ describe("standalone native file workflow", function () {
 \draw[blue] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
     await page.goto(url);
-    await page.getByRole("button", { name: "tikzpicture", exact: true }).click();
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     await expect(page.locator(".cm-content")).toBeVisible({ timeout: 30_000 });
     await page.locator(".cm-content").fill(authored);

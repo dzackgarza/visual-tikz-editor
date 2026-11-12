@@ -7,7 +7,8 @@
       <details class="file-menu" aria-label="File" @click="closeFileMenu">
         <summary>File</summary>
         <div class="file-menu-items">
-          <button type="button" :disabled="document === null" @click="newDocument">New tikzpicture or tikzcd…</button>
+          <button type="button" :disabled="document === null" @click="newDocument('tikzpicture')">New tikzpicture</button>
+          <button type="button" :disabled="document === null" @click="newDocument('tikzcd')">New tikzcd</button>
           <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
           <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
           <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
@@ -24,8 +25,8 @@
       </details>
       <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
     </header>
-    <div v-if="unsavedPrompt" class="new-kind-backdrop">
-      <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" @keydown.esc.stop.prevent="resolveUnsaved('cancel')">
+    <div v-if="unsavedPrompt" class="dialog-backdrop">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" @keydown.esc.stop.prevent="resolveUnsaved('cancel')">
         <h2 id="unsaved-title">Save changes?</h2>
         <p>Save changes to {{ fileName }} before {{ unsavedPrompt }}?</p>
         <div class="unsaved-actions">
@@ -35,19 +36,7 @@
         </div>
       </div>
     </div>
-    <div v-if="newKindOpen" class="new-kind-backdrop">
-      <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="new-kind-title">
-        <h2 id="new-kind-title">New tikzpicture or tikzcd</h2>
-        <p>Choose a diagram type.</p>
-        <div class="new-kind-options">
-          <button type="button" @click="createDocument('tikzpicture')">tikzpicture</button>
-          <button type="button" @click="createDocument('tikzcd')">tikzcd</button>
-        </div>
-        <button type="button" class="new-kind-cancel" @click="openDocument">Open existing…</button>
-        <button v-if="document?.saved || source !== ''" type="button" class="new-kind-cancel" @click="newKindOpen = false">Cancel</button>
-      </div>
-    </div>
-    <main v-if="document !== null && target !== null && !newKindOpen" class="workspace">
+    <main v-if="document !== null && target !== null" class="workspace">
       <nav class="view-rail" aria-label="Left views" :class="{ 'drop-target': dropSide === 'left' }"
         @dragover.prevent="dropSide = 'left'" @dragleave="dropSide = null" @drop.prevent="dropView($event, 'left')">
         <button v-for="view in placements.left" :key="view" type="button" draggable="true"
@@ -135,7 +124,6 @@ const workbenchViews: readonly Exclude<ViewId, "code">[] = ["preview", "canvas",
 const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["preview", "canvas", "quiver"] });
 const active = reactive<Record<Side, ViewId | null>>({ left: null, right: "canvas" });
 const visited = reactive(new Set<ViewId>());
-const newKindOpen = ref(false);
 function closeFileMenu(event: MouseEvent): void {
   if (event.target instanceof Element && event.target.closest("button") &&
       event.currentTarget instanceof HTMLDetailsElement) {
@@ -375,7 +363,6 @@ async function applyDocument(response: Response): Promise<void> {
   recoveredSource.value = recoverySaved.value ? text : "";
   sourceSelection.value = null;
   documentKey.value++;
-  newKindOpen.value = !document.value.saved && text === "";
   const preferred: ViewId = rawTikzEnvironment(text) === "tikzcd" || document.value.path.endsWith(".tikzcd") ? "quiver" : "canvas";
   visited.clear();
   visited.add(preferred);
@@ -411,11 +398,16 @@ async function mayLeaveDocument(action: "closing" | "continuing"): Promise<boole
   await documentWrite;
   if (!dirty.value) return true;
   if (unsavedPrompt.value !== null) return false;
+  const opener = window.document.activeElement;
   const choice = await new Promise<"save" | "discard" | "cancel">((resolve) => {
     resolvePrompt = resolve;
     unsavedPrompt.value = action;
     void nextTick(() => window.document.querySelector<HTMLButtonElement>(".unsaved-actions button:last-child")?.focus());
   });
+  // The APG dialog pattern returns focus to the invoking control; a menu item's menu has closed,
+  // so focus goes to the menu's title, where the APG menubar pattern leaves it after a choice.
+  const invoker = opener instanceof HTMLElement ? opener.closest("details")?.querySelector("summary") ?? opener : null;
+  invoker?.focus();
   if (choice === "cancel") return false;
   if (choice === "discard") return true;
   return await save() && !dirty.value;
@@ -426,15 +418,10 @@ async function requestExit(): Promise<void> {
   if (nativeWindow) await getCurrentWindow().close();
 }
 
-async function newDocument(): Promise<void> {
+async function newDocument(kind: "tikzpicture" | "tikzcd"): Promise<void> {
   if (!await mayLeaveDocument("continuing")) return;
-  newKindOpen.value = true;
-}
-
-async function createDocument(kind: "tikzpicture" | "tikzcd"): Promise<void> {
   try {
     await applyDocument(await fetch("/api/new", { method: "POST", body: kind }));
-    newKindOpen.value = false;
   } catch (error) {
     host.reportError("Could not create a diagram", error);
   }
@@ -443,9 +430,7 @@ async function createDocument(kind: "tikzpicture" | "tikzcd"): Promise<void> {
 async function openDocument(): Promise<void> {
   if (!await mayLeaveDocument("continuing")) return;
   try {
-    const response = await fetch("/api/open", { method: "POST" });
-    await applyDocument(response);
-    if (response.status !== 204) newKindOpen.value = false;
+    await applyDocument(await fetch("/api/open", { method: "POST" }));
   } catch (error) {
     host.reportError("Could not open a diagram", error);
   }
@@ -725,7 +710,7 @@ body,
   margin-left: 0;
 }
 
-.new-kind-backdrop {
+.dialog-backdrop {
   position: fixed;
   inset: 0;
   z-index: 30;
@@ -734,7 +719,7 @@ body,
   background: color-mix(in srgb, var(--ink) 38%, transparent);
 }
 
-.new-kind-dialog {
+.dialog {
   width: min(440px, calc(100vw - 32px));
   padding: 24px;
   border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
@@ -743,12 +728,10 @@ body,
   box-shadow: 0 16px 48px color-mix(in srgb, var(--ink) 30%, transparent);
 }
 
-.new-kind-dialog h2 { margin: 0 0 8px; font-size: 20px; }
-.new-kind-dialog p { margin: 0 0 20px; color: var(--graphite); }
-.new-kind-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.new-kind-dialog button { min-height: 56px; border: 1px solid var(--ribbon); border-radius: 10px; color: var(--ink); background: var(--leaf); font: inherit; cursor: pointer; }
-.new-kind-dialog button:hover, .new-kind-dialog button:focus-visible { background: color-mix(in srgb, var(--ribbon) 15%, var(--leaf)); }
-.new-kind-dialog .new-kind-cancel { display: block; width: 100%; min-height: 40px; margin-top: 12px; border-color: color-mix(in srgb, var(--ink) 18%, transparent); }
+.dialog h2 { margin: 0 0 8px; font-size: 20px; }
+.dialog p { margin: 0 0 20px; color: var(--graphite); }
+.dialog button { min-height: 56px; border: 1px solid var(--ribbon); border-radius: 10px; color: var(--ink); background: var(--leaf); font: inherit; cursor: pointer; }
+.dialog button:hover, .dialog button:focus-visible { background: color-mix(in srgb, var(--ribbon) 15%, var(--leaf)); }
 .unsaved-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .unsaved-actions button { min-height: 44px; padding: 0 14px; }
 
