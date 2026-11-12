@@ -22,7 +22,7 @@ Source: fork `packages/app/src/ui/DockLayout.tsx:694-718`, `inspector-panel/Insp
 - **Properties, nothing selected.** The header is the active tool's name ("SELECT"). Below it are Transform (X and Y scale of the whole figure) and Figure Bounds (Mode "Auto from content"). With a creation tool active, the panel shows a hint box and a "New strokes" section with stroke and fill pickers and the circle and arc construction controls.
 - **Properties, selection.** The header is the type ("CIRCLE"), followed by the line "Selected circle". Transform (X/Y shift, X/Y scale, rotate, X/Y shear) comes first; then Stroke (colour, line width, dash), Fill (colour, "more options..", "+ gradient", "+ pattern"), and Shadow. Colours are dropdowns that read "Color" and "No color" in italics.
 - **Layers.** The header row holds the word button "New layer" and icon buttons Group, Ungroup, Send to back, Send backward, Bring forward; the last is clipped by the panel edge. Every object in the figure is a row. Each row puts its name on one line and eye, lock, and pencil (rename) on a second line, about 93 px per row. Layer rows add Raise, Lower, "Move here", and Delete. A layer is a top-level `scope` with a `name=` option (fork `layers.ts`); that option compiles and does not name the nodes inside the scope.
-- **Host state.** The host passes `showInspector` to the TikZ provider but does not listen for its `inspector-closed` event, which it forwards for every other provider (`TikzWorkbench.vue:77-91` against `:93-110`). After "×", the host still holds the panel open.
+- **Host state.** The panel belongs to the canvas editor, whose `inspector-closed` event the shell forwards to the host (`TikzWorkbench.vue:93-110`); the TeX render provider (`TikzCompilerPreview.vue`) has no panel. After "×", one host request opens the panel again (`test/hosted-browser.spec.ts`, `opens Properties on one host tap after the panel's own close button`).
 - **Overlap with the selection strip.** The strip over a selection offers "Fill and stroke", "Style", and "Transform", which repeat sections of Properties. The strip belongs to [#24](https://github.com/dzackgarza/visual-tikz-editor/issues/24).
 
 ## Prior art
@@ -85,7 +85,7 @@ Not verified from a primary source: how Procreate closes its Layers panel; the G
 | Layer actions | Raise, Lower, "Move here", Delete buttons on every layer row | Row menu: Procreate Layer Options, Inkscape context menu | Buttons on every row |
 | New layer | Word button "New layer" | Icon button | Word |
 | Header actions | Group, Ungroup, and four stacking buttons; the last clipped | View toggle and up/down stacking buttons (Inkscape); Group in the object menu | Group in the panel header; clipped button |
-| Host sync | `inspector-closed` not forwarded for the TikZ provider | Host and panel state agree | Bug |
+| Host sync | The host follows `inspector-closed` | Host and panel state agree | Keep |
 
 ## Specification
 
@@ -98,7 +98,7 @@ Not verified from a primary source: how Procreate closes its Layers panel; the G
 7. **Layers contents.** The panel lists the layers and objects of the figure as a tree, with a header toggle between the Layers view (layer rows only) and the Objects view (the full tree), as in Inkscape. A layer stays a top-level `scope` with a `name=` option, as an Inkscape layer is an SVG group marked `inkscape:groupmode="layer"`.
 8. **Layers rows.** One line per row: disclosure, name, then eye and lock at the trailing end. Eye and lock are always visible on touch; with a pointer they show on hover or when hidden or locked. A double-click or double-tap on the name renames it. A second tap on a selected row, a long press, or a right-click opens the row menu: Rename, Raise, Lower, Move selection here, Delete. Drag reordering stays. The per-row pencil, Raise, Lower, "Move here", and Delete buttons are deleted.
 9. **Layers header.** An add-layer icon button (`RiAddLine`), the view toggle, and stacking buttons (Send to back, Send backward, Bring forward, Bring to front) that fit the panel width. Group and Ungroup leave the header for the selection commands ([#24](https://github.com/dzackgarza/visual-tikz-editor/issues/24)) and the Object menu (#22).
-10. **Host sync.** The host listens for the TikZ provider's panel-closed event, so host state and panel state agree.
+10. **Host sync.** The host listens for the canvas editor's panel-closed event, so host state and panel state agree. The present build meets this rule.
 
 ## Implementation issues
 
@@ -113,4 +113,3 @@ An issue that names a dependency starts after that audit has its specification.
 | 6 | [#38](https://github.com/dzackgarza/visual-tikz-editor/issues/38) Properties sections, colour wells, and paint type | #29 |
 | 7, 9 | [#39](https://github.com/dzackgarza/visual-tikz-editor/issues/39) Layers view toggle and header | #24 |
 | 8 | [#40](https://github.com/dzackgarza/visual-tikz-editor/issues/40) Layers rows on one line; rename and row menu | — |
-| 10 | [#41](https://github.com/dzackgarza/visual-tikz-editor/issues/41) Host listens for the TikZ panel-closed event | — |
