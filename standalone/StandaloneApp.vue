@@ -23,7 +23,6 @@
         </div>
       </details>
       <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
-      <button type="button" @click="toggleTheme">{{ theme === 'light' ? 'Dark' : 'Light' }} theme</button>
     </header>
     <div v-if="unsavedPrompt" class="new-kind-backdrop">
       <div class="new-kind-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" @keydown.esc.stop.prevent="resolveUnsaved('cancel')">
@@ -242,9 +241,12 @@ let applyingDocument = false;
 let documentWrite = Promise.resolve();
 const loadError = ref("");
 const hostError = ref("");
-const theme = ref<TikzWorkbenchTheme>(
-  window.localStorage.getItem("visual-tikz-editor:theme") === "dark" ? "dark" : "light",
-);
+// The system appearance owns light and dark; Apple's HIG: "Avoid offering an app-specific appearance setting."
+const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+const theme = ref<TikzWorkbenchTheme>(systemDark.matches ? "dark" : "light");
+function followSystemAppearance(event: MediaQueryListEvent): void {
+  theme.value = event.matches ? "dark" : "light";
+}
 
 const dirty = computed(() => document.value !== null && (source.value !== savedSource.value ||
   document.value.recovery === "conflict" || (!document.value.saved && recoverySaved.value)));
@@ -393,7 +395,6 @@ async function load(): Promise<void> {
     const editorUrl = new URL("/tikz-editor/index.html", window.location.href);
     editorUrl.hash = new URLSearchParams({ storage: JSON.stringify(preferences) }).toString();
     host.editorUrl = editorUrl.href;
-    theme.value = preferences["visual-tikz-editor:theme"] === "dark" ? "dark" : "light";
     await applyDocument(await fetch("/api/document"));
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
@@ -534,14 +535,6 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
   event.returnValue = "";
 }
 
-function toggleTheme(): void {
-  theme.value = theme.value === "light" ? "dark" : "light";
-  void savePreference("visual-tikz-editor:theme", theme.value)
-    .catch(error => host.reportError("Could not save the theme", error));
-}
-
-
-
 async function copySource(): Promise<void> {
   try {
     const text = await currentSource();
@@ -555,6 +548,7 @@ async function copySource(): Promise<void> {
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("beforeunload", onBeforeUnload);
+  systemDark.addEventListener("change", followSystemAppearance);
   if (nativeWindow) {
     void getCurrentWindow().onCloseRequested((event) => {
       event.preventDefault();
@@ -578,6 +572,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("beforeunload", onBeforeUnload);
+  systemDark.removeEventListener("change", followSystemAppearance);
   unlistenClose?.();
   resolveUnsaved("cancel");
 });

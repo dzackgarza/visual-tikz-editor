@@ -71,10 +71,6 @@ The per-row Rename, Raise, "Move selection to …", and Delete buttons: WB 2528,
 
 WB 176 `keeps authored source through a render error and recovers in the dark tablet workspace`; WB 2620, 2766, 7773, 7803; WB 7887 `matches compiled geometry for filled primitives and transformed curves`; WB 9468 `edits a Quiver diagram and retains source and selection across views at ${width}px`; WB 9507 `carries one Quiver diagram through two relabelled vertices, a TeX compile, view switches, and the whole history`; WB 9573 `retains authored source and its drawing tool through rendered-view switches with a desktop mouse`; WB 9594; WF 130, 208, 397; and every story that uses "Code: left sidebar" or `authorAndRender`.
 
-### #45 Theme follows the system
-
-The theme button and the stored theme: WB 176; WB 1061 `draws the axes distinct from major grid lines, undimmed, in both themes`; WB 4538, 4592, 4819.
-
 ### #47, #48 Banners for persistent states
 
 WF 290 (the conflict as status text "The file changed on disk").

@@ -358,8 +358,7 @@ const server = Bun.serve({
     if (pathname === "/api/preferences" && request.method === "PUT") {
       const entry = await request.json() as { key: string; value: string };
       if (typeof entry.key !== "string" || typeof entry.value !== "string" ||
-          entry.key === "tikz-editor:workspace" ||
-          !(entry.key.startsWith("tikz-editor:") || entry.key === "visual-tikz-editor:theme")) {
+          entry.key === "tikz-editor:workspace" || !entry.key.startsWith("tikz-editor:")) {
         return new Response("Invalid preference", { status: 400 });
       }
       const write = preferenceWrite.then(async () => {

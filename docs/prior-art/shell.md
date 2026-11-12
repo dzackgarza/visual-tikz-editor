@@ -75,7 +75,7 @@ Not verified from a primary source: how long a GNOME toast stays; the GNOME wind
 | Ellipsis | "PDF", "SVG", "PNG" open a dialog without "…" | Ellipsis when more input follows | Missing ellipsis |
 | "Exit" | "Exit", no shortcut | "Quit", Ctrl+Q | Name and shortcut |
 | Shortcuts | Save and zoom only | New, Open, Save As, Close, Quit, Undo, Redo, Document Properties, Group | Missing |
-| Theme | Toolbar button, stored preference, system ignored | Follow the system | App-specific appearance control |
+| Theme | Toolbar button, stored preference, system ignored | Follow the system | Repaired |
 | Views offered | All four, always | Only views valid for the document | Error panels on demand |
 | View names | Rail and view labels differ; glyphs | One name per view | Two names |
 | Window title | "Visual TikZ Editor" | File name, app name, unsaved marker | Repaired |
@@ -88,14 +88,14 @@ Not verified from a primary source: how long a GNOME toast stays; the GNOME wind
 
 ## Specification
 
-1. **Menu bar.** The document bar holds a menu bar: File, Edit, View, Object, Help. It is one implementation in the desktop and browser builds and follows the WAI-ARIA menubar pattern. A menu opens directly under its title. One menu is open at a time; hovering another title while a menu is open moves to that menu. A choice, Escape, a second press on the title, or a press outside closes the menu; a press outside does nothing else. Escape returns focus to the title. Items show their shortcut at the trailing end, groups are separated, and an item that asks for more input ends in "…". The Export menu, the Copy source button, and the theme button leave the bar.
+1. **Menu bar.** The document bar holds a menu bar: File, Edit, View, Object, Help. It is one implementation in the desktop and browser builds and follows the WAI-ARIA menubar pattern. A menu opens directly under its title. One menu is open at a time; hovering another title while a menu is open moves to that menu. A choice, Escape, a second press on the title, or a press outside closes the menu; a press outside does nothing else. Escape returns focus to the title. Items show their shortcut at the trailing end, groups are separated, and an item that asks for more input ends in "…". The Export menu and the Copy source button leave the bar.
 2. **File menu.** New tikzpicture (Ctrl+N), New tikzcd; Open… (Ctrl+O), Open Recent (file names, not paths); Save (Ctrl+S), Save As… (Ctrl+Shift+S), Export (PDF…, SVG…, PNG…); Document Properties… (Ctrl+Shift+D); Quit (Ctrl+Q, desktop only).
 3. **Edit menu.** Undo (Ctrl+Z), Redo (Ctrl+Shift+Z, Ctrl+Y); Cut, Copy, Paste, Delete, Select All; Copy TikZ Source; Settings… (Ctrl+Shift+P), as Inkscape's Edit › Preferences… (`/usr/share/inkscape/ui/menus.ui:354-357`, `/usr/share/inkscape/keys/inkscape.xml:82`) and Xournal++'s Edit › Preferences. Each editing command goes to the focused view: the Code view, the Canvas, or Quiver.
 4. **View menu.** The views the document supports, as check items; Properties and Layers, as check items ([panels specification](panels.md) item 1); the zoom commands and canvas aids of the [zoom specification](zoom-and-view.md) item 5.
 5. **Object menu.** Group (Ctrl+G), Ungroup (Ctrl+Shift+G); Bring to Front, Bring Forward, Send Backward, Send to Back. These are the commands that leave the Layers header ([panels specification](panels.md) item 9).
 6. **Help menu.** Keyboard Shortcuts, which lists every shortcut above; About Visual TikZ Editor.
 7. **Views by document.** The rail and the View menu offer only the views whose `supports` test holds for the document: Quiver for a tikzcd, Canvas for a tikzpicture, Code and Preview for both. Each view has one name in the rail, the View menu, and the view itself: Code, Preview, Canvas, Quiver. Rail buttons use icons from the icon set the canvas already uses, with the name as tooltip and accessible label.
-8. **Theme.** The interface follows the system appearance (`prefers-color-scheme`) and changes when the system changes. The theme button, the stored theme preference, and the `localStorage` read are deleted.
+8. **Theme.** The interface follows the system appearance (`prefers-color-scheme`) and changes when the system changes. No control in the app sets the theme, and no preference stores it. The present build meets this rule.
 9. **Window title.** "figure.tikz - Visual TikZ Editor", with a leading "\*" while there are unsaved changes, as in Inkscape. The browser build sets the page title the same way. An untitled document is titled by its file name, "Untitled.tikz - Visual TikZ Editor". The present build meets this rule.
 10. **Messages.** The document bar is one row of fixed height; no message changes its height or moves its controls. A persistent state (the file changed on disk, the renderer is unavailable) shows as a banner at the top of the workspace with one title and at most one button, and leaves when the state ends. A single event shows as a toast: "Copied TikZ source", "Exported figure.pdf", or the failed command and its reason. Where the status text sits belongs to #21.
 11. **Save conflict.** When the file changed on disk, a banner reads "figure.tikz changed on disk" with the actions Compare and Overwrite, as in VS Code. Compare shows the disk text against the editor text; Overwrite writes the editor text over the file. A Save after the conflict shows the same banner and leaves the file unchanged until Compare or Overwrite ends the conflict, as in VS Code; the present build already does this (WF 290).
@@ -110,7 +110,6 @@ An issue that names a dependency starts after that audit has its specification.
 | 1, 2, 6 | [#42](https://github.com/dzackgarza/visual-tikz-editor/issues/42) Menu bar with File and Help menus | — |
 | 3, 5 | [#43](https://github.com/dzackgarza/visual-tikz-editor/issues/43) Edit and Object menus send commands to the focused view | #24, #39 |
 | 4, 7 | [#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44) View menu; views offered by document kind; one name per view | #23 |
-| 8 | [#45](https://github.com/dzackgarza/visual-tikz-editor/issues/45) Theme follows the system appearance | — |
 | 10 | [#47](https://github.com/dzackgarza/visual-tikz-editor/issues/47) Fixed-height document bar; banners and toasts | #21 |
 | 11 | [#48](https://github.com/dzackgarza/visual-tikz-editor/issues/48) Save conflict: Compare and Overwrite | — |
 | 2 | [#50](https://github.com/dzackgarza/visual-tikz-editor/issues/50) Document Properties dialog | — |

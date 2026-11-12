@@ -178,7 +178,7 @@ describe("standalone workbench host boundary", function () {
     async function () {
       await editorReady(page);
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-      await page.getByRole("button", { name: "Dark theme", exact: true }).click();
+      await page.emulateMedia({ colorScheme: "dark" });
       const valid = String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (1cm);\end{tikzpicture}`;
       await page.locator(".cm-content").fill(valid);
       await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
@@ -1109,7 +1109,7 @@ describe("standalone workbench host boundary", function () {
           });
         for (const theme of ["light", "dark"] as const) {
           if (theme === "dark") {
-            await page.getByRole("button", { name: "Dark theme", exact: true }).click();
+            await page.emulateMedia({ colorScheme: "dark" });
             await expect(frame.locator("html")).toHaveAttribute("data-color-scheme", "dark");
           }
           const [a, m] = [await look(axis), await look(major)];
@@ -4668,7 +4668,7 @@ describe("standalone workbench host boundary", function () {
         const strip = rail.locator('[class*="embeddedTools"]');
         for (const theme of ["light", "dark"] as const) {
           if (theme === "dark") {
-            await page.getByRole("button", { name: "Dark theme", exact: true }).click();
+            await page.emulateMedia({ colorScheme: "dark" });
             await expect(frame.locator("html")).toHaveAttribute("data-color-scheme", "dark");
           }
           const overflow = await strip.evaluate((element) => ({
@@ -4720,7 +4720,7 @@ describe("standalone workbench host boundary", function () {
         await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}\draw (0,0) -- (4,0);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await editorReady(page);
-        await page.getByRole("button", { name: "Dark theme", exact: true }).click();
+        await page.emulateMedia({ colorScheme: "dark" });
         const frame = editorFrame(page);
         const rail = frame.locator("[data-diagram-tools]");
         const names = await rail.getByRole("button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? ""));
@@ -4966,10 +4966,8 @@ describe("standalone workbench host boundary", function () {
         await setSnapRule(frame, input, "Objects", false);
         await setSnapRule(frame, input, "Alignment", false);
         await setSnapRule(frame, input, "Angle", true);
-        await page.getByRole("button", { name: "Dark theme", exact: true }).click();
         await page.reload();
         await editorReady(page);
-        await expect(page.getByRole("button", { name: "Light theme", exact: true })).toBeVisible();
         const reopened = editorFrame(page);
         const reopenedRail = reopened.locator("[data-diagram-tools]");
         await expect(reopenedRail.getByRole("button", { name: "Snap: angle" })).toBeVisible();
