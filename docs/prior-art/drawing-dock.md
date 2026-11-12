@@ -95,7 +95,7 @@ Every control of the dock compared with the conventions above.
    - Geometry: the construction picker.
    - Text: Text and Equation.
 6. **Colour.** The colour well shows the current colour and has no label. A choice recolours the stroke of the selection when one exists, and sets the colour of the next strokes when none does. Fill colour is set in Properties ([#20](https://github.com/dzackgarza/visual-tikz-editor/issues/20)) and with the Bucket. The picker keeps the exact `xcolor` field.
-7. **Snapping.** A tap on the snap icon turns snapping on or off. The arrow beside it opens the rules (Lattice, Objects, Alignment, Angle) as named toggles, with no sentences; the lattice step stays as the one line of data.
+7. **Snapping.** A tap on the snap icon turns snapping on or off. The arrow beside it opens the rules (Lattice, Objects, Alignment, Angle) as named toggles, with no sentences. The lattice step is a value in Document Properties ([instructional-text specification](instructional-text.md) item 6).
 8. **Panels toggle.** Every button that opens a popover or a panel closes it on the next press. One popover is open at a time; a press on another button closes the open one and opens the new one.
 9. **Moving the dock.** The dock moves by a drag from its edge to any screen edge. The drop zones show the target edge as a highlight, with no words.
 10. **Construction status.** The step text leaves the dock for a status line ([#21](https://github.com/dzackgarza/visual-tikz-editor/issues/21)). Finish and Cancel stay in the dock while a construction runs.
