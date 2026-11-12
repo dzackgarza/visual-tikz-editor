@@ -1510,7 +1510,7 @@ describe("standalone workbench host boundary", function () {
         await expect(step).toHaveText("Arc through three points: place the last point");
         // Properties describes the same construction stage as the dock.
         await tap(rail.getByRole("button", { name: "Properties", exact: true }));
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(panel).toContainText("Arc through three points: place the last point");
         await tap(panel.getByRole("button", { name: "Close properties", exact: true }));
         // Cancel removes only the provisional construction; the tool stays chosen.
@@ -2244,7 +2244,7 @@ describe("standalone workbench host boundary", function () {
         await tap(rail.getByRole("button", { name: "Geometry", exact: true }));
         await tap(frame.getByRole("option", { name: "Line", exact: true }));
         await tap(rail.getByRole("button", { name: "Properties", exact: true }));
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(panel.getByText("Line", { exact: true })).toBeVisible();
         await expect(panel.getByText("New strokes", { exact: true })).toBeVisible();
         await tap(panel.getByRole("button", { name: "Creation stroke color" }));
@@ -2294,7 +2294,7 @@ describe("standalone workbench host boundary", function () {
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Properties", exact: true })),
         ]);
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(panel).toBeVisible();
         await expect(panel.getByText("Freehand", { exact: false }).first()).toBeVisible();
         const text = await panel.innerText();
@@ -2580,7 +2580,7 @@ describe("standalone workbench host boundary", function () {
         // A new layer takes the styled line, picked in the layer list, into its scope.
         await tap(rail.getByRole("button", { name: "Layers", exact: true }));
         const panel = frame
-          .getByRole("complementary", { name: "Diagram properties", exact: true })
+          .getByRole("complementary", { name: "Properties", exact: true })
           .getByRole("tabpanel");
         await tap(panel.getByRole("button", { name: "New layer", exact: true }));
         await step("The layer is not in the source");
@@ -3584,7 +3584,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const rail = frame.locator("[data-diagram-tools]");
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         type Box = { x: number; y: number; width: number; height: number };
         const clear = (a: Box, b: Box) =>
@@ -4573,7 +4573,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         const rail = frame.locator("[data-diagram-tools]");
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         const physical = /\d\s*(cm|px)\b|\((cm|px)\)/;
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
@@ -4997,7 +4997,7 @@ describe("standalone workbench host boundary", function () {
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await tap(rail.getByRole("button", { name: "Properties", exact: true }));
         const mode = frame
-          .getByRole("complementary", { name: "Diagram properties", exact: true })
+          .getByRole("complementary", { name: "Properties", exact: true })
           .locator("select")
           .first();
         await expect(mode).toBeVisible();
@@ -5289,7 +5289,7 @@ describe("standalone workbench host boundary", function () {
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await fitDiagram(frame, input);
         await tap(rail.getByRole("button", { name: "Properties", exact: true }));
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(panel.getByText("Figure Bounds", { exact: true })).toBeVisible();
         await panel.locator("select").selectOption("fixed");
         const field = (name: string) =>
@@ -5493,7 +5493,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         for (const name of ["Properties", "Layers"]) {
           const button = rail.getByRole("button", { name, exact: true });
           await tap(button);
@@ -5545,7 +5545,7 @@ describe("standalone workbench host boundary", function () {
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Select", exact: true }));
         await fitDiagram(frame, input);
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         const checkControls = async () => {
           const controls = panel.locator(
             'button,input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),select,textarea',
@@ -5691,7 +5691,7 @@ describe("standalone workbench host boundary", function () {
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Layers", exact: true })),
         ]);
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(panel).toBeVisible();
         await expect(
           panel.getByRole("tabpanel").getByText("Layers", { exact: true }),
@@ -5716,7 +5716,7 @@ describe("standalone workbench host boundary", function () {
               .getByRole("button", { name: "Layers", exact: true }),
           ),
         ]);
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(
           panel.getByRole("tab", { name: "Layers", exact: true, selected: true }),
         ).toBeVisible();
@@ -5752,7 +5752,7 @@ describe("standalone workbench host boundary", function () {
         const rail = frame.locator("[data-diagram-tools]");
         await tap(rail.getByRole("button", { name: "Layers", exact: true }));
         const panel = frame
-          .getByRole("complementary", { name: "Diagram properties", exact: true })
+          .getByRole("complementary", { name: "Properties", exact: true })
           .getByRole("tabpanel");
         const layers = () =>
           panel
@@ -5844,7 +5844,7 @@ describe("standalone workbench host boundary", function () {
         );
         // The selected line's control stays off the open panel.
         const aside = (await frame
-          .getByRole("complementary", { name: "Diagram properties", exact: true })
+          .getByRole("complementary", { name: "Properties", exact: true })
           .boundingBox())!;
         for (const control of [
           frame.getByRole("button", { name: "Lock", exact: true }),
@@ -5887,7 +5887,7 @@ describe("standalone workbench host boundary", function () {
         await storyScreenshot(page, `layers-${tablet.name}`);
         await tap(
           frame
-            .getByRole("complementary", { name: "Diagram properties", exact: true })
+            .getByRole("complementary", { name: "Properties", exact: true })
             .getByRole("button", { name: "Close properties", exact: true }),
         );
       },
@@ -5916,7 +5916,7 @@ describe("standalone workbench host boundary", function () {
           await input.touch([await stableCenter(locator)]);
         };
         await tap(frame.getByRole("button", { name: "Layers", exact: true }));
-        const panel = frame.getByRole("complementary", { name: "Diagram properties" }).getByRole("tabpanel");
+        const panel = frame.getByRole("complementary", { name: "Properties" }).getByRole("tabpanel");
         await tap(panel.getByRole("button", { name: "New layer", exact: true }));
         await tap(panel.getByRole("button", { name: "New layer", exact: true }));
         await fitDiagram(frame, input);
@@ -5950,7 +5950,7 @@ describe("standalone workbench host boundary", function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const reopened = editorFrame(page);
         await tap(reopened.getByRole("button", { name: "Layers", exact: true }));
-        const reopenedPanel = reopened.getByRole("complementary", { name: "Diagram properties" }).getByRole("tabpanel");
+        const reopenedPanel = reopened.getByRole("complementary", { name: "Properties" }).getByRole("tabpanel");
         await expect.poll(async () => reopenedPanel.getByRole("group", { name: / layer$/ }).evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")))).toEqual(["Layer 1 layer", "Layer 2 layer"]);
         await expect(reopenedPanel.getByRole("button", { name: "Show Layer 2", exact: true })).toBeVisible();
         await expect(reopenedPanel.getByRole("button", { name: "Lock Layer 1", exact: true })).toHaveAttribute("aria-pressed", "false");
@@ -5981,7 +5981,7 @@ describe("standalone workbench host boundary", function () {
               .getByRole("button", { name: "Layers", exact: true }),
           ),
         ]);
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         const title = panel.getByRole("button", {
           name: "Long foreground layer Layer",
           exact: true,
@@ -6060,7 +6060,7 @@ describe("standalone workbench host boundary", function () {
             .locator("[data-diagram-tools]")
             .getByRole("button", { name: "Layers", exact: true }),
         );
-        const aside = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const aside = frame.getByRole("complementary", { name: "Properties", exact: true });
         const panel = aside.getByRole("tabpanel");
         const before = await source();
         await tap(panel.getByRole("button", { name: "Coordinate", exact: true }));
@@ -6106,7 +6106,7 @@ describe("standalone workbench host boundary", function () {
         await input.touch([
           await stableCenter(rail.getByRole("button", { name: "Properties", exact: true })),
         ]);
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(panel).toBeVisible();
         assert.equal(await overlap(panel), 0, "The properties panel covers the rail");
         await storyScreenshot(page, `placement-${tablet.name}`);
@@ -6140,7 +6140,7 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke([await strokePoint(page, corner, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
         await tap(rail.getByRole("button", { name: "Properties", exact: true }));
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(panel).toBeVisible();
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
@@ -6230,7 +6230,7 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke([await strokePoint(page, corner, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
         await tap(rail.getByRole("button", { name: "Properties", exact: true }));
-        const panel = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         await tap(panel.getByRole("spinbutton", { name: "X shift", exact: true }));
         const scale = (await editorDebug(page)).viewport.scale;
         // iPadOS reports the keyboard as a shorter visual viewport over an unchanged layout.
@@ -7565,7 +7565,7 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
         await input.touch([await stableCenter(rail.getByRole("button", { name: "Select", exact: true }))]);
         await input.touch([await stableCenter(rail.getByRole("button", { name: "Properties", exact: true }))]);
-        const properties = frame.getByRole("complementary", { name: "Diagram properties", exact: true });
+        const properties = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(properties.getByText("3 selected objects", { exact: true })).toBeVisible();
         await expect(properties.getByText("Selected objects", { exact: true })).toBeVisible();
         await input.touch([await stableCenter(rail.getByRole("button", { name: "Properties", exact: true }))]);
@@ -8348,9 +8348,9 @@ describe("standalone workbench host boundary", function () {
     assert.equal(await sourcePane.innerText(), authored);
     const frame = editorFrame(page);
     await frame.getByRole("button", { name: "Properties", exact: true }).click();
-    await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
+    await expect(frame.getByRole("complementary", { name: "Properties" })).toBeVisible();
     await frame.getByRole("button", { name: "Close properties", exact: true }).click();
-    await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toHaveCount(0);
+    await expect(frame.getByRole("complementary", { name: "Properties" })).toHaveCount(0);
     assert.equal(await sourcePane.innerText(), authored);
   });
 
@@ -8412,12 +8412,12 @@ describe("standalone workbench host boundary", function () {
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       const frame = editorFrame(page);
       await frame.getByRole("button", { name: "Properties", exact: true }).click();
-      await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
+      await expect(frame.getByRole("complementary", { name: "Properties" })).toBeVisible();
       await page.screenshot({ path: "test-results/workbench/tablet-properties.png" });
       await expect(sourcePane).toBeHidden();
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       assert.equal(await sourcePane.innerText(), source);
-      await expect(frame.getByRole("complementary", { name: "Diagram properties" })).toBeVisible();
+      await expect(frame.getByRole("complementary", { name: "Properties" })).toBeVisible();
       await page.screenshot({ path: "test-results/workbench/tablet-both-panels.png" });
       await frame.getByRole("button", { name: "Close properties", exact: true }).click();
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);

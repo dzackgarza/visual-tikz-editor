@@ -548,7 +548,7 @@ describe("standalone native file workflow", function () {
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     const reopened = page.frameLocator('iframe[title="TikZ visual editor"]');
     await reopened.getByRole("button", { name: "Layers", exact: true }).click();
-    const panel = reopened.getByRole("complementary", { name: "Diagram properties" }).getByRole("tabpanel");
+    const panel = reopened.getByRole("complementary", { name: "Properties" }).getByRole("tabpanel");
     await expect.poll(() => panel.getByRole("group", { name: / layer$/ }).evaluateAll((groups) => groups.map((group) => group.getAttribute("aria-label")))).toEqual(["Front layer", "Rear layer"]);
     await expect(panel.getByRole("button", { name: "Show Rear", exact: true })).toBeVisible();
     await expect(panel.getByRole("button", { name: "Lock Front", exact: true })).toHaveAttribute("aria-pressed", "false");
