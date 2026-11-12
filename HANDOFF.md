@@ -4,7 +4,7 @@
 
 Deliver the complete standalone mathematical diagram editor and its reusable host API. Drawing, selection, correction, source editing, saving, export, and reopening form one coherent pen-and-touch workflow, and authored TikZ stays authoritative. The user reports needed function and defects as an end user; the maintainer repairs every defect found. The interface follows established notebook and vector-editor conventions, recorded with their prior art under [docs/prior-art](docs/prior-art/).
 
-The present work is the user's report of 2026-11-12: basic design and usability defects, each listed with its issues under Next work, item 1. The work is done when each report is repaired in the running app. A specification rule that no report needs waits on its issue behind the reports.
+The present work starts from the user's report of 2026-11-12: basic design and usability defects, each listed with its issues under Next work, item 1. The first deliverable is the audit of what those defects imply about the app's design: which design process produced them, which other decisions share that cause, and what in the design must change. Repairs follow the audit. A rule-by-rule check of the prior-art specifications is not that audit.
 
 ## Completion condition
 
@@ -32,7 +32,7 @@ The rules behind A–J and the product decisions are in [the interaction model](
 
 ## Next work, ranked
 
-1. Repair the user's reports, in this order. The issues the audits found without a report wait behind them. The reports and the issues that carry them:
+1. Write the design audit of the user's reports (Task), then repair the reports in this order. The issues the audits found without a report wait behind them. The reports and the issues that carry them:
 
    | User report | Issues |
    | --- | --- |
