@@ -2942,7 +2942,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const draws = async () =>
-          (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ?? ([] as string[]);
+          Array.from((await editorDebug(page)).source.matchAll(/\\draw[^;]*;/g), (match) => match[0]);
         await input.penStroke(waveAcross(viewport, 0.3, 0.4, 120));
         await expect.poll(async () => (await draws()).length).toBe(1);
         await page.keyboard.press("Escape");
@@ -3050,7 +3050,7 @@ describe("standalone workbench host boundary", function () {
         await expect(line).toBeVisible();
         await fitDiagram(frame, input);
         const source = async () => (await editorDebug(page)).source;
-        const draws = async () => (await source()).match(/\\draw[^;]*;/g) ?? ([] as string[]);
+        const draws = async () => Array.from((await source()).matchAll(/\\draw[^;]*;/g), (match) => match[0]);
         // The stroke is written against the point's name, so it follows the point (slice 3, item 5).
         const named = String.raw`\draw (0.37,0.61) coordinate (p1) -- (4.23,2.29);`;
         // The delay that turns a held pen into a move is a setting.
@@ -6417,7 +6417,7 @@ describe("standalone workbench host boundary", function () {
           Array.from({ length: 16 }, (_, i) => ({ x: from + (i * (to - from)) / 15, y })),
         );
         const statements = async () =>
-          (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ?? ([] as string[]);
+          Array.from((await editorDebug(page)).source.matchAll(/\\draw[^;]*;/g), (match) => match[0]);
         await expect
           .poll(async () => (await statements()).length, {
             message: "The sweep did not leave two pieces of each stroke it crossed",
@@ -6514,7 +6514,7 @@ describe("standalone workbench host boundary", function () {
         ]);
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const statements = async () =>
-          (await editorDebug(page)).source.match(/\\draw[^;]*;/g) ?? ([] as string[]);
+          Array.from((await editorDebug(page)).source.matchAll(/\\draw[^;]*;/g), (match) => match[0]);
         // Each shape's top point is the top centre of its box; a short vertical sweep crosses only that point.
         const sweepTop = async (statement: string) => {
           await editorReady(page);
