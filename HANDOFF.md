@@ -32,7 +32,7 @@ The rules behind A–J and the product decisions are in [the interaction model](
 
 ## Next work, ranked
 
-1. Resolve the open question of the [specification](specs/001-product-design/spec.md) (FR-041) with the user, then run `/speckit-plan` and `/speckit-tasks` against it; each plan passes the constitution's Constitution Check. The per-surface specifications under docs/prior-art and their issues are corrected where they disagree with the specification. The user sets the priorities of the repairs. The reports and the issues filed for them:
+1. The user sets the priorities of the [specification](specs/001-product-design/spec.md)'s user stories. Then run `/speckit-plan` and `/speckit-tasks` against it; each plan passes the constitution's Constitution Check. The per-surface specifications under docs/prior-art and their issues are corrected where they disagree with the specification. The user sets the priorities of the repairs. The reports and the issues filed for them:
 
    | User report | Issues |
    | --- | --- |

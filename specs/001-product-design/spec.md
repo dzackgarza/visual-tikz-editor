@@ -195,7 +195,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 **Zoom and coordinates** (prior art: Inkscape zoom field and rulers; constitution Principle VI)
 
 - **FR-040**: A figure with content MUST open fitted to its content and reopen at its last view.
-- **FR-041**: An empty figure MUST open at [NEEDS CLARIFICATION: the launch view of an empty figure and the meaning of the zoom percentage — see Question 1].
+- **FR-041**: 100 % MUST be printed size, as Inkscape "Zoom to 1:1" and Xournal++ "Normal Size". An empty figure MUST open at 100 % with the origin centred (user decision, 2026-11-13).
 - **FR-042**: Rulers, readouts, and fields MUST show figure coordinates; the origin and axes MUST be visible on the grid.
 - **FR-043**: Zooming MUST NOT change the source or the selection.
 
