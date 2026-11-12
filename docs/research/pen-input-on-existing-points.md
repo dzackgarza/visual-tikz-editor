@@ -32,4 +32,4 @@ No surveyed app moves a point on a plain pen touch while a drawing tool is activ
 4. Hover and an in-stroke target mark show the attachment target before commit. The move state changes the mark.
 5. One gesture is one undo step: a stroke with its attachments, or a point move with the update of every attached object.
 
-Unverified: Safari's `pointerType: "pen"` and hover events on a physical iPad ([WebKit 193945](https://bugs.webkit.org/show_bug.cgi?id=193945), [WebKit 296943](https://bugs.webkit.org/show_bug.cgi?id=296943)). A contrary observation on a device opens an issue against slice 2 item 3.
+Unverified: Safari's `pointerType: "pen"` and hover events on a physical iPad ([WebKit 193945](https://bugs.webkit.org/show_bug.cgi?id=193945), [WebKit 296943](https://bugs.webkit.org/show_bug.cgi?id=296943)). A contrary observation on a device opens an issue: the move modifier and the target marks then need another signal.

@@ -1,68 +1,83 @@
 # Visual TikZ Editor
 
-Visual TikZ Editor edits one mathematical diagram and its TikZ source. It runs as a standalone local web app. The `tikzpicture` view uses the pinned [TikZ Editor](https://github.com/DominikPeters/tikz-editor) fork. The `tikzcd` view uses the pinned [Quiver](https://github.com/varkor/quiver) fork. Both show the diagram directly while you edit. Drawing and visual preview do not run TeX.
+Visual TikZ Editor edits one mathematical diagram and its TikZ source with a pen, touch, or mouse. The file on disk always holds plain TikZ that compiles with LaTeX, so the diagram stays editable in any text editor. A `tikzpicture` opens in a drawing canvas, a pinned fork of [TikZ Editor](https://github.com/DominikPeters/tikz-editor). A `tikzcd` diagram opens in a pinned fork of [Quiver](https://github.com/varkor/quiver). Drawing runs no TeX.
 
-This repository was extracted from [`zettlr-pandoc/packages/tikz-workbench`](https://github.com/dzackgarza/zettlr-pandoc/tree/tikz-workbench-module/packages/tikz-workbench). It holds the editor component, a standalone file host, the fork patches, and their pinned assets. The visual tools edit TikZ source through the host; the host owns the file.
+The editor runs on Linux as a desktop window or as a local web page. Its controls are sized for a pen and fingers on a tablet screen, and a mouse and keyboard also work. Other programs embed the same editor through a typed host interface.
 
-The [product and interface guidance](docs/guidance/README.md) records the intended tablet-first experience and ideal GUI.
+## Install
 
-## Run the standalone app
+### Debian package
 
-Install [Bun](https://bun.sh/), [just](https://github.com/casey/just), Zenity for native file dialogs, and librsvg's `rsvg-convert` for PDF and PNG export. The test suite also uses Node.js. Native file workflows require Xvfb, D-Bus, xdotool, ImageMagick, and `pdfinfo`. They run Chrome and the real Zenity chooser on a private display and session bus. Then run:
+Download `visual-tikz-editor_0.1.0_amd64.deb` from the [latest release](https://github.com/dzackgarza/visual-tikz-editor/releases/latest) and install it:
 
 ```sh
-bun install --frozen-lockfile
-just run
+sudo apt install ./visual-tikz-editor_0.1.0_amd64.deb
 ```
 
-Open the local URL printed by `just run`. The New dialog offers `tikzpicture`, which opens the drawing canvas, and `tikzcd`, which opens Quiver. The **File** menu holds New, Open, Save, and Save As. Edits to a file save automatically; an untitled diagram keeps a recovery draft until **Save** or Ctrl+S opens the native Save As dialog. The workbench restores the active diagram after a restart. To open a file at launch, run `just run path/to/figure.tikz`. A disk change stops the file save, keeps a recovery draft, and reports a conflict. Image paths resolve from the file directory. **Export** writes one PDF page per figure or separate numbered SVG/PNG files for each figure. Export reads the current source and leaves it editable.
+The package depends on Zenity, Pandoc, pdf2svg, librsvg, and TeX Live. It installs the command `visual-tikz-editor` and a **Visual TikZ Editor** menu entry.
 
-## Draw with pen or touch
+### From source
 
-The drawing dock holds Select, Lasso, Pen, Eraser, Geometry, Label, Bucket, Color and saved swatches, Undo, Redo, Layers, Properties, and Settings in that order. Its grip moves and docks it. **Geometry** opens a picker of illustrated constructions grouped by family: lines and arrows, curves, circles and arcs, shapes, and diagrams (grids, matrices, images). The control shows the chosen construction's icon and name. **Label** offers Text and Equation. The zoom readout opens Fit diagram, zoom presets, grid, rulers, guides, and output bounds. Properties and Layers use a side panel in landscape and a bottom sheet in portrait.
+Install [Bun](https://bun.sh/), [just](https://github.com/casey/just), Zenity, and librsvg (`rsvg-convert`). The desktop package also needs Rust and the [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/#linux). Then build and install the desktop app for your user:
 
-Hold a finger on an element to open its actions; hold on empty canvas for selection, paste, and canvas aids. Double-tap a curve to add a point. The selection strip identifies the selected object and offers its applicable actions, including point editing, repeated simplification, and selection lock. The eraser removes every stroke a sweep crosses. A finger pans and two fingers zoom; palm contact during pen drawing does not make a second stroke.
+```sh
+git clone https://github.com/dzackgarza/visual-tikz-editor.git
+cd visual-tikz-editor
+bun install --frozen-lockfile
+just install-desktop
+```
 
-The rail's **Snap** control names the active snapping rule, for example "Snap: lattice", and opens the four rules with their state. **Lattice** lands points on the lattice and is on by default. **Objects** attaches line and arrow ends to nodes and to the ends of open paths, places a label on a line or arrow as a node that follows it, and starts a freehand stroke on an existing point by its name. The attachments are authored TikZ references, so moving a node, a line, or a point carries everything attached to it as one undo step, and they survive save and reopen. Before commit, the mark names the attachment: the node's name, "On line", or the point's attach ring. **Alignment** lines edges, centres, and equal gaps up with other objects and with ruler guides. **Angle** gives drawing and moving a touch equivalent of geometric modifier keys: lines use 15-degree angle steps, rectangles become squares, and moves stay on their dominant canvas axis. The rules rank: an endpoint, corner, centre, or crossing within reach wins over an alignment guide, which wins over the lattice, and the angle constraint then turns the point. Alignment reaches an object's top, bottom, sides, and centre. A circle or arc drawn from its centre takes the second point as its radius; an arc's end keeps the radius and lands on a lattice point of its ray when one is within reach, otherwise on a nearby common angle (a multiple of 45 or 15 degrees). Before a point is committed, a cross with a label names the chosen target, for example "Centre", "Aligned with bottom", "Lattice", "Angle", "Square", or "Axis". On a desktop, holding Ctrl or Cmd bypasses snapping for one placement. Coordinates and geometry fields, including figure bounds and Repeat, use lattice units. With `x=2cm`, one horizontal lattice step is two centimetres in the exported picture. The Snap popup states the physical size of one lattice step from the figure's own `x`, `y`, or `scale` options, for example "One lattice step is 2 cm along x and 0.5 cm along y."
+`just install-desktop` builds the Debian package and copies its contents under `$XDG_DATA_HOME` (default `~/.local/share`): the app in `visual-tikz-editor/`, the menu entry in `applications/`, and the icon in `icons/`. It links `~/.local/bin/visual-tikz-editor`. Run it again after each update.
 
-Freehand drawing offers a fit with its recorded-sample and fitted-point counts. Keep the original stroke to restore it later, including after reopening. Simplify can be repeated until no simpler fit remains. Clear **Interpret geometry** in Freehand Properties for handwriting that should stay as ink.
+To use the editor in a browser without the desktop package, run `just run` from the checkout.
 
-A layer is a named top-level TikZ scope. In **Layers**, create and rename layers, move selected objects into them, hide/show them, change their stacking order, or delete a layer and its contents after confirmation. A move that would put a named coordinate after a path using it is refused. Layer names, contents, order, and visibility are saved in the TikZ source. **Layer locks last only for the open document session**; reopening starts layers unlocked. The selection strip's **Lock** control keeps the selected object while you work and is also session-local.
+### TeX render and export
 
-In **Settings → Keyboard shortcuts**, search for a command, choose **Set keys**, and press a replacement shortcut. **Clear** removes its bindings; **Reset** restores that command's defaults; **Reset all shortcuts** restores the whole set. Conflicts identify the command already using the keys. Bindings survive reopening the editor. Touch controls remain available independently of shortcuts. Canvas settings and named color collections occupy the other Settings categories.
+The **TeX render** view and **Export** compile the diagram with `pandoc`, `pdflatex`, and `pdf2svg`. They read a Pandoc filter and template from `~/.pandoc`, which must support renderer protocol 3. If `~/.pandoc` does not exist, copy the filter and template from this repository:
 
-## Linux desktop package
+```sh
+mkdir -p ~/.pandoc
+cp -R test/fixtures/tikz-data/filters test/fixtures/tikz-data/templates ~/.pandoc/
+```
 
-Run `just package` to build a Debian package in `src-tauri/target/release/bundle/deb/`. The desktop host supplies native clipboard access. It contains a Tauri window, a compiled Bun file host, the editor assets, an application icon, and a desktop entry. Install the package with your system package manager, or run `just install-desktop` to sync a user installation under `XDG_DATA_HOME` (default `~/.local/share`). The user install stores the app in `visual-tikz-editor/`, the entry in `applications/`, and the icon in `icons/`. Run the installer again after a new build to update those files. The installer also links the command `visual-tikz-editor` into `~/.local/bin`. Launch **Visual TikZ Editor** from the application menu or pass a `.tikz` or `.tikzcd` file to its command. A host application that opens one of its own diagrams passes two options before the file: `--macros <file>` names a MathJax macro projection (a JSON object of macros) that Quiver then uses in place of the central one, and `--resources <directory>` names the directory from which image paths and TeX inputs resolve in place of the file directory. The drawing view works without TeX; the optional **TeX render** view uses the tools and `~/.pandoc` configuration described below.
+Drawing and source editing work without these tools.
 
-The workbench offers a **TeX render** view of the same source. It uses the local `pandoc`, `pdflatex`, and `pdf2svg` tools with the Pandoc filter and standalone template under `~/.pandoc`. The filter must support renderer protocol 3 (available in `pandoc-config` revision `f6e2e4c` and later). The standalone Quiver canvas starts with standard KaTeX macros; an embedding host supplies its document's macro definitions through the host interface. Code, preview, canvas, and Quiver have icons on two sidebars. Drag icons between the sidebars. Click an icon to open its view, or click the active icon to close it. One open view fills the center; two open views have a movable divider. The canvas toolbar opens **Properties**, **Layers**, and **Settings**. Its grip moves and docks the toolbar; **Geometry** holds the constructions and **Label** holds text and equation insertion. **Copy source** copies the authored source without saving the file. The light theme is the default; the theme button saves the chosen appearance locally.
+## First use
 
-## Embed the workbench
+Start the editor with no file:
 
-Mount `src/ui/TikzWorkbench.vue` with `target`, `host`, and `theme`. Set `initialMode` for the opening view, or bind `requestedMode` when a host control must switch views after mount. The standalone host opens `tikzpicture` in its visual editor; Zettlr opens it in TeX render. A host that supplies only the visual editor opens the drawing canvas. `target` names the source bytes, their document range, the diagram language, and the document path. `host` implements `TikzWorkbenchHost` in `src/host.ts`:
+```sh
+visual-tikz-editor
+```
 
-| Service | Host responsibility |
-| --- | --- |
-| `readSource`, `writeSource` | Read and replace the source range. Send an updated target after a write. |
-| `rendering` | Supply `render` and `figureUrl` together when the host offers a TeX render view. |
-| `quiver` | Supply the Quiver page URL and KaTeX macro projection when the host edits `tikzcd`. |
-| `imageBaseUrl` | Resolve figure image paths. |
-| `editorUrl` | Serve the pinned drawing editor page under `vendor/`. |
-| `requestSave` | Handle an explicit editor Save gesture when the host offers file saving. |
-| `reportError` | Report an integration error. |
+From a checkout, `just run` starts the same editor in your browser. It prints the local address, for example `TikZ workbench: http://127.0.0.1:41623/`.
 
-The source document is authoritative. The editor bridges reject stale source writes. The host must keep source identity and save transactions consistent with its own document model.
+1. In the New dialog, choose **tikzpicture**. The drawing canvas opens.
+2. Choose **Pen** in the drawing dock and draw a stroke.
+3. Open **File → Save As…** and save the diagram as `figure.tikz`.
+4. Open `figure.tikz` in a text editor. It holds one `tikzpicture` environment with a `\draw` statement for the stroke.
 
-The mounted `/embedding.html` fixture exercises the iframe boundary and the exported `requestEditorSnapshot` client. A host creates a UUID session and sends typed `HostCommand` loads with strictly increasing load revisions and unique request IDs. The iframe accepts commands only from its parent at the referring origin. Notifications never execute commands. Each snapshot request names the session, load revision and exact source bytes; it waits for the editor's compute scheduler and returns matching source, SVG, viewBox, local bounds, original-stroke associations, selection, tool and viewport, or a typed failure. Local bounds use the exported SVG coordinate system in points; an empty scene has null bounds. Pass a saved snapshot's `state` with a later `load` to restore its tool, selection and viewport after the matching render. Its SVG definitions are namespaced to the session and source revision.
+To edit an existing file, pass its path: `visual-tikz-editor figure.tikz` or `just run figure.tikz`. The [user guide](docs/user-guide.md) describes the tools, snapping, layers, views, and settings.
 
-Pass an `AbortSignal` to `requestEditorSnapshot`; aborting cancels the request. On host disposal, abort with the reason `"disposed"` before removing the iframe to remove client listeners without sending further commands. Use `requestEditorSource` for current text, including an edit whose change notification has not arrived yet. It shares the snapshot client's peer, origin, session, request, timeout and disposal checks. Copying does not request a save.
+## Files, state, and network
 
-`import-ink` accepts typed `OriginalStroke` records with figure-local keys, ordered samples, optional sensor channels and optional outlines. These records live in source comments inside their own scopes and therefore travel through source history and ordinary file storage. `interpret-ink` and `restore-ink` require the exact current source and stroke key. Strokes marked `ink` cannot be interpreted as geometry. Original-stroke controls remain available when their scope is selected after reopening. Clear **Interpret geometry** in the Freehand properties to keep new handwritten strokes outside fitting. SVG snapshots bundle image bytes and namespace definition IDs.
+| Item | Location | Behaviour |
+| --- | --- | --- |
+| Diagram | The `.tikz` or `.tikzcd` file you open | Each accepted edit saves to the file. A change on disk stops the save and reports a conflict. |
+| Recovery draft | `$XDG_STATE_HOME/visual-tikz-editor/recovery.json` (default `~/.local/state`) | Holds an untitled diagram until Save As, and the edits that a disk conflict stopped. The editor restores the last diagram after a restart. |
+| Preferences | `$XDG_CONFIG_HOME/visual-tikz-editor/preferences.json` (default `~/.config`) | Theme, canvas settings, snapping rules, shortcuts, and colour collections. |
+| Render cache | `$XDG_CACHE_HOME/visual-tikz-editor` (default `~/.cache`) | Compiled TeX output for the render view and export. |
+| Images | Relative to the diagram's directory | `\includegraphics` paths and TeX inputs resolve there. |
 
-View switches retain the visual editor instance, including its selection, viewport, tool and source undo history. The host owns document identity and persistence. Snapshot state can restore a view into a fresh session; undo history remains session-local. Consumers pin the full commit of a reviewed release from this repository, keeping the public TypeScript API and vendored editor assets at that same revision. Release archives include the standalone build and qualification recordings. A new release pin requires the software suite and a physical-tablet session to pass.
+The editor serves its page on `127.0.0.1` only, on a free port. It makes no requests to other hosts. Layer locks and selection locks last only for the open session.
 
-## Build and provenance
+## More documentation
 
-`just build` builds the standalone page. `just test-commit` checks Vue and TypeScript. Install the test browser once with `bunx playwright install chromium`. `bun run test:logic` runs the curated fork tests against the real color, snapping, layer, shortcut, and geometry sources in seconds. `bun run test` runs those tests, then the workbench's Mocha suite on Node.js, including native file dialogs; `just test-push` runs the same suite behind the commit checks. Each browser story loads at its registered viewport in its own server and temporary `XDG_CONFIG_HOME`, so tests never read or write your saved preferences. During an edit, use `bun run test:browser --grep '<affected story names>'`. The milestone gate is the Development diagnostics workflow, which runs `just test-ci` on every push after `_ci-environment` provisions the runner. The source under `vendor/tikz-editor` and `vendor/quiver` comes from pinned upstream revisions plus maintained patches. Each `PROVENANCE.toml` records the source revision. `just update-tikz-editor-vendor` and `just update-quiver-vendor` rebuild those assets.
+- [User guide](docs/user-guide.md): drawing, construction, snapping, layers, views, export, and settings.
+- [Interaction model](docs/interaction-model.md): the rules for tools, selection, undo, snapping, and attachments.
+- [Embedding](docs/embedding.md): the host interface for programs that embed the editor.
+- [Development](docs/development.md): building, testing, the vendored editors, and releases.
 
-The workbench is GPL-3.0. The bundled editors and their third-party assets retain their own license files. See [LICENSE](LICENSE) and the vendor provenance records.
+## License
+
+GPL-3.0; see [LICENSE](LICENSE). The bundled editors keep their own licenses, recorded with their sources under `vendor/`.

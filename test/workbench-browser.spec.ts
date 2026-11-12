@@ -3036,7 +3036,7 @@ describe("standalone workbench host boundary", function () {
         await fitDiagram(frame, input);
         const source = async () => (await editorDebug(page)).source;
         const draws = async () => Array.from((await source()).matchAll(/\\draw[^;]*;/g), (match) => match[0]);
-        // The stroke is written against the point's name, so it follows the point (slice 3, item 5).
+        // The stroke is written against the point's name, so it follows the point (docs/interaction-model.md, "Attached relationships").
         const named = String.raw`\draw (0.37,0.61) coordinate (p1) -- (4.23,2.29);`;
         // The delay that turns a held pen into a move is a setting.
         await tap(rail.getByRole("button", { name: "Settings", exact: true }));

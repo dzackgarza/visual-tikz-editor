@@ -1,6 +1,6 @@
 # Interaction model
 
-This document defines the single interaction model that slices 1–4 of [HANDOFF.md](../HANDOFF.md) implement. The [ideal GUI](guidance/ideal-gui.md), the [mockup warnings](guidance/mockup-interpretation-warnings.md), and the user decisions recorded in HANDOFF.md settle each rule below. Authored TikZ stays the only document state; every rule here describes editor session state around it.
+This document defines the one interaction model of the editor. The [ideal GUI](guidance/ideal-gui.md), the [mockup warnings](guidance/mockup-interpretation-warnings.md), and the decisions at the end of this document settle each rule. Authored TikZ stays the only document state; every rule here describes editor session state around it. The [user guide](user-guide.md) describes the controls that follow from these rules.
 
 ## Session state
 
@@ -50,6 +50,15 @@ An attachment is an authored TikZ reference, never editor state. A line or arrow
 - When a panel, sheet, or keyboard opens, the canvas moves so the selected subject stays visible.
 - The storage status ("Saved", "Unsaved changes") is always visible in the top bar.
 
-## Release scope
+## Decisions
 
-Partial erasing, autosave with interruption recovery, PDF/SVG/PNG export, reusable styles, and Pencil hardware gestures are release requirements.
+A row without a named owner is a user decision of 2026-10-29.
+
+| Topic | Decision |
+| --- | --- |
+| Release scope | Partial erasing, autosave with interruption recovery, PDF/SVG/PNG export, attached relationships (arrows and labels follow the nodes and objects they attach to), reusable styles, and Pencil hardware gestures are release requirements. iPadOS Safari delivers no Pencil double tap or squeeze to a web page, so that requirement is a recorded platform limit ([research](research/pencil-hardware-gestures.md)). |
+| Snapping precedence | Object features first, as in [Ipe](https://ipe.otfried.org/): endpoints, intersections, and centres beat alignment guides, which beat the lattice. The guide names the chosen target. Angle snapping constrains direction after the point target. |
+| Eraser scope (maintainer, 2026-11-11, [#15](https://github.com/dzackgarza/visual-tikz-editor/issues/15)) | The eraser cuts every drawn path; it has no whole-object mode. Inkscape, Illustrator, Xournal, and Goodnotes also erase in part under one eraser mode. |
+| Hold-to-move delay (maintainer, 2026-11-12) | 450 ms is the default of "Hold to move a point", between the platform long-press defaults of 400 ms (Android `ViewConfiguration.getLongPressTimeout`) and 500 ms (iOS `UILongPressGestureRecognizer.minimumPressDuration`). The setting stays configurable. |
+| Session state architecture | One XState statechart in the fork owns the session states above and replaces the independent mode states of the canvas component. |
+| Pen input on existing points | The policy follows iPadOS-native interaction patterns that [research](research/pen-input-on-existing-points.md) establishes: a pen stroke that starts on a point draws at once and attaches to it; a held finger modifier or a pen hold past the delay moves the point; a double tap never moves points. |

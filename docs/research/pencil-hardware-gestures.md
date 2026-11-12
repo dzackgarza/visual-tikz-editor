@@ -11,4 +11,4 @@ Question: can the editor, running as a web page in iPadOS Safari, receive Apple 
 
 ## Result
 
-This is a platform limit. A web page in iPadOS Safari cannot receive Pencil double tap or squeeze, so the editor cannot map them. The eraser and the tool changes stay on the rail, where the pen and a finger reach them. If the editor is later wrapped in a native shell, that shell owns a `UIPencilInteraction` and forwards the preferred action as an embed command. The physical-tablet session confirms that double tap and squeeze do nothing on the canvas.
+This is a platform limit. A web page in iPadOS Safari cannot receive Pencil double tap or squeeze, so the editor cannot map them. The eraser and the tool changes stay on the rail, where the pen and a finger reach them. If the editor is later wrapped in a native shell, that shell owns a `UIPencilInteraction` and forwards the preferred action as an embed command. An observation on a physical tablet that double tap or squeeze acts on the canvas opens an issue.
