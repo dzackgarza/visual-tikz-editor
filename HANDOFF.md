@@ -23,10 +23,10 @@ Inventory baseline: `17d6892`, inspected 2026-10-29. This inventory does not est
 | GitHub #2–#5, #7–#9 | Closed | Retain their technical acceptance requirements |
 | Open pull requests | None | Establish review state for subsequent implementation |
 | PR #11 | Merged; live review threads all resolved on 2026-10-29 | Historical review record |
-| Latest listed release | Prerelease `workbench-07f072a` | Qualify later changes independently |
+| Latest listed release | A prerelease `workbench-<sha>` of a head of `main` whose Development diagnostics run is green; `gh release list --limit 1` names it. Assets: the source tree with the built page, the Debian package, the CI qualification evidence, and `SHA256SUMS` | Physical-tablet results at the same revision make it the immutable release |
 | Project cards, including archived | Workspace plan and its feature | Use the current card and this inventory |
 | GitHub #14 | Closed again on three consecutive green instrumented runs at `5e36766` (41078668784, 41078719334, 41078725991). Since `29aeaa6` the canvas marks its startup view installed (`data-canvas-view="ready"`) and the shared ready wait requires that mark before its two-frame stillness check | A story that fails only in the full suite reopens it with the run and the triage log |
-| GitHub #15 | Decided on the issue: the eraser cuts every drawn path. A sweep leaves the rest of a circle, an ellipse, an arc, a rectangle, a grid, or a `to` path in place; the story "erases only the swept part of a circle, an ellipse, an arc path, and a rectangle" holds it | Close it when the Development diagnostics run that contains the story is green |
+| GitHub #15 | Closed on green run 43080699277 at `6babb40`: the eraser cuts every drawn path; the story "erases only the swept part of a circle, an ellipse, an arc path, and a rectangle" holds it in both orientations | A sweep that erases a cuttable shape whole reopens it |
 | GitHub #16 | Closed on run 41024136888 at `30fdae3`; the Development diagnostics workflow runs `just test-ci`, logic tests and browser suite included, on every push to any branch | Branch protection and PR review belong to the stabilized phase, which the user chooses after the baseline freezes |
 
 ## Next work, ranked
