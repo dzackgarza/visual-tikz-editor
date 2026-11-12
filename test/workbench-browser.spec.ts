@@ -4383,6 +4383,47 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  story({}, "loads stored settings that hold the retired toolbar items and saves them without it", async function () {
+    const stored = {
+      settings: {
+        colorPicker: {
+          collections: [
+            { id: "default", name: "Default", colors: ["black", "white"] },
+            { id: "roots", name: "Roots", colors: ["red", "blue"] },
+          ],
+          activeCollectionId: "roots",
+        },
+        toolbar: { dock: "bottom", items: [{ kind: "tool", id: "select" }, { kind: "separator" }] },
+      },
+    };
+    const put = await page.request.put(`${url}api/preferences`, {
+      data: { key: "tikz-editor:settings", value: JSON.stringify(stored) },
+    });
+    assert.equal(put.status(), 204);
+    await page.reload();
+    await editorReady(page);
+    const frame = editorFrame(page);
+    const rail = frame.locator("[data-diagram-tools]");
+    const railColors = () =>
+      rail
+        .getByRole("button", { name: /^Use / })
+        .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")!.slice(4)));
+    await expect.poll(railColors).toEqual(["red", "blue"]);
+    await rail.getByRole("button", { name: "Settings", exact: true }).click();
+    const dialog = frame.getByTestId("settings-modal");
+    await dialog.getByTestId("settings-category-colors").click();
+    await dialog.getByLabel("Collection", { exact: true }).selectOption({ label: "Default" });
+    await expect
+      .poll(async () => {
+        const preferences = (await (await page.request.get(`${url}api/preferences`)).json()) as Record<string, string>;
+        const settings = (JSON.parse(preferences["tikz-editor:settings"]) as {
+          settings: { colorPicker: { activeCollectionId: string }; toolbar: Record<string, unknown> };
+        }).settings;
+        return { active: settings.colorPicker.activeCollectionId, items: "items" in settings.toolbar };
+      })
+      .toEqual({ active: "default", items: false });
+  });
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
