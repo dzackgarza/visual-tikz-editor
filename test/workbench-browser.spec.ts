@@ -262,6 +262,63 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    {},
+    "opens Document Properties from File and by Ctrl+Shift+D, writes the scale Properties writes, and closes on Escape",
+    async function () {
+      await editorReady(page);
+      const frame = editorFrame(page);
+      const code = page.getByRole("button", { name: "Code: left sidebar", exact: true });
+      const figure = String.raw`\begin{tikzpicture}
+\draw (0,0) -- (3,2);
+\end{tikzpicture}`;
+      const author = async () => {
+        await expect(code).toHaveAttribute("aria-pressed", "true");
+        await page.locator(".cm-content").fill(figure);
+        await expect.poll(async () => (await editorDebug(page)).source).toBe(figure);
+      };
+      // The oracle: the TikZ that Properties writes for an X scale of 2 with nothing selected.
+      await author();
+      const rail = frame.locator("[data-diagram-tools]");
+      await rail.getByRole("button", { name: "Select", exact: true }).click();
+      await rail.getByRole("button", { name: "Properties", exact: true }).click();
+      const properties = frame.getByRole("complementary", { name: "Properties", exact: true });
+      await properties.getByLabel("X scale", { exact: true }).fill("2");
+      await properties.getByLabel("X scale", { exact: true }).press("Enter");
+      await expect.poll(async () => (await editorDebug(page)).source).not.toBe(figure);
+      const scaled = (await editorDebug(page)).source;
+
+      await author();
+      const fileMenu = page.getByRole("group", { name: "File" }).locator("summary");
+      await fileMenu.click();
+      await page.getByRole("button", { name: "Document Properties…", exact: true }).click();
+      const dialog = frame.getByRole("dialog", { name: "Document Properties" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText("Figure Bounds", { exact: true })).toBeVisible();
+      await dialog.getByLabel("X scale", { exact: true }).fill("2");
+      await dialog.getByLabel("X scale", { exact: true }).press("Enter");
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(fileMenu).toBeFocused();
+      assert.equal((await editorDebug(page)).source, scaled);
+
+      await page.locator(".cm-content").click();
+      await page.keyboard.press("Control+Shift+D");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByLabel("X scale", { exact: true })).toHaveValue("2");
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(page.locator(".cm-content")).toBeFocused();
+
+      await frame.locator('[data-canvas-viewport="true"]').click();
+      await page.keyboard.press("Control+Shift+D");
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      assert.equal((await editorDebug(page)).source, scaled);
+    },
+  );
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
