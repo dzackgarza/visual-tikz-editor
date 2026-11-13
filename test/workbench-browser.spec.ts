@@ -6905,6 +6905,74 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  /** A panel control of the document bar (contracts/surfaces.md, FR-060). */
+  const documentPanelButton = (name: "Layers" | "Properties") =>
+    page.locator(".document-bar").getByRole("button", { name, exact: true });
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `Layers then Properties: one panel at a time; a second tap closes each, in ${tablet.name}`,
+      async function () {
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const layers = frame.getByRole("complementary", { name: "Layers", exact: true });
+        const properties = frame.getByRole("complementary", { name: "Properties", exact: true });
+        const code = page.locator(".cm-content");
+        // Each panel is its own: its title and its close button, with no tab to the other panel.
+        const ownPanel = async (panel: Locator, title: "Layers" | "Properties") => {
+          await expect(panel.getByRole("heading", { name: title, exact: true })).toBeVisible();
+          await expect(panel.getByRole("button", { name: `Close ${title.toLowerCase()}`, exact: true })).toBeVisible();
+          await expect(panel.getByRole("tab")).toHaveCount(0);
+        };
+        const pressed = async (open: "Layers" | "Properties" | null) => {
+          for (const name of ["Layers", "Properties"] as const) {
+            await expect(documentPanelButton(name)).toHaveAttribute("aria-pressed", String(name === open));
+          }
+        };
+
+        await tap(documentPanelButton("Layers"));
+        await expect(layers).toBeVisible();
+        await ownPanel(layers, "Layers");
+        await pressed("Layers");
+        await storyScreenshot(page, `layers-panel-${tablet.name}`);
+
+        // Scenario 1: Properties replaces Layers.
+        await tap(documentPanelButton("Properties"));
+        await expect(properties).toBeVisible();
+        await expect(layers).toHaveCount(0);
+        await ownPanel(properties, "Properties");
+        await pressed("Properties");
+
+        // The panel's own close button closes it, and the bar follows.
+        await tap(properties.getByRole("button", { name: "Close properties", exact: true }));
+        await expect(properties).toHaveCount(0);
+        await pressed(null);
+
+        // Scenario 2: a second tap on the bar button closes its panel.
+        for (const [name, panel] of [["Layers", layers], ["Properties", properties]] as const) {
+          await tap(documentPanelButton(name));
+          await expect(panel).toBeVisible();
+          await tap(documentPanelButton(name));
+          await expect(panel).toHaveCount(0);
+          await pressed(null);
+        }
+
+        // Code is in the same one-panel state (data-model Panel `open`).
+        await tap(documentPanelButton("Layers"));
+        await expect(layers).toBeVisible();
+        await tap(page.getByRole("button", { name: "Code: left sidebar", exact: true }));
+        await expect(code).toBeVisible();
+        await expect(layers).toHaveCount(0);
+        await pressed(null);
+        await tap(documentPanelButton("Properties"));
+        await expect(properties).toBeVisible();
+        await expect(code).toBeHidden();
+      },
+    );
+  }
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
