@@ -17,7 +17,7 @@ architecture. It follows the [constitution](../../.specify/memory/constitution.m
 The user is a research mathematician who draws diagrams for papers and notes on a tablet with a
 pen and fingers, and sometimes at a desktop with a mouse and keyboard. A diagram is one
 `tikzpicture` or one `tikzcd` figure in a `.tikz` or `.tikzcd` file that a LaTeX document
-includes. The user knows iPad notebook applications (GoodNotes, Noteful, Apple Notes) and
+includes. The user knows iPad notebook applications (GoodNotes, Notability, Noteful, Apple Notes) and
 figure editors (Ipe, Inkscape, Quiver), and expects the editor to behave like them. The editor
 runs alone (desktop window or local page) or inside a host (Zettlr, Math Notes) through the
 typed host interface.
@@ -33,7 +33,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 | Active tool menu (beside the toolbar) | The options of the active tool: width, style, smoothing, the construction variant | GoodNotes Active Tool Menu |
 | Object menu (above the selection) | Only the commands that apply to the selection | GoodNotes Universal Object Menu; HIG context menus |
 | Canvas controls (canvas corners) | Zoom readout with zoom in and out; Snap with its rules | 2026-10-16 mockups; Inkscape status-bar zoom field; Ipe Snap toolbar |
-| Panels (side panel in landscape, sheet in portrait) | Layers; Properties; one at a time per side | GoodNotes Layers panel; HIG sheets and popovers |
+| Panels (side panel in landscape, sheet in portrait) | Layers; Properties; one at a time | GoodNotes Layers panel; HIG sheets and popovers |
 | More (⋯) menu | Settings (appearance, canvas, colour collections, keyboard shortcuts), Copy TikZ | GoodNotes More menu (Document Editing, toolbar customization) |
 
 ## User Scenarios & Testing *(mandatory)*
@@ -247,4 +247,4 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 - The per-surface specifications under [docs/prior-art](../../docs/prior-art/) and the
   interaction model remain the detailed rules where they agree with this specification and the
   constitution; where they disagree, they are corrected.
-- The renderer failure on zoom (#18) is defect work outside this specification.
+- The renderer failure on zoom is defect work outside this specification.

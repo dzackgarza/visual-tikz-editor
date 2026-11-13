@@ -220,7 +220,7 @@ actions"; the available actions depend on the selected content
 ## R15. Settings and More
 
 **Proposal**: More (⋯) at the end of the document bar holds Settings and Copy TikZ. Settings has
-the categories Canvas, Colours (the colour collections), and Keyboard shortcuts; each changed
+the categories Appearance (R17), Canvas, Colours (the colour collections), and Keyboard shortcuts; each changed
 setting shows its own reset (FR-062).
 
 **Rationale**: GoodNotes keeps its document settings and toolbar customization in More
