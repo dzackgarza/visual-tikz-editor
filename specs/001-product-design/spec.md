@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft. The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-060a, FR-063, and FR-064 (the editor is standalone) (2026-11-13). Every other requirement is the
+**Status**: Draft. The user has decided FR-005, FR-006a, FR-012a, FR-012b, FR-015, FR-017 (the Figures panel), FR-034, FR-041, FR-044, FR-054, FR-060a, FR-063, FR-064 (the editor is standalone), and FR-065 (2026-11-13). Every other requirement is the
 maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
@@ -46,6 +46,11 @@ The editor has these surfaces. Each control appears on exactly one of them.
 - Q: Does the editor have a status line, and what does it show? → A: A status line shows the pointer position in figure coordinates only.
 - Q: In a wide window, are two views shown side by side? → A: No. Code is a panel beside the canvas or Quiver, like Layers and Properties; Render stays a full view.
 - Q: What does Properties show when nothing is selected? → A: The figure's properties; Properties is the one place for them.
+- Q: During a construction in progress, what does Undo do? → A: Undo removes the last placed point; with no point left, the construction ends. Undo acts on the document history only when no construction is in progress.
+- Q: When does the editor write a file to disk? → A: Each accepted edit writes a named file at once, as GoodNotes and Notability do. An Untitled document keeps a draft in the XDG state directory until Save As gives it a path. Save writes at once.
+- Q: How does the editor treat a file with more than one figure? → A: It edits one figure at a time; a Figures panel with thumbnails picks the figure, and the other figures stay byte for byte.
+- Q: Where does Render get the LaTeX preamble and macros? → A: From the pandoc template `~/.pandoc/templates/standalone-tikz.tex`, the one source of packages and macros; a missing template is an error that names the path.
+- Q: After Undo or Redo, what is selected on the canvas? → A: The objects that the step changed; nothing when the step removed them.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -87,8 +92,9 @@ compares the file byte for byte outside the edited statement.
 
 **Acceptance Scenarios**:
 
-1. **Given** a saved file, **When** an edit is accepted, **Then** the file is written and the title shows the saved state.
-2. **Given** a file changed on disk, **When** the editor next saves, **Then** it stops, keeps the edit as a recovery draft, and shows the conflict in the document bar.
+1. **Given** a saved file, **When** an edit is accepted, **Then** the file is written and the title shows the saved state (FR-006a).
+2. **Given** an Untitled document, **When** an edit is accepted, **Then** no file outside `$XDG_STATE_HOME/visual-tikz-editor/` is written, and after Save As the chosen path holds the source.
+3. **Given** a file changed on disk, **When** the editor next saves, **Then** it stops, keeps the edit as a recovery draft, and shows the conflict in the document bar.
 
 ---
 
@@ -129,6 +135,7 @@ and checks the emitted TikZ; at no stage does a sentence appear.
 
 1. **Given** the arc-through-three-points construction, **When** two points are placed, **Then** the canvas shows the placed points, the provisional arc through the pen position, and the snap marker, and no instruction text.
 2. **Given** a construction in progress, **When** the user chooses another tool, **Then** only the provisional construction is discarded.
+3. **Given** the arc-through-three-points construction with two points placed, **When** the user taps Undo, **Then** only the second point is removed, the source does not change, and a second Undo ends the construction (FR-034).
 
 ---
 
@@ -211,6 +218,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 ### Edge Cases
 
 - An empty untitled figure has no content to fit (see FR-041).
+- A file holds a `tikzpicture` and a `tikzcd`: each figure opens in the editor of its own kind (FR-013, FR-017).
 - The system appearance changes while the editor runs: with the default appearance, the editor follows it (FR-005).
 
 ## Requirements *(mandatory)*
@@ -225,6 +233,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 - **FR-004**: At most one popover MUST be open at a time.
 - **FR-005**: The appearance MUST NOT be a control of the document bar or the drawing toolbar. Settings › Appearance MUST hold Match System Appearance, on by default, and a Light or Dark choice for when it is off, as Notability Settings does ([research](research.md) R17).
 - **FR-006**: The save state MUST be a short status beside the title ("Saved", "Not saved", a conflict) and MUST agree with the disk.
+- **FR-006a**: Each accepted edit MUST write a named file at once. An Untitled document MUST keep its source as a draft in `$XDG_STATE_HOME/visual-tikz-editor/` (FR-063) until Save As gives it a path. Save MUST write at once (user decision, 2026-11-13; GoodNotes and Notability autosave).
 
 **Drawing toolbar and tool menus** (prior art: GoodNotes toolbar, Active Tool Menu, colour presets; HIG toolbars, buttons)
 
@@ -243,6 +252,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 - **FR-014**: View MUST offer the document's editor and Render, and MUST NOT offer the other kind's editor.
 - **FR-015**: Code MUST be a panel, opened by Code in the document bar, beside the canvas or Quiver; an edit in either MUST show at once in the other. Render MUST replace the editor in the window. Switching between the editor and Render MUST keep selection, viewport, and tool (user decision, 2026-11-13; Inkscape XML Editor).
 - **FR-016**: No view MUST show an explanation of why another view is unavailable.
+- **FR-017**: A file with more than one figure MUST open one figure at a time. A Figures panel MUST show a thumbnail of each figure and MUST open the figure the user taps; View MUST offer Figures for such a file. An edit MUST change only the source of the open figure, and the other figures MUST stay byte for byte (user decision, 2026-11-13; GoodNotes page thumbnails).
 
 **Colour, snapping, and tool options** (prior art: GoodNotes colour presets; Ipe snapping; HIG colour wells)
 
@@ -261,6 +271,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 - **FR-031**: No construction MUST show an instruction sentence.
 - **FR-032**: Cancel and Finish MUST appear in the Active Tool Menu while a construction is in progress.
 - **FR-033**: Choosing another tool MUST discard only the provisional construction.
+- **FR-034**: While a construction is in progress, Undo MUST remove only its last placed point, and the construction MUST end when no point remains; Undo MUST act on the document history (FR-012b) only when no construction is in progress (user decision, 2026-11-13; Inkscape Pen tool Backspace, Ipe path drawing).
 
 **Zoom and coordinates** (prior art: Inkscape zoom field and rulers; constitution Principle VI)
 
@@ -276,15 +287,17 @@ reference, and holds the pen over a lattice point and reads the status line.
 - **FR-051**: The object menu MUST hold only commands that apply to the selection, with a More item for secondary commands.
 - **FR-052**: A locked selection MUST survive a tap that misses.
 - **FR-053**: Edit Points MUST show the curve's points with the rest of the figure dimmed and locked. (interaction model, Editing points)
+- **FR-054**: After Undo or Redo, the selection MUST be the objects that the step changed; a step that leaves none of them in the figure MUST leave nothing selected (user decision, 2026-11-13; Keynote and Pages for iPad).
 
 **Panels and settings** (prior art: GoodNotes Layers panel and More menu; HIG sheets, settings)
 
-- **FR-060**: Code, Layers, and Properties MUST be separate panels, one open at a time, each opened by its own document-level control.
+- **FR-060**: Code, Layers, Properties, and Figures MUST be separate panels, one open at a time, each opened by its own document-level control.
 - **FR-060a**: Properties MUST show the attributes of the selection and, with nothing selected, the attributes of the figure; no other surface MUST hold the figure's attributes (user decision, 2026-11-13; Keynote for iPad Format and Layout).
 - **FR-061**: A panel MUST open at the side in landscape and as a sheet in portrait, and MUST leave the selected object visible.
 - **FR-062**: Settings MUST open from More and MUST hold appearance, canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset.
 - **FR-063**: The editor MUST keep its files in the XDG base directories: preferences in `$XDG_CONFIG_HOME`, recovery drafts and per-file view state in `$XDG_STATE_HOME`, and the render cache in `$XDG_CACHE_HOME`, each under `visual-tikz-editor/` ([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/); user decision, 2026-11-13).
 - **FR-064**: The editor MUST be a standalone application, and no other application MUST embed it (user decision, 2026-11-13).
+- **FR-065**: Render MUST compile each figure through the pandoc template `~/.pandoc/templates/standalone-tikz.tex`, the one source of packages and macros, and Quiver MUST take its macros from the same template. When the template is missing, Render MUST show an error that names its path (user decision, 2026-11-13).
 
 **Text in the interface** (prior art: HIG offering help)
 
