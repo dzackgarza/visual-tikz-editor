@@ -5408,6 +5408,133 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `line style, opacity, and smoothing chosen in the Pen's Active Tool Menu apply to the next stroke as it is drawn, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const pen = toolbarItem(frame, "Pen");
+        await input.touch([await stableCenter(pen)]);
+        await expect(pen).toHaveAttribute("aria-pressed", "true");
+        const area = await canvasFreeArea(frame);
+        const preview = frame.locator('[data-tool-preview="freehand"]');
+        // A stroke's colour `{rgb,255:red,0;…}` holds semicolons, so a statement is its whole line.
+        const statements = async () =>
+          Array.from((await editorDebug(page)).source.matchAll(/^[ \t]*\\draw.*$/gm), (match) => match[0].trim());
+        /** Draws a zigzag with the pen; returns the mark's dash pattern and opacity, read before the pen lifts, and the statement it wrote. */
+        const zigzag = async (fy: number) => {
+          const y = area.top + fy * (area.bottom - area.top);
+          const points = Array.from({ length: 41 }, (_, i) => ({
+            x: area.left + 0.2 * (area.right - area.left) + i * 0.015 * (area.right - area.left),
+            y: y + (i % 2 === 0 ? -8 : 8),
+          }));
+          const before = await statements();
+          await input.penDown(points[0]);
+          for (const point of points.slice(1, 6)) {
+            await input.penMove(point);
+          }
+          await expect(preview, "The pen left no mark before it lifted").toHaveCount(1);
+          const shown = await preview
+            .locator("line, path")
+            .first()
+            .evaluate((element: SVGGraphicsElement) => ({
+              dashes: getComputedStyle(element).strokeDasharray,
+              opacity: parseFloat(getComputedStyle(element).strokeOpacity),
+            }));
+          for (const point of points.slice(6)) {
+            await input.penMove(point);
+          }
+          await input.penUp(points.at(-1)!);
+          await expect
+            .poll(async () => (await statements()).length, { message: "The stroke added no path to the source" })
+            .toBe(before.length + 1);
+          const written = (await statements()).find((statement) => !before.includes(statement))!;
+          return { shown, written };
+        };
+        /** The summed second differences of a statement's written y coordinates, in points. */
+        const roughness = (statement: string) => {
+          const ys = Array.from(statement.matchAll(/\([-\d.e]+pt,([-\d.e]+)pt\)/g), (match) => Number(match[1]));
+          return ys.slice(1, -1).reduce((sum, y, i) => sum + Math.abs(ys[i] - 2 * y + ys[i + 2]), 0);
+        };
+        const plain = await zigzag(0.25);
+        assert.equal(plain.shown.dashes, "none", "The default pen draws a dashed mark");
+        assert.doesNotMatch(plain.written, /opacity|dashed|dotted/, `The default stroke writes a style: ${plain.written}`);
+
+        await input.touch([await stableCenter(pen)]);
+        const menu = activeToolMenu(frame);
+        await expect(menu).toBeVisible();
+        await menu.getByRole("listbox", { name: "Line style" }).getByRole("option", { name: "Dashed", exact: true }).click();
+        await menu.getByRole("slider", { name: "Opacity", exact: true }).fill("0.5");
+        await menu.getByRole("slider", { name: "Smoothing", exact: true }).fill("1");
+        await input.touch([await stableCenter(pen)]);
+        await expect(menu).toHaveCount(0);
+
+        const styled = await zigzag(0.6);
+        assert.notEqual(styled.shown.dashes, "none", "The pen does not draw dashed while the stroke is drawn");
+        assert.ok(Math.abs(styled.shown.opacity - 0.5) < 0.01, `The mark shows opacity ${styled.shown.opacity}, not 0.5`);
+        assert.match(styled.written, /\bdashed\b/, `The stroke does not write the dashed style: ${styled.written}`);
+        assert.match(styled.written, /draw opacity=0\.5\b/, `The stroke does not write opacity 0.5: ${styled.written}`);
+        assert.ok(
+          roughness(styled.written) < 0.5 * roughness(plain.written),
+          `Smoothing does not smooth the written stroke: roughness ${roughness(styled.written)} against ${roughness(plain.written)} unsmoothed`,
+        );
+        assert.ok(
+          (await statements()).includes(plain.written),
+          "Options chosen after a stroke changed that earlier stroke",
+        );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `the Eraser's Active Tool Menu chooses Whole stroke and a size, and the next sweep removes every stroke within that size, in ${tablet.name}`,
+      async function () {
+        const authored = String.raw`\begin{tikzpicture}
+\draw (-4,-4) -- (-4,4);
+\draw (0,-4) -- (0,4);
+\draw (4,-4) -- (4,4);
+\end{tikzpicture}`;
+        await author(authored);
+        const frame = editorFrame(page);
+        await expect(frame.locator("[data-source-id]")).toHaveCount(3);
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const eraser = toolbarItem(frame, "Eraser");
+        await input.touch([await stableCenter(eraser)]);
+        await input.touch([await stableCenter(eraser)]);
+        const menu = activeToolMenu(frame);
+        await expect(menu).toBeVisible();
+        const mode = menu.getByRole("listbox", { name: "Erase" });
+        await expect(mode.getByRole("option", { name: "Partial", exact: true })).toHaveAttribute("aria-selected", "true");
+        await mode.getByRole("option", { name: "Whole stroke", exact: true }).click();
+        await menu.getByRole("slider", { name: "Size", exact: true }).fill("60");
+        await input.touch([await stableCenter(eraser)]);
+        await expect(menu).toHaveCount(0);
+        const middleOf = (id: string) =>
+          strokePoint(page, frame.locator(`svg [data-source-id="${id}"]`).first(), 0.5);
+        const [left, right] = [await middleOf("path:0"), await middleOf("path:2")];
+        // The sweep crosses the left and middle lines and ends 20 px short of the right one:
+        // inside the reach of a 60 px eraser (30 px radius), outside the default 20 px eraser's.
+        const from = left.x - 20,
+          to = right.x - 20;
+        await input.penStroke(
+          Array.from({ length: 16 }, (_, i) => ({ x: from + (i * (to - from)) / 15, y: left.y })),
+        );
+        await expect
+          .poll(async () => (await editorDebug(page)).source, {
+            message: "The Whole stroke sweep did not remove all three strokes within its size",
+          })
+          .toBe(String.raw`\begin{tikzpicture}
+\end{tikzpicture}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `the eraser sweep removes the crossed parts of two strokes in one undo step, in ${tablet.name}`,
       async function () {
         const authored = String.raw`\begin{tikzpicture}
