@@ -17,6 +17,8 @@ export const originalStrokeSchema = z.object({
   key: z.string().regex(/^[A-Za-z0-9_-]+$/),
   intent: z.enum(['geometry', 'ink']),
   color: z.string().refine(color => strokeColorComponents(color) !== null, 'Expected hex RGB, hex RGBA or rgba() color'),
+  /** The pen's line width in points, present only when it differs from TikZ's default. */
+  lineWidth: z.number().positive().finite().optional(),
   samples: z.array(z.object({
     x: coordinate, y: coordinate, time: coordinate,
     pressure: coordinate.optional(), altitude: coordinate.optional(),
@@ -68,7 +70,8 @@ export function originalDrawingSource(stroke: OriginalStroke): string {
     const name = index === 0 ? stroke.ends?.start : index === last ? stroke.ends?.end : undefined;
     return name === undefined ? `(${stroke.samples[index].x}pt,${stroke.samples[index].y}pt)` : `(${name})`;
   };
-  return `\\draw[draw=${tikzStrokeColor(stroke)},draw opacity=${tikzStrokeOpacity(stroke)}] ${stroke.samples.map((_sample, index) => point(index)).join(' -- ')};`;
+  const width = stroke.lineWidth === undefined ? '' : `,line width=${stroke.lineWidth}pt`;
+  return `\\draw[draw=${tikzStrokeColor(stroke)},draw opacity=${tikzStrokeOpacity(stroke)}${width}] ${stroke.samples.map((_sample, index) => point(index)).join(' -- ')};`;
 }
 export const originalAssociationSchema = z.object({
   stroke: originalStrokeSchema,

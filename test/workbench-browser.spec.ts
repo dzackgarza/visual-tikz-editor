@@ -5584,6 +5584,9 @@ describe("standalone workbench host boundary", function () {
           await expect(activeToolMenu(frame)).toHaveCount(0);
         };
         await chooseShape("Rectangle");
+        // The selection's object menu sits beside it; a tap on empty canvas clears both first.
+        await input.penStroke([at(10, 10)]);
+        await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
         await drag(at(4.5, 2.5), at(7.8, 5.6));
         await expect
           .poll(selection, { message: "The Rectangle drag did not select the right circle" })
@@ -5624,7 +5627,8 @@ describe("standalone workbench host boundary", function () {
           y: area.top + (area.bottom - area.top) * fy,
         });
         await input.touch([await stableCenter(toolbarItem(frame, "Pen"))]);
-        // Three upright strokes; each one's text is the lines it added to the source.
+        // Three upright strokes; each one's text is the drawing it added to the source. Its record lines
+        // such as \begin{scope} repeat between strokes, so only the \draw lines identify it.
         const strokes: string[] = [];
         for (const fx of [0.3, 0.5, 0.7]) {
           const before = await source();
@@ -5633,7 +5637,9 @@ describe("standalone workbench host boundary", function () {
           );
           await expect.poll(source, { message: "A pen stroke changed nothing" }).not.toBe(before);
           const kept = new Set(before.split("\n"));
-          strokes.push((await source()).split("\n").filter((line) => !kept.has(line)).join("\n"));
+          const drawn = (await source()).split("\n").filter((line) => !kept.has(line) && line.startsWith("\\draw"));
+          assert.equal(drawn.length, 1, "A pen stroke did not add exactly one drawing");
+          strokes.push(drawn[0]);
         }
         // A sweep across the first stroke only.
         await input.touch([await stableCenter(toolbarItem(frame, "Eraser"))]);

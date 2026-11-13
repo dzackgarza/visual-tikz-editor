@@ -12,7 +12,7 @@
           <RiArrowGoForwardLine aria-hidden="true" size="22" />
         </button>
       </div>
-      <details class="file-menu" aria-label="File" @click="closeFileMenu">
+      <details class="file-menu" aria-label="File" @click="closeFileMenu" @toggle="onShellMenuToggle">
         <summary>File</summary>
         <div class="file-menu-items">
           <button type="button" :disabled="document === null" @click="newDocument('tikzpicture')">New tikzpicture</button>
@@ -25,7 +25,7 @@
           <button v-if="nativeWindow" type="button" @click="requestExit">Exit</button>
         </div>
       </details>
-      <details class="file-menu export-menu" aria-label="Export" @click="closeFileMenu">
+      <details class="file-menu export-menu" aria-label="Export" @click="closeFileMenu" @toggle="onShellMenuToggle">
         <summary>Export</summary>
         <div class="file-menu-items">
           <button type="button" :disabled="document === null" @click="exportDiagram('pdf')">PDF</button>
@@ -67,7 +67,7 @@
             :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
             :initial-mode="modeForView(view)" @status="onEditorStatus(view, $event)"
             @undo-request="undoDocument" @redo-request="redoDocument"
-            @document-properties-closed="documentPropertiesClosed" />
+            @document-properties-closed="documentPropertiesClosed" @popover-opened="closeShellMenus" />
         </div>
         <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
           aria-orientation="vertical" :aria-valuenow="Math.round(splitPercent)" aria-valuemin="15" aria-valuemax="85"
@@ -168,6 +168,18 @@ function closeFileMenu(event: MouseEvent): void {
       event.currentTarget instanceof HTMLDetailsElement) {
     event.currentTarget.open = false;
   }
+}
+// One popover at a time across shell and canvas (FR-004).
+function onShellMenuToggle(event: Event): void {
+  const menu = event.currentTarget as HTMLDetailsElement;
+  if (!menu.open) return;
+  for (const other of window.document.querySelectorAll<HTMLDetailsElement>("details.file-menu")) {
+    if (other !== menu) other.open = false;
+  }
+  for (const editor of workbenches.values()) editor.dismissPopover();
+}
+function closeShellMenus(): void {
+  for (const menu of window.document.querySelectorAll<HTMLDetailsElement>("details.file-menu")) menu.open = false;
 }
 const nativeWindow = isTauri();
 const unsavedPrompt = ref<"closing" | "continuing" | null>(null);

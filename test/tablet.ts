@@ -168,9 +168,7 @@ export async function strokePoint(page: Page, element: Locator, fraction: number
  * The startup zoom depends on the canvas size at mount; a story acting on drawn items sets its view here.
  */
 export async function fitDiagram(frame: FrameLocator, input: TabletInput): Promise<void> {
-  const zoom = frame
-    .locator("[data-diagram-tools]")
-    .getByRole("button", { name: "Zoom and display", exact: true });
+  const zoom = frame.getByRole("button", { name: "Zoom and display", exact: true });
   await input.touch([await stableCenter(zoom)]);
   await input.touch([
     await stableCenter(frame.getByRole("button", { name: "Fit diagram", exact: true })),

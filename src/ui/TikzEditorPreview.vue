@@ -74,6 +74,7 @@ const emit = defineEmits<{
   (e: "undoRequest"): void;
   (e: "redoRequest"): void;
   (e: "documentPropertiesClosed"): void;
+  (e: "popoverOpened"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
 }>();
@@ -178,7 +179,12 @@ function documentProperties(): void {
   postToEditor({ action: "document-properties" });
 }
 
-defineExpose({ snapshot, currentSource, zoom, documentProperties });
+// One popover at a time across shell and canvas (FR-004): the shell's menu closes the canvas's.
+function dismissPopover(): void {
+  if (loaded.value) postToEditor({ action: "dismiss-popover" });
+}
+
+defineExpose({ snapshot, currentSource, zoom, documentProperties, dismissPopover });
 
 function sendFullLoad(): void {
   if (!hostReady.value) {
@@ -411,6 +417,9 @@ function onMessage(event: MessageEvent): void {
       break;
     case "document-properties-closed":
       emit("documentPropertiesClosed");
+      break;
+    case "popover-opened":
+      emit("popoverOpened");
       break;
     case "source-selection": {
       if (message.revision !== session.value.revision || typeof message.source !== "string") break;
