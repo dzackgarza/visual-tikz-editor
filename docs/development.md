@@ -56,7 +56,13 @@ bunx playwright show-trace test-results-*/workbench/failed-*.zip
 
 ### Reviewing what the stories show
 
-A passing story is not evidence that a surface looks right. Each story writes its last state as `test-results/workbench/<story>.png`. A task or a phase of `specs/001-product-design/tasks.md` is complete only after these screenshots are viewed, in portrait and in landscape, and compared with [contracts/surfaces.md](../specs/001-product-design/contracts/surfaces.md). Each difference that is seen gets a red story, or goes to the open task that owns it.
+A passing story is not evidence that a surface looks right. Each story writes its last state as `test-results/workbench/<story>.png` and its whole run as `test-results/workbench/<story>.webm`. A contact sheet of one frame per second shows the run as one image:
+
+```sh
+ffmpeg -i 'test-results/workbench/<story>.webm' -vf 'fps=1,scale=480:-1,tile=4x4' -frames:v 1 sheet.png
+```
+
+A task or a phase of `specs/001-product-design/tasks.md` is complete only after these screenshots and contact sheets are viewed, in portrait and in landscape, and compared with [contracts/surfaces.md](../specs/001-product-design/contracts/surfaces.md). Each difference that is seen gets a red story, or goes to the open task that owns it.
 
 ### Writing a browser story
 

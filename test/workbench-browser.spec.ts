@@ -316,7 +316,12 @@ describe("standalone workbench host boundary", function () {
     workbench = await startWorkbench(process.env, undefined, setup?.resources, documentPath);
     url = workbench.url;
     const viewport = setup?.viewport;
-    context = await browser.newContext(viewport ? { viewport } : {});
+    // Each story keeps a video beside its screenshot, for the review of what the stories show
+    // (docs/development.md); https://playwright.dev/docs/videos.
+    context = await browser.newContext({
+      ...(viewport ? { viewport } : {}),
+      recordVideo: { dir: "test-results/workbench/video" },
+    });
     await context.addInitScript(recordCanvasProtocol);
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
@@ -348,6 +353,9 @@ describe("standalone workbench host boundary", function () {
     } finally {
       try {
         await context.close();
+        const video = page.video()!;
+        await video.saveAs(`test-results/workbench/${name}.webm`);
+        await video.delete();
       } finally {
         await workbench.stop();
       }
@@ -1615,10 +1623,8 @@ describe("standalone workbench host boundary", function () {
           if (uneven !== undefined) return `ticks are not ${spacing.toFixed(2)} px apart, Inkscape's subdivision (${context}): ${positions}`;
           return null;
         };
-        const zoom = frame
-          .locator("[data-diagram-tools]")
-          .getByRole("button", { name: "Zoom and display", exact: true });
-        const levels = ["10%", "20%", "100%", "1000%", "Fit diagram"];
+        const zoom = zoomControl(frame);
+        const levels =["10%", "20%", "100%", "1000%", "Fit diagram"];
         for (const level of levels) {
           await input.touch([await stableCenter(zoom)]);
           await input.touch([await stableCenter(frame.getByRole("button", { name: level, exact: true }))]);
@@ -2743,7 +2749,6 @@ describe("standalone workbench host boundary", function () {
         // No stroke waits for the canvas to finish redrawing the one before it.
         await input.penStroke(waveAcross(viewport, 0.45, 0.2, 120));
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 120));
-        await page.keyboard.press("Escape");
         await input.penStroke(waveAcross(viewport, 0.45, 0.6, 120));
         await expect
           .poll(draws, { message: "A stroke drawn while the canvas redrew was lost" })
@@ -3349,7 +3354,6 @@ describe("standalone workbench host boundary", function () {
           Array.from((await editorDebug(page)).source.matchAll(/\\draw(?:\{[^}]*\}|[^;{])*;/g), (match) => match[0]);
         await input.penStroke(waveAcross(viewport, 0.3, 0.4, 120));
         await expect.poll(async () => (await draws()).length).toBe(1);
-        await page.keyboard.press("Escape");
         const [first] = await draws();
         const end = await strokePoint(page, frame.locator("svg [data-source-id]").first(), 1);
         // The second stroke goes down a few pixels past the first one's end and continues away from it.
@@ -3364,11 +3368,19 @@ describe("standalone workbench host boundary", function () {
             message: "The stroke near the end did not draw a new stroke",
           })
           .toBe(2);
-        assert.equal(
-          (await draws())[0],
-          first,
-          "The stroke near the end changed the stroke it started near",
-        );
+        // Snap to objects lands the new stroke on the end, and the new stroke is written against
+        // the end's name (FR-023): the old stroke gains `coordinate (pN)` and keeps every point.
+        const [old, added] = await draws();
+        const named = /^(.*) coordinate \((p\d+)\);$/.exec(old);
+        assert.ok(named, `The new stroke did not attach to the end: ${old}`);
+        assert.equal(`${named[1]};`, first, "The stroke near the end changed the stroke it started near");
+        assert.ok(added.includes(`(${named[2]})`), `The new stroke does not start at (${named[2]}): ${added}`);
+        // The canvas draws both strokes, and still does after the render of the new source lands.
+        const second = frame.locator('svg [data-source-id="path:1"]').first();
+        await expect(second, "The canvas does not draw the new stroke").toBeVisible();
+        await page.waitForTimeout(1000);
+        await expect(second, "The canvas stopped drawing the new stroke").toBeVisible();
+        assert.equal((await draws()).length, 2, "The new stroke left the source");
       },
     );
   }
@@ -4169,9 +4181,7 @@ describe("standalone workbench host boundary", function () {
         await expect(result).toHaveCount(0);
         await chooseTool(frame, input, "Lasso");
         // Start from an empty selection, then tap the fitted path.
-        await input.touch([
-          { x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 },
-        ]);
+        await input.touch([(await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0]]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         const ids = await frame
           .locator('svg [data-source-id^="path:"]')
@@ -4892,6 +4902,55 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `a Pen stroke writes its preset's xcolor expression, as a shape does, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (target: Locator) => input.touch([await stableCenter(target)]);
+        await tap(toolbarItem(frame, "Pen"));
+        await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
+        const area = await canvasFreeArea(frame);
+        const statements = async () =>
+          Array.from((await editorDebug(page)).source.matchAll(/^[ \t]*\\draw.*$/gm), (match) => match[0].trim());
+        const stroke = async (fy: number) => {
+          const before = await statements();
+          const y = area.top + fy * (area.bottom - area.top);
+          await input.penStroke(
+            Array.from({ length: 20 }, (_, i) => ({
+              x: area.left + 0.2 * (area.right - area.left) + i * 0.02 * (area.right - area.left),
+              y: y + (i % 2 === 0 ? -6 : 6),
+            })),
+          );
+          await expect
+            .poll(async () => (await statements()).length, { message: "The stroke added no path to the source" })
+            .toBe(before.length + 1);
+          return (await statements()).find((statement) => !before.includes(statement))!;
+        };
+        // The Pen's presets are xcolor expressions: black, blue, red (FR-020, FR-022, Principle I).
+        const black = await stroke(0.2);
+        assert.doesNotMatch(black, /rgb|draw=/, `The black preset writes a colour: ${black}`);
+
+        const blue = drawingToolbar(frame).getByRole("button", { name: /^Colour 2: / });
+        await tap(blue);
+        assert.match(await stroke(0.45), /^\\draw\[draw=blue\b/, "The blue preset does not write draw=blue");
+
+        await tap(blue);
+        const popup = frame.getByRole("dialog", { name: "Colour options" });
+        await expect(popup).toBeVisible();
+        await popup.getByLabel("Exact xcolor", { exact: true }).fill("red!50!blue");
+        await popup.getByRole("button", { name: "Apply exact color", exact: true }).click();
+        await tap(blue);
+        await expect(popup).toHaveCount(0);
+        const mixed = await stroke(0.7);
+        assert.match(mixed, /^\\draw\[draw=red!50!blue\b/, `The exact xcolor preset is not written as authored: ${mixed}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `the Eraser's Active Tool Menu chooses Whole stroke and a size, and the next sweep removes every stroke within that size, in ${tablet.name}`,
       async function () {
         const authored = String.raw`\begin{tikzpicture}
@@ -5205,6 +5264,415 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  /**
+   * The accessible entries of a surface, read from its ARIA snapshot without the surface's own line:
+   * one `role "name"` string per child, so a heading or a sentence shows as an entry of its own.
+   */
+  async function ariaEntries(surface: Locator): Promise<string[]> {
+    return (await surface.ariaSnapshot())
+      .split("\n")
+      .slice(1)
+      .map((line) => line.trim().replace(/^- /, "").replace(/ \[[^\]]*\]$/, "").replace(/:$/, ""))
+      .filter((entry) => entry !== "separator");
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `each object menu holds exactly the commands of its selection, in ${tablet.name}`,
+      async function () {
+        await author(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (1,6) .. controls (2,8) and (4,8) .. (5,6) -- (7,7);
+\draw (2,2) rectangle (5,4);
+\path[use as bounding box] (-2,-2) rectangle (12,12);
+\end{tikzpicture}`);
+        const frame = editorFrame(page);
+        const curve = frame.locator('svg [data-source-id="path:2"]').first();
+        const rectangle = frame.locator('svg [data-source-id="path:3"]').first();
+        await expect(rectangle).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        await chooseTool(frame, input, "Lasso");
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        const clear = async () => {
+          await input.penStroke([at(10, 10)]);
+          await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
+        };
+        const menu = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        // The object menu holds buttons only (contracts/surfaces.md, Object menu; FR-070): no heading
+        // names the selection, and no other text.
+        const commands = async () => {
+          await expect(menu).toBeVisible();
+          return ariaEntries(menu);
+        };
+        const buttons = (...names: string[]) => names.map((name) => `button "${name}"`);
+
+        // One curve: Edit Points, Simplify, Lock, Duplicate, More; no original stroke, so no Restore.
+        await input.penStroke([await strokePoint(page, curve, 0.3)]);
+        await expect.poll(selection).toEqual(["path:2"]);
+        assert.deepEqual(
+          await commands(),
+          buttons("Edit Points", "Simplify", "Lock", "Duplicate", "More"),
+          "The object menu of one curve",
+        );
+
+        // Points in Edit Points: of Smooth, Corner, Split, Delete, Done, only those that apply to the
+        // joint at (5,6), in that order; Split, Delete, and Done apply to an interior point.
+        await input.touch([await stableCenter(menu.getByRole("button", { name: "Edit Points", exact: true }))]);
+        const joint = at(5, 6);
+        await input.penStroke([joint]);
+        const pointCommands = await commands();
+        const pointOrder = buttons("Smooth", "Corner", "Split", "Delete", "Done");
+        assert.deepEqual(
+          pointCommands,
+          pointOrder.filter((entry) => pointCommands.includes(entry)),
+          "The object menu of a point holds other entries than Smooth, Corner, Split, Delete, Done, or another order",
+        );
+        for (const entry of buttons("Split", "Delete", "Done")) {
+          assert.ok(pointCommands.includes(entry), `The object menu of an interior point lacks ${entry}`);
+        }
+        await input.touch([await stableCenter(menu.getByRole("button", { name: "Done", exact: true }))]);
+        await clear();
+
+        // One shape: Lock, Duplicate, More.
+        await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
+        await expect.poll(selection).toEqual(["path:3"]);
+        assert.deepEqual(await commands(), buttons("Lock", "Duplicate", "More"), "The object menu of one shape");
+        // More holds Cut, Copy, Paste, Delete, Transform, Reorder, Repeat…, and nothing else.
+        await input.touch([await stableCenter(menu.getByRole("button", { name: "More", exact: true }))]);
+        const more = frame.getByRole("menu").first();
+        await expect(more).toBeVisible();
+        const moreEntries = await ariaEntries(more);
+        const moreOrder = ["Cut", "Copy", "Paste", "Delete", "Transform", "Reorder", "Repeat…"];
+        // A menu item's name is its label, then its keyboard shortcut when it has one.
+        assert.deepEqual(
+          moreEntries.map((entry) => moreOrder.find((label) => new RegExp(`^menuitem "${label}( [^"]+)?"$`).test(entry)) ?? entry),
+          moreOrder,
+          "More of the object menu",
+        );
+        await page.keyboard.press("Escape");
+        await clear();
+
+        // Several objects: Align, Distribute, Lock, Duplicate, More.
+        await input.penStroke([at(0.5, 1.5), at(8, 1.5), at(8, 8.5), at(0.5, 8.5), at(0.5, 1.6)]);
+        await expect.poll(selection).toEqual(["path:2", "path:3"]);
+        assert.deepEqual(
+          await commands(),
+          buttons("Align", "Distribute", "Lock", "Duplicate", "More"),
+          "The object menu of several objects",
+        );
+      },
+    );
+  }
+
+  /** Two animation frames of the canvas frame, after which a handled tap shows in its state. */
+  const canvasSettled = (frame: FrameLocator) =>
+    frame
+      .locator("body")
+      .evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+
+  /** The values of the drawing toolbar's presets, in order, read from their names "Colour n: value". */
+  async function presetValues(frame: FrameLocator): Promise<string[]> {
+    return (await ariaEntries(drawingToolbar(frame))).flatMap(
+      (entry) => /^button "Colour \d+: (.+)"$/.exec(entry)?.slice(1) ?? [],
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a colour preset colours the tool and the selection, and no word names the target; each tool shows its own presets, in ${tablet.name}`,
+      async function () {
+        await author(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (2,2) rectangle (5,4);
+\path[use as bounding box] (-2,-2) rectangle (12,12);
+\end{tikzpicture}`);
+        const frame = editorFrame(page);
+        const rectangle = frame.locator('svg [data-source-id="path:2"]').first();
+        await expect(rectangle).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const toolbar = drawingToolbar(frame);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const source = async () => (await editorDebug(page)).source;
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        const preset = (name: string) => toolbar.getByRole("button", { name, exact: true });
+        // No word on the toolbar names what a preset colours (FR-021), and the toolbar takes no typed colour.
+        const noWords = async (when: string) => {
+          assert.equal((await toolbar.innerText()).trim(), "", `The drawing toolbar shows words ${when}`);
+          await expect(toolbar.getByRole("textbox")).toHaveCount(0);
+        };
+
+        // Each tool shows its own presets (FR-020).
+        await chooseTool(frame, input, "Lasso");
+        assert.deepEqual(await presetValues(frame), ["black", "blue", "red"], "The Lasso's presets");
+        await chooseTool(frame, input, "Fill");
+        assert.deepEqual(await presetValues(frame), ["yellow!30", "blue!20", "red!20"], "The Fill's presets");
+
+        // With a selection, a Lasso preset colours its stroke and a Fill preset fills it.
+        await chooseTool(frame, input, "Lasso");
+        await noWords("with nothing selected");
+        await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
+        await expect.poll(selection).toEqual(["path:2"]);
+        await noWords("with a selection");
+        await tap(preset("Colour 3: red"));
+        await expect
+          .poll(source, { message: "A Lasso preset did not colour the selected rectangle's stroke" })
+          .toMatch(/\\draw\[(draw=)?red\] \(2,2\) rectangle \(5,4\);/);
+        await chooseTool(frame, input, "Fill");
+        await tap(preset("Colour 2: blue!20"));
+        await expect
+          .poll(source, { message: "A Fill preset did not fill the selected rectangle" })
+          .toMatch(/\\draw\[[^\]]*\bfill=blue!20\b[^\]]*\] \(2,2\) rectangle \(5,4\);/);
+
+        // With nothing selected, a preset leaves every object as written and colours the next line drawn.
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([at(10, 10)]);
+        await expect.poll(selection).toEqual([]);
+        await chooseShape(frame, input, "Line");
+        const written = await source();
+        await tap(preset("Colour 2: blue"));
+        await expect(preset("Colour 2: blue")).toHaveAttribute("aria-pressed", "true");
+        await canvasSettled(frame);
+        assert.equal(await source(), written, "A preset chosen with nothing selected changed the source");
+        const [from, to] = [at(1, 8), at(6, 8)];
+        await input.penStroke(
+          Array.from({ length: 8 }, (_, i) => ({ x: from.x + ((to.x - from.x) * i) / 7, y: from.y })),
+        );
+        await expect
+          .poll(source, { message: "The line drawn after the preset is not blue" })
+          .toMatch(/\\draw\[(draw=)?blue\] \(1,8\) -- \(6,8\);/);
+
+        // At most 12 presets: every tool and Add colour stay in view, and only the chosen preset is pressed.
+        await chooseTool(frame, input, "Pen");
+        const presets = toolbar.getByRole("button", { name: /^Colour \d+: / });
+        const options = frame.getByRole("dialog", { name: "Colour options", exact: true });
+        const add = toolbarItem(frame, "Add colour");
+        for (let count = 3; count < 12; count++) {
+          await tap(add);
+          await expect(presets).toHaveCount(count + 1);
+          // A tap on the active preset, the new one, closes its colour options.
+          await expect(options).toBeVisible();
+          await tap(presets.nth(count));
+          await expect(options).toHaveCount(0);
+        }
+        await expect(add, "Add colour is available at 12 presets").toBeDisabled();
+        for (const name of ["Lasso", "Pen", "Eraser", "Shapes", "Text", "Fill", "Add colour"]) {
+          await expect(toolbarItem(frame, name), `${name} is out of view at 12 presets`).toBeInViewport({ ratio: 1 });
+        }
+        await tap(presets.nth(4));
+        await expect(presets.nth(4)).toHaveAttribute("aria-pressed", "true");
+        assert.deepEqual(
+          await presets.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-pressed"))),
+          Array.from({ length: 12 }, (_, i) => String(i === 4)),
+          "Another preset than the chosen one is pressed",
+        );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a locked selection survives a tap that misses; Edit Points dims and locks the rest, in ${tablet.name}`,
+      async function () {
+        await author(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (1,6) .. controls (2,8) and (4,8) .. (5,6) -- (7,7);
+\draw (2,2) rectangle (5,4);
+\path[use as bounding box] (-2,-2) rectangle (12,12);
+\end{tikzpicture}`);
+        const frame = editorFrame(page);
+        const curve = frame.locator('svg [data-source-id="path:2"]').first();
+        const rectangle = frame.locator('svg [data-source-id="path:3"]').first();
+        await expect(rectangle).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        await chooseTool(frame, input, "Lasso");
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const source = async () => (await editorDebug(page)).source;
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        const menu = frame.getByRole("toolbar", { name: "Selection", exact: true });
+
+        // A locked selection survives a tap that misses (FR-052); unlocked, the same tap clears it.
+        await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
+        await expect.poll(selection).toEqual(["path:3"]);
+        const lock = menu.getByRole("button", { name: "Lock", exact: true });
+        await tap(lock);
+        await expect(lock).toHaveAttribute("aria-pressed", "true");
+        await input.penStroke([at(10, 10)]);
+        await canvasSettled(frame);
+        assert.deepEqual(await selection(), ["path:3"], "A tap that missed cleared the locked selection");
+        await tap(lock);
+        await expect(lock).toHaveAttribute("aria-pressed", "false");
+        await input.penStroke([at(10, 10)]);
+        await expect.poll(selection, { message: "A tap that missed kept the unlocked selection" }).toEqual([]);
+
+        // Edit Points dims the rest of the figure and locks it (FR-053).
+        await input.penStroke([await strokePoint(page, curve, 0.3)]);
+        await expect.poll(selection).toEqual(["path:2"]);
+        await tap(menu.getByRole("button", { name: /^Edit points$/i }));
+        await expect(menu.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+        // The opacity an element is painted with: the product of its own and its ancestors' opacities.
+        const paintedOpacity = (element: Locator) =>
+          element.evaluate((node) => {
+            let opacity = 1;
+            for (let at: Element | null = node; at !== null; at = at.parentElement) {
+              opacity *= Number(getComputedStyle(at).opacity);
+            }
+            return opacity;
+          });
+        await expect
+          .poll(() => paintedOpacity(rectangle), { message: "Edit Points did not dim the rest of the figure" })
+          .toBeLessThan(0.75);
+        assert.equal(await paintedOpacity(curve), 1, "Edit Points dimmed the curve it edits");
+        const written = await source();
+        const grip = await strokePoint(page, rectangle, 0.1);
+        await input.penStroke(Array.from({ length: 8 }, (_, i) => ({ x: grip.x + i * 10, y: grip.y })));
+        await canvasSettled(frame);
+        assert.equal(await source(), written, "A drag in Edit Points moved the dimmed rectangle");
+        await input.penStroke([grip]);
+        await canvasSettled(frame);
+        assert.deepEqual(await selection(), ["path:2"], "A tap in Edit Points selected the dimmed rectangle");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a second tap on the active preset opens the palette, wheel, opacity, hex, and the exact xcolor field, and red!50!blue stays as authored, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        const toolbar = drawingToolbar(frame);
+        const options = frame.getByRole("dialog", { name: "Colour options", exact: true });
+        const first = toolbar.getByRole("button", { name: /^Colour 1: / });
+        await chooseShape(frame, input, "Line");
+        const toggleOptions = async (open: boolean) => {
+          await tap(first);
+          await (open ? expect(options).toBeVisible() : expect(options).toHaveCount(0));
+        };
+        // Each line goes one row lower on the free canvas; the result is the \draw statement it added.
+        const area = await canvasFreeArea(frame);
+        let row = 0;
+        const drawLine = async (): Promise<string> => {
+          const draws = async () =>
+            (await editorDebug(page)).source
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.startsWith("\\draw"));
+          const before = (await draws()).length;
+          row += 1;
+          const y = area.top + ((area.bottom - area.top) * row) / 6;
+          const [left, right] = [area.left + (area.right - area.left) * 0.3, area.left + (area.right - area.left) * 0.7];
+          await input.penStroke(Array.from({ length: 8 }, (_, i) => ({ x: left + ((right - left) * i) / 7, y })));
+          await expect.poll(async () => (await draws()).length).toBe(before + 1);
+          return (await draws()).at(-1)!;
+        };
+
+        // The colour options hold the palette, the wheel, Opacity, Hex, the exact xcolor field, and Edit.
+        await toggleOptions(true);
+        const palette = options.getByRole("group", { name: "Palette", exact: true });
+        await expect(palette).toBeVisible();
+        await expect(options.getByLabel("Colour wheel", { exact: true })).toBeVisible();
+        await expect(options.getByRole("slider", { name: "Opacity", exact: true })).toBeVisible();
+        const hex = options.getByRole("textbox", { name: "Hex", exact: true });
+        const exact = options.getByRole("textbox", { name: "Exact xcolor", exact: true });
+        await expect(hex).toBeVisible();
+        await expect(exact).toBeVisible();
+        await expect(options.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+
+        // The palette is the active collection of Settings › Colors, laid out in rows.
+        const paletteColours = async () =>
+          (await ariaEntries(palette)).map((entry) => /^button "(.+)"$/.exec(entry)?.[1] ?? entry);
+        const initial = await paletteColours();
+        assert.ok(initial.length > 1, `The palette holds ${initial.length} colours`);
+        const swatches = palette.getByRole("button");
+        const [one, two] = [await layoutBox(swatches.nth(0)), await layoutBox(swatches.nth(1))];
+        assert.ok(Math.abs(one.y - two.y) < 2 && two.x > one.x, "The palette's colours are stacked, not in rows");
+        await toggleOptions(false);
+        const settingsColours = async (change: (settings: Locator) => Promise<void>) => {
+          const settings = await openSettings();
+          await tap(settings.getByTestId("settings-category-colors"));
+          await change(settings);
+          await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
+          await expect(settings).toHaveCount(0);
+        };
+        await settingsColours(async (settings) => {
+          await tap(settings.getByRole("button", { name: "New collection" }));
+          await settings.getByLabel("Collection name", { exact: true }).fill("Roots");
+          await tap(settings.getByRole("button", { name: "Remove" }).first());
+        });
+        await toggleOptions(true);
+        await expect
+          .poll(paletteColours, { message: "The palette did not follow a new collection with a colour removed" })
+          .toEqual(initial.slice(1));
+        await toggleOptions(false);
+        await settingsColours((settings) =>
+          settings.getByLabel("Collection", { exact: true }).selectOption({ label: "Default" }).then(() => undefined),
+        );
+        await toggleOptions(true);
+        await expect
+          .poll(paletteColours, { message: "The palette did not follow the switch back to Default" })
+          .toEqual(initial);
+        const stored = JSON.parse(
+          ((await (await page.request.get(`${url}api/preferences`)).json()) as Record<string, string>)[
+            "tikz-editor:settings"
+          ],
+        ) as { settings: { colorPicker: { collections: { id: string; colors: string[] }[] } } };
+        assert.deepEqual(
+          stored.settings.colorPicker.collections.find((collection) => collection.id === "default")?.colors,
+          initial,
+          "The palette is not the Default collection of Settings",
+        );
+
+        // An xcolor expression applied in the exact field becomes the preset and is written as authored.
+        await exact.fill("red!50!blue");
+        await exact.press("Enter");
+        await expect(toolbar.getByRole("button", { name: "Colour 1: red!50!blue", exact: true })).toBeVisible();
+        if (await options.isVisible()) await toggleOptions(false);
+        assert.match(await drawLine(), /^\\draw\[(draw=)?red!50!blue\] /, "The line is not drawn in red!50!blue");
+        // One typed, then dismissed by Escape, is discarded.
+        await toggleOptions(true);
+        await exact.fill("green!20");
+        await exact.press("Escape");
+        await expect(options).toHaveCount(0);
+        await expect(toolbar.getByRole("button", { name: "Colour 1: red!50!blue", exact: true })).toBeVisible();
+
+        // A wheel colour at full opacity is written as an rgb triple, never as HTML hex.
+        await toggleOptions(true);
+        const wheel = await layoutBox(options.getByLabel("Colour wheel", { exact: true }));
+        await input.touch([{ x: wheel.x + wheel.width * 0.85, y: wheel.y + wheel.height * 0.5 }]);
+        await expect(first).not.toHaveAccessibleName("Colour 1: red!50!blue");
+        await toggleOptions(false);
+        const wheelLine = await drawLine();
+        assert.match(wheelLine, /\{?rgb,255:red,\d+;green,\d+;blue,\d+\}?/, wheelLine);
+        assert.doesNotMatch(wheelLine, /#[0-9a-f]{3,8}/i, `A wheel colour is written as HTML hex: ${wheelLine}`);
+        assert.doesNotMatch(wheelLine, /opacity/, `Full opacity is written: ${wheelLine}`);
+
+        // A hex code at full opacity is written as its rgb triple, with no opacity.
+        await toggleOptions(true);
+        await hex.fill("ff0000");
+        await hex.press("Enter");
+        if (await options.isVisible()) await toggleOptions(false);
+        const hexLine = await drawLine();
+        assert.match(hexLine, /\{?rgb,255:red,255;green,0;blue,0\}?/, hexLine);
+        assert.doesNotMatch(hexLine, /#|opacity/, hexLine);
+      },
+    );
+  }
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
@@ -5409,23 +5877,21 @@ describe("standalone workbench host boundary", function () {
         await expect(snapping.locator("[aria-description]")).toHaveCount(0);
         await tap(snap);
         await expect(snapping).toHaveCount(0);
-        // The circle construction controls with lattice lock on: field labels and the insert button.
+        // The Shapes menu's circle numbers with lattice lock on: field labels and the insert button,
+        // beside the construction families (data-model Tool).
         await setSnapRule(frame, input, "Lattice", true);
         await chooseShape(frame, input, "Circle");
-        await tap(documentPanelButton("Properties"));
-        const construction = frame
-          .getByRole("complementary", { name: "Properties", exact: true })
-          .locator("section")
-          .filter({ has: frame.getByText("Circle construction", { exact: true }) });
-        await expect(construction).toBeVisible();
-        assert.deepEqual(await texts(construction), [
-          "Circle construction",
-          "Construction",
-          "Center X",
-          "Center Y",
+        const shapesMenu = activeToolMenu(frame);
+        await tap(toolbarItem(frame, "Shapes"));
+        await expect(shapesMenu).toBeVisible();
+        assert.deepEqual(await texts(shapesMenu, "option, nav, [role=group]"), [
+          "Centre X",
+          "Centre Y",
           "Radius",
           "Insert circle",
         ]);
+        await tap(toolbarItem(frame, "Shapes"));
+        await expect(shapesMenu).toHaveCount(0);
         // Settings rows carry a label and, for a slider, its value in a user unit (item 5).
         const settings = settingsDialog();
         await openSettings();
@@ -6215,9 +6681,8 @@ describe("standalone workbench host boundary", function () {
         // A Bézier control point dragged to an off-lattice pen position lands on a whole lattice point.
         await chooseTool(frame, input, "Lasso");
         // The placed line stays selected, with its controls near the curve; clear it on empty canvas first.
-        // The canvas corner is clear of the selection strip, which follows the selection.
-        const canvas = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        await input.touch([{ x: canvas.x + canvas.width - 12, y: canvas.y + canvas.height - 12 }]);
+        // The lattice point (9,9) is clear of every object, of the object menu, and of the canvas corners.
+        await input.touch([at(9, 9)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await input.penStroke([await strokePoint(page, curve, 0.5)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
@@ -6436,10 +6901,14 @@ describe("standalone workbench host boundary", function () {
         await chooseTool(frame, input, "Lasso");
         await fitDiagram(frame, input);
         const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
-        const checkControls = async () => {
+        // The figure's Properties hold X scale, Y scale, and the bounds Mode (FR-060a); a rectangle's hold more.
+        const checkControls = async (baseline: number) => {
           const controls = panel.locator(
             'button,input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),select,textarea',
           );
+          // The panel opens after the tap; count its controls once they are shown.
+          await expect(panel).toBeVisible();
+          await expect.poll(async () => (await controls.filter({ visible: true }).count()) >= baseline).toBe(true);
           let checked = 0;
           for (const control of await controls.all()) {
             if (!(await control.isVisible())) {
@@ -6453,7 +6922,7 @@ describe("standalone workbench host boundary", function () {
             );
             checked++;
           }
-          assert.ok(checked >= 4, "The panel had no editable control baseline");
+          assert.ok(checked >= baseline, `The panel showed ${checked} controls, fewer than ${baseline}`);
           const body = panel.locator(".embed-inspector-content");
           assert.ok(
             await body.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
@@ -6461,14 +6930,14 @@ describe("standalone workbench host boundary", function () {
           );
         };
         await tap(documentPanelButton("Properties"));
-        await checkControls();
+        await checkControls(3);
         await expect(panel.getByRole("tab")).toHaveCount(0);
         await tap(panel.getByRole("button", { name: "Close properties", exact: true }));
         await input.touch([
           await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.06),
         ]);
         await tap(documentPanelButton("Properties"));
-        await checkControls();
+        await checkControls(4);
         assert.equal(
           (await editorDebug(page)).source,
           source,
@@ -6550,9 +7019,7 @@ describe("standalone workbench host boundary", function () {
 
         await chooseTool(frame, input, "Lasso");
         // The inserted line stays selected and its control may cover the circle; tap empty canvas to dismiss it.
-        await input.touch([
-          { x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 },
-        ]);
+        await input.touch([(await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0]]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await fitDiagram(frame, input);
         await input.longPress(
@@ -6677,9 +7144,7 @@ describe("standalone workbench host boundary", function () {
           "The drag moved the layer instead of its line",
         );
         // The selected line's control stays off the open panel.
-        const aside = (await frame
-          .getByRole("complementary", { name: "Properties", exact: true })
-          .boundingBox())!;
+        const aside = (await panel.boundingBox())!;
         for (const control of [
           frame.getByRole("button", { name: "Lock", exact: true }),
           frame.getByRole("button", { name: "Edit points", exact: true }),
@@ -6761,9 +7226,7 @@ describe("standalone workbench host boundary", function () {
           "The Layer badge is clipped by the title",
         );
         await chooseTool(frame, input, "Lasso");
-        const zoom = frame
-          .locator("[data-diagram-tools]")
-          .getByRole("button", { name: "Zoom and display", exact: true });
+        const zoom = zoomControl(frame);
         await input.touch([await stableCenter(zoom)]);
         await input.touch([
           await stableCenter(frame.getByRole("button", { name: "200%", exact: true })),
@@ -7723,7 +8186,8 @@ describe("standalone workbench host boundary", function () {
             !intersects(controlBox, (await frame.locator("[data-diagram-tools]").boundingBox())!),
             `${contact}: the curve control covers the rail`,
           );
-          await input.touch([{ x: frameBox.x + 8, y: frameBox.y + frameBox.height - 8 }]);
+          await input.touch([(await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0]]);
+          await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         }
       },
     );
@@ -9137,6 +9601,9 @@ describe("standalone workbench host boundary", function () {
     await expect(frame.getByRole("complementary", { name: "Properties" })).toBeVisible();
     await frame.getByRole("button", { name: "Close properties", exact: true }).click();
     await expect(frame.getByRole("complementary", { name: "Properties" })).toHaveCount(0);
+    // Properties closed the Code panel: one panel is open at a time (FR-060).
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await expect(sourcePane).toBeVisible();
     assert.equal(await sourcePane.innerText(), authored);
   });
 
