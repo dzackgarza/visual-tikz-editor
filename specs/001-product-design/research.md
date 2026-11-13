@@ -31,21 +31,30 @@ non-essential cached data in `$XDG_CACHE_HOME`, and "current state of the applic
 reused on a restart (view, layout, open files, undo history, …)" in `$XDG_STATE_HOME`
 ([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/)).
 
-## R3. Undo and Redo in every view
+## R3. One document history
 
-**Proposal**: The document bar's Undo and Redo act on the history of the view that last took
-input: the canvas, the Code view, or Quiver. Each editor keeps its own history and reports whether
-Undo and Redo are available, so the bar dims them. In the Quiver view, Quiver's own toolbar does
-not show Undo and Redo, as Quiver inside the shell does not show its Save, autosave, theme, and
-About actions.
+**Decision** (the user, 2026-11-13): Undo and Redo act on the one history of the document. Every
+view shows the same document, so the history belongs to the document and not to a view (FR-012b).
+A step is one edit of the source, made in any view: a canvas gesture, a Quiver edit, or a burst of
+typing in the Code view. Undo restores the source before the last step, and every view then shows
+that source. A new edit after Undo discards the steps that Redo would restore. The canvas and
+Quiver keep no history of their own: their Undo and Redo shortcuts ask the shell, and Quiver's
+toolbar shows no Undo or Redo.
 
-**Rationale**: FR-012 puts Undo and Redo only in the document bar; GoodNotes keeps them in its
-navigation bar
+**Rationale**: The canvas, the Code view, Quiver, and the TeX render are views of one source
+(Principle I). A history that belongs to a view holds states of that one source, so it is either
+the document history or wrong: after a Code edit and then a canvas edit, the Code view's Undo
+would remove the first edit under the second, which gives a source that the user never saw. Emacs
+shows one buffer in several windows and keeps the history by buffer: "Each buffer records changes
+individually, and the undo command always applies to the current buffer"
+([GNU Emacs manual, Undo](https://www.gnu.org/software/emacs/manual/html_node/emacs/Undo.html)).
+Inkscape's XML Editor and canvas edit one document and record each change in the document's one
+undo history (`DocumentUndo::done(document, …)`, `src/ui/dialog/xml-tree.cpp:584-753` at
+[`70feba2`](https://gitlab.com/inkscape/inkscape/-/tree/70feba21364ccbe2d2d2fab397228bc2e0d41b5a)).
+Typing is grouped as CodeMirror groups it: adjacent changes no more than 500 ms apart are one step
+(`newGroupDelay`, [CodeMirror reference](https://codemirror.net/docs/ref/#commands.history)).
+GoodNotes keeps Undo and Redo in its navigation bar
 ([Improved User Interface](https://support.goodnotes.com/hc/en-us/articles/13682253498767-Improved-User-Interface)).
-Quiver owns its history (`vendor/quiver/README-ZETTLR.md`); the bar only calls it.
-
-**Alternatives considered**: Quiver's toolbar keeps Undo, and the bar hides its Undo in the Quiver
-view. Rejected: the bar would change by view, and Undo would sit on two surfaces.
 
 ## R4. Selection with the Lasso
 

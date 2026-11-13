@@ -11,8 +11,8 @@ least 44 × 44 pt (Principle II).
 | --- | --- | --- | --- | --- |
 | Leading | Title | the file name | text | Opens the title menu: New tikzpicture, New tikzcd, Open…, Save, Save As…, Document Properties… |
 | Leading | Save state | "Saved", "Not saved", "Saving", "Changed on disk" | text, beside the title | None |
-| Centre | Undo | "Undo" | `RiArrowGoBackLine` | Undoes in the input view (research R3); dimmed when nothing to undo |
-| Centre | Redo | "Redo" | `RiArrowGoForwardLine` | Redoes in the input view; dimmed when nothing to redo |
+| Centre | Undo | "Undo" | `RiArrowGoBackLine` | Undoes the last edit of the document, in every view (FR-012b); dimmed when nothing to undo |
+| Centre | Redo | "Redo" | `RiArrowGoForwardLine` | Redoes the last undone edit, in every view; dimmed when nothing to redo |
 | Trailing | View | "View" | `RiLayoutColumnLine` | Opens View: the document's editor, Code, Render; then Grid, Rulers, Guides, Output Bounds |
 | Trailing | Layers | "Layers" | `RiStackLine` | Opens or closes the Layers panel |
 | Trailing | Properties | "Properties" | `RiEqualizerLine` | Opens or closes Properties; dimmed with nothing selected (research R13) |

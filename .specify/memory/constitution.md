@@ -10,12 +10,20 @@ A rule that its prior art does not support is a defect in this document.
 
 The file on disk is the only document state. It MUST hold plain TikZ that compiles with LaTeX
 and stays editable in a text editor. The canvas, the Code view, Quiver, and the TeX render are
-views of that one source. An edit MUST leave every construct it does not touch as authored.
-Session state (selection, locks, view, tool) MUST NOT write itself into the source.
+views of that one source, and every view MUST show the same document. The document has one
+history: Undo and Redo act on it whichever view made the edit, and no view keeps a history of its
+own. An edit MUST leave every construct it does not touch as authored. Session state (selection,
+locks, view, tool) MUST NOT write itself into the source.
 
 Prior art: Quiver's fork keeps the `tikzcd` environment as the source of truth
-(`vendor/quiver/README-ZETTLR.md`). Requirement: [README](../../README.md), first paragraph;
-[HANDOFF](../../HANDOFF.md), item A.
+(`vendor/quiver/README-ZETTLR.md`). Emacs keeps the undo history by buffer, not by window
+([GNU Emacs manual, Undo](https://www.gnu.org/software/emacs/manual/html_node/emacs/Undo.html));
+Inkscape's XML Editor and canvas record their edits in the document's one undo history
+(`src/ui/dialog/xml-tree.cpp` at
+[`70feba2`](https://gitlab.com/inkscape/inkscape/-/tree/70feba21364ccbe2d2d2fab397228bc2e0d41b5a)).
+Requirement: [README](../../README.md), first paragraph; [HANDOFF](../../HANDOFF.md), item A;
+the user's statement of 2026-11-13 that all views show the same document and that a history per
+view is incoherent.
 
 ### II. Pen and Touch First
 
@@ -202,4 +210,4 @@ repository or an issue, or a repository fact. Versions follow semantic versionin
 removed or redefined principle, MINOR for a new principle or section, PATCH for wording. Each
 specification and plan MUST record its compliance with the version in force.
 
-**Version**: 2.1.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-13
+**Version**: 2.2.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-13

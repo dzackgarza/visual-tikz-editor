@@ -33,7 +33,8 @@ A failed story keeps its Playwright trace in `test-results/workbench/`
 | Open a figure with content | All content visible, fitted with the margin (SC-005); reopen restores the last view | FR-040 |
 | Open an empty figure | 100 % is printed size; the origin is centred | FR-041 |
 | A `tikzpicture` | View offers Canvas, Code, Render, and no Quiver | FR-014 |
-| A `tikzcd` | View offers Quiver, Code, Render; Undo in the document bar undoes the Quiver edit | FR-014, research R3 |
+| A `tikzcd` | View offers Quiver, Code, Render | FR-014 |
+| Edit in Code, then on the canvas (or in Quiver), then Undo twice | The first Undo removes the canvas edit and the second the Code edit; after each, every view shows the same source | FR-012b |
 | Layers, then Properties | One panel open at a time; Properties dimmed with nothing selected | User Story 6, research R13 |
 | Settings › Appearance | Match System Appearance on follows the system; off with Light shows a light surface under a dark system | FR-005 |
 | Every edit | Leaves untouched constructs as authored; session state never enters the source | Principle I |

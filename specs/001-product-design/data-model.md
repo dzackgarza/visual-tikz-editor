@@ -23,9 +23,19 @@ the user chooses a version.
 | --- | --- | --- |
 | `id` | `editor` \| `code` \| `render` | `editor` is Canvas for a `tikzpicture` and Quiver for a `tikzcd` (FR-014) |
 | `shown` | one or two views | Two only in a regular-width window (FR-015) |
-| `inputView` | `editor` \| `code` | The view that last took input; Undo and Redo act on its history |
 
-Switching views keeps selection, viewport, tool, and history (FR-015).
+Switching views keeps selection, viewport, and tool (FR-015).
+
+## History
+
+One per document, kept by the shell (FR-012b, research R3).
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `past` | source revisions | A step is one edit of the source in any view; typing in the Code view groups changes no more than 500 ms apart |
+| `future` | source revisions | Undo moves the current source here; a new edit empties it |
+
+Undo and Redo replace the source in every view. The canvas and Quiver keep no history of their own.
 
 ## Tool
 

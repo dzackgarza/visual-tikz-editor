@@ -19,7 +19,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `display` | `fullscreen` | Fills the window |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | Opens one panel or closes the open one (research R13) |
 | `document-properties` | — | Opens Document Properties from the title menu |
-| `undo`, `redo` | — | Acts on the canvas history (research R3) |
+| `replace-source` | `source` | Shows the source that Undo or Redo restored; keeps the viewport and the tool (research R3) |
 | `dismiss-popover` | — | Closes the canvas popover, because the shell opened one (research R16) |
 | `zoom` | `direction`: `in` \| `out` \| `fit` \| `selection` \| `normal`, or `scale` | The zoom commands of the readout ([surfaces](surfaces.md), Canvas controls; research R8) |
 | `source`, `snapshot` | — | Reads the source or a rendered snapshot |
@@ -34,13 +34,12 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | --- | --- | --- |
 | `init` | `version` | The protocol version |
 | `loaded`, `rendered` | `sourceRevision` | The document is shown |
-| `change` | `source`, `sourceRevision` | An edit; the save state goes to unsaved (FR-006) |
+| `change` | `source`, `sourceRevision` | An edit: one step of the document history (research R3); the save state goes to unsaved (FR-006) |
 | `save` | `source`, `fileName` | The Save shortcut inside the canvas |
-| `history` | `canUndo`, `canRedo` | Dims Undo and Redo in the document bar (research R3) |
+| `undo-request`, `redo-request` | — | The Undo or Redo shortcut inside the canvas; the shell acts on the document history (FR-012b) |
 | `selection` | `empty` | Dims Properties with nothing selected (research R13) |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | The panel that is open, after any change, including its own close button |
 | `popover-opened` | — | The canvas opened a popover; the shell closes its own (research R16) |
-| `input` | — | The canvas took input; it becomes the input view (data model, View) |
 | `persistence-save` | `key`, `value` | A preference or per-file view state to keep outside the source |
 | `source-selection` | `source`, `from`, `to` | The selected source range, for the Code view |
 | `clipboard-read`, `clipboard-write` | `requestId`, `text` | Native clipboard in a desktop window |
@@ -51,14 +50,12 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 
 | Direction | Message | Purpose |
 | --- | --- | --- |
-| to Quiver | `zettlr-quiver:load`, `zettlr-quiver:source` | Opens or replaces the `tikzcd` source |
+| to Quiver | `zettlr-quiver:load`, `zettlr-quiver:source` | Opens or replaces the `tikzcd` source, also after Undo or Redo (research R3) |
 | to Quiver | `zettlr-quiver:theme` | Sets the appearance (FR-005) |
 | to Quiver | `zettlr-quiver:display` | Fills the window |
-| to Quiver | `zettlr-quiver:undo`, `zettlr-quiver:redo` | Acts on Quiver's history (research R3) |
 | from Quiver | `zettlr-quiver:ready`, `zettlr-quiver:loaded` | The frame is ready; the diagram is shown |
-| from Quiver | `zettlr-quiver:change` | An edit, with the source |
-| from Quiver | `zettlr-quiver:history` | `canUndo`, `canRedo` |
-| from Quiver | `zettlr-quiver:input` | Quiver took input; it becomes the input view |
+| from Quiver | `zettlr-quiver:change` | An edit, with the source: one step of the document history |
+| from Quiver | `zettlr-quiver:undo-request`, `zettlr-quiver:redo-request` | The Undo or Redo shortcut inside Quiver; the shell acts on the document history (FR-012b) |
 | from Quiver | `zettlr-quiver:save`, `zettlr-quiver:close-request`, `zettlr-quiver:error` | Save, close, and failure |
 
 Inside the shell, Quiver's toolbar shows no Undo, Redo, Save, autosave, theme, or About (research R3).
