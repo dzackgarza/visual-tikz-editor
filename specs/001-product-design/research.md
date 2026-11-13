@@ -124,8 +124,8 @@ and both open a document with its page fitted; Inkscape's zoom menu gives the pr
 is upstream TikZ Editor's fit margin. The specification puts the readout in a canvas corner and
 View in the document bar.
 
-**Alternatives considered**: The readout at the right end of a status line. Rejected: the design
-has no status line (R10).
+**Alternatives considered**: The readout at the right end of the status line, as Inkscape.
+Rejected: the status line shows the pointer position only (R10).
 
 ## R9. Rulers in figure coordinates
 
@@ -139,21 +139,26 @@ coordinates whenever `x` or `y` is not 1 cm.
 
 **Alternatives considered**: Centimetre labels. Rejected by Principle VI.
 
-## R10. No status line
+## R10. A status line with the pointer position only
 
-**Proposal**: The editor has no status line. A construction shows its stage by the placed points,
-the provisional geometry, and the snap marker (FR-030); Cancel and Finish are in the Active Tool
-Menu (FR-032). No surface shows a step instruction, a tool hint, or a selection hint.
+**Decision** (the user, 2026-11-13): A status line under the canvas shows the pointer position in
+figure coordinates, and nothing else (FR-044). The pointer is the pen, the finger, or the mouse
+cursor. A construction shows its stage by the placed points, the provisional geometry, and the
+snap marker (FR-030); Cancel and Finish are in the Active Tool Menu (FR-032). No surface shows a
+step instruction, a tool hint, or a selection hint.
 
-**Rationale**: Ipe shows a construction's progress by its preview and the secondary cursor
+**Rationale**: The Inkscape status bar "provides information such as the colors of the selected
+object, layers, cursor coordinates, zoom level and page rotation"
+([Inkscape manual, Interface](https://inkscape-manuals.readthedocs.io/en/latest/interface.html));
+in Inkscape 1.4.4 the pointer position "X: Y:" is in the status bar
+([zoom specification](../../docs/prior-art/zoom-and-view.md)). Ipe shows "the mouse coordinates"
+at the bottom right (Ipe manual, `manual/20_concepts.rst:278-279`). The coordinates are the
+numbers of the source (Principle VI). Ipe shows a construction's progress by its preview and
+the secondary cursor
 ([Ipe manual, Snapping](https://github.com/otfried/ipe/blob/f4a918b12e68f1f244dd3c7d0e30ecf78ea13a01/manual/40_snapping.rst));
 HIG Offering help: "If you need a lot of text to describe a control, consider simplifying your
 interface design"
 ([Offering help](https://developer.apple.com/design/human-interface-guidelines/offering-help)).
-The information architecture has no status-line surface (Principle VII).
-
-**Alternatives considered**: A status line under the canvas with the next step. Rejected: its
-content is the instruction text that FR-031 and FR-070 forbid.
 
 ## R11. Tooltips
 

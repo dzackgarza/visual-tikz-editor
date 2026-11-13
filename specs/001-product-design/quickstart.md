@@ -38,6 +38,7 @@ A failed story keeps its Playwright trace in `test-results/workbench/`
 | Settings › Appearance | Match System Appearance on follows the system; off with Light shows a light surface under a dark system | FR-005 |
 | Every edit | Leaves untouched constructs as authored; session state never enters the source | Principle I |
 | Change a preference, then reopen a figure | The preference is in `$XDG_CONFIG_HOME/visual-tikz-editor/`, the figure's view state in `$XDG_STATE_HOME/visual-tikz-editor/`; nothing is written beside the figure but the figure | FR-063 |
+| Pen over the point (1, 2) of the grid | The status line reads 1 and 2, and no other text | FR-044 |
 | Lasso with Oval | A drag from empty canvas selects the objects inside the oval | FR-012a |
 
 Data shapes: [data model](data-model.md). Messages between the workbench and the editors:

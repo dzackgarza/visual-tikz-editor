@@ -81,6 +81,7 @@ only the provisional part (FR-032, FR-033).
 | `scale` | number | 1 is printed size at 96 CSS px per inch (FR-041) |
 | `fit` | boolean | On at open for a figure with content (FR-040); a zoom, pan, or pinch turns it off |
 | `centre` | figure point | The origin for an empty figure (FR-041) |
+| `pointer` | figure point | The latest position of the pen, finger, or cursor on the canvas; shown in the status line (FR-044); not kept |
 
 The viewport is kept per file, so a figure reopens at its last view (FR-040). Zooming changes
 neither the source nor the selection (FR-043).

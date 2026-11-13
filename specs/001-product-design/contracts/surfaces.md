@@ -67,6 +67,12 @@ More holds Cut, Copy, Paste, Delete, Transform, Reorder, Repeat….
 | Lower leading corner | Snap | "Snap" (pressed state on or off) | Turns snapping on or off |
 | Beside Snap | Snap rules | "Snapping rules" | Opens Lattice, Objects, Alignment, Angle as toggles |
 
+## Status line
+
+Under the canvas. It holds one text, accessible name "Pointer position", that reads the pointer's
+*x* and *y* in figure coordinates, as the source writes them (FR-044, research R10). It holds no
+control and no other text.
+
 ## Panels
 
 Layers and Properties: one open at a time; a side pane in landscape, a sheet with medium and large
