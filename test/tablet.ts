@@ -38,10 +38,12 @@ export async function startWorkbench(
   env: NodeJS.ProcessEnv,
   persistentHome?: string,
   resources?: string,
+  /** The diagram file to open; an untitled tikzpicture without one. */
+  document?: string,
 ): Promise<Workbench> {
   const configHome = persistentHome ?? await mkdtemp(join(tmpdir(), "workbench-config-"));
   const launch = resources === undefined ? [] : ["--resources", resources];
-  const server: ChildProcess = spawn("bun", ["run", "standalone/server.ts", ...launch, ""], {
+  const server: ChildProcess = spawn("bun", ["run", "standalone/server.ts", ...launch, document ?? ""], {
     env: { ...env, XDG_CONFIG_HOME: configHome, XDG_STATE_HOME: configHome },
     stdio: ["ignore", "pipe", "inherit"],
     detached: true,

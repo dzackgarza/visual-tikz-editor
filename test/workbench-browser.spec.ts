@@ -1,5 +1,8 @@
 import { strict as assert } from "node:assert";
 import { randomUUID } from "node:crypto";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type Browser,
   type BrowserContext,
@@ -88,12 +91,16 @@ describe("standalone workbench host boundary", function () {
   let context: BrowserContext;
   let page: Page;
   let url: string;
+  /** The file that the story's editor opened at launch, when its setup names a document. */
+  let documentPath: string | undefined;
 
   type StorySetup = {
     viewport?: { width: number; height: number };
     initialPage?: "blank";
     /** The directory from which the document's relative image paths resolve. */
     resources?: string;
+    /** The source of a diagram file that the editor opens at launch. */
+    document?: string;
   };
   const storySetups = new Map<string, StorySetup>();
   function story(setup: StorySetup, title: string, run: Mocha.AsyncFunc): void {
@@ -227,7 +234,12 @@ describe("standalone workbench host boundary", function () {
 
   beforeEach(async function () {
     const setup = storySetups.get(this.currentTest!.title);
-    workbench = await startWorkbench(process.env, undefined, setup?.resources);
+    documentPath =
+      setup?.document === undefined
+        ? undefined
+        : join(await mkdtemp(join(tmpdir(), "workbench-document-")), "figure.tikz");
+    if (documentPath !== undefined) await writeFile(documentPath, setup!.document!);
+    workbench = await startWorkbench(process.env, undefined, setup?.resources, documentPath);
     url = workbench.url;
     const viewport = setup?.viewport;
     context = await browser.newContext(viewport ? { viewport } : {});
@@ -9789,7 +9801,309 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByRole("group", { name: "File" })).toBeVisible();
   });
 
-  story({}, "restores its accepted tool and viewport in a fresh editor session", async function () {
+/** CSS px per figure centimetre at printed size: 96 CSS px per inch (FR-041). */
+  const PRINTED_PX_PER_CM = 96 / 2.54;
+  /** The canvas scale at printed size: the canvas draws in TeX points, 72.27 to the inch. */
+  const PRINTED_SCALE = 96 / 72.27;
+
+  /**
+   * The part of the canvas, in page coordinates, that the dock leaves: the canvas viewport
+   * less the dock on the edge it is docked to.
+   */
+  async function canvasFreeArea(
+    frame: FrameLocator,
+  ): Promise<{ left: number; top: number; right: number; bottom: number }> {
+    const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
+    const dock = await layoutBox(frame.locator("[data-diagram-tools]"));
+    const area = { left: canvas.x, top: canvas.y, right: canvas.x + canvas.width, bottom: canvas.y + canvas.height };
+    const gaps = {
+      bottom: area.bottom - dock.y,
+      top: dock.y + dock.height - area.top,
+      left: dock.x + dock.width - area.left,
+      right: area.right - dock.x,
+    };
+    const docked = (Object.keys(gaps) as (keyof typeof gaps)[]).reduce((nearest, side) =>
+      gaps[side] < gaps[nearest] ? side : nearest,
+    );
+    if (docked === "bottom") area.bottom = dock.y;
+    if (docked === "top") area.top = dock.y + dock.height;
+    if (docked === "left") area.left = dock.x + dock.width;
+    if (docked === "right") area.right = dock.x;
+    return area;
+  }
+
+  /** Each labelled tick of a ruler, in page coordinates: its label and its position along the ruler. */
+  async function rulerLabels(
+    frame: FrameLocator,
+    testId: "canvas-top-ruler" | "canvas-left-ruler",
+  ): Promise<{ label: string; position: number }[]> {
+    const offset = (await layoutBox(page.locator('iframe[title="TikZ visual editor"]')));
+    const ticks = await frame.getByTestId(testId).evaluate((svg: SVGSVGElement) =>
+      [...svg.querySelectorAll(":scope > g")].flatMap((group) => {
+        const label = group.querySelector("text")?.textContent ?? null;
+        const m = (group as SVGGElement).getScreenCTM()!;
+        return label === null ? [] : [{ label, x: m.e, y: m.f }];
+      }),
+    );
+    return ticks.map(({ label, x, y }) => ({
+      label,
+      position: testId === "canvas-top-ruler" ? offset.x + x : offset.y + y,
+    }));
+  }
+
+  /** The page position of a figure point, in centimetres, read from the labelled ticks of both rulers. */
+  async function figurePoint(frame: FrameLocator, x: number, y: number): Promise<Point> {
+    const along = async (testId: "canvas-top-ruler" | "canvas-left-ruler", value: number) => {
+      const ticks = (await rulerLabels(frame, testId)).map((tick) => ({
+        value: Number(tick.label),
+        position: tick.position,
+      }));
+      assert.ok(ticks.length >= 2, `${testId} has fewer than two labels`);
+      const [a, b] = ticks;
+      return a.position + ((value - a.value) * (b.position - a.position)) / (b.value - a.value);
+    };
+    return { x: await along("canvas-top-ruler", x), y: await along("canvas-left-ruler", y) };
+  }
+
+  /** The canvas transform that the canvas shows. */
+  async function shownTransform(frame: FrameLocator): Promise<{ scale: string; x: string; y: string }> {
+    const view = frame.locator("[data-canvas-scale]");
+    const [scale, x, y] = await Promise.all(
+      ["data-canvas-scale", "data-canvas-translate-x", "data-canvas-translate-y"].map(
+        async (name) => (await view.getAttribute(name))!,
+      ),
+    );
+    return { scale, x, y };
+  }
+
+  /** The zoom that the canvas shows, as a whole percentage of printed size. */
+  const shownZoom = async (frame: FrameLocator) =>
+    Math.round((Number((await shownTransform(frame)).scale) / PRINTED_SCALE) * 100);
+
+  story(
+    { document: String.raw`\begin{tikzpicture}
+\draw[blue] (0,0) rectangle (12,3);
+\end{tikzpicture}
+` },
+    "a figure with content opens fitted with the 44 px margin and reopens at its last view",
+    async function () {
+      const frame = editorFrame(page);
+      const content = frame.locator('[data-canvas-viewport="true"] [data-source-id="path:0"]').first();
+      await expect(content).toBeVisible();
+      // A figure four times wider than high is fitted across the canvas: 44 px from its left and
+      // right edges, and at least 44 px clear of its top and of the dock (research R8).
+      const fitted = async (): Promise<string> => {
+        const area = await canvasFreeArea(frame);
+        const box = await layoutBox(content);
+        const margins = {
+          left: box.x - area.left,
+          right: area.right - (box.x + box.width),
+          top: box.y - area.top,
+          bottom: area.bottom - (box.y + box.height),
+        };
+        const fit =
+          Math.abs(margins.left - 44) <= 3 && Math.abs(margins.right - 44) <= 3 &&
+          margins.top >= 41 && margins.bottom >= 41;
+        return fit ? "fitted" : JSON.stringify(margins);
+      };
+      await expect.poll(fitted, { timeout: 10_000 }).toBe("fitted");
+
+      // While the view is fitted, a change of window size fits it again.
+      await page.setViewportSize({ width: 1000, height: 700 });
+      await expect.poll(fitted, { timeout: 10_000 }).toBe("fitted");
+
+      // A zoom ends the fit: a later change of window size keeps the scale.
+      const canvas = (await layoutBox(frame.locator('[data-canvas-viewport="true"]')));
+      await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 3);
+      const before = (await shownTransform(frame)).scale;
+      await page.keyboard.down("Control");
+      await page.mouse.wheel(0, -180);
+      await page.keyboard.up("Control");
+      await expect.poll(async () => (await shownTransform(frame)).scale).not.toBe(before);
+      await page.setViewportSize({ width: 1100, height: 720 });
+      const zoomed = await shownTransform(frame);
+      await expect.poll(async () => (await shownTransform(frame)).scale).toBe(zoomed.scale);
+      await expect.poll(async () => JSON.stringify(await shownTransform(frame))).toBe(JSON.stringify(zoomed));
+      const shown = await layoutBox(content);
+
+      // After a restart the file opens at the view it was left in, and the file holds no view.
+      const configHome = workbench.configHome;
+      await workbench.stop();
+      workbench = await startWorkbench(process.env, configHome, undefined, documentPath);
+      url = workbench.url;
+      await page.goto(url);
+      await editorReady(page);
+      await expect(content).toBeVisible();
+      await expect.poll(async () => JSON.stringify(await shownTransform(frame))).toBe(JSON.stringify(zoomed));
+      await expect(async () => {
+        const after = await layoutBox(content);
+        const keys = ["x", "y", "width", "height"] as const;
+        expect(Math.max(...keys.map((key) => Math.abs(after[key] - shown[key])))).toBeLessThan(1);
+      }).toPass({ timeout: 5_000 });
+      assert.equal(
+        await readFile(documentPath!, "utf8"),
+        String.raw`\begin{tikzpicture}
+\draw[blue] (0,0) rectangle (12,3);
+\end{tikzpicture}
+`,
+      );
+    },
+  );
+
+  story(
+    {},
+    "an empty figure opens at 100 % with the origin centred and the axes visible; Normal Size makes 1 cm of the figure 96 / 2.54 CSS px; the ruler labels and the status line read figure coordinates, with no pixel unit",
+    async function () {
+      const frame = editorFrame(page);
+      await expect.poll(() => shownZoom(frame)).toBe(100);
+      const area = await canvasFreeArea(frame);
+      const origin = await figurePoint(frame, 0, 0);
+      assert.ok(
+        Math.abs(origin.x - (area.left + area.right) / 2) <= 2 &&
+          Math.abs(origin.y - (area.top + area.bottom) / 2) <= 2,
+        `The origin ${JSON.stringify(origin)} is not centred in ${JSON.stringify(area)}`,
+      );
+      const originLabel = frame.locator('[data-canvas-viewport="true"]').getByText("(0,0)", { exact: true });
+      await expect(originLabel).toBeVisible();
+
+      // Normal Size after a zoom: one centimetre of the figure is 96 / 2.54 CSS px.
+      await author(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (1,0);
+\end{tikzpicture}`);
+      const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
+      await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 3);
+      await page.keyboard.down("Control");
+      await page.mouse.wheel(0, -180);
+      await page.keyboard.up("Control");
+      await expect.poll(() => shownZoom(frame)).not.toBe(100);
+      await page.locator(".document-bar strong").click();
+      await page.keyboard.press("Control+0");
+      await expect.poll(() => shownZoom(frame)).toBe(100);
+      const segment = frame.locator('[data-canvas-viewport="true"] [data-source-id="path:0"]').first();
+      await expect
+        .poll(() =>
+          segment.evaluate((path: SVGGeometryElement) => {
+            const m = path.getScreenCTM()!;
+            const [start, end] = [0, path.getTotalLength()].map((length) => {
+              const p = path.getPointAtLength(length);
+              return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+            });
+            return Math.round(Math.hypot(end.x - start.x, end.y - start.y) * 10) / 10;
+          }),
+        )
+        .toBe(Math.round(PRINTED_PX_PER_CM * 10) / 10);
+
+      // The ruler labels are figure numbers, without a unit, one centimetre apart in figure units.
+      for (const testId of ["canvas-top-ruler", "canvas-left-ruler"] as const) {
+        const labels = await rulerLabels(frame, testId);
+        assert.ok(labels.length >= 2, `${testId} has fewer than two labels`);
+        for (const { label } of labels) assert.match(label, /^-?\d+(\.\d+)?$/);
+        const [a, b] = labels;
+        const perCm = (b.position - a.position) / (Number(b.label) - Number(a.label));
+        assert.ok(
+          Math.abs(Math.abs(perCm) - PRINTED_PX_PER_CM) <= 0.5,
+          `${testId} labels are ${perCm} px per figure unit at 100 %`,
+        );
+      }
+
+      // The status line reads the pointer in figure coordinates, without a unit.
+      const input = await TabletInput.attach(page);
+      await input.penHover(await figurePoint(frame, 1, 0));
+      const status = frame.getByRole("status", { name: "Pointer position", exact: true });
+      await expect(status).toBeVisible();
+      await expect(status).not.toContainText("px");
+      await expect(status).toHaveText(/^\s*\(?\s*1\s*,?\s+0\s*\)?\s*$/);
+    },
+  );
+
+  story({}, "the pen over (1, 2) makes the status line 'Pointer position' read 1 and 2 and nothing else", async function () {
+    const frame = editorFrame(page);
+    await expect.poll(() => shownZoom(frame)).toBe(100);
+    const input = await TabletInput.attach(page);
+    await input.penHover(await figurePoint(frame, 1, 2));
+    const status = frame.getByRole("status", { name: "Pointer position", exact: true });
+    await expect(status).toBeVisible();
+    await expect
+      .poll(async () => {
+        const text = await status.innerText();
+        return /^[\s(),]*$/.test(text.replace(/-?\d+(\.\d+)?/g, "")) ? text.match(/-?\d+(\.\d+)?/g) : text;
+      })
+      .toEqual(["1", "2"]);
+  });
+
+  story(
+    {},
+    "the zoom readout opens Zoom to Fit, Zoom to Selection, Normal Size, and 10–1000 %; zooming changes neither source nor selection; Snap toggles and Snapping rules opens Lattice, Objects, Alignment, Angle",
+    async function () {
+      await author(String.raw`\begin{tikzpicture}
+\draw (0,0) rectangle (2,1);
+\draw (3,0) circle (0.5);
+\end{tikzpicture}`);
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
+      // The readout at the canvas's lower trailing corner, Zoom out and Zoom in beside it.
+      const readout = frame.getByRole("button", { name: /^Zoom: \d+ %$/ });
+      await expect(readout).toHaveAccessibleName("Zoom: 100 %");
+      const readoutBox = await layoutBox(readout);
+      assert.ok(
+        canvas.x + canvas.width - (readoutBox.x + readoutBox.width) < 120 &&
+          canvas.y + canvas.height - (readoutBox.y + readoutBox.height) < 120,
+        "The zoom readout is not at the canvas's lower trailing corner",
+      );
+      await input.touch([await stableCenter(frame.getByRole("button", { name: "Zoom in", exact: true }))]);
+      await expect(readout).not.toHaveAccessibleName("Zoom: 100 %");
+      await input.touch([await stableCenter(frame.getByRole("button", { name: "Zoom out", exact: true }))]);
+      await expect(readout).toHaveAccessibleName("Zoom: 100 %");
+
+      // Select the rectangle with the Lasso.
+      const rail = frame.locator("[data-diagram-tools]");
+      await input.touch([await stableCenter(rail.getByRole("button", { name: "Lasso", exact: true }))]);
+      const corners = await Promise.all(
+        [[-0.3, -0.3], [2.3, -0.3], [2.3, 1.3], [-0.3, 1.3], [-0.3, -0.2]].map(([x, y]) => figurePoint(frame, x, y)),
+      );
+      await input.penStroke(corners);
+      const selection = async () => [...(await editorDebug(page)).selection].sort();
+      await expect.poll(selection).toEqual(["path:0"]);
+      const source = (await editorDebug(page)).source;
+
+      const menuItems = [
+        "Zoom to Fit",
+        "Zoom to Selection",
+        "Normal Size",
+        ...[10, 20, 50, 100, 200, 500, 1000].map((percent) => `${percent} %`),
+      ];
+      for (const item of menuItems) {
+        await input.touch([await stableCenter(readout)]);
+        const menu = frame.getByRole("menu", { name: "Zoom" });
+        await expect(menu.getByRole("menuitem")).toHaveText(menuItems);
+        await input.touch([await stableCenter(menu.getByRole("menuitem", { name: item, exact: true }))]);
+        await expect(menu).toHaveCount(0);
+        if (item.endsWith(" %")) await expect(readout).toHaveAccessibleName(`Zoom: ${item}`);
+        if (item === "Normal Size") await expect(readout).toHaveAccessibleName("Zoom: 100 %");
+        assert.equal((await editorDebug(page)).source, source, `${item} changed the source`);
+        assert.deepEqual(await selection(), ["path:0"], `${item} changed the selection`);
+      }
+
+      // Snap at the lower leading corner toggles; Snapping rules opens the four rules.
+      const snap = frame.getByRole("button", { name: "Snap", exact: true });
+      const snapBox = await layoutBox(snap);
+      assert.ok(
+        snapBox.x - canvas.x < 120 && canvas.y + canvas.height - (snapBox.y + snapBox.height) < 120,
+        "Snap is not at the canvas's lower leading corner",
+      );
+      const pressed = await snap.getAttribute("aria-pressed");
+      await input.touch([await stableCenter(snap)]);
+      await expect(snap).toHaveAttribute("aria-pressed", pressed === "true" ? "false" : "true");
+      await input.touch([await stableCenter(frame.getByRole("button", { name: "Snapping rules", exact: true }))]);
+      const rules = frame.getByRole("dialog").filter({ has: frame.getByRole("button", { name: "Lattice", exact: true }) });
+      for (const rule of ["Lattice", "Objects", "Alignment", "Angle"]) {
+        await expect(rules.getByRole("button", { name: rule, exact: true })).toHaveAttribute("aria-pressed", /true|false/);
+      }
+    },
+  );
+
+    story({}, "restores its accepted tool and viewport in a fresh editor session", async function () {
     await author(circleFigure);
     const frame = editorFrame(page);
     await freehandTool(frame).click();
