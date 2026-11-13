@@ -4,33 +4,33 @@
 
 <script setup lang="ts">
 /**
- * The TikZ source pane of the standalone workbench. The file text is the
- * source authority: edits here and edits from the workbench both replace it,
- * and this pane shows the current text.
+ * The TikZ source pane of the standalone workbench. It shows the document of
+ * `src/document-history.ts` and keeps no history of its own: its edits enter the
+ * document's one history, and it shows the edits that other views and Undo make.
  */
 
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Annotation, Compartment, EditorState, Transaction } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, drawSelection, keymap, lineNumbers } from "@codemirror/view";
 import { tikz } from "@tikz-editor/lang-tikz";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { CODE_STEP, type DocumentHistory } from "../src/document-history";
 import type { TikzWorkbenchTheme } from "../src/host";
 
 const props = defineProps<{
-  source: string;
+  document: DocumentHistory;
   theme: TikzWorkbenchTheme;
   selection?: { from: number; to: number } | null;
-}>();
-
-const emit = defineEmits<{
-  (e: "change", source: string): void;
 }>();
 
 const parent = ref<HTMLDivElement | null>(null);
 let view: EditorView | null = null;
 const themeCompartment = new Compartment();
+// An edit made elsewhere, which this pane only shows.
+const shown = Annotation.define<boolean>();
+let unsubscribe: (() => void) | null = null;
 
 function showSelection(): void {
   const range = props.selection;
@@ -51,40 +51,39 @@ onMounted(() => {
   view = new EditorView({
     parent: parent.value,
     state: EditorState.create({
-      doc: props.source,
+      doc: props.document.source,
       extensions: [
         lineNumbers(),
         drawSelection(),
-        history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        // CodeMirror's historyKeymap bindings, bound to the document history.
+        keymap.of([
+          { key: "Mod-z", run: () => props.document.undo(), preventDefault: true },
+          { key: "Mod-y", mac: "Mod-Shift-z", run: () => props.document.redo(), preventDefault: true },
+          { key: "Mod-Shift-z", run: () => props.document.redo(), preventDefault: true },
+          ...defaultKeymap,
+        ]),
         tikz(),
         themeCompartment.of(
           props.theme === "dark" ? oneDark : syntaxHighlighting(defaultHighlightStyle),
         ),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            emit("change", update.state.doc.toString());
+          for (const tr of update.transactions) {
+            if (tr.docChanged && tr.annotation(shown) !== true) {
+              props.document.edit(tr.changes, CODE_STEP, tr.annotation(Transaction.userEvent));
+            }
           }
         }),
       ],
     }),
   });
+  unsubscribe = props.document.subscribe(({ changes, source }) => {
+    if (view === null || view.state.doc.toString() === source) return;
+    view.dispatch({ changes, annotations: shown.of(true) });
+  });
   showSelection();
 });
 
 watch(() => props.selection, showSelection, { flush: "post" });
-
-watch(
-  () => props.source,
-  (source) => {
-    if (view === null || source === view.state.doc.toString()) {
-      return;
-    }
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: source },
-    });
-  },
-);
 
 watch(
   () => props.theme,
@@ -98,6 +97,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  unsubscribe?.();
   view?.destroy();
   view = null;
 });

@@ -47,9 +47,10 @@ export interface TikzWorkbenchHost {
   readSource: (from: number, to: number) => string;
   /**
    * Replace [from, to) of the source document. The host then passes the
-   * workbench a target that describes the changed document.
+   * workbench a target that describes the changed document. Consecutive writes
+   * with one `step` are one step of the document history.
    */
-  writeSource: (from: number, to: number, insert: string) => void;
+  writeSource: (from: number, to: number, insert: string, step: string) => void;
   /** Present only when the host supplies a compiled TeX view. */
   rendering?: TikzWorkbenchRendering;
   /** Present only when the host supplies a tikzcd editor. */

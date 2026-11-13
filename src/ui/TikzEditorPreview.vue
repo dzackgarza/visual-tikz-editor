@@ -108,7 +108,9 @@ function snapshot(signal: AbortSignal) {
 async function currentSource(signal: AbortSignal): Promise<string> {
   const active = session.value;
   if (frame.value === null || !loaded.value) return active.source.source;
-  const source = await requestEditorSource(
+  // The canvas posts each edit as a `change` before it replies, so after the reply the document
+  // holds every edit; the frame's source differs only during a gesture, which is not yet an edit.
+  await requestEditorSource(
     frame.value,
     { sessionId: active.id, revision: active.revision },
     AbortSignal.any([signal, lifetime.signal]),
@@ -116,7 +118,6 @@ async function currentSource(signal: AbortSignal): Promise<string> {
   if (session.value.revision !== active.revision) {
     throw new Error("The source changed while reading the editor");
   }
-  applyEditorSource(source, active.revision);
   return session.value.source.source;
 }
 
@@ -230,14 +231,13 @@ watch(
       return;
     }
 
-    // Edits elsewhere in the Markdown document may move the source range
-    // without changing this TikZ block. Keep tikz-editor's history intact and
-    // refresh only the authority coordinates used for the next write-back.
+    // Another view or the document history changed the source: the canvas shows it and
+    // keeps its viewport and tool.
     session.value = { ...active, source: next };
-    if (!sameSource) {
-      errorMessage.value = "";
-      sendFullLoad();
-    }
+    if (sameSource) return;
+    errorMessage.value = "";
+    if (loaded.value) postToEditor({ action: "replace-source", source: next.source });
+    else sendFullLoad();
   },
 );
 
@@ -273,7 +273,8 @@ function parseHostMessage(data: unknown): EditorNotification | null {
   return parsed.success ? parsed.data : null;
 }
 
-function applyEditorSource(source: string, revision: number | undefined): void {
+/** One `change` of the canvas; the changes of one canvas `step` are one step of the document history. */
+function applyEditorSource(source: string, revision: number, step: number): void {
   const active = session.value;
   if (revision !== active.revision) {
     return;
@@ -291,7 +292,8 @@ function applyEditorSource(source: string, revision: number | undefined): void {
 
   try {
     const replacement = tikzEditorReplacement(active.source, source);
-    props.host.writeSource(replacement.from, replacement.to, replacement.insert);
+    props.host.writeSource(replacement.from, replacement.to, replacement.insert,
+      `canvas:${active.id}:${active.revision}:${step}`);
     session.value = { ...active, source: replacement.next };
     errorMessage.value = "";
   } catch (error) {
@@ -369,12 +371,12 @@ function onMessage(event: MessageEvent): void {
       if (documentPropertiesRequested) documentProperties();
       break;
     case "change": {
-      applyEditorSource(message.source, message.revision);
+      applyEditorSource(message.source, message.revision, message.step);
       break;
     }
     case "save": {
+      // Only `change` writes the source: each write is one step of the document history.
       if (message.revision !== session.value.revision) break;
-      applyEditorSource(message.source, message.revision);
       props.host.requestSave?.();
       break;
     }
@@ -405,7 +407,6 @@ function onMessage(event: MessageEvent): void {
       break;
     case "source-selection": {
       if (message.revision !== session.value.revision || typeof message.source !== "string") break;
-      applyEditorSource(message.source, message.revision);
       const active = session.value.source;
       if (
         active.source !== message.source ||

@@ -190,7 +190,8 @@ function applyEditorSource(source: string): void {
   }
   if (source === quiverSourceForSession(active.source)) return;
   const replacement = quiverReplacement(active.source, source);
-  props.host.writeSource(replacement.from, replacement.to, replacement.insert);
+  // Each Quiver change is one step of the document history.
+  props.host.writeSource(replacement.from, replacement.to, replacement.insert, `quiver:${crypto.randomUUID()}`);
   session.value = { ...active, source: replacement.next };
   errorMessage.value = "";
 }

@@ -58,10 +58,10 @@ story that uses Undo or the document bar depends on this phase; the open view of
 
 ### One document history (FR-012b, research R3, data-model History)
 
-- [ ] T015 Write the red story "Undo acts on the one document history in every view" in `test/workbench-browser.spec.ts`: drag one point on the canvas, then type in the source editor, then tap Undo twice; the first Undo removes the whole typing and the second the whole drag, and after each the canvas and the source editor show the same source; Redo restores the drag; repeat with a label edited in Quiver for a `tikzcd`; commit it red
-- [ ] T016 Create `src/document-history.ts`: the document is a headless CodeMirror `EditorState` from `@codemirror/state` with `history({ newGroupDelay: 500 })` from `@codemirror/commands`; canvas and Quiver `change` events enter as transactions annotated `isolateHistory.of("full")`; Undo and Redo are `undo` and `redo` on that state; `undoDepth` and `redoDepth` dim the buttons; a new edit after Undo empties `future` (data-model History: "A step is one edit of the source in any view; typing in the Code panel groups changes no more than 500 ms apart")
-- [ ] T017 Mount the source editor of `standalone/SourceEditor.vue` (the later Code panel) on the document state of `src/document-history.ts`, so it keeps no history of its own: delete its `history()` extension and `historyKeymap` (`standalone/SourceEditor.vue:12,58-59`) and bind `Mod-z` and `Mod-Shift-z` to the document history
-- [ ] T018 In `src/ui/TikzWorkbench.vue` replace the header of `:150-187` (`showHeader`) with the document bar of contracts/surfaces.md: the title leading; Undo (`RiArrowGoBackLine`, "Undo") and Redo (`RiArrowGoForwardLine`, "Redo") in the centre; View (`RiLayoutColumnLine`, "View") trailing, as a popover anchored to its button that lists the views the shell has now (US5 sets its contents). Undo and Redo act on `src/document-history.ts`, answer `undo-request` and `redo-request` from both frames, and send `replace-source` to the canvas and `zettlr-quiver:source` to Quiver after each step; run the T015 story green
+- [X] T015 Write the red story "Undo acts on the one document history in every view" in `test/workbench-browser.spec.ts`: drag one point on the canvas, then type in the source editor, then tap Undo twice; the first Undo removes the whole typing and the second the whole drag, and after each the canvas and the source editor show the same source; Redo restores the drag; repeat with a label edited in Quiver for a `tikzcd`; commit it red
+- [X] T016 Create `src/document-history.ts`: the document is a headless CodeMirror `EditorState` from `@codemirror/state` with `history({ newGroupDelay: 500, joinToEvent })` from `@codemirror/commands`; every edit names its step (a canvas gesture its frame `step`, a Quiver write its own, the source editor `code`), and `joinToEvent` joins an edit to the Undo step before it only when both name the same step; only `change` writes canvas source, and the frame posts it before `source-selection`; Undo and Redo are `undo` and `redo` on that state; `undoDepth` and `redoDepth` dim the buttons; a new edit after Undo empties `future` (data-model History: "A step is one edit of the source in any view; typing in the Code panel groups changes no more than 500 ms apart")
+- [X] T017 Mount the source editor of `standalone/SourceEditor.vue` (the later Code panel) on the document state of `src/document-history.ts`, so it keeps no history of its own: delete its `history()` extension and `historyKeymap` (`standalone/SourceEditor.vue:12,58-59`) and bind `Mod-z` and `Mod-Shift-z` to the document history
+- [X] T018 In the document bar of `standalone/StandaloneApp.vue` (contracts/surfaces.md): the title leading; Undo (`RiArrowGoBackLine`, "Undo") and Redo (`RiArrowGoForwardLine`, "Redo") in the centre. Undo and Redo act on `src/document-history.ts`, answer `undo-request` and `redo-request` from the canvas frame, and send `replace-source` to the canvas and `zettlr-quiver:source` to Quiver after each step; run the T015 story green
 
 **Checkpoint**: the shell is standalone, the protocol is at its new version, and Undo acts on the document in every view.
 
@@ -192,8 +192,8 @@ compares the file byte for byte outside the edited statement.
 
 ### Implementation
 
-- [ ] T064 [US2] Replace the File `<details>` menu of `standalone/StandaloneApp.vue:3-29,699-711` with the title menu anchored to the title in `src/ui/TikzWorkbench.vue`, closing on a second tap, an outside tap, and Escape
-- [ ] T065 [US2] Show the save state beside the title from data-model Document `saveState` (`saved` | `unsaved` | `saving` | `conflict`) with its transitions, in `src/ui/TikzWorkbench.vue` and `standalone/StandaloneApp.vue`
+- [ ] T064 [US2] Replace the File `<details>` menu of `standalone/StandaloneApp.vue:3-29,699-711` with the title menu anchored to the title in the document bar of `standalone/StandaloneApp.vue`, closing on a second tap, an outside tap, and Escape
+- [ ] T065 [US2] Show the save state beside the title from data-model Document `saveState` (`saved` | `unsaved` | `saving` | `conflict`) with its transitions, in the document bar of `standalone/StandaloneApp.vue`
 - [ ] T066 [US2] Detect a changed file at save in `standalone/server.ts`, write the recovery draft under `$XDG_STATE_HOME/visual-tikz-editor/`, and report the conflict to the shell
 - [ ] T067 [US2] Rewrite the replaced story at line 207 of `test/workbench-files.spec.ts`; run the US2 stories green
 
@@ -214,7 +214,7 @@ source is highlighted without taking focus.
 
 ### Implementation
 
-- [ ] T071 [US5] Replace the view rails of `standalone/StandaloneApp.vue:42-75` and their drag (`:178-189`) with View (`RiLayoutColumnLine`) in the document bar of `src/ui/TikzWorkbench.vue`, listing the document's editor and Render, then Grid, Rulers, Guides, Output Bounds
+- [ ] T071 [US5] Replace the view rails of `standalone/StandaloneApp.vue:42-75` and their drag (`:178-189`) with View (`RiLayoutColumnLine`, "View") trailing in the document bar of `standalone/StandaloneApp.vue`, a popover anchored to its button, listing the document's editor and Render, then Grid, Rulers, Guides, Output Bounds
 - [ ] T072 [US5] Offer Quiver only for a `tikzcd` from the kind of `src/source-block.ts:74-80` and `standalone/StandaloneApp.vue:289`; delete the unavailable-Quiver text of `src/ui/TikzWorkbench.vue:71-76` and `src/quiver-bridge.ts:89-94`, and the mode labels of `src/preview-modes.ts:46-79` that name the other kind
 - [ ] T073 [US5] Add Code (`RiCodeLine`) to the document bar and show `standalone/SourceEditor.vue` as the Code panel beside the canvas or Quiver, a side pane in landscape and a sheet in portrait; send `panel: null` to the canvas when Code opens (FR-061, research R12)
 - [ ] T074 [US5] Highlight the `source-selection` range in the Code panel without moving focus from the canvas in `standalone/SourceEditor.vue`
@@ -239,7 +239,7 @@ without a selection.
 
 ### Implementation
 
-- [ ] T079 [US6] Add Layers (`RiStackLine`) and Properties (`RiEqualizerLine`) to the document bar of `src/ui/TikzWorkbench.vue`, sending `panel` and following the `panel` event, with Code in the same one-panel state (data-model Panel `open`: none, `code`, `layers`, or `properties`)
+- [ ] T079 [US6] Add Layers (`RiStackLine`) and Properties (`RiEqualizerLine`) to the document bar of `standalone/StandaloneApp.vue`, sending `panel` and following the `panel` event, with Code in the same one-panel state (data-model Panel `open`: none, `code`, `layers`, or `properties`)
 - [ ] T080 [US6] Split the shared panel of `.cache/tikz-editor/packages/app/src/ui/DockLayout.tsx:702-724` into a Layers panel and a Properties panel, each with its title and close button
 - [ ] T081 [US6] Show `<InspectorPanel figure />` in Properties when the selection is empty and post `selection` (`empty`); delete `DocumentPropertiesDialog.tsx` and its references in `App.tsx` and `editor-command-runtime.ts` under `.cache/tikz-editor/packages/app/src/`; delete the `document-properties` command, the `document-properties-closed` event and action of `vendor/tikz-editor/embed/src/`, the `tikz-embed-document-properties` listeners of `main.tsx`, and Document Properties… with its handlers in `standalone/StandaloneApp.vue`, `src/ui/TikzWorkbench.vue`, and `src/ui/TikzEditorPreview.vue`
 - [ ] T082 [US6] Keep layer visibility and lock as per-file view state through `persistence-save`, never in the source, in the fork store `.cache/tikz-editor/packages/app/src/store/`
@@ -258,7 +258,7 @@ without a selection.
 
 ### Implementation
 
-- [ ] T086 [US7] Replace the Export `<details>` menu of `standalone/StandaloneApp.vue` with Share and Export (`RiShareBoxLine`) in `src/ui/TikzWorkbench.vue`, holding Copy TikZ, then PDF…, SVG…, PNG…, anchored to its button (research R15)
+- [ ] T086 [US7] Replace the Export `<details>` menu of `standalone/StandaloneApp.vue` with Share and Export (`RiShareBoxLine`) in the document bar of `standalone/StandaloneApp.vue`, holding Copy TikZ, then PDF…, SVG…, PNG…, anchored to its button (research R15)
 - [ ] T087 [US7] Rewrite the story "Copy source" near line 8550 of `test/workbench-browser.spec.ts` to Copy TikZ; run the US7 stories green
 
 ---
@@ -266,7 +266,7 @@ without a selection.
 ## Phase 11: Polish and cross-cutting rules
 
 - [ ] T088 Story "Settings › Appearance: Match System Appearance on follows the system; off with Light shows a light surface under a dark system; the choice is kept in `$XDG_CONFIG_HOME/visual-tikz-editor/` and nothing is written beside the figure" (FR-005, FR-063), replacing the theme story at line 208 of `test/workbench-browser.spec.ts`; commit it red
-- [ ] T089 Add More (`RiMoreLine`) with Settings… to the document bar of `src/ui/TikzWorkbench.vue`; build Settings with Appearance, Canvas, Colours, and Keyboard shortcuts, each changed setting with its own reset; delete the `prefers-color-scheme` theme of `standalone/StandaloneApp.vue:253-258` and the theme control; send `settings.general.colorScheme` to the canvas and `zettlr-quiver:theme` to Quiver; extend `.cache/tikz-editor/packages/app/src/ui/SettingsModal.tsx:11-14` (FR-062, research R15, R17)
+- [ ] T089 Add More (`RiMoreLine`) with Settings… to the document bar of `standalone/StandaloneApp.vue`; build Settings with Appearance, Canvas, Colours, and Keyboard shortcuts, each changed setting with its own reset; delete the `prefers-color-scheme` theme of `standalone/StandaloneApp.vue:253-258` and the theme control; send `settings.general.colorScheme` to the canvas and `zettlr-quiver:theme` to Quiver; extend `.cache/tikz-editor/packages/app/src/ui/SettingsModal.tsx:11-14` (FR-062, research R15, R17)
 - [ ] T090 Story "Code, Layers, and Properties open as a side pane in landscape and as a sheet in portrait, and the selected object stays visible" (FR-061, Principle IV) in `test/workbench-browser.spec.ts`
 - [ ] T091 Story "every surface holds exactly the controls of contracts/surfaces.md, found by accessible name, in portrait and landscape, each with a hit region of at least 44 × 44 CSS px" (SC-002, Principle II) in `test/workbench-browser.spec.ts`
 - [ ] T092 Story "no reached state shows an instruction sentence, and every command is reached by pen taps alone" (SC-003, SC-004) in `test/workbench-browser.spec.ts`

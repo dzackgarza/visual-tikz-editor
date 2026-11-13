@@ -33,7 +33,8 @@ export const editorNotificationSchema = z.discriminatedUnion('event', [
   z.object({ ...notificationIdentity, event: z.literal('loaded') }),
   z.object({ ...notificationIdentity, event: z.literal('change'), source: z.string(), sourceRevision: z.number().int().nonnegative(), step: z.number().int().nonnegative() }),
   z.object({ ...notificationIdentity, event: z.literal('rendered'), sourceRevision: z.number().int().nonnegative() }),
-  z.object({ ...notificationIdentity, event: z.literal('save'), source: z.string(), fileName: z.string() }),
+  // The canvas asks the shell to save the document; `change` has already carried its source.
+  z.object({ ...notificationIdentity, event: z.literal('save') }),
   // The Undo or Redo gesture inside the canvas; the shell owns the document history.
   z.object({ ...notificationIdentity, event: z.literal('undo-request') }),
   z.object({ ...notificationIdentity, event: z.literal('redo-request') }),

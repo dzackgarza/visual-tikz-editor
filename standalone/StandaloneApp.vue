@@ -4,6 +4,14 @@
       <strong>{{ fileName }}</strong>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
       <span v-if="editorStatus !== ''" class="tikz-view-status">{{ editorStatus }}</span>
+      <div class="history-controls">
+        <button type="button" aria-label="Undo" title="Undo" :disabled="!canUndo" @click="undoDocument">
+          <RiArrowGoBackLine aria-hidden="true" size="22" />
+        </button>
+        <button type="button" aria-label="Redo" title="Redo" :disabled="!canRedo" @click="redoDocument">
+          <RiArrowGoForwardLine aria-hidden="true" size="22" />
+        </button>
+      </div>
       <details class="file-menu" aria-label="File" @click="closeFileMenu">
         <summary>File</summary>
         <div class="file-menu-items">
@@ -51,13 +59,14 @@
       <div ref="paneHost" class="pane-host" :class="{ split: bothOpen }"
         :style="bothOpen ? { gridTemplateColumns: `${splitPercent}% 6px minmax(0, 1fr)` } : undefined">
         <div v-if="visited.has('code')" v-show="isVisible('code')" class="view-pane" :style="paneStyle('code')">
-          <SourceEditor class="tikz-standalone-source" :source="source" :theme="theme" :selection="sourceSelection" @change="source = $event" />
+          <SourceEditor class="tikz-standalone-source" :document="documentHistory" :theme="theme" :selection="sourceSelection" />
         </div>
         <div v-for="view in workbenchViews" :key="view" class="view-pane" :class="{ 'pane-hidden': !isVisible(view) }" :style="paneStyle(view)">
           <TikzWorkbench v-if="visited.has(view)" :ref="(handle) => setWorkbench(view, handle)" :key="`${documentKey}-${view}`"
             class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
             :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
             :initial-mode="modeForView(view)" @status="onEditorStatus(view, $event)"
+            @undo-request="undoDocument" @redo-request="redoDocument"
             @document-properties-closed="documentPropertiesClosed" />
         </div>
         <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
@@ -88,7 +97,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { RiArrowGoBackLine, RiArrowGoForwardLine } from "@remixicon/vue";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { DocumentHistory } from "../src/document-history";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
@@ -214,7 +225,22 @@ function resizeWithKeyboard(event: KeyboardEvent): void {
   event.preventDefault();
   splitPercent.value = Math.max(15, Math.min(85, splitPercent.value + (event.key === "ArrowLeft" ? -5 : 5)));
 }
+// The one source of every view and its one history (FR-012b); `source` mirrors it for the views.
+const documentHistory = new DocumentHistory("");
 const source = ref("");
+const canUndo = ref(false);
+const canRedo = ref(false);
+documentHistory.subscribe((change) => {
+  source.value = change.source;
+  canUndo.value = documentHistory.canUndo;
+  canRedo.value = documentHistory.canRedo;
+});
+function undoDocument(): void {
+  documentHistory.undo();
+}
+function redoDocument(): void {
+  documentHistory.redo();
+}
 const workbenches = new Map<Exclude<ViewId, "code">, InstanceType<typeof TikzWorkbench>>();
 function setWorkbench(view: Exclude<ViewId, "code">, handle: unknown): void {
   if (handle === null) workbenches.delete(view);
@@ -314,8 +340,8 @@ const host: TikzWorkbenchHost = {
     sourceSelection.value = { from, to };
   },
   readSource: (from, to) => source.value.slice(from, to),
-  writeSource: (from, to, insert) => {
-    source.value = source.value.slice(0, from) + insert + source.value.slice(to);
+  writeSource: (from, to, insert, step) => {
+    documentHistory.edit({ from, to, insert }, step);
   },
   rendering: {
     render: async (request) => {
@@ -383,7 +409,7 @@ async function applyDocument(response: Response): Promise<void> {
   const text = await responseText(response);
   applyingDocument = true;
   document.value = metadata(response);
-  source.value = text;
+  documentHistory.reset(text);
   savedSource.value = text;
   recoverySaved.value = document.value.recovery === "draft";
   recoveredSource.value = recoverySaved.value ? text : "";
@@ -533,6 +559,14 @@ function onKeydown(event: KeyboardEvent): void {
       event.preventDefault();
       workbenches.get("canvas")?.zoom(event.key === "0" ? "normal" : event.key === "-" ? "out" : "in");
     }
+    return;
+  }
+  // The source editor answers its own Undo and Redo keys; the shell answers them elsewhere.
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "z" && !event.defaultPrevented &&
+      !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) {
+    event.preventDefault();
+    if (event.shiftKey) redoDocument();
+    else undoDocument();
     return;
   }
   if ((event.ctrlKey || event.metaKey) && event.key === "s") {
@@ -712,6 +746,20 @@ body,
 
 .file-menu-items button {
   justify-content: flex-start;
+}
+
+.history-controls {
+  display: flex;
+  gap: 4px;
+  margin-inline: auto;
+}
+
+.history-controls button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
 }
 
 .document-bar button[aria-pressed="true"] {

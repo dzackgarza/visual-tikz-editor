@@ -34,7 +34,6 @@ const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
 \end{tikzpicture}
 `;
 
-let lastSavedSource = DEFAULT_SOURCE;
 let currentFileName = 'document.tikz';
 let currentHostRevision = 0;
 let currentHostSession = '';
@@ -251,10 +250,9 @@ function createEmbedPlatform(initialSource: string): EditorPlatform {
 		},
 		files: {
 			openText: async () => openTextFileWithPicker(),
-			saveText: async (text, options) => {
-				lastSavedSource = text;
+			saveText: async (_text, options) => {
 				currentFileName = options?.suggestedName ?? options?.fileRef?.name ?? currentFileName;
-				postToHost({ event: 'save', revision: currentHostRevision, source: text, xml: text, fileName: currentFileName });
+				postToHost({ event: 'save', revision: currentHostRevision });
 				return { status: 'saved', fileRef: makeFileRef(currentFileName) };
 			},
 			exportFile: async (content, options) => {
@@ -271,7 +269,6 @@ function createEmbedPlatform(initialSource: string): EditorPlatform {
 
 function loadIntoEditor(source: string, fileName = currentFileName) {
 	currentFileName = fileName;
-	lastSavedSource = source;
 	const store = useEditorStore.getState();
 	store.dispatch({ type: 'CODE_EDITED', source });
 	store.dispatch({ type: 'MARK_DOCUMENT_SAVED', fileRef: makeFileRef(fileName), lastKnownDiskSource: source });
@@ -296,6 +293,11 @@ function HostBridge() {
 		let previousSelection = '';
 		let previousSelectionEmpty: boolean | null = null;
 		const unsubscribe = useEditorStore.subscribe((state) => {
+			// The change goes first: the shell takes a selection only in the source it already has.
+			if (state.lastStep !== previousStep) {
+				previousStep = state.lastStep;
+				if (state.lastStep !== null) postToHost({ event: 'change', revision: currentHostRevision, source: state.source, sourceRevision: state.sourceRevision, step: state.historyStep });
+			}
 			const selectionEmpty = state.selectedElementIds.size === 0 && state.activeHandleId === null;
 			if (selectionEmpty !== previousSelectionEmpty) {
 				previousSelectionEmpty = selectionEmpty;
@@ -325,11 +327,6 @@ function HostBridge() {
 				previousRenderRef.current = state.snapshot.revision;
 				postToHost({ event: 'rendered', sourceRevision: state.sourceRevision });
 			}
-
-			if (state.lastStep === previousStep) return;
-			previousStep = state.lastStep;
-			if (state.lastStep === null) return;
-			postToHost({ event: 'change', revision: currentHostRevision, source: state.source, sourceRevision: state.sourceRevision, step: state.historyStep });
 		});
 
 		const reply = (command: HostCommand, error?: CommandFailure) => {
