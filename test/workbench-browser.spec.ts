@@ -267,6 +267,87 @@ describe("standalone workbench host boundary", function () {
 
   story(
     {},
+    "Undo acts on the one document history in every view",
+    async function () {
+      const bar = page.locator(".document-bar");
+      const undo = bar.getByRole("button", { name: "Undo", exact: true });
+      const redo = bar.getByRole("button", { name: "Redo", exact: true });
+      const code = page.locator(".cm-content");
+      // Typing at the end of the first line; the source editor groups the keystrokes into one step.
+      const typeComment = async () => {
+        await code.click();
+        await page.keyboard.press("Control+Home");
+        await page.keyboard.press("End");
+        await page.keyboard.type("% typed");
+      };
+
+      // The canvas: an authored line, one of its ends dragged, then a comment typed.
+      const authored = String.raw`\begin{tikzpicture}
+\draw (1,1) -- (4,1);
+\end{tikzpicture}`;
+      await code.fill(authored);
+      const frame = editorFrame(page);
+      const canvasSource = async () => (await editorDebug(page)).source;
+      await expect.poll(canvasSource).toBe(authored);
+      const input = await TabletInput.attach(page);
+      const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+      await fitDiagram(frame, input);
+      const line = frame.locator('svg [data-source-id="path:0"]').first();
+      await tap(frame.locator("[data-diagram-tools]").getByRole("button", { name: "Select", exact: true }));
+      await input.penStroke([await strokePoint(page, line, 0.5)]);
+      await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+      const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+      await tap(strip.getByRole("button", { name: "Edit points", exact: true }));
+      const handle = (await frame
+        .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
+        .first()
+        .boundingBox())!;
+      const end = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 };
+      await input.penDown(end);
+      for (let i = 1; i <= 15; i++) await input.penMove({ x: end.x - i * 8, y: end.y });
+      await input.penUp({ x: end.x - 120, y: end.y });
+      await expect.poll(canvasSource, { message: "The drag did not reach the source" }).not.toBe(authored);
+      const dragged = await canvasSource();
+      await expect.poll(() => code.innerText()).toBe(dragged);
+      await typeComment();
+      const typed = dragged.replace("\\begin{tikzpicture}", "\\begin{tikzpicture}% typed");
+      await expect.poll(canvasSource).toBe(typed);
+
+      const bothShow = async (expected: string, message: string) => {
+        await expect.poll(canvasSource, { message: `${message}: the canvas` }).toBe(expected);
+        await expect.poll(() => code.innerText(), { message: `${message}: the source editor` }).toBe(expected);
+      };
+      await undo.click();
+      await bothShow(dragged, "The first Undo did not remove the whole typed comment");
+      await undo.click();
+      await bothShow(authored, "The second Undo did not remove the whole drag");
+      await redo.click();
+      await bothShow(dragged, "Redo did not restore the drag");
+
+      // Quiver: an authored tikzcd, a label edited in Quiver, then a comment typed.
+      const diagram = String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`;
+      await code.fill(diagram);
+      await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
+      const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+      await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
+      await quiver.locator(".vertex").nth(1).click();
+      await quiver.locator(".label-input").fill("Edited");
+      await expect.poll(() => code.innerText(), { message: "The Quiver edit did not reach the source" }).toContain("Edited");
+      const relabelled = await code.innerText();
+      await typeComment();
+      await expect.poll(() => code.innerText()).toBe(`${relabelled.split("\n")[0]}% typed${relabelled.slice(relabelled.split("\n")[0].length)}`);
+      await undo.click();
+      await expect.poll(() => code.innerText(), { message: "The first Undo did not remove the typed comment" }).toBe(relabelled);
+      await expect(quiver.locator(".vertex").nth(1)).toContainText("Edited");
+      await undo.click();
+      await expect.poll(() => code.innerText(), { message: "The second Undo did not remove the Quiver edit" }).toBe(diagram);
+      await expect(quiver.locator(".vertex").nth(1)).toContainText("B");
+      await expect(quiver.locator(".vertex").nth(1)).not.toContainText("Edited");
+    },
+  );
+
+  story(
+    {},
     "opens Document Properties from File and by Ctrl+Shift+D, writes the scale Properties writes, and closes on Escape",
     async function () {
       await editorReady(page);
