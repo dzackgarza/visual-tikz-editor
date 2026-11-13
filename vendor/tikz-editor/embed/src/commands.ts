@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { snapshotRequestSchema, editorStateSchema } from './snapshot-protocol';
+import { editorStateSchema } from './editor-state';
+import { snapshotRequestSchema } from './snapshot-protocol';
 
 export const commandIdentitySchema = z.object({
   sessionId: z.string().uuid(),

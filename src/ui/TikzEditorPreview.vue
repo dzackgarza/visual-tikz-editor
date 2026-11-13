@@ -197,6 +197,7 @@ function sendFullLoad(): void {
     fileName: props.target.docPath === "" ? "diagram.tikz" : props.target.docPath,
     imageBaseUrl: props.host.imageBaseUrl(props.target.docPath),
     nativeClipboard: props.host.clipboard !== undefined,
+    state: props.host.viewState(),
     settings: {
       general: {
         colorScheme: props.theme,
@@ -348,6 +349,12 @@ function onMessage(event: MessageEvent): void {
           .savePreference(message.key, message.value)
           .catch((error) => props.host.reportError("Could not save editor preferences", error));
       }
+      break;
+    case "view-state":
+      if (message.revision !== session.value.revision || !loaded.value) break;
+      void props.host
+        .saveViewState(message.state)
+        .catch((error) => props.host.reportError("Could not keep the canvas view", error));
       break;
     case "init":
       // An editor built from another protocol would misread every command, so it gets none.

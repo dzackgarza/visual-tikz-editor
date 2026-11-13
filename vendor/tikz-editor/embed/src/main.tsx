@@ -7,7 +7,7 @@ import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
 import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
-import { createSnapshotRequests } from './snapshots';
+import { createSnapshotRequests, editorState } from './snapshots';
 import { FRAME_PROTOCOL_VERSION, type CommandFailure } from './events';
 import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
 import { walkStatements } from 'tikz-editor/ast/walk';
@@ -292,6 +292,20 @@ function HostBridge() {
 		let previousStep = useEditorStore.getState().lastStep;
 		let previousSelection = '';
 		let previousSelectionEmpty: boolean | null = null;
+		// The settled view of the loaded file goes to the shell, which reopens the file at it.
+		let loadedRevision = -1;
+		let previousView = '';
+		const reportView = (state: ReturnType<typeof useEditorStore.getState>) => {
+			if (loadedRevision !== currentHostRevision || state.activeFigureId === null || state.pendingViewportRestore !== null ||
+				state.pendingRequestId !== null || state.snapshot.source !== state.source ||
+				state.snapshot.activeFigureId !== state.activeFigureId) return;
+			const view = editorState(state, state.activeFigureId);
+			if (view === null) return;
+			const serialized = JSON.stringify(view);
+			if (serialized === previousView) return;
+			previousView = serialized;
+			postToHost({ event: 'view-state', state: view });
+		};
 		const unsubscribe = useEditorStore.subscribe((state) => {
 			// The change goes first: the shell takes a selection only in the source it already has.
 			if (state.lastStep !== previousStep) {
@@ -327,6 +341,7 @@ function HostBridge() {
 				previousRenderRef.current = state.snapshot.revision;
 				postToHost({ event: 'rendered', sourceRevision: state.sourceRevision });
 			}
+			reportView(state);
 		});
 
 		const reply = (command: HostCommand, error?: CommandFailure) => {
@@ -365,12 +380,11 @@ function HostBridge() {
 					reply(command);
 					return;
 				case 'load': {
-					const restoredState = command.state;
-					if (restoredState && !parseTikzForEdit(command.source, { activeFigureId: restoredState.activeFigureId })
-						.figures.some(figure => figure.id === restoredState.activeFigureId)) {
-						reply(command, 'invalid-command');
-						return;
-					}
+					// A file edited outside the editor may no longer hold the figure of its kept
+					// view; it then opens as a file without one.
+					const keptState = command.state;
+					const restoredState = keptState && parseTikzForEdit(command.source, { activeFigureId: keptState.activeFigureId })
+						.figures.some(figure => figure.id === keptState.activeFigureId) ? keptState : undefined;
 					if (currentHostSession !== '' &&
 						(command.sessionId !== currentHostSession || command.revision <= currentHostRevision)) {
 						reply(command, 'stale-target');
@@ -387,7 +401,7 @@ function HostBridge() {
 					imageBaseUrl = command.imageBaseUrl ?? '';
 					imageBaseErrorReported = false;
 					applyHostSettings(command.settings);
-					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: restoredState ? { source: command.source, transform: restoredState.viewport, fitToContent: restoredState.fitToContent } : null });
+					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: restoredState ? { source: command.source, view: restoredState.viewport, fitToContent: restoredState.fitToContent } : null });
 					loadIntoEditor(command.source, command.fileName);
 					const finishLoad = () => {
 						const state = useEditorStore.getState();
@@ -403,6 +417,9 @@ function HostBridge() {
 						}
 						postToHost({ event: 'loaded', revision: command.revision });
 						reply(command);
+						loadedRevision = command.revision;
+						previousView = '';
+						reportView(useEditorStore.getState());
 					};
 					pendingLoad = useEditorStore.subscribe(finishLoad);
 					finishLoad();

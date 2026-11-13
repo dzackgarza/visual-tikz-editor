@@ -14,7 +14,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 
 | Command | Fields | Purpose |
 | --- | --- | --- |
-| `load` | `source`, `fileName`, `settings`, `state`, `imageBaseUrl`, `nativeClipboard` | Opens the document with its view state (FR-040) |
+| `load` | `source`, `fileName`, `settings`, `state`, `imageBaseUrl`, `nativeClipboard` | Opens the document at its kept view state (FR-040); a `state` whose figure the source no longer holds opens the document as one without a view state |
 | `settings` | `general.colorScheme`: `system` \| `light` \| `dark` | Sets the appearance from Settings › Appearance (FR-005) |
 | `display` | `fullscreen` | Fills the window |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | Opens one panel or closes the open one; `null` also when the shell opens the Code panel (FR-060, research R13) |
@@ -38,7 +38,8 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `selection` | `empty` | Properties shows the figure when the selection is empty (FR-060a) |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | The panel that is open, after any change, including its own close button |
 | `popover-opened` | — | The canvas opened a popover; the shell closes its own (research R16) |
-| `persistence-save` | `key`, `value` | A preference or per-file view state to keep outside the source |
+| `persistence-save` | `key`, `value` | A preference to keep outside the source |
+| `view-state` | `state`: figure, selection, tool, view (the scale and the figure point at the centre of the canvas, as Inkscape keeps a document's zoom and centre), Zoom to Fit, geometry interpretation | The settled view of the loaded file; the workbench keeps it in `$XDG_STATE_HOME/visual-tikz-editor/view-state.json`, keyed by file path, and sends it in the next `load` of that file (FR-040, FR-063) |
 | `source-selection` | `source`, `from`, `to` | The selected source range, for the Code panel |
 | `clipboard-read`, `clipboard-write` | `requestId`, `text` | Native clipboard in a desktop window |
 | `export` | `format`, `source`, `svg`, `data` | The result of an export |

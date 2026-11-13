@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { commandIdentitySchema, panelSchema } from './commands';
+import { editorStateSchema } from './editor-state';
 import { snapshotResultSchema } from './snapshot-protocol';
 
 // A change to any message of commands.ts or events.ts raises this version. The shell
 // refuses an editor that reports another one.
-export const FRAME_PROTOCOL_VERSION = '2';
+export const FRAME_PROTOCOL_VERSION = '3';
 
 export const commandFailureSchema = z.enum(['invalid-command', 'stale-target', 'cancelled', 'timeout', 'busy']);
 export type CommandFailure = z.infer<typeof commandFailureSchema>;
@@ -44,6 +45,8 @@ export const editorNotificationSchema = z.discriminatedUnion('event', [
   z.object({ ...notificationIdentity, event: z.literal('popover-opened') }),
   z.object({ ...notificationIdentity, event: z.literal('status'), modified: z.boolean() }),
   z.object({ ...notificationIdentity, event: z.literal('persistence-save'), key: z.string(), value: z.string() }),
+  // The view of the loaded file changed; the shell keeps it to reopen the file at it (FR-040).
+  z.object({ ...notificationIdentity, event: z.literal('view-state'), state: editorStateSchema }),
   z.object({ ...notificationIdentity, event: z.literal('message'), title: z.string(), message: z.string(), kind: z.string() }),
   z.object({ ...notificationIdentity, event: z.literal('error'), message: z.string() }),
   z.object({ ...notificationIdentity, event: z.literal('close-request') }),

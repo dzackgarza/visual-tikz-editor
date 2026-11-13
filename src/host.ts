@@ -8,6 +8,7 @@
 import type { TikzRenderSuccess } from "./live-preview";
 import type { QuiverMacroProjection } from "./quiver-macros";
 import type { TikzRenderRequest, TikzRenderResult } from "./tikz-render";
+import type { EditorState } from "../vendor/tikz-editor/embed/src/editor-state";
 
 export type { HostCommand } from "../vendor/tikz-editor/embed/src/commands";
 export type {
@@ -16,11 +17,13 @@ export type {
   EditorEvent,
   EditorNotification,
 } from "../vendor/tikz-editor/embed/src/events";
+export { editorStateSchema } from "../vendor/tikz-editor/embed/src/editor-state";
 export {
   commandReplySchema,
   editorEventSchema,
   editorNotificationSchema,
 } from "../vendor/tikz-editor/embed/src/events";
+export type { EditorState } from "../vendor/tikz-editor/embed/src/editor-state";
 export type { OriginalStroke } from "../vendor/tikz-editor/embed/src/original-ink";
 export type {
   EditorSnapshot,
@@ -62,6 +65,10 @@ export interface TikzWorkbenchHost {
   selectSource: (from: number, to: number) => void;
   /** Native clipboard services when the host runs in a desktop window. */
   clipboard?: { readText: () => Promise<string>; writeText: (text: string) => Promise<void> };
+  /** The view at which the canvas last showed the open file; none for a file never shown (FR-040). */
+  viewState: () => EditorState | undefined;
+  /** Keep the view at which the canvas shows the open file, outside its source (FR-040). */
+  saveViewState: (state: EditorState) => Promise<void>;
   /** Persist editor preferences independently of the source document. */
   savePreference?: (key: string, value: string) => Promise<void>;
   /** Explicit Save gesture from the editor; only the document owner persists it. */

@@ -2,7 +2,20 @@ import { useEditorStore } from '@tikz-editor/app/store';
 import { worldToSvgBounds } from 'tikz-editor/coords/index';
 import { exportSvg } from './export-svg';
 import { originalStrokes } from './original-ink';
+import type { EditorState } from './editor-state';
 import type { EditorSnapshot, EditorSnapshotResult, SnapshotFailure, SnapshotRequest } from './snapshot-protocol';
+
+/** The view that the canvas shows of the figure `activeFigureId`; null until the canvas shows one. */
+export function editorState(state: ReturnType<typeof useEditorStore.getState>, activeFigureId: string): EditorState | null {
+  if (state.canvasView === null) return null;
+  return {
+    activeFigureId,
+    selection: [...state.selectedElementIds], tool: state.toolMode,
+    viewport: { ...state.canvasView },
+    fitToContent: state.fitToContentModeActive,
+    interpretGeometry: state.freehandInterpretGeometry,
+  };
+}
 
 /** Wait on the editor's own scheduler; never pair source with its previous SVG. */
 export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => void, imageBaseUrl: () => string) {
@@ -52,6 +65,9 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
       catch { fail(requestId, 'invalid-original-ink'); continue; }
       const activeFigure = state.snapshot.figures.find(figure => figure.id === state.activeFigureId);
       if (activeFigure === undefined) { fail(requestId, 'render-failed'); continue; }
+      // The canvas reports its view a frame after it shows the figure.
+      const view = editorState(state, activeFigure.id);
+      if (view === null) continue;
       originals = originals.filter(original => original.from >= activeFigure.span.from && original.to <= activeFigure.span.to);
       entry.exporting = true;
       const result: Omit<EditorSnapshot, "svg"> = {
@@ -66,13 +82,7 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         })),
         localBounds: state.snapshot.scene?.bounds ? worldToSvgBounds(state.snapshot.scene.bounds, drawing.viewBox) : null,
         viewBox: drawing.viewBox,
-        state: {
-          activeFigureId: activeFigure.id,
-          selection: [...state.selectedElementIds], tool: state.toolMode,
-          viewport: { ...state.canvasTransform },
-          fitToContent: state.fitToContentModeActive,
-          interpretGeometry: state.freehandInterpretGeometry,
-        },
+        state: view,
       };
       void exportSvg(drawing.svg, `figure-${request.sessionId}-${request.revision}-${sourceRevision}`, imageBaseUrl(), entry.abort.signal)
         .then(svg => finish(requestId, { ...result, svg }), () => fail(requestId, 'resource-unavailable'));

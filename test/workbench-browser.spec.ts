@@ -132,6 +132,22 @@ describe("standalone workbench host boundary", function () {
     await expect(popup).toHaveCount(0);
   }
 
+  /**
+   * Where content sits from the centre of the canvas, and its size. A file reopens at the scale
+   * and the figure point at the centre of the canvas that it was left with (FR-040), so this
+   * place is the same after a reopen although the panels around the canvas can differ.
+   */
+  async function placeOnCanvas(frame: FrameLocator, content: Locator): Promise<Record<"x" | "y" | "width" | "height", number>> {
+    const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
+    const box = await layoutBox(content);
+    return {
+      x: box.x - (canvas.x + canvas.width / 2),
+      y: box.y - (canvas.y + canvas.height / 2),
+      width: box.width,
+      height: box.height,
+    };
+  }
+
   /** The shell's current canvas session. */
   async function canvasSession(): Promise<{ sessionId: string; revision: number }> {
     const session = await page.evaluate(() => window.canvasProtocol.session);
@@ -1676,34 +1692,23 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `starts on at least (-20,20) on both axes at a preset zoom in ${tablet.name}`,
+      `an empty figure starts at 100 % with the origin centred, and 100 % is a preset, in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const zoom = frame.getByRole("button", { name: "Zoom and display", exact: true });
-        await expect(zoom).toBeVisible();
+        await expect(zoom).toHaveText("100%");
         const readout = (await zoom.innerText()).trim();
-        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        // Measure the view the author sees once startup layout has settled.
+        // Measure the view the author sees once startup layout has settled (FR-041): the
+        // origin is centred in the canvas that the rulers and the dock leave free (research R8).
         await settledCenter(frame.locator("text", { hasText: "(0,0)" }).first());
-        // Ruler labels are drawn rotated, so read the range from the axes and the scale: one lattice unit is one cm here.
-        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
-        const [vertical, horizontal] = await frame
-          .locator('line[class*="gridAxis"]')
-          .evaluateAll((lines) => lines.map((line) => line.getBoundingClientRect()));
-        const unitPx = (await editorDebug(page)).viewport.scale * 28.4527559055;
-        const originX = frameBox.x + vertical.x + vertical.width / 2;
-        const originY = frameBox.y + horizontal.y + horizontal.height / 2;
-        const x = {
-          min: -(originX - viewport.x) / unitPx,
-          max: (viewport.x + viewport.width - originX) / unitPx,
-        };
-        const y = {
-          min: -(viewport.y + viewport.height - originY) / unitPx,
-          max: (originY - viewport.y) / unitPx,
-        };
-        assert.ok(x.min <= -20 && x.max >= 20, `x range ${x.min.toFixed(1)}..${x.max.toFixed(1)}`);
-        assert.ok(y.min <= -20 && y.max >= 20, `y range ${y.min.toFixed(1)}..${y.max.toFixed(1)}`);
+        const area = await canvasFreeArea(frame);
+        const origin = await figurePoint(frame, 0, 0);
+        assert.ok(
+          Math.abs(origin.x - (area.left + area.right) / 2) <= 2 &&
+            Math.abs(origin.y - (area.top + area.bottom) / 2) <= 2,
+          `The origin ${JSON.stringify(origin)} is not centred in ${JSON.stringify(area)}`,
+        );
         const input = await TabletInput.attach(page);
         // The popup lists the current zoom beside its presets, so move away first: the startup zoom must still be offered.
         await input.touch([await stableCenter(zoom)]);
@@ -9920,11 +9925,12 @@ describe("standalone workbench host boundary", function () {
       await page.mouse.wheel(0, -180);
       await page.keyboard.up("Control");
       await expect.poll(async () => (await shownTransform(frame)).scale).not.toBe(before);
+      await settledCenter(content);
+      const zoomed = (await shownTransform(frame)).scale;
       await page.setViewportSize({ width: 1100, height: 720 });
-      const zoomed = await shownTransform(frame);
-      await expect.poll(async () => (await shownTransform(frame)).scale).toBe(zoomed.scale);
-      await expect.poll(async () => JSON.stringify(await shownTransform(frame))).toBe(JSON.stringify(zoomed));
-      const shown = await layoutBox(content);
+      await expect.poll(async () => (await shownTransform(frame)).scale).toBe(zoomed);
+      await settledCenter(content);
+      const shown = await placeOnCanvas(frame, content);
 
       // After a restart the file opens at the view it was left in, and the file holds no view.
       const configHome = workbench.configHome;
@@ -9934,9 +9940,9 @@ describe("standalone workbench host boundary", function () {
       await page.goto(url);
       await editorReady(page);
       await expect(content).toBeVisible();
-      await expect.poll(async () => JSON.stringify(await shownTransform(frame))).toBe(JSON.stringify(zoomed));
+      await expect.poll(async () => (await shownTransform(frame)).scale).toBe(zoomed);
       await expect(async () => {
-        const after = await layoutBox(content);
+        const after = await placeOnCanvas(frame, content);
         const keys = ["x", "y", "width", "height"] as const;
         expect(Math.max(...keys.map((key) => Math.abs(after[key] - shown[key])))).toBeLessThan(1);
       }).toPass({ timeout: 5_000 });
@@ -10127,7 +10133,7 @@ describe("standalone workbench host boundary", function () {
       '[data-canvas-viewport="true"] circle[data-source-id="path:0"]',
     );
     await expect(displayedCircle).toBeVisible();
-    const before = await layoutBox(displayedCircle);
+    const before = await placeOnCanvas(frame, displayedCircle);
     await page.reload();
     await editorReady(page);
     const restored = await canvasSnapshot();
@@ -10139,7 +10145,7 @@ describe("standalone workbench host boundary", function () {
       String(saved.state.viewport.scale),
     );
     await expect(async () => {
-      const after = await layoutBox(displayedCircle);
+      const after = await placeOnCanvas(frame, displayedCircle);
       const keys = ["x", "y", "width", "height"] as const;
       expect(
         Math.max(...keys.map((key) => Math.abs(after[key] - before[key]))),

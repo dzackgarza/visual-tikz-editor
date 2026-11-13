@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { z } from "zod";
+import { editorStateSchema } from "../vendor/tikz-editor/embed/src/editor-state";
 import { parseMathJaxMacros } from "../src/mathjax-config";
 import { projectQuiverMacros } from "../src/quiver-macros";
 import {
@@ -82,6 +83,25 @@ type RecoveryRecord = z.infer<typeof RecoveryRecord>;
 let recoveryRecord: RecoveryRecord | null = existsSync(recoveryPath)
   ? RecoveryRecord.parse(JSON.parse(await readFile(recoveryPath, "utf8")))
   : null;
+// The view at which the canvas last showed each file, kept outside its source (FR-040, FR-063).
+const viewStatePath = path.join(stateHome, "visual-tikz-editor", "view-state.json");
+const ViewStates = z.record(z.string(), editorStateSchema);
+const viewStates: z.infer<typeof ViewStates> = existsSync(viewStatePath)
+  ? ViewStates.parse(JSON.parse(await readFile(viewStatePath, "utf8")))
+  : {};
+let viewStateWrite = Promise.resolve();
+/** The file whose view the canvas shows: its path, or the untitled document's identity. */
+const viewKey = (): string => documentPath ?? `untitled:${documentId}`;
+function persistViewStates(): Promise<void> {
+  const snapshot = JSON.stringify(viewStates);
+  const write = viewStateWrite.then(async () => {
+    await mkdir(path.dirname(viewStatePath), { recursive: true });
+    await writeFile(`${viewStatePath}.pending`, snapshot, "utf8");
+    await rename(`${viewStatePath}.pending`, viewStatePath);
+  });
+  viewStateWrite = write.catch(() => undefined);
+  return write;
+}
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".svg"]);
 const EXPORT_FORMATS = new Set(["pdf", "svg", "png"]);
 const untitledPath = (): string => path.join(home, `Untitled${untitledExtension}`);
@@ -148,8 +168,10 @@ async function currentSource(): Promise<string> {
 }
 
 function documentResponse(source: string): Response {
+  const view = viewStates[viewKey()];
   return new Response(source, {
     headers: {
+      ...(view === undefined ? {} : { "x-document-view": encodeURIComponent(JSON.stringify(view)) }),
       "content-type": "text/plain; charset=utf-8",
       etag: conflictRevision ?? revisionOf(source),
       "x-document-path": documentPath ?? untitledPath(),
@@ -237,7 +259,12 @@ async function handleSaveAs(request: Request): Promise<Response> {
   }
   const next = await request.text();
   await writeFile(selected, next, "utf8");
+  const shownView = viewStates[viewKey()];
   documentPath = await realpath(selected);
+  if (shownView !== undefined) {
+    viewStates[viewKey()] = shownView;
+    await persistViewStates();
+  }
   conflictSource = null;
   conflictRevision = null;
   await persistRecovery({ documentId, path: documentPath, extension: path.extname(documentPath) as ".tikz" | ".tikzcd", source: next, revision: revisionOf(next) });
@@ -371,6 +398,15 @@ const server = Bun.serve({
       });
       preferenceWrite = write;
       await write;
+      return new Response(null, { status: 204 });
+    }
+    if (pathname === "/api/view-state" && request.method === "PUT") {
+      if (request.headers.get("x-document-id") !== documentId)
+        return new Response("Document session changed", { status: 409 });
+      const view = editorStateSchema.safeParse(await request.json());
+      if (!view.success) return new Response(view.error.message, { status: 400 });
+      viewStates[viewKey()] = view.data;
+      await persistViewStates();
       return new Response(null, { status: 204 });
     }
     if (pathname === "/api/new" && request.method === "POST") {

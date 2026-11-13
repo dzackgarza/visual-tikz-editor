@@ -100,7 +100,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { RiArrowGoBackLine, RiArrowGoForwardLine } from "@remixicon/vue";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { DocumentHistory } from "../src/document-history";
-import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../src/host";
+import { editorStateSchema, type EditorState, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
@@ -129,6 +129,31 @@ function savePreference(key: string, value: string): Promise<void> {
     preferences[key] = value;
   });
   return preferenceWrite;
+}
+// The view at which the canvas shows the open file, kept outside its source (FR-040).
+// Writes go one at a time, and each sends the newest view.
+let viewState: EditorState | undefined;
+let pendingView: { id: string; state: EditorState } | null = null;
+let viewWrite = Promise.resolve();
+function saveViewState(state: EditorState): Promise<void> {
+  const opened = document.value;
+  if (opened === null) return Promise.resolve();
+  viewState = state;
+  pendingView = { id: opened.id, state };
+  const write = viewWrite.then(async () => {
+    const next = pendingView;
+    if (next === null || next.id !== document.value?.id) return;
+    pendingView = null;
+    const response = await fetch("/api/view-state", {
+      method: "PUT",
+      headers: { "x-document-id": next.id },
+      body: JSON.stringify(next.state),
+    });
+    if (!response.ok) throw new Error(await response.text());
+  });
+  // The caller reports a failed write; the next write still goes.
+  viewWrite = write.catch(() => undefined);
+  return write;
 }
 type ViewId = "code" | "preview" | "canvas" | "quiver";
 type Side = "left" | "right";
@@ -334,6 +359,8 @@ async function responseText(response: Response): Promise<string> {
 }
 
 const host: TikzWorkbenchHost = {
+  viewState: () => viewState,
+  saveViewState,
   savePreference,
   ...(nativeWindow ? { clipboard: { readText, writeText } } : {}),
   selectSource: (from, to) => {
@@ -409,6 +436,9 @@ async function applyDocument(response: Response): Promise<void> {
   const text = await responseText(response);
   applyingDocument = true;
   document.value = metadata(response);
+  const view = response.headers.get("x-document-view");
+  viewState = view === null ? undefined : editorStateSchema.parse(JSON.parse(decodeURIComponent(view)));
+  pendingView = null;
   documentHistory.reset(text);
   savedSource.value = text;
   recoverySaved.value = document.value.recovery === "draft";
@@ -467,7 +497,7 @@ async function mayLeaveDocument(action: "closing" | "continuing"): Promise<boole
 }
 
 async function requestExit(): Promise<void> {
-  await preferenceWrite;
+  await Promise.all([preferenceWrite, viewWrite]);
   if (nativeWindow) await getCurrentWindow().close();
 }
 
@@ -604,7 +634,7 @@ onMounted(() => {
   if (nativeWindow) {
     void getCurrentWindow().onCloseRequested((event) => {
       event.preventDefault();
-      void preferenceWrite.then(() => mayLeaveDocument("closing")).then(async (leave) => {
+      void Promise.all([preferenceWrite, viewWrite]).then(() => mayLeaveDocument("closing")).then(async (leave) => {
         if (!leave) return;
         allowUnload = true;
         try {

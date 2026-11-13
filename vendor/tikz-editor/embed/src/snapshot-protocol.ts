@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { editorStateSchema } from './editor-state';
 import { originalAssociationSchema } from './original-ink';
 
 const identity = {
@@ -6,21 +7,6 @@ const identity = {
   revision: z.number().int().nonnegative(),
   requestId: z.string().min(1),
 };
-
-export const toolModeSchema = z.enum([
-  'select', 'lasso', 'erase', 'magnify', 'addFreehand', 'addLine', 'addArrow', 'addNode', 'addPoint',
-  'addImage', 'addCircle', 'addRect', 'addEllipse', 'addArc', 'addPath', 'addBezier',
-  'addShape', 'addMatrix', 'addGrid', 'addBucket',
-]);
-
-export const editorStateSchema = z.object({
-  activeFigureId: z.string().min(1),
-  selection: z.array(z.string()),
-  tool: toolModeSchema,
-  viewport: z.object({ scale: z.number().positive(), translateX: z.number(), translateY: z.number() }),
-  fitToContent: z.boolean(),
-  interpretGeometry: z.boolean(),
-});
 
 export const snapshotRequestSchema = z.object({
   action: z.literal('snapshot'),
