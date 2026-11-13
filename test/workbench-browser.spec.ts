@@ -5935,6 +5935,7 @@ describe("standalone workbench host boundary", function () {
         await expect(sidePanel(frame, "Layers")).toBeVisible();
         await tap(frame.getByRole("button", { name: "Close layers", exact: true }));
         await openSettings();
+        await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
         await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("View: Layers Panel");
         await tap(commandRow);
         await page.keyboard.press("ArrowLeft");
