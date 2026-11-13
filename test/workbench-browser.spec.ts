@@ -5300,6 +5300,380 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  /** The drawing toolbar of the canvas frame. */
+  const drawingToolbar = (frame: FrameLocator) => frame.locator("[data-diagram-tools]");
+  /** A control of the drawing toolbar, by its accessible name in contracts/surfaces.md. */
+  const toolbarItem = (frame: FrameLocator, name: string) =>
+    drawingToolbar(frame).getByRole("button", { name, exact: true });
+  /** The Active Tool Menu of the active tool (FR-009). */
+  const activeToolMenu = (frame: FrameLocator) => frame.getByRole("dialog", { name: "Active Tool Menu" });
+  /** A history control of the document bar (FR-012). */
+  const documentHistory = (name: "Undo" | "Redo") =>
+    page.locator(".document-bar").getByRole("button", { name, exact: true });
+
+  /**
+   * The page point of figure coordinates (x, y), read from the authored axes
+   * `path:0` = (0,0) -- (10,0) and `path:1` = (0,0) -- (0,10).
+   */
+  async function figureAxes(frame: FrameLocator): Promise<(x: number, y: number) => Point> {
+    const frameBox = await layoutBox(page.locator('iframe[title="TikZ visual editor"]'));
+    const ends = async (id: string) =>
+      frame
+        .locator(`svg [data-source-id="${id}"]`)
+        .first()
+        .evaluate((path: SVGGeometryElement) => {
+          const m = path.getScreenCTM()!;
+          return [0, path.getTotalLength()].map((length) => {
+            const p = path.getPointAtLength(length);
+            return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+          });
+        });
+    const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+    return (x, y) => ({
+      x: frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+      y: frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+    });
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `the pen marks on first contact and the source gains a path; a width chosen in the Pen's Active Tool Menu applies to the next stroke as it is drawn, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const pen = toolbarItem(frame, "Pen");
+        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await input.touch([await stableCenter(pen)]);
+        await expect(pen).toHaveAttribute("aria-pressed", "true");
+        await expect(activeToolMenu(frame)).toHaveCount(0);
+        const area = await canvasFreeArea(frame);
+        const box = { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top };
+        const preview = frame.locator('[data-tool-preview="freehand"]');
+        const draws = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        /** Draws a wave with the pen; returns the width of its mark in screen pixels, read before the pen lifts. */
+        const stroke = async (fy: number): Promise<number> => {
+          const points = waveAcross(box, 0.3, fy, 120);
+          await input.penDown(points[0]);
+          for (const point of points.slice(1, 4)) {
+            await input.penMove(point);
+          }
+          await expect(preview, "The pen left no mark before it lifted").toHaveCount(1);
+          const shown = await preview
+            .locator("line, path")
+            .first()
+            .evaluate(
+              (element: SVGGraphicsElement) =>
+                parseFloat(getComputedStyle(element).strokeWidth) * element.getScreenCTM()!.a,
+            );
+          for (const point of points.slice(4)) {
+            await input.penMove(point);
+          }
+          await input.penUp(points.at(-1)!);
+          return shown;
+        };
+        const before = await draws();
+        await stroke(0.25);
+        await expect
+          .poll(draws, { message: "The stroke added no path to the source" })
+          .toBeGreaterThan(before);
+        // A second tap on the active Pen opens its Active Tool Menu; a further tap closes it.
+        await input.touch([await stableCenter(pen)]);
+        const menu = activeToolMenu(frame);
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole("slider", { name: "Width", exact: true })).toBeVisible();
+        const width = menu.getByRole("spinbutton", { name: "Width value", exact: true });
+        await width.fill("2");
+        await width.press("Enter");
+        await input.touch([await stableCenter(pen)]);
+        await expect(menu).toHaveCount(0);
+        const pixelsPerPoint = await frame
+          .locator('[data-canvas-viewport="true"]')
+          .evaluate((element) => element.querySelector<SVGSVGElement>("svg[viewBox]")!.getScreenCTM()!.a);
+        const shown = await stroke(0.55);
+        assert.ok(
+          Math.abs(shown - 2 * pixelsPerPoint) <= 0.15 * 2 * pixelsPerPoint,
+          `The mark is ${shown} px wide while the pen draws, not 2 pt (${2 * pixelsPerPoint} px)`,
+        );
+        await expect
+          .poll(async () => ((await editorDebug(page)).source.match(/line width=2pt/g) ?? []).length, {
+            message: "The next stroke does not carry the width chosen in the Active Tool Menu",
+          })
+          .toBe(1);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `the eraser sweep removes the crossed parts of two strokes in one undo step, in ${tablet.name}`,
+      async function () {
+        const authored = String.raw`\begin{tikzpicture}
+\draw (-4,-4) -- (-4,4);
+\draw (0,-4) -- (0,4);
+\draw (4,-4) -- (4,4);
+\end{tikzpicture}`;
+        await author(authored);
+        const frame = editorFrame(page);
+        await expect(frame.locator("[data-source-id]")).toHaveCount(3);
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        await input.touch([await stableCenter(toolbarItem(frame, "Eraser"))]);
+        const middleOf = (id: string) =>
+          strokePoint(page, frame.locator(`svg [data-source-id="${id}"]`).first(), 0.5);
+        const [left, middle, right] = [await middleOf("path:0"), await middleOf("path:1"), await middleOf("path:2")];
+        // One sweep along y = 0 crosses the left and middle lines and stops short of the right one.
+        const from = left.x - 20,
+          to = (middle.x + right.x) / 2;
+        await input.penStroke(
+          Array.from({ length: 16 }, (_, i) => ({ x: from + (i * (to - from)) / 15, y: left.y })),
+        );
+        const statements = async () =>
+          Array.from((await editorDebug(page)).source.matchAll(/\\draw[^;]*;/g), (match) => match[0]);
+        await expect
+          .poll(async () => (await statements()).length, {
+            message: "The sweep did not leave two pieces of each stroke it crossed",
+          })
+          .toBe(5);
+        assert.ok(
+          (await statements()).includes(String.raw`\draw (4,-4) -- (4,4);`),
+          "The sweep changed the stroke it did not cross",
+        );
+        const erased = (await editorDebug(page)).source;
+        await input.touch([await stableCenter(documentHistory("Undo"))]);
+        await expect
+          .poll(async () => (await editorDebug(page)).source, {
+            message: "One Undo in the document bar did not restore both strokes",
+          })
+          .toBe(authored);
+        await input.touch([await stableCenter(documentHistory("Redo"))]);
+        await expect
+          .poll(async () => (await editorDebug(page)).source, {
+            message: "One Redo in the document bar did not repeat the whole sweep",
+          })
+          .toBe(erased);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `the drawing toolbar holds Lasso, Pen, Eraser, Shapes, Text, Fill, the active tool's presets, and Add colour, all as symbols, and nothing else, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        await input.touch([await stableCenter(toolbarItem(frame, "Pen"))]);
+        const items = await drawingToolbar(frame)
+          .locator(
+            'button, input, select, textarea, [role="button"], [role="slider"], [role="option"], [tabindex]:not([tabindex="-1"])',
+          )
+          .evaluateAll((elements) =>
+            elements.map((element) => {
+              const box = element.getBoundingClientRect();
+              return {
+                name: element.getAttribute("aria-label") ?? "",
+                words: (element as HTMLElement).innerText.trim(),
+                width: box.width,
+                height: box.height,
+              };
+            }),
+          );
+        const names = items.map((item) => item.name);
+        const listed = names.join(", ");
+        assert.deepEqual(
+          names.slice(0, 6),
+          ["Lasso", "Pen", "Eraser", "Shapes", "Text", "Fill"],
+          `The toolbar holds ${listed}`,
+        );
+        assert.equal(names.at(-1), "Add colour", `The toolbar holds ${listed}`);
+        const presets = names.slice(6, -1);
+        assert.equal(presets.length, 3, `The Pen has not three presets: ${listed}`);
+        for (const preset of presets) {
+          assert.match(preset, /^Colour \d+: .+$/, `The toolbar holds ${listed}`);
+        }
+        for (const item of items) {
+          assert.equal(item.words, "", `${item.name} shows the words "${item.words}"`);
+          assert.ok(
+            item.width >= 44 && item.height >= 44,
+            `${item.name} has a ${item.width} × ${item.height} hit region`,
+          );
+        }
+        await expect(toolbarItem(frame, "Lasso").locator("svg.lucide-lasso")).toHaveCount(1);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a second tap on the Pen closes its Active Tool Menu; opening File closes it, and opening it closes File, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const pen = toolbarItem(frame, "Pen");
+        const menu = activeToolMenu(frame);
+        const file = page.locator('details.file-menu[aria-label="File"]');
+        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await input.touch([await stableCenter(pen)]);
+        await expect(menu).toHaveCount(0);
+        await input.touch([await stableCenter(pen)]);
+        await expect(menu).toBeVisible();
+        await input.touch([await stableCenter(pen)]);
+        await expect(menu).toHaveCount(0);
+        await input.touch([await stableCenter(pen)]);
+        await expect(menu).toBeVisible();
+        await input.touch([await stableCenter(file.locator("summary"))]);
+        await expect(file).toHaveAttribute("open", "");
+        await expect(menu, "The Active Tool Menu stayed open beside File").toHaveCount(0);
+        await input.touch([await stableCenter(pen)]);
+        await expect(menu).toBeVisible();
+        await expect(file, "File stayed open beside the Active Tool Menu").not.toHaveAttribute("open");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `the Lasso selects by tap, by Freehand, Rectangle, and Oval drag, and moves by a drag on the selection, in ${tablet.name}`,
+      async function () {
+        await author(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (2,4) circle (1);
+\draw (6,4) circle (1);
+\draw (2,7) -- (6,7);
+\path[use as bounding box] (-2,-2) rectangle (12,12);
+\end{tikzpicture}`);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const lasso = toolbarItem(frame, "Lasso");
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        await input.touch([await stableCenter(lasso)]);
+        await expect(lasso).toHaveAttribute("aria-pressed", "true");
+        // A tap selects the object under it.
+        await input.penStroke([
+          await strokePoint(page, frame.locator('svg [data-source-id="path:4"]').first(), 0.5),
+        ]);
+        await expect.poll(selection, { message: "A tap did not select the line" }).toEqual(["path:4"]);
+        // Freehand is the default shape: a loop round both circles.
+        await input.penStroke([at(0.5, 2.5), at(8, 2.5), at(8, 5.5), at(0.5, 5.5), at(0.5, 2.6)]);
+        await expect
+          .poll(selection, { message: "The Freehand loop did not select both circles" })
+          .toEqual(["path:2", "path:3"]);
+        const drag = (from: Point, to: Point) =>
+          input.penStroke(
+            Array.from({ length: 8 }, (_, i) => ({
+              x: from.x + ((to.x - from.x) * i) / 7,
+              y: from.y + ((to.y - from.y) * i) / 7,
+            })),
+          );
+        const chooseShape = async (shape: "Rectangle" | "Oval") => {
+          await input.touch([await stableCenter(lasso)]);
+          await input.touch([
+            await stableCenter(activeToolMenu(frame).getByRole("option", { name: shape, exact: true })),
+          ]);
+          await expect(activeToolMenu(frame)).toHaveCount(0);
+        };
+        await chooseShape("Rectangle");
+        await drag(at(4.5, 2.5), at(7.8, 5.6));
+        await expect
+          .poll(selection, { message: "The Rectangle drag did not select the right circle" })
+          .toEqual(["path:3"]);
+        await chooseShape("Oval");
+        // The oval inscribed in this drag's box holds the left circle.
+        await drag(at(0.4, 2.4), at(3.6, 5.6));
+        await expect
+          .poll(selection, { message: "The Oval drag did not select the left circle" })
+          .toEqual(["path:2"]);
+        // A drag on the selection moves it: here by 2 along x.
+        const grip = await strokePoint(page, frame.locator('svg [data-source-id="path:2"]').first(), 0.25);
+        const [zero, two] = [at(0, 0), at(2, 0)];
+        await drag(grip, { x: grip.x + two.x - zero.x, y: grip.y + two.y - zero.y });
+        await expect
+          .poll(async () => (await editorDebug(page)).source, {
+            message: "A drag on the selection did not move it",
+          })
+          .toContain(String.raw`\draw (4,4) circle (1);`);
+        assert.ok((await editorDebug(page)).source.includes(String.raw`\draw (6,4) circle (1);`));
+        assert.deepEqual(await selection(), ["path:2"], "The move changed the selection");
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `draws three strokes, erases one by a sweep, lassoes the other two, moves them, and undoes the move, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const source = async () => (await editorDebug(page)).source;
+        const area = await canvasFreeArea(frame);
+        const point = (fx: number, fy: number) => ({
+          x: area.left + (area.right - area.left) * fx,
+          y: area.top + (area.bottom - area.top) * fy,
+        });
+        await input.touch([await stableCenter(toolbarItem(frame, "Pen"))]);
+        // Three upright strokes; each one's text is the lines it added to the source.
+        const strokes: string[] = [];
+        for (const fx of [0.3, 0.5, 0.7]) {
+          const before = await source();
+          await input.penStroke(
+            Array.from({ length: 12 }, (_, i) => point(fx + Math.sin(i) * 0.004, 0.3 + (i * 0.3) / 11)),
+          );
+          await expect.poll(source, { message: "A pen stroke changed nothing" }).not.toBe(before);
+          const kept = new Set(before.split("\n"));
+          strokes.push((await source()).split("\n").filter((line) => !kept.has(line)).join("\n"));
+        }
+        // A sweep across the first stroke only.
+        await input.touch([await stableCenter(toolbarItem(frame, "Eraser"))]);
+        const sweptFrom = await source();
+        await input.penStroke(Array.from({ length: 10 }, (_, i) => point(0.2 + (i * 0.2) / 9, 0.45)));
+        await expect.poll(source, { message: "The sweep erased nothing" }).not.toBe(sweptFrom);
+        const erased = await source();
+        assert.ok(!erased.includes(strokes[0]), "The sweep left the first stroke whole");
+        assert.ok(
+          erased.includes(strokes[1]) && erased.includes(strokes[2]),
+          "The sweep changed a stroke it did not cross",
+        );
+        // A Freehand lasso round the other two, then a drag on one of them moves both.
+        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await input.penStroke([point(0.42, 0.22), point(0.8, 0.22), point(0.8, 0.68), point(0.42, 0.68), point(0.42, 0.23)]);
+        await expect
+          .poll(async () => (await editorDebug(page)).selection.length, {
+            message: "The lasso did not select the two strokes",
+          })
+          .toBe(2);
+        const [first] = (await editorDebug(page)).selection;
+        const grip = await strokePoint(page, frame.locator(`svg [data-source-id="${first}"]`).first(), 0.5);
+        const shift = (area.right - area.left) * 0.08;
+        await input.penStroke(
+          Array.from({ length: 8 }, (_, i) => ({ x: grip.x + (shift * i) / 7, y: grip.y })),
+        );
+        await expect.poll(source, { message: "A drag on the selection did not move it" }).not.toBe(erased);
+        const moved = await source();
+        assert.ok(
+          !moved.includes(strokes[1]) && !moved.includes(strokes[2]),
+          "The drag did not move both selected strokes",
+        );
+        await input.touch([await stableCenter(documentHistory("Undo"))]);
+        await expect
+          .poll(source, { message: "One Undo did not return the strokes to where they were" })
+          .toBe(erased);
+      },
+    );
+  }
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },

@@ -77,12 +77,12 @@ the other two, moves them, and undoes the move.
 
 ### Stories (red first)
 
-- [ ] T019 [P] [US1] Story "the pen marks on first contact and the source gains a path; a width chosen in the Pen's Active Tool Menu applies to the next stroke as it is drawn" (scenario 1, FR-025) in `test/workbench-browser.spec.ts`, with the pen helpers of `test/tablet.ts`
-- [ ] T020 [P] [US1] Story "the eraser sweep removes the crossed parts of two strokes in one undo step" (scenario 2) in `test/workbench-browser.spec.ts`
-- [ ] T021 [P] [US1] Story "the drawing toolbar holds Lasso, Pen, Eraser, Shapes, Text, Fill, the active tool's presets, and Add colour, all as symbols, and nothing else" (scenario 3, FR-007, FR-008, FR-011, SC-002) in `test/workbench-browser.spec.ts`
-- [ ] T022 [P] [US1] Story "a second tap closes the Active Tool Menu; a tap on View closes it and opens View" (scenario 4, FR-003, FR-004, FR-009) in `test/workbench-browser.spec.ts`
-- [ ] T023 [P] [US1] Story "the Lasso selects by tap, by Freehand, Rectangle, and Oval drag, and moves by a drag on the selection" (FR-012a) in `test/workbench-browser.spec.ts`
-- [ ] T024 [US1] Story for the independent test (three strokes, sweep, lasso two, move, Undo) in `test/workbench-browser.spec.ts`; run T019–T024 against the present code and commit them red
+- [X] T019 [P] [US1] Story "the pen marks on first contact and the source gains a path; a width chosen in the Pen's Active Tool Menu applies to the next stroke as it is drawn" (scenario 1, FR-025) in `test/workbench-browser.spec.ts`, with the pen helpers of `test/tablet.ts`
+- [X] T020 [P] [US1] Story "the eraser sweep removes the crossed parts of two strokes in one undo step" (scenario 2) in `test/workbench-browser.spec.ts`
+- [X] T021 [P] [US1] Story "the drawing toolbar holds Lasso, Pen, Eraser, Shapes, Text, Fill, the active tool's presets, and Add colour, all as symbols, and nothing else" (scenario 3, FR-007, FR-008, FR-011, SC-002) in `test/workbench-browser.spec.ts`
+- [X] T022 [P] [US1] Story "a second tap on the Pen closes its Active Tool Menu; opening File closes it, and opening it closes File" (scenario 4, FR-003, FR-004, FR-009; View replaces File in this story when T071 adds View) in `test/workbench-browser.spec.ts`
+- [X] T023 [P] [US1] Story "the Lasso selects by tap, by Freehand, Rectangle, and Oval drag, and moves by a drag on the selection" (FR-012a) in `test/workbench-browser.spec.ts`
+- [X] T024 [US1] Story for the independent test (three strokes, sweep, lasso two, move, Undo) in `test/workbench-browser.spec.ts`; run T019–T024 against the present code and commit them red
 
 ### Implementation
 
@@ -92,7 +92,7 @@ the other two, moves them, and undoes the move.
 - [ ] T028 [US1] Open the Active Tool Menu on a second tap on the active tool and close it on a further tap in `.cache/tikz-editor/packages/app/src/ui/ToolbarToolPopup.tsx` (`openPopupMode` at `:83`); hold the options of data-model Tool per tool
 - [ ] T029 [US1] Keep one popover open in the window: the fork posts `popover-opened` when it opens one and closes its own on `dismiss-popover` (`vendor/tikz-editor/embed/src/main.tsx`); the shell closes its menus on `popover-opened` and sends `dismiss-popover` when it opens one (`src/ui/TikzWorkbench.vue`) (research R16)
 - [ ] T030 [US1] Move the toolbar only by its grip and dock it to any screen edge in `.cache/tikz-editor/packages/app/src/ui/DockLayout.tsx` (FR-010)
-- [ ] T031 [US1] Make the Eraser sweep remove the crossed parts of every crossed stroke as one change event, so it is one step of the document history, in the fork's eraser tool under `.cache/tikz-editor/packages/app/src/`
+- [X] T031 [US1] Make the Eraser sweep remove the crossed parts of every crossed stroke as one change event, so it is one step of the document history, in the fork's eraser tool under `.cache/tikz-editor/packages/app/src/` (the present code meets it: the T020 story passes with the document bar's Undo and Redo)
 - [ ] T032 [US1] Rewrite the replaced stories near lines 5012, 5067, 1445, and 1803 of `test/workbench-browser.spec.ts` to the toolbar and Lasso rules; run `just tikz-editor-patch && just update-tikz-editor-vendor` and the US1 stories green
 
 **Checkpoint**: User Story 1 passes by itself.
