@@ -8,12 +8,19 @@ release.
 
 The fork boundary is intentionally narrow:
 
-- Quiver remains the owner of diagram layout, selection, history, undo/redo,
-  touch/pointer interaction, arrow/vertex controls, TikZ-cd parsing and export.
+- Quiver remains the owner of diagram layout, selection, touch/pointer
+  interaction, arrow/vertex controls, TikZ-cd parsing and export.
+- The host owns the document's one history. Each change names the Quiver
+  history event it made or extended, so the edits Quiver collapses into one
+  event (a label typed letter by letter) are one Undo step of the document.
+  Quiver's Undo and Redo shortcuts post `zettlr-quiver:undo-request` and
+  `zettlr-quiver:redo-request`, and its toolbar has no Undo or Redo.
 - `zettlr-host.{html,css,mjs}` is a local iframe host. It exposes a small
   postMessage bridge for source, theme, macros, change events and Escape.
 - Diagram changes are emitted from Quiver's own history/autosave mutation
-  boundary. Zettlr does not infer edits from Quiver's DOM.
+  boundary. Zettlr does not infer edits from Quiver's DOM. A source request is
+  answered after the pending change is posted, so only `zettlr-quiver:change`
+  carries edits.
 - KaTeX is loaded locally; the embedded editor has no dependency on the hosted
   q.uiver.app site.
 - Zettlr owns persistence, theme, macro configuration and source editing.

@@ -15,7 +15,7 @@ index 06a13bd..dd16833 100644
                  if (!this.is_finished() && !this.check(this.col_delim) && !this.check("\\\\")
                      && !this.check("\\ar[") && !this.check("\\arrow[") && !this.check("\\end")
 diff --git a/src/ui.mjs b/src/ui.mjs
-index 1c7718a..fe2fa02 100644
+index 1c7718a..9089986 100644
 --- a/src/ui.mjs
 +++ b/src/ui.mjs
 @@ -63,7 +63,7 @@ Object.assign(CONSTANTS, {
@@ -166,7 +166,7 @@ index 1c7718a..fe2fa02 100644
          this.colour_picker.update_latex_colours(this);
      }
  
-@@ -3659,6 +3683,15 @@ class UI {
+@@ -3659,6 +3683,18 @@ class UI {
  
      /// Save the current diagram if it is not currently saved.
      autosave_diagram() {
@@ -174,15 +174,31 @@ index 1c7718a..fe2fa02 100644
 +        // History.add/undo/redo all funnel through this method, so this is the
 +        // single mutation boundary for telling the parent that the diagram has
 +        // changed. Selection, hover, pan and other purely-presentational DOM
-+        // updates never reach this hook.
++        // updates never reach this hook. The detail is the history event that
++        // the change made or extended.
 +        if (window.__ZETTLR_QUIVER_HOST__ === true) {
-+            window.dispatchEvent(new CustomEvent("zettlr-quiver-change"));
++            window.dispatchEvent(new CustomEvent("zettlr-quiver-change", {
++                detail: this.history.actions[this.history.present - 1],
++            }));
 +        }
 +
          if (this.start_new_history) {
              this.start_new_history = false;
              this.save_diagram();
-@@ -6978,13 +7011,17 @@ class Toolbar {
+@@ -3783,6 +3819,12 @@ class History {
+             this.effect(ui, actions.actions, false);
+             if (unchanged) {
+                 this.pop(ui);
++                // The edit is back where it began, and the host must show that too.
++                if (window.__ZETTLR_QUIVER_HOST__ === true) {
++                    window.dispatchEvent(new CustomEvent("zettlr-quiver-change", {
++                        detail: actions,
++                    }));
++                }
+             } else {
+                 ui.autosave_diagram();
+             }
+@@ -6978,31 +7020,51 @@ class Toolbar {
  
          // Add all of the toolbar buttons.
  
@@ -205,9 +221,59 @@ index 1c7718a..fe2fa02 100644
 +            );
 +        }
  
-         add_action(
-             "Undo",
-@@ -7315,49 +7352,51 @@ class Toolbar {
+-        add_action(
+-            "Undo",
+-            "undo",
+-            [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+-            () => {
+-                ui.history.undo(ui);
+-            },
+-        );
++        if (window.__ZETTLR_QUIVER_HOST__ === true) {
++            // The host keeps the document's one history and shows its Undo and
++            // Redo, so Quiver's shortcuts ask the host to step.
++            ui.shortcuts.add(
++                [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
++                () => window.dispatchEvent(new CustomEvent("zettlr-quiver-undo-request")),
++            );
++            ui.shortcuts.add(
++                [
++                    { key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer },
++                    { key: "Y", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer },
++                ],
++                () => window.dispatchEvent(new CustomEvent("zettlr-quiver-redo-request")),
++            );
++        } else {
++            add_action(
++                "Undo",
++                "undo",
++                [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
++                () => {
++                    ui.history.undo(ui);
++                },
++            );
+ 
+-        add_action(
+-            "Redo",
+-            "redo",
+-            [{ key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+-            () => {
+-                ui.history.redo(ui);
+-            },
+-        );
++            add_action(
++                "Redo",
++                "redo",
++                [{ key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
++                () => {
++                    ui.history.redo(ui);
++                },
++            );
++        }
+ 
+         const select = add_subtoolbar("Select", "select");
+ 
+@@ -7315,49 +7377,51 @@ class Toolbar {
              settings,
          );
  
@@ -299,7 +365,7 @@ index 1c7718a..fe2fa02 100644
          ui.switch_theme(ui.theme);
  
          add_action(
-@@ -7378,20 +7417,22 @@ class Toolbar {
+@@ -7378,20 +7442,22 @@ class Toolbar {
              },
          );
  
@@ -336,7 +402,22 @@ index 1c7718a..fe2fa02 100644
  
          // Disable those buttons that need to be disabled.
          this.update(ui);
-@@ -8521,6 +8562,16 @@ export class Edge extends Cell {
+@@ -7412,9 +7478,11 @@ class Toolbar {
+ 
+         const default_pan = [UIMode.Default, UIMode.Pan];
+ 
+-        enable_if("undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
+-        enable_if("redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
+-            && ui.history.present < ui.history.actions.length);
++        if (window.__ZETTLR_QUIVER_HOST__ !== true) {
++            enable_if("undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
++            enable_if("redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
++                && ui.history.present < ui.history.actions.length);
++        }
+         enable_if("select-all",
+             ui.in_mode(...default_pan) && ui.selection.size < ui.quiver.all_cells().length);
+         const connected_components = ui.quiver.connected_components(ui.selection);
+@@ -8521,6 +8589,16 @@ export class Edge extends Cell {
  let KaTeX = null;
  let Typst = null;
  
@@ -353,7 +434,7 @@ index 1c7718a..fe2fa02 100644
  class PromiseQueue {
      constructor() {
          // Start with a resolved promise.
-@@ -8585,6 +8636,12 @@ const load_typst = (ui) => {
+@@ -8585,6 +8663,12 @@ const load_typst = (ui) => {
  
  // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
  document.addEventListener("DOMContentLoaded", () => {
@@ -366,7 +447,7 @@ index 1c7718a..fe2fa02 100644
      // We don't want the browser being too clever and trying to restore the scroll position, as that
      // won't play nicely with the auto-centring.
      if ("scrollRestoration" in window.history) {
-@@ -8720,12 +8777,12 @@ document.addEventListener("DOMContentLoaded", () => {
+@@ -8720,12 +8804,12 @@ document.addEventListener("DOMContentLoaded", () => {
      };
  
      // Immediately load the KaTeX library as an ES6 module (regardless of the current renderer).
@@ -513,10 +594,10 @@ index 0000000..3780c0b
 +</html>
 diff --git a/src/zettlr-host.mjs b/src/zettlr-host.mjs
 new file mode 100644
-index 0000000..e0424da
+index 0000000..86710a5
 --- /dev/null
 +++ b/src/zettlr-host.mjs
-@@ -0,0 +1,221 @@
+@@ -0,0 +1,244 @@
 +// Zettlr host bridge for the vendored Quiver fork. This file deliberately
 +// contains no diagram-editing implementation: Quiver owns that. It only maps
 +// parent-window messages to Quiver's public import/export/macro/theme surfaces.
@@ -647,10 +728,22 @@ index 0000000..e0424da
 +    return current_source;
 +}
 +
-+window.addEventListener("zettlr-quiver-change", () => {
++// One Quiver history event is one step of the host's document history: the
++// edits that Quiver collapses into one event, such as a label typed letter by
++// letter, post the same step.
++const history_steps = new WeakMap();
++let next_history_step = 0;
++let pending_step = 0;
++
++window.addEventListener("zettlr-quiver-change", (event) => {
 +    if (suppress_change) {
 +        return;
 +    }
++    if (!(event.detail instanceof Object)) {
++        throw new Error("Quiver changed the diagram outside its history");
++    }
++    if (!history_steps.has(event.detail)) history_steps.set(event.detail, ++next_history_step);
++    pending_step = history_steps.get(event.detail);
 +    source_dirty = true;
 +    if (emit_timer !== null) {
 +        clearTimeout(emit_timer);
@@ -658,18 +751,21 @@ index 0000000..e0424da
 +    // Label edits are deliberately collapsed by Quiver's History. A tiny
 +    // debounce mirrors that semantic boundary and avoids rewriting the
 +    // Markdown document on every internal render step.
-+    emit_timer = setTimeout(() => {
-+        emit_timer = null;
-+        try {
-+            post({ type: "zettlr-quiver:change", source: read_source() });
-+        } catch (error) {
-+            post({
-+                type: "zettlr-quiver:error",
-+                message: error instanceof Error ? error.message : String(error),
-+            });
-+        }
-+    }, 40);
++    emit_timer = setTimeout(emit_change, 40);
 +});
++
++// Only `zettlr-quiver:change` carries an edit to the host, with its step.
++function emit_change() {
++    emit_timer = null;
++    try {
++        post({ type: "zettlr-quiver:change", source: read_source(), step: pending_step });
++    } catch (error) {
++        post({
++            type: "zettlr-quiver:error",
++            message: error instanceof Error ? error.message : String(error),
++        });
++    }
++}
 +
 +window.addEventListener("message", (event) => {
 +    if (event.source !== window.parent || event.origin !== host_origin || event.data === null || typeof event.data !== "object") {
@@ -684,6 +780,11 @@ index 0000000..e0424da
 +        if (message.sessionId !== session_id || message.revision !== revision) {
 +            post({ ...identity, status: "failed", error: "stale-target" });
 +            return;
++        }
++        // The host reads the source only after the edit not yet posted.
++        if (emit_timer !== null) {
++            clearTimeout(emit_timer);
++            emit_change();
 +        }
 +        try {
 +            post({ ...identity, status: "ok", source: read_source() });
@@ -710,6 +811,9 @@ index 0000000..e0424da
 +        document.body.classList.toggle("zettlr-fullscreen", fullscreen);
 +    }
 +});
++
++window.addEventListener("zettlr-quiver-undo-request", () => post({ type: "zettlr-quiver:undo-request" }));
++window.addEventListener("zettlr-quiver-redo-request", () => post({ type: "zettlr-quiver:redo-request" }));
 +
 +// Escape must work while focus is inside the iframe; keyboard events do not
 +// bubble across frame boundaries.

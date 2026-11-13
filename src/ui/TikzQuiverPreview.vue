@@ -64,6 +64,8 @@ interface QuiverHostMessage {
   sessionId?: string | null;
   revision?: number;
   source?: string;
+  // The Quiver history event of a change; the changes of one event are one step of the document history.
+  step?: number;
   message?: string;
   diagnostics?: QuiverDiagnostic[];
 }
@@ -78,6 +80,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "exitFullscreen"): void;
   (e: "status", text: string): void;
+  (e: "undoRequest"): void;
+  (e: "redoRequest"): void;
 }>();
 
 const quiver = props.host.quiver;
@@ -182,7 +186,7 @@ watch(
   },
 );
 
-function applyEditorSource(source: string): void {
+function applyEditorSource(source: string, step: string): void {
   const active = session.value;
   const current = props.host.readSource(active.source.sourceFrom, active.source.sourceTo);
   if (current !== active.source.authoredSource) {
@@ -190,8 +194,7 @@ function applyEditorSource(source: string): void {
   }
   if (source === quiverSourceForSession(active.source)) return;
   const replacement = quiverReplacement(active.source, source);
-  // Each Quiver change is one step of the document history.
-  props.host.writeSource(replacement.from, replacement.to, replacement.insert, `quiver:${crypto.randomUUID()}`);
+  props.host.writeSource(replacement.from, replacement.to, replacement.insert, step);
   session.value = { ...active, source: replacement.next };
   errorMessage.value = "";
 }
@@ -222,7 +225,10 @@ async function currentSource(signal: AbortSignal): Promise<string> {
   if (session.value.id !== active.id || session.value.revision !== active.revision) {
     throw new Error("The source changed while reading Quiver");
   }
-  applyEditorSource(source);
+  // Quiver posts its last edit as a `change` before it replies, so the document already holds it.
+  if (source !== quiverSourceForSession(session.value.source)) {
+    throw new Error("Quiver and the document disagree about the diagram");
+  }
   return session.value.source.source;
 }
 defineExpose({ currentSource });
@@ -245,14 +251,20 @@ function onMessage(event: MessageEvent<QuiverHostMessage>): void {
       errorMessage.value = "";
       break;
     case "zettlr-quiver:change": {
-      if (typeof message.source !== "string") return;
+      if (typeof message.source !== "string" || !Number.isSafeInteger(message.step)) return;
       try {
-        applyEditorSource(message.source);
+        applyEditorSource(message.source, `quiver:${session.value.id}:${message.step}`);
       } catch (error) {
         reportSynchronizationError(error);
       }
       break;
     }
+    case "zettlr-quiver:undo-request":
+      emit("undoRequest");
+      break;
+    case "zettlr-quiver:redo-request":
+      emit("redoRequest");
+      break;
     case "zettlr-quiver:save":
       void saveCurrentSource();
       break;

@@ -10413,17 +10413,18 @@ describe("standalone workbench host boundary", function () {
         await expect(vertex(0)).toContainText("D");
         await expect(vertex(1)).toContainText("C");
 
-        // Quiver owns this history: its Undo walks back to the authored bytes, and its Redo walks
-        // forward to the final source.
-        const press = async (name: "undo" | "redo", message: string, restored: (text: string) => boolean) => {
-          await input.touch([await stableCenter(frame.locator(`.action[data-name="${name}"]`))]);
+        // The document bar's Undo walks back to the authored bytes, and its Redo walks forward to
+        // the final source.
+        const bar = page.locator(".document-bar");
+        const press = async (name: "Undo" | "Redo", message: string, restored: (text: string) => boolean) => {
+          await input.touch([await stableCenter(bar.getByRole("button", { name, exact: true }))]);
           await expect.poll(async () => restored(await code()), { message }).toBe(true);
         };
-        await press("undo", "Undo did not restore the first relabel", (text) => text === first);
-        await press("undo", "Undo did not restore the authored bytes", (text) => text === authored);
+        await press("Undo", "Undo did not restore the first relabel", (text) => text === first);
+        await press("Undo", "Undo did not restore the authored bytes", (text) => text === authored);
         await expect(vertex(1)).toContainText("B");
-        await press("redo", "Redo did not restore the first relabel", (text) => text === first);
-        await press("redo", "Redo did not restore the second relabel", (text) => text === second);
+        await press("Redo", "Redo did not restore the first relabel", (text) => text === first);
+        await press("Redo", "Redo did not restore the second relabel", (text) => text === second);
         await expect(vertex(0)).toContainText("D");
       },
     );

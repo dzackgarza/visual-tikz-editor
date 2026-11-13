@@ -128,10 +128,22 @@ function read_source() {
     return current_source;
 }
 
-window.addEventListener("zettlr-quiver-change", () => {
+// One Quiver history event is one step of the host's document history: the
+// edits that Quiver collapses into one event, such as a label typed letter by
+// letter, post the same step.
+const history_steps = new WeakMap();
+let next_history_step = 0;
+let pending_step = 0;
+
+window.addEventListener("zettlr-quiver-change", (event) => {
     if (suppress_change) {
         return;
     }
+    if (!(event.detail instanceof Object)) {
+        throw new Error("Quiver changed the diagram outside its history");
+    }
+    if (!history_steps.has(event.detail)) history_steps.set(event.detail, ++next_history_step);
+    pending_step = history_steps.get(event.detail);
     source_dirty = true;
     if (emit_timer !== null) {
         clearTimeout(emit_timer);
@@ -139,18 +151,21 @@ window.addEventListener("zettlr-quiver-change", () => {
     // Label edits are deliberately collapsed by Quiver's History. A tiny
     // debounce mirrors that semantic boundary and avoids rewriting the
     // Markdown document on every internal render step.
-    emit_timer = setTimeout(() => {
-        emit_timer = null;
-        try {
-            post({ type: "zettlr-quiver:change", source: read_source() });
-        } catch (error) {
-            post({
-                type: "zettlr-quiver:error",
-                message: error instanceof Error ? error.message : String(error),
-            });
-        }
-    }, 40);
+    emit_timer = setTimeout(emit_change, 40);
 });
+
+// Only `zettlr-quiver:change` carries an edit to the host, with its step.
+function emit_change() {
+    emit_timer = null;
+    try {
+        post({ type: "zettlr-quiver:change", source: read_source(), step: pending_step });
+    } catch (error) {
+        post({
+            type: "zettlr-quiver:error",
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+}
 
 window.addEventListener("message", (event) => {
     if (event.source !== window.parent || event.origin !== host_origin || event.data === null || typeof event.data !== "object") {
@@ -165,6 +180,11 @@ window.addEventListener("message", (event) => {
         if (message.sessionId !== session_id || message.revision !== revision) {
             post({ ...identity, status: "failed", error: "stale-target" });
             return;
+        }
+        // The host reads the source only after the edit not yet posted.
+        if (emit_timer !== null) {
+            clearTimeout(emit_timer);
+            emit_change();
         }
         try {
             post({ ...identity, status: "ok", source: read_source() });
@@ -191,6 +211,9 @@ window.addEventListener("message", (event) => {
         document.body.classList.toggle("zettlr-fullscreen", fullscreen);
     }
 });
+
+window.addEventListener("zettlr-quiver-undo-request", () => post({ type: "zettlr-quiver:undo-request" }));
+window.addEventListener("zettlr-quiver-redo-request", () => post({ type: "zettlr-quiver:redo-request" }));
 
 // Escape must work while focus is inside the iframe; keyboard events do not
 // bubble across frame boundaries.

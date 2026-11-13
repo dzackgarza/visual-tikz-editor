@@ -3687,9 +3687,12 @@ export class UI {
         // History.add/undo/redo all funnel through this method, so this is the
         // single mutation boundary for telling the parent that the diagram has
         // changed. Selection, hover, pan and other purely-presentational DOM
-        // updates never reach this hook.
+        // updates never reach this hook. The detail is the history event that
+        // the change made or extended.
         if (window.__ZETTLR_QUIVER_HOST__ === true) {
-            window.dispatchEvent(new CustomEvent("zettlr-quiver-change"));
+            window.dispatchEvent(new CustomEvent("zettlr-quiver-change", {
+                detail: this.history.actions[this.history.present - 1],
+            }));
         }
 
         if (this.start_new_history) {
@@ -3816,6 +3819,12 @@ class History {
             this.effect(ui, actions.actions, false);
             if (unchanged) {
                 this.pop(ui);
+                // The edit is back where it began, and the host must show that too.
+                if (window.__ZETTLR_QUIVER_HOST__ === true) {
+                    window.dispatchEvent(new CustomEvent("zettlr-quiver-change", {
+                        detail: actions,
+                    }));
+                }
             } else {
                 ui.autosave_diagram();
             }
@@ -7023,23 +7032,39 @@ class Toolbar {
             );
         }
 
-        add_action(
-            "Undo",
-            "undo",
-            [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
-            () => {
-                ui.history.undo(ui);
-            },
-        );
+        if (window.__ZETTLR_QUIVER_HOST__ === true) {
+            // The host keeps the document's one history and shows its Undo and
+            // Redo, so Quiver's shortcuts ask the host to step.
+            ui.shortcuts.add(
+                [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+                () => window.dispatchEvent(new CustomEvent("zettlr-quiver-undo-request")),
+            );
+            ui.shortcuts.add(
+                [
+                    { key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer },
+                    { key: "Y", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer },
+                ],
+                () => window.dispatchEvent(new CustomEvent("zettlr-quiver-redo-request")),
+            );
+        } else {
+            add_action(
+                "Undo",
+                "undo",
+                [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+                () => {
+                    ui.history.undo(ui);
+                },
+            );
 
-        add_action(
-            "Redo",
-            "redo",
-            [{ key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
-            () => {
-                ui.history.redo(ui);
-            },
-        );
+            add_action(
+                "Redo",
+                "redo",
+                [{ key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+                () => {
+                    ui.history.redo(ui);
+                },
+            );
+        }
 
         const select = add_subtoolbar("Select", "select");
 
@@ -7453,9 +7478,11 @@ class Toolbar {
 
         const default_pan = [UIMode.Default, UIMode.Pan];
 
-        enable_if("undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
-        enable_if("redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
-            && ui.history.present < ui.history.actions.length);
+        if (window.__ZETTLR_QUIVER_HOST__ !== true) {
+            enable_if("undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
+            enable_if("redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
+                && ui.history.present < ui.history.actions.length);
+        }
         enable_if("select-all",
             ui.in_mode(...default_pan) && ui.selection.size < ui.quiver.all_cells().length);
         const connected_components = ui.quiver.connected_components(ui.selection);
