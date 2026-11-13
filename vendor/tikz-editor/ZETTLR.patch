@@ -799,14 +799,14 @@ index 00000000..875dc71c
 +  return shortcut ? shortcutLabel(shortcut) : "";
 +}
 diff --git a/packages/app/src/settings/storage.ts b/packages/app/src/settings/storage.ts
-index 4850a87e..4d292b41 100644
+index 4850a87e..693a62a3 100644
 --- a/packages/app/src/settings/storage.ts
 +++ b/packages/app/src/settings/storage.ts
 @@ -1,5 +1,6 @@
 +import { parseShortcutOverrides } from "./keybindings";
  import type { AppSettings } from "./types";
 -import { DEFAULT_SETTINGS } from "./types";
-+import { DEFAULT_SETTINGS, MAX_PRESETS, PRESET_TOOLS, type ToolbarDock, type ToolbarSettings } from "./types";
++import { DEFAULT_SETTINGS, ERASER_SIZE_MAX_PX, ERASER_SIZE_MIN_PX, MAX_PRESETS, PRESET_TOOLS, type ToolbarDock, type ToolbarSettings } from "./types";
  import { getActiveEditorPlatform } from "../platform/current";
  
  const STORAGE_KEY = "tikz-editor:settings";
@@ -818,7 +818,7 @@ index 4850a87e..4d292b41 100644
        general: {
          ...DEFAULT_SETTINGS.general,
          ...parsed.general
-@@ -36,11 +38,44 @@ export function loadSettings(): AppSettings {
+@@ -36,11 +38,49 @@ export function loadSettings(): AppSettings {
        },
        canvas: {
          ...DEFAULT_SETTINGS.canvas,
@@ -861,11 +861,16 @@ index 4850a87e..4d292b41 100644
 +        y: typeof parsed.toolbar?.y === "number" && Number.isFinite(parsed.toolbar.y) ? parsed.toolbar.y : DEFAULT_SETTINGS.toolbar.y,
 +        penWidth: typeof parsed.toolbar?.penWidth === "number" && Number.isFinite(parsed.toolbar.penWidth) && parsed.toolbar.penWidth > 0
 +          ? parsed.toolbar.penWidth : DEFAULT_SETTINGS.toolbar.penWidth,
++        penStyle: parsed.toolbar?.penStyle === "dashed" || parsed.toolbar?.penStyle === "dotted" ? parsed.toolbar.penStyle : "solid",
++        penOpacity: inRange(parsed.toolbar?.penOpacity, 0.1, 1) ?? DEFAULT_SETTINGS.toolbar.penOpacity,
++        penSmoothing: inRange(parsed.toolbar?.penSmoothing, 0, 1) ?? DEFAULT_SETTINGS.toolbar.penSmoothing,
++        eraserMode: parsed.toolbar?.eraserMode === "whole" ? "whole" : "partial",
++        eraserSize: inRange(parsed.toolbar?.eraserSize, ERASER_SIZE_MIN_PX, ERASER_SIZE_MAX_PX) ?? DEFAULT_SETTINGS.toolbar.eraserSize,
 +        ...loadPresets(parsed.toolbar)
        },
        rendering: {
          ...DEFAULT_SETTINGS.rendering,
-@@ -52,6 +87,36 @@ export function loadSettings(): AppSettings {
+@@ -52,6 +92,41 @@ export function loadSettings(): AppSettings {
    }
  }
  
@@ -895,6 +900,11 @@ index 4850a87e..4d292b41 100644
 +  return { presets, activePreset };
 +}
 +
++/** A saved number when it lies in [min, max]; otherwise undefined, so the default applies. */
++function inRange(value: number | undefined, min: number, max: number): number | undefined {
++  return typeof value === "number" && value >= min && value <= max ? value : undefined;
++}
++
 +function isToolbarDock(value: string | undefined): value is ToolbarDock {
 +  return value === "left" || value === "right" || value === "top" || value === "bottom" || value === "floating";
 +}
@@ -903,7 +913,7 @@ index 4850a87e..4d292b41 100644
    if (!Number.isFinite(value)) {
      return DEFAULT_SETTINGS.editor.formatterMaxLineLength;
 diff --git a/packages/app/src/settings/types.ts b/packages/app/src/settings/types.ts
-index af0a7abe..288aa62d 100644
+index af0a7abe..5a75dec1 100644
 --- a/packages/app/src/settings/types.ts
 +++ b/packages/app/src/settings/types.ts
 @@ -1,3 +1,4 @@
@@ -911,7 +921,7 @@ index af0a7abe..288aa62d 100644
  export type EditorSettings = {
    wordWrap: boolean;
    fontSize: number;
-@@ -9,6 +10,34 @@ export type EditorSettings = {
+@@ -9,6 +10,50 @@ export type EditorSettings = {
  
  export type ColorPickerAccuracy = "approximate" | "exact";
  
@@ -930,6 +940,12 @@ index af0a7abe..288aa62d 100644
 +export const MAX_PRESETS = 12;
 +/** TikZ's default line width (PGF manual, \pgfsetlinewidth: "thin" is 0.4pt). */
 +export const DEFAULT_PEN_WIDTH_PT = 0.4;
++export type PenStyle = "solid" | "dashed" | "dotted";
++export type EraserMode = "partial" | "whole";
++/** The Eraser's diameter range in screen pixels; the default covers a fingertip's width of a stroke. */
++export const ERASER_SIZE_MIN_PX = 4;
++export const ERASER_SIZE_MAX_PX = 80;
++export const DEFAULT_ERASER_SIZE_PX = 20;
 +export type ToolbarSettings = {
 +  dock: ToolbarDock; x: number; y: number; lassoShape: "freehand" | "ellipse" | "rectangle";
 +  /** How the Circle and Arc tools take their points: by centre, or through tapped points (IPE's constructions). */
@@ -937,6 +953,16 @@ index af0a7abe..288aa62d 100644
 +  arcConstruction: ArcConstruction;
 +  /** The Pen's line width in points; a stroke writes it only when it differs from TikZ's default. */
 +  penWidth: number;
++  /** The Pen's TikZ dash style; a solid stroke writes none. */
++  penStyle: PenStyle;
++  /** The Pen's opacity, 0.1–1; a stroke writes it only below 1. */
++  penOpacity: number;
++  /** The Pen's smoothing in centimetres, 0–1, applied to each stroke as it is drawn. */
++  penSmoothing: number;
++  /** Partial erases the swept parts of a stroke; Whole stroke erases every stroke the sweep touches. */
++  eraserMode: EraserMode;
++  /** The Eraser's diameter in screen pixels. */
++  eraserSize: number;
 +  /** Each tool's colour presets, as authored `xcolor` expressions. */
 +  presets: Record<PresetTool, string[]>;
 +  /** The index of each tool's active preset. */
@@ -946,7 +972,7 @@ index af0a7abe..288aa62d 100644
  export type GridSize = "fine" | "standard" | "coarse";
  
  export type ColorScheme = "system" | "light" | "dark";
-@@ -20,10 +49,30 @@ export type GeneralSettings = {
+@@ -20,10 +65,30 @@ export type GeneralSettings = {
  };
  
  export type CanvasSettings = {
@@ -977,7 +1003,7 @@ index af0a7abe..288aa62d 100644
  };
  
  export type MathJaxFont =
-@@ -44,12 +93,17 @@ export type RenderingSettings = {
+@@ -44,12 +109,17 @@ export type RenderingSettings = {
  };
  
  export type AppSettings = {
@@ -995,7 +1021,7 @@ index af0a7abe..288aa62d 100644
    rendering: RenderingSettings;
  };
  
-@@ -67,6 +121,7 @@ export const EDITOR_FONT_SIZE_OPTIONS = Array.from(
+@@ -67,6 +137,7 @@ export const EDITOR_FONT_SIZE_OPTIONS = Array.from(
  );
  
  export const DEFAULT_SETTINGS: AppSettings = {
@@ -1003,7 +1029,7 @@ index af0a7abe..288aa62d 100644
    general: {
      uiFontSizePx: 11,
      colorScheme: "system",
-@@ -81,15 +136,75 @@ export const DEFAULT_SETTINGS: AppSettings = {
+@@ -81,15 +152,80 @@ export const DEFAULT_SETTINGS: AppSettings = {
      formatterMaxLineLength: 100
    },
    canvas: {
@@ -1043,6 +1069,11 @@ index af0a7abe..288aa62d 100644
 +    x: 0.5,
 +    y: 0.5,
 +    penWidth: DEFAULT_PEN_WIDTH_PT,
++    penStyle: "solid",
++    penOpacity: 1,
++    penSmoothing: 0,
++    eraserMode: "partial",
++    eraserSize: DEFAULT_ERASER_SIZE_PX,
 +    presets: {
 +      lasso: ["black", "blue", "red"],
 +      pen: ["black", "blue", "red"],
@@ -6291,7 +6322,7 @@ index 0ddde08e..fb0723e3 100644
 +  grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
 +}
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..2c432041 100644
+index a3293df2..67cdbbc5 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,5 +1,7 @@
@@ -6326,15 +6357,15 @@ index a3293df2..2c432041 100644
  import popupCss from "./ToolbarToolPopup.module.css";
  import type { ToolMode } from "../store/types";
 +import { useSettingsStore } from "../settings/useSettingsStore";
-+import { MAX_PRESETS, type PresetTool, type ToolbarSettings } from "../settings/types";
++import { ERASER_SIZE_MAX_PX, ERASER_SIZE_MIN_PX, MAX_PRESETS, type EraserMode, type PenStyle, type PresetTool, type ToolbarSettings } from "../settings/types";
  import css from "./Toolbar.module.css";
 +import { useSelector } from "@xstate/react";
-+import { canvasSession, constructionFinishes, constructionName, constructionStep, newStrokeSettings, setNewStrokeSettings } from "./canvas-panel/canvas-session";
++import { canvasSession, constructionFinishes, constructionName, constructionStep } from "./canvas-panel/canvas-session";
 +import { publishOccupiedInsets } from "./canvas-panel/occupied-insets";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    id: option.value,
-@@ -26,16 +36,57 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,16 +36,62 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -6357,6 +6388,12 @@ index a3293df2..2c432041 100644
 +];
 +const LASSO_SHAPES: readonly { id: ToolbarSettings["lassoShape"]; label: string }[] = [
 +  { id: "freehand", label: "Freehand" }, { id: "rectangle", label: "Rectangle" }, { id: "ellipse", label: "Oval" }
++];
++const PEN_STYLES: readonly { id: PenStyle; label: string }[] = [
++  { id: "solid", label: "Solid" }, { id: "dashed", label: "Dashed" }, { id: "dotted", label: "Dotted" }
++];
++const ERASER_MODES: readonly { id: EraserMode; label: string }[] = [
++  { id: "partial", label: "Partial" }, { id: "whole", label: "Whole stroke" }
 +];
 +/** The Pen's width range in points: PGF's "ultra thin" (0.1pt) to ten times "ultra thick". */
 +const PEN_WIDTH_MIN_PT = 0.1;
@@ -6389,12 +6426,11 @@ index a3293df2..2c432041 100644
 -  const bucketFillColor = useEditorStore((s) => s.bucketFillColor);
 +  const constructionStepText = useSelector(canvasSession, constructionStep);
 +  const constructionHasFinish = useSelector(canvasSession, constructionFinishes);
-+  const sessionNewStrokes = useSelector(canvasSession, (snapshot) => snapshot.context.newStrokes);
 +  const selectedElementIds = useEditorStore((s) => s.selectedElementIds);
    const selectedAddShape = useEditorStore((s) => s.selectedAddShape);
    const selectedAddMatrixRows = useEditorStore((s) => s.selectedAddMatrixRows);
    const selectedAddMatrixColumns = useEditorStore((s) => s.selectedAddMatrixColumns);
-@@ -45,8 +96,25 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -45,8 +101,25 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      () => new Map(projectNamedColorSwatches.map((swatch) => [swatch.token, swatch.cssColor] as const)),
      [projectNamedColorSwatches]
    );
@@ -6421,7 +6457,7 @@ index a3293df2..2c432041 100644
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
    const matrixPreviewColumns = matrixHoverSize?.columns ?? selectedAddMatrixColumns;
-@@ -56,70 +124,180 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,70 +129,180 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -6643,7 +6679,7 @@ index a3293df2..2c432041 100644
              }}
              testIdPrefix="toolbar-shape-choice"
            />
-@@ -132,9 +310,11 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -132,9 +315,11 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        const isSelected = (row: number, column: number): boolean =>
          row <= matrixPreviewRows && column <= matrixPreviewColumns;
        return (
@@ -6656,7 +6692,7 @@ index a3293df2..2c432041 100644
              data-testid="toolbar-matrix-picker-grid"
              onMouseLeave={() => { setMatrixHoverSize(null); }}
            >
-@@ -144,6 +324,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -144,6 +329,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                    <button
                      key={`${row}-${column}`}
                      type="button"
@@ -6664,7 +6700,7 @@ index a3293df2..2c432041 100644
                      className={[
                        popupCss.matrixPickerCell,
                        isSelected(row, column) ? popupCss.matrixPickerCellSelected : ""
-@@ -154,7 +335,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -154,7 +340,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                        dispatch({ type: "SET_ADD_MATRIX_PRESET", rows: row, columns: column });
                        dispatch({ type: "SET_TOOL_MODE", mode: "addMatrix" });
                        setMatrixHoverSize(null);
@@ -6673,7 +6709,7 @@ index a3293df2..2c432041 100644
                      }}
                      data-testid={`toolbar-matrix-picker-cell-${row}-${column}`}
                      aria-label={`${row} rows by ${column} columns`}
-@@ -170,68 +351,280 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,69 +356,299 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -6698,7 +6734,8 @@ index a3293df2..2c432041 100644
 +    dispatch({ type: "SET_TOOL_MODE", mode: choice.mode });
 +    closeMenu();
 +  };
-+
+ 
+-    const bucketFillColorCss = cssColorForToken(bucketFillColor, namedColorLookup) ?? "transparent";
 +  /** The selection takes the colour of a tapped preset (FR-021): its stroke, or its fill for the Fill tool. */
 +  const colourSelection = (value: string, key: "draw" | "fill") => {
 +    if (selectedElementIds.size === 0) return;
@@ -6750,27 +6787,6 @@ index a3293df2..2c432041 100644
 +    closeMenu();
 +  };
  
--    const bucketFillColorCss = cssColorForToken(bucketFillColor, namedColorLookup) ?? "transparent";
-+  const renderColourOptions = (index: number) => {
-+    const colour = presets[index];
-+    return <ToolbarPopupSection>
-+      <ColorPicker ariaLabel={`Colour ${index + 1}`} value={colour} syntaxValue={colour} allowNone={presetTool === "fill"}
-+        namedColorSwatches={projectNamedColorSwatches} onChange={(value) => editPreset(index, value)} />
-+      <form className={css.exactColorForm} onSubmit={(event) => {
-+        event.preventDefault();
-+        if (exactColor.trim()) { editPreset(index, exactColor.trim()); setExactColor(""); }
-+      }}>
-+        <label>Exact xcolor <input type="text" value={exactColor} placeholder={colour} onChange={(event) => setExactColor(event.currentTarget.value)} /></label>
-+        <button type="submit">Apply exact color</button>
-+      </form>
-+      <div className={css.presetActions}>
-+        <button type="button" disabled={index === 0} onClick={() => movePreset(index, -1)}>Move earlier</button>
-+        <button type="button" disabled={index === presets.length - 1} onClick={() => movePreset(index, 1)}>Move later</button>
-+        <button type="button" disabled={presets.length <= 1} onClick={() => removePreset(index)}>Remove colour</button>
-+      </div>
-+    </ToolbarPopupSection>;
-+  };
- 
 -    return (
 -      <ToolbarToolPopup
 -        key={mode}
@@ -6819,13 +6835,33 @@ index a3293df2..2c432041 100644
 -        </div>
 -      </ToolbarToolPopup>
 -    );
++  const renderColourOptions = (index: number) => {
++    const colour = presets[index];
++    return <ToolbarPopupSection>
++      <ColorPicker ariaLabel={`Colour ${index + 1}`} value={colour} syntaxValue={colour} allowNone={presetTool === "fill"}
++        namedColorSwatches={projectNamedColorSwatches} onChange={(value) => editPreset(index, value)} />
++      <form className={css.exactColorForm} onSubmit={(event) => {
++        event.preventDefault();
++        if (exactColor.trim()) { editPreset(index, exactColor.trim()); setExactColor(""); }
++      }}>
++        <label>Exact xcolor <input type="text" value={exactColor} placeholder={colour} onChange={(event) => setExactColor(event.currentTarget.value)} /></label>
++        <button type="submit">Apply exact color</button>
++      </form>
++      <div className={css.presetActions}>
++        <button type="button" disabled={index === 0} onClick={() => movePreset(index, -1)}>Move earlier</button>
++        <button type="button" disabled={index === presets.length - 1} onClick={() => movePreset(index, 1)}>Move later</button>
++        <button type="button" disabled={presets.length <= 1} onClick={() => removePreset(index)}>Remove colour</button>
++      </div>
++    </ToolbarPopupSection>;
++  };
++
 +  const penWidth = settings.toolbar.penWidth;
 +  const setPenWidth = (text: string) => {
 +    setPenWidthDraft(text);
 +    const value = Number(text);
 +    if (text.trim() !== "" && Number.isFinite(value) && value >= PEN_WIDTH_MIN_PT && value <= PEN_WIDTH_MAX_PT) updateToolbarSettings({ penWidth: value });
-   };
-+  const smoothing = newStrokeSettings(settings.canvas, sessionNewStrokes).freehandSmoothingUnits;
++  };
++  const { penStyle, penOpacity, penSmoothing, eraserMode, eraserSize } = settings.toolbar;
 +  const renderPenMenu = () => <ToolbarPopupSection>
 +    <label className={css.menuField}>Width
 +      <input type="range" aria-label="Width" min={PEN_WIDTH_MIN_PT} max={PEN_WIDTH_MAX_PT} step={0.1} value={penWidth}
@@ -6834,10 +6870,27 @@ index a3293df2..2c432041 100644
 +        value={penWidthDraft ?? String(penWidth)} onChange={(event) => setPenWidth(event.currentTarget.value)}
 +        onBlur={() => setPenWidthDraft(null)} />
 +    </label>
++    <ToolbarPopupChoiceList label="Line style" choices={PEN_STYLES} selectedId={penStyle}
++      onSelect={(style) => updateToolbarSettings({ penStyle: style as PenStyle })} />
++    <label className={css.menuField}>Opacity
++      <input type="range" aria-label="Opacity" min={0.1} max={1} step={0.05} value={penOpacity}
++        onChange={(event) => updateToolbarSettings({ penOpacity: Number(event.currentTarget.value) })} />
++      <output>{Math.round(penOpacity * 100)} %</output>
++    </label>
 +    <label className={css.menuField}>Smoothing
-+      <input type="range" aria-label="Smoothing" min={0} max={1} step={0.05} value={smoothing}
-+        onChange={(event) => setNewStrokeSettings({ freehandSmoothingUnits: Number(event.currentTarget.value) })} />
-+      <output>{smoothing.toFixed(2)}</output>
++      <input type="range" aria-label="Smoothing" min={0} max={1} step={0.05} value={penSmoothing}
++        onChange={(event) => updateToolbarSettings({ penSmoothing: Number(event.currentTarget.value) })} />
++      <output>{penSmoothing.toFixed(2)} cm</output>
++    </label>
++  </ToolbarPopupSection>;
++
++  const renderEraserMenu = () => <ToolbarPopupSection>
++    <ToolbarPopupChoiceList label="Erase" choices={ERASER_MODES} selectedId={eraserMode}
++      onSelect={(mode) => updateToolbarSettings({ eraserMode: mode as EraserMode })} />
++    <label className={css.menuField}>Size
++      <input type="range" aria-label="Size" min={ERASER_SIZE_MIN_PX} max={ERASER_SIZE_MAX_PX} step={2} value={eraserSize}
++        onChange={(event) => updateToolbarSettings({ eraserSize: Number(event.currentTarget.value) })} />
++      <output>{eraserSize} px</output>
 +    </label>
 +  </ToolbarPopupSection>;
 +
@@ -6890,18 +6943,19 @@ index a3293df2..2c432041 100644
 +  const renderToolMenu = (tool: DrawingTool) => {
 +    switch (tool) {
 +      case "lasso": return <ToolbarPopupSection><ToolbarPopupChoiceList
++        label="Selection shape"
 +        choices={LASSO_SHAPES}
 +        selectedId={settings.toolbar.lassoShape}
 +        onSelect={(shape) => { updateToolbarSettings({ lassoShape: shape as ToolbarSettings["lassoShape"] }); closeMenu(); }}
 +      /></ToolbarPopupSection>;
 +      case "pen": return renderPenMenu();
-+      case "eraser": return null;
++      case "eraser": return renderEraserMenu();
 +      case "shapes": return renderShapesMenu();
 +      case "text": return renderTextMenu();
 +      case "fill": return renderColourOptions(activePresetIndex);
 +    }
-+  };
-+
+   };
+ 
 +  /** A first tap activates a tool; a second tap on the active tool opens its Active Tool Menu, and a further tap closes it (FR-009). */
 +  const tapTool = (tool: DrawingTool) => {
 +    if (tool === activeTool) {
@@ -7010,10 +7064,11 @@ index a3293df2..2c432041 100644
 +  const toolStripSize = safeRect ? (verticalDock
 +    ? { maxHeight: Math.max(44, safeRect.bottom - safeRect.top - 40) }
 +    : { maxWidth: Math.max(44, safeRect.right - safeRect.left - 40) }) : undefined;
- 
++
    const renderShapeButton = () => {
      const mode = "addShape" as const;
-@@ -257,6 +650,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+     const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
+@@ -257,6 +673,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7021,7 +7076,7 @@ index a3293df2..2c432041 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +693,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +716,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7029,7 +7084,7 @@ index a3293df2..2c432041 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -321,7 +716,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +739,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -7037,7 +7092,7 @@ index a3293df2..2c432041 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +724,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +747,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -7049,7 +7104,7 @@ index a3293df2..2c432041 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +737,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +760,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -7110,7 +7165,7 @@ index a3293df2..2c432041 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -358,9 +803,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -358,9 +826,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
@@ -7121,7 +7176,7 @@ index a3293df2..2c432041 100644
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
-@@ -387,4 +830,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +853,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -7267,7 +7322,7 @@ index b12fedb2..c9cb6a8c 100644
 +.popup { max-width: calc(100vw - 24px); max-height: calc(100vh - 100px); overflow: auto; }
 +.matrixPickerCell { flex: 0 0 44px; min-width: 44px; }
 diff --git a/packages/app/src/ui/ToolbarToolPopup.tsx b/packages/app/src/ui/ToolbarToolPopup.tsx
-index 8aeb4133..96f43680 100644
+index 8aeb4133..c724af05 100644
 --- a/packages/app/src/ui/ToolbarToolPopup.tsx
 +++ b/packages/app/src/ui/ToolbarToolPopup.tsx
 @@ -1,4 +1,5 @@
@@ -7393,7 +7448,7 @@ index 8aeb4133..96f43680 100644
        ) : null}
      </div>
    );
-@@ -93,6 +157,11 @@ export type ToolbarPopupVisualChoice = {
+@@ -93,19 +157,27 @@ export type ToolbarPopupVisualChoice = {
    id: string;
    label: string;
    previewSvg?: string | null;
@@ -7405,7 +7460,24 @@ index 8aeb4133..96f43680 100644
  };
  
  export function ToolbarPopupChoiceList({
-@@ -126,18 +195,23 @@ export function ToolbarPopupChoiceList({
++  label,
+   choices,
+   selectedId,
+   onSelect
+ }: {
++  /** The option the choices set, such as "Line style". */
++  label: string;
+   choices: readonly ToolbarPopupChoice[];
+   selectedId: string;
+   onSelect: (id: string) => void;
+ }) {
+   return (
+-    <div className={css.choiceList} role="listbox" aria-label="Subtools">
++    <div className={css.choiceList} role="listbox" aria-label={label}>
+       {choices.map((choice) => {
+         const selected = choice.id === selectedId;
+         return (
+@@ -126,18 +198,23 @@ export function ToolbarPopupChoiceList({
  }
  
  export function ToolbarPopupVisualChoiceGrid({
@@ -7430,7 +7502,7 @@ index 8aeb4133..96f43680 100644
        {choices.map((choice) => {
          const selected = choice.id === selectedId;
          const testId = testIdPrefix ? `${testIdPrefix}-${choice.id.replace(/\s+/g, "-")}` : undefined;
-@@ -147,13 +221,16 @@ export function ToolbarPopupVisualChoiceGrid({
+@@ -147,13 +224,16 @@ export function ToolbarPopupVisualChoiceGrid({
              type="button"
              role="option"
              aria-selected={selected}
@@ -7819,7 +7891,7 @@ index cf4cf2cf..7277358e 100644
 +}
 +.cornerButtonActive { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..f07d253c 100644
+index 4e22ccfa..fc2d0a85 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,14 @@
@@ -7890,7 +7962,7 @@ index 4e22ccfa..f07d253c 100644
 +import { useSelector } from "@xstate/react";
 +import { canvasSession, newStrokeSettings, offerIsCurrent, pathDraftRef, saveNewStrokeDefaults, setArcDraft, setFreehandResultOffer, setLockedCurveId, setNewStrokeSettings, setPathDraft, setPendingBezier, setSelectedNodeIndices, setTapDraft, setTouchNodeSelection } from "./canvas-session";
 +import { ExactRange } from "../ExactRange";
-+import { strokeEnvelope, originalStrokeSchema, originalDrawingSource, originalStrokes } from '../../original-ink';
++import { strokeEnvelope, originalStrokeSchema, originalDrawingSource, originalStrokes, smoothPolyline, strokeColorWithOpacity } from '../../original-ink';
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
  import { resolveBucketFillEdit } from "./bucket-fill";
  import { recordDragPatchModeFullReason } from "./drag-patch-mode-debug";
@@ -7911,7 +7983,7 @@ index 4e22ccfa..f07d253c 100644
 +  withSnappedEnds,
  } from "./freehand-tool";
 +import { editSemanticCurveNodes } from "./semantic-curve-edit";
-+import { collectEraserStrokes, ERASER_RADIUS_PX, sweptStrokeIds, type EraserStroke } from "./eraser-sweep";
++import { collectEraserStrokes, sweptStrokeIds, type EraserStroke } from "./eraser-sweep";
 +import { cuttablePath, pathStatementSpan, remainingStatements, sweepCapsule, type CuttablePath } from "./partial-erase";
 +import { OCCUPIED_INSETS_EVENT, occupiedInsets } from "./occupied-insets";
 +import { isFingerContact, POINT_HOLD_SLOP_PX, POINT_TARGET_RADIUS_PX, resolvePointTarget, type PointTargetMark } from "./point-target";
@@ -8018,19 +8090,12 @@ index 4e22ccfa..f07d253c 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,10 +832,76 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +832,69 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
 +function smoothFreehandPoints(points: readonly WorldPoint[], units: number): WorldPoint[] {
-+  return points.map((point, index) => {
-+    if (index === 0 || index === points.length - 1) return point;
-+    const dx = (points[index - 1].x + points[index + 1].x) / 2 - point.x;
-+    const dy = (points[index - 1].y + points[index + 1].y) / 2 - point.y;
-+    const displacement = Math.hypot(dx, dy);
-+    const amount = displacement === 0 ? 0 : Math.min(1, units * PT_PER_CM / displacement);
-+    return makeWorldPoint(pt(point.x + dx * amount), pt(point.y + dy * amount));
-+  });
++  return smoothPolyline(points, units).map((point) => makeWorldPoint(pt(point.x), pt(point.y)));
 +}
 +
 +/** Refit a refinement's points at a simplification and smoothing; a selected curve keeps its draw command. */
@@ -8097,7 +8162,7 @@ index 4e22ccfa..f07d253c 100644
  }) {
    const platform = getActiveEditorPlatform();
    const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
-@@ -774,6 +915,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +908,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -8106,7 +8171,7 @@ index 4e22ccfa..f07d253c 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -791,8 +934,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -791,8 +927,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestValue,
      showGrid,
      showTransparencyGrid,
@@ -8115,7 +8180,7 @@ index 4e22ccfa..f07d253c 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +955,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +948,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -8124,7 +8189,7 @@ index 4e22ccfa..f07d253c 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -831,8 +974,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -831,8 +967,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestValue: s.zoomScaleRequestValue,
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
@@ -8133,7 +8198,7 @@ index 4e22ccfa..f07d253c 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +986,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +979,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -8145,7 +8210,7 @@ index 4e22ccfa..f07d253c 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -857,6 +1000,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -857,6 +993,8 @@ export const CanvasPanel = memo(function CanvasPanel({
    const baseSvgResult = snapshot.svg;
    const baseSvgModel = snapshot.svgModel;
    const [warning, setWarning] = useState<string | null>(null);
@@ -8154,7 +8219,7 @@ index 4e22ccfa..f07d253c 100644
    const [dragTooltip, setDragTooltip] = useState<DragTooltipState | null>(null);
    const dragTooltipBoundaryRef = useRef<{ left: number; top: number; right: number; bottom: number } | null>(null);
    const [dragCursorLock, setDragCursorLock] = useState<string | null>(null);
-@@ -889,14 +1034,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,14 +1027,14 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -8171,7 +8236,7 @@ index 4e22ccfa..f07d253c 100644
    const svgModel = useMemo(() => {
      if (!baseSvgModel || !svgResult) {
        return baseSvgModel;
-@@ -911,12 +1056,119 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -911,12 +1049,119 @@ export const CanvasPanel = memo(function CanvasPanel({
    }, [baseSvgModel, svgResult]);
    const [toolCursorWorld, setToolCursorWorld] = useState<WorldPoint | null>(null);
    const [magnifierState, setMagnifierState] = useState<MagnifierState | null>(null);
@@ -8294,7 +8359,7 @@ index 4e22ccfa..f07d253c 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,26 +1185,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,26 +1178,13 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -8322,7 +8387,7 @@ index 4e22ccfa..f07d253c 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1285,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1278,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -8345,7 +8410,7 @@ index 4e22ccfa..f07d253c 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,9 +1355,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,9 +1348,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -8358,7 +8423,7 @@ index 4e22ccfa..f07d253c 100644
  
    const dispatchCanvasTransform = useCallback(
      (transform: CanvasTransform) => {
-@@ -1156,16 +1382,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1156,16 +1375,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const interactionSvgRef = useRef<SVGSVGElement | null>(null);
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
@@ -8389,7 +8454,7 @@ index 4e22ccfa..f07d253c 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1265,10 +1503,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1265,10 +1496,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      [setActiveCanvasDragKind]
    );
  
@@ -8400,7 +8465,7 @@ index 4e22ccfa..f07d253c 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1300,7 +1534,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1527,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -8408,7 +8473,7 @@ index 4e22ccfa..f07d253c 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1554,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1547,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -8419,7 +8484,7 @@ index 4e22ccfa..f07d253c 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1738,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1731,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -8443,7 +8508,7 @@ index 4e22ccfa..f07d253c 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1753,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1746,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -8457,7 +8522,7 @@ index 4e22ccfa..f07d253c 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1761,11 +1971,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1761,11 +1964,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
      const handleKeyDown = (event: KeyboardEvent) => {
@@ -8470,7 +8535,7 @@ index 4e22ccfa..f07d253c 100644
        if (event.key !== "Escape" && !isUndo) {
          return;
        }
-@@ -1810,19 +2016,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +2009,37 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -8510,7 +8575,7 @@ index 4e22ccfa..f07d253c 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,16 +2062,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,16 +2055,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -8534,7 +8599,7 @@ index 4e22ccfa..f07d253c 100644
      svgResultRef,
      canvasTransformRef,
      guideDragRef,
-@@ -1857,44 +2087,51 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2080,51 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -8596,7 +8661,7 @@ index 4e22ccfa..f07d253c 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1921,15 +2158,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1921,15 +2151,19 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const applyActionWithFeedback = useCallback(
@@ -8625,7 +8690,7 @@ index 4e22ccfa..f07d253c 100644
          evaluateOptions: { sourceFingerprint, textEngine: textEngineRef.current },
          parseOptions: { ...editParseOptions, propertyWriteMode: "drag-frame", sourceFingerprint }
        });
-@@ -1940,13 +2181,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1940,13 +2174,14 @@ export const CanvasPanel = memo(function CanvasPanel({
            setWarning(`${result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
          }
  
@@ -8641,7 +8706,7 @@ index 4e22ccfa..f07d253c 100644
              precomputedResult: result
            });
          }
-@@ -1975,6 +2217,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2210,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -8885,7 +8950,7 @@ index 4e22ccfa..f07d253c 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,69 +2534,292 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,69 +2527,295 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -8998,9 +9063,12 @@ index 4e22ccfa..f07d253c 100644
 +      ends[target.end] = named.reference;
 +      if (named.insertedAt !== null) namedFrom = Math.min(namedFrom, named.insertedAt);
 +    }
-+    const penWidth = useSettingsStore.getState().settings.toolbar.penWidth;
-+    const original = originalStrokeSchema.parse({ key: crypto.randomUUID(), intent, color: originalColor, samples: draft.samples,
++    // The Pen's options apply to the stroke as it is drawn (FR-025); each is recorded only when it changes the drawing.
++    const { penWidth, penStyle, penOpacity, penSmoothing } = useSettingsStore.getState().settings.toolbar;
++    const original = originalStrokeSchema.parse({ key: crypto.randomUUID(), intent, color: strokeColorWithOpacity(originalColor, penOpacity), samples: draft.samples,
 +      ...(penWidth === DEFAULT_PEN_WIDTH_PT ? {} : { lineWidth: penWidth }),
++      ...(penStyle === "solid" ? {} : { lineStyle: penStyle }),
++      ...(penSmoothing === 0 ? {} : { smoothing: penSmoothing }),
 +      ...(ends.start !== undefined || ends.end !== undefined ? { ends } : {}) });
 +    const sourceSamples = original.samples.map((sample) => {
 +      const point = applyMatrix(inverse, makeWorldPoint(pt(sample.x), pt(sample.y)));
@@ -9214,7 +9282,7 @@ index 4e22ccfa..f07d253c 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2834,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2830,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -9222,7 +9290,7 @@ index 4e22ccfa..f07d253c 100644
          return;
        }
  
-@@ -2141,7 +2842,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2838,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -9230,7 +9298,7 @@ index 4e22ccfa..f07d253c 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2858,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2854,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -9238,7 +9306,7 @@ index 4e22ccfa..f07d253c 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2872,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2868,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -9268,7 +9336,7 @@ index 4e22ccfa..f07d253c 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3727,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3723,8 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -9277,7 +9345,7 @@ index 4e22ccfa..f07d253c 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3049,12 +3767,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3049,12 +3763,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          setWarning(`${resolution.result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
        }
  
@@ -9294,7 +9362,7 @@ index 4e22ccfa..f07d253c 100644
      },
      setSnapLines,
      logSnapDebug,
-@@ -3064,9 +3785,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3781,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -9304,7 +9372,7 @@ index 4e22ccfa..f07d253c 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3795,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3791,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -9312,7 +9380,7 @@ index 4e22ccfa..f07d253c 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3866,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3862,10 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -9324,7 +9392,7 @@ index 4e22ccfa..f07d253c 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3893,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3889,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -9334,7 +9402,7 @@ index 4e22ccfa..f07d253c 100644
      ]
    );
  
-@@ -3192,6 +3915,78 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3911,78 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -9413,7 +9481,7 @@ index 4e22ccfa..f07d253c 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +4015,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +4011,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -9432,7 +9500,7 @@ index 4e22ccfa..f07d253c 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +4049,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4045,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -9443,7 +9511,7 @@ index 4e22ccfa..f07d253c 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4072,325 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4068,329 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -9467,9 +9535,10 @@ index 4e22ccfa..f07d253c 100644
 +    setHoveredHandleId(nearest);
 +  }, [handleDisplays, onInteractionPointerMove, selectedCurve, session]);
 +
-+  // The sweep is a region in world space; each stroke it touches keeps the pieces outside it (partial-erase.ts).
++  // The sweep is a region in world space. In Partial mode each stroke it touches keeps the pieces outside it
++  // (partial-erase.ts); in Whole stroke mode each stroke it touches goes. The Eraser's size is its diameter on screen.
 +  const eraserGestureRef = useRef<{ pointerId: number; last: { x: number; y: number }; strokes: EraserStroke[]; touched: Set<string>; mergeKey: string; baseSource: string;
-+    spans: Map<string, { from: number; to: number }>; region: paper.PathItem | null; radius: number;
++    spans: Map<string, { from: number; to: number }>; region: paper.PathItem | null; radius: number; radiusPx: number; whole: boolean;
 +    toWorld: (point: { x: number; y: number }) => WorldPoint | null; cut: (id: string) => CuttablePath | null; cuts: Map<string, CuttablePath | null> } | null>(null);
 +  const eraseAt = useCallback((point: { x: number; y: number }) => {
 +    const gesture = eraserGestureRef.current;
@@ -9478,7 +9547,7 @@ index 4e22ccfa..f07d253c 100644
 +    if (!from || !to) return;
 +    // Short moves wait to join the next one, so the region grows by capsules of useful length.
 +    if (gesture.region && Math.hypot(to.x - from.x, to.y - from.y) < gesture.radius / 4) return;
-+    const ids = sweptStrokeIds(gesture.strokes, gesture.last, point, ERASER_RADIUS_PX).filter((id) => !gesture.touched.has(id));
++    const ids = sweptStrokeIds(gesture.strokes, gesture.last, point, gesture.radiusPx).filter((id) => !gesture.touched.has(id));
 +    gesture.last = point;
 +    const capsule = sweepCapsule(from, to, gesture.radius);
 +    gesture.region = gesture.region ? gesture.region.unite(capsule, { insert: false }) : capsule;
@@ -9487,6 +9556,7 @@ index 4e22ccfa..f07d253c 100644
 +    const edits = [...gesture.touched].flatMap((id) => {
 +      const span = gesture.spans.get(id);
 +      if (!span) return [];
++      if (gesture.whole) return [{ ...wholeLineSpan(gesture.baseSource, span), text: "" }];
 +      if (!gesture.cuts.has(id)) gesture.cuts.set(id, gesture.cut(id));
 +      const cut = gesture.cuts.get(id);
 +      const pieces = cut && gesture.region ? remainingStatements(cut, gesture.region, gesture.radius / 20) : [];
@@ -9573,7 +9643,9 @@ index 4e22ccfa..f07d253c 100644
 +    const svg = interactionSvgRef.current, viewBox = svgResult?.viewBox;
 +    if (!svg || !viewBox) return;
 +    const toWorld = (point: { x: number; y: number }) => clientToWorldPoint(makeClientPoint(px(point.x), px(point.y)), svg, viewBox);
-+    const origin = toWorld({ x: event.clientX, y: event.clientY }), side = toWorld({ x: event.clientX + ERASER_RADIUS_PX, y: event.clientY });
++    const { eraserSize, eraserMode } = useSettingsStore.getState().settings.toolbar;
++    const radiusPx = eraserSize / 2;
++    const origin = toWorld({ x: event.clientX, y: event.clientY }), side = toWorld({ x: event.clientX + radiusPx, y: event.clientY });
 +    if (!origin || !side) return;
 +    const handles = snapshot.editHandles;
 +    const scene = snapshot.scene;
@@ -9585,7 +9657,7 @@ index 4e22ccfa..f07d253c 100644
 +        // A circle or ellipse element spans only its own operation; the erased object is its whole statement.
 +        return [element.sourceRef.sourceId, entry ? { from: entry.from, to: entry.to } : pathStatementSpan(source, element.sourceRef.sourceId, editParseOptions) ?? span];
 +      })),
-+      region: null, radius: Math.hypot(side.x - origin.x, side.y - origin.y), toWorld, cuts: new Map(),
++      region: null, radius: Math.hypot(side.x - origin.x, side.y - origin.y), radiusPx, whole: eraserMode === "whole", toWorld, cuts: new Map(),
 +      // A recorded stroke is cut when its drawing is that one statement; its pieces replace the record.
 +      cut: (id) => {
 +        const element = scene?.elements.find((item) => item.sourceRef.sourceId === id);
@@ -11364,14 +11436,12 @@ index 00000000..e60d3051
 +};
 diff --git a/packages/app/src/ui/canvas-panel/eraser-sweep.ts b/packages/app/src/ui/canvas-panel/eraser-sweep.ts
 new file mode 100644
-index 00000000..0c687287
+index 00000000..71cb58d6
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/eraser-sweep.ts
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,111 @@
 +import paper from "paper";
 +type Point = { x: number; y: number };
-+/** The eraser's reach around the pen, in screen pixels. */
-+export const ERASER_RADIUS_PX = 10;
 +export type EraserStroke = { sourceId: string; strokeRadius: number; segments: Array<readonly [Point, Point]> };
 +
 +function distanceToSegment(point: Point, start: Point, end: Point): number {
@@ -11482,7 +11552,7 @@ index 00000000..0c687287
 +  return strokes;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-index a7b0a7e2..58eadb02 100644
+index a7b0a7e2..8d3c7d2f 100644
 --- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
 @@ -2,18 +2,23 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
@@ -11490,7 +11560,7 @@ index a7b0a7e2..58eadb02 100644
  import { buildDrawOptions } from "tikz-editor/edit/element-templates";
  import type { WorldPoint } from "../coords/types";
 +import type { ScenePath } from "tikz-editor/semantic/types";
-+import { originalDrawingSource, tikzStrokeColor, tikzStrokeOpacity, type OriginalStroke } from '../../original-ink';
++import { inkStyleOptions, originalDrawingSource, tikzStrokeColor, type OriginalStroke } from '../../original-ink';
 +import { applyMatrix } from "tikz-editor/semantic/transform";
 +import type { WorldTransform } from "tikz-editor/coords/transforms";
 +import { geometryScope } from "./paper-scope";
@@ -12048,12 +12118,12 @@ index a7b0a7e2..58eadb02 100644
 +  return originalDrawingSource({ ...stroke, samples: stroke.samples.map((sample, index) => ({ ...sample, x: points[index].x, y: points[index].y })) });
 +}
 +
-+/** Recorded ink refitted at a tolerance: one draw command carrying the ink's colour and opacity, or null when no geometric fit exists. */
++/** Recorded ink refitted at a tolerance: one draw command carrying the ink's colour and style, or null when no geometric fit exists. */
 +export function refittedInkDrawing(stroke: OriginalStroke, inverse: WorldTransform, toleranceWorld: number): string | null {
-+  const fit = interpretFreehandToolSource({ points: localInkPoints(stroke, inverse), minSampleDistanceWorld: 0 }, 1, { strokeColor: tikzStrokeColor(stroke), lineWidth: stroke.lineWidth, toleranceWorld, ends: stroke.ends });
++  const fit = interpretFreehandToolSource({ points: localInkPoints(stroke, inverse), minSampleDistanceWorld: 0 }, 1, { strokeColor: tikzStrokeColor(stroke), toleranceWorld, ends: stroke.ends });
 +  if (!fit || fit.kind === "raw") return null;
-+  const opacity = tikzStrokeOpacity(stroke);
-+  return opacity === 1 ? fit.source : fit.source.replace(/^\\draw(?:\[([^\]]*)\])?/u, (_, options: string | undefined) => `\\draw[${options ? options + ", " : ""}draw opacity=${opacity}]`);
++  const style = inkStyleOptions(stroke);
++  return style.length === 0 ? fit.source : fit.source.replace(/^\\draw(?:\[([^\]]*)\])?/u, (_, options: string | undefined) => `\\draw[${[...(options ? [options] : []), ...style].join(", ")}]`);
 +}
 +
 diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
@@ -12630,7 +12700,7 @@ index 00000000..6948104e
 +  window.dispatchEvent(new Event(OCCUPIED_INSETS_EVENT));
 +}
 diff --git a/packages/app/src/ui/canvas-panel/overlays.tsx b/packages/app/src/ui/canvas-panel/overlays.tsx
-index 13b3ad2b..d4aad884 100644
+index 13b3ad2b..76a96c6a 100644
 --- a/packages/app/src/ui/canvas-panel/overlays.tsx
 +++ b/packages/app/src/ui/canvas-panel/overlays.tsx
 @@ -1,6 +1,6 @@
@@ -12697,43 +12767,59 @@ index 13b3ad2b..d4aad884 100644
          if (line.type === "points") {
            const points = line.points.map((point) => worldToSvgPoint(point, viewBox));
            const first = points[0];
-@@ -326,6 +361,9 @@ export function ToolPreviewOverlay({
+@@ -326,6 +361,13 @@ export function ToolPreviewOverlay({
    handleStrokeWidth: number;
    previewArrowPoints: (x1: number, y1: number, x2: number, y2: number, size: number) => string;
  }) {
-+  // The pen's mark shows as it will be written: the Pen's width, in points, and its colour.
++  // The pen's mark shows as it will be written: the Pen's width, in points, its colour, opacity, and dash style.
 +  const penWidth = useSettingsStore((state) => state.settings.toolbar.penWidth);
++  const penStyle = useSettingsStore((state) => state.settings.toolbar.penStyle);
++  const penOpacity = useSettingsStore((state) => state.settings.toolbar.penOpacity);
++  // TikZ's dashed and dotted patterns, as the renderer draws them (tikz-editor semantic/style/apply-flag.ts).
++  const penDashes = penStyle === "dashed" ? "3 3" : penStyle === "dotted" ? `${penWidth} 2` : undefined;
 +  const penColor = cssColorForToken(useEditorStore((state) => state.creationStrokeColor)) ?? undefined;
    if (!toolPreview) {
      return null;
    }
-@@ -478,7 +516,7 @@ export function ToolPreviewOverlay({
+@@ -478,27 +520,16 @@ export function ToolPreviewOverlay({
          </g>
        )}
        {toolPreview.kind === "freehand" && (
 -        <g>
-+        <g data-tool-preview="freehand" style={{ stroke: penColor }}>
-           {toolPreview.segments.map((segment, index) =>
-             segment.kind === "line" ? (
-               <line
-@@ -488,14 +526,14 @@ export function ToolPreviewOverlay({
-                 x2={segment.x2}
-                 y2={segment.y2}
-                 className={css.toolPreviewStroke}
+-          {toolPreview.segments.map((segment, index) =>
+-            segment.kind === "line" ? (
+-              <line
+-                key={`freehand-line-${index}`}
+-                x1={segment.x1}
+-                y1={segment.y1}
+-                x2={segment.x2}
+-                y2={segment.y2}
+-                className={css.toolPreviewStroke}
 -                strokeWidth={handleStrokeWidth}
-+                strokeWidth={penWidth}
-               />
-             ) : (
-               <path
-                 key={`freehand-bezier-${index}`}
-                 d={`M ${fmt(segment.x1)},${fmt(segment.y1)} C ${fmt(segment.c1x)},${fmt(segment.c1y)} ${fmt(segment.c2x)},${fmt(segment.c2y)} ${fmt(segment.x2)},${fmt(segment.y2)}`}
-                 className={css.toolPreviewStroke}
+-              />
+-            ) : (
+-              <path
+-                key={`freehand-bezier-${index}`}
+-                d={`M ${fmt(segment.x1)},${fmt(segment.y1)} C ${fmt(segment.c1x)},${fmt(segment.c1y)} ${fmt(segment.c2x)},${fmt(segment.c2y)} ${fmt(segment.x2)},${fmt(segment.y2)}`}
+-                className={css.toolPreviewStroke}
 -                strokeWidth={handleStrokeWidth}
-+                strokeWidth={penWidth}
-               />
-             )
-           )}
-@@ -644,6 +682,43 @@ export function NodePositionLinkOverlay({
+-              />
+-            )
+-          )}
++        <g data-tool-preview="freehand" style={{ stroke: penColor, strokeOpacity: penOpacity, strokeDasharray: penDashes }}>
++          {/* One path, so a dash pattern runs along the whole mark instead of restarting at each sample. */}
++          <path
++            d={toolPreview.segments.map((segment, index) =>
++              (index === 0 ? `M ${fmt(segment.x1)},${fmt(segment.y1)} ` : "") + (segment.kind === "line"
++                ? `L ${fmt(segment.x2)},${fmt(segment.y2)}`
++                : `C ${fmt(segment.c1x)},${fmt(segment.c1y)} ${fmt(segment.c2x)},${fmt(segment.c2y)} ${fmt(segment.x2)},${fmt(segment.y2)}`)).join(" ")}
++            className={css.toolPreviewStroke}
++            strokeWidth={penWidth}
++          />
+         </g>
+       )}
+       {toolPreview.kind === "grid" && (
+@@ -644,6 +675,43 @@ export function NodePositionLinkOverlay({
    );
  }
  
@@ -12777,7 +12863,7 @@ index 13b3ad2b..d4aad884 100644
  export function HitRegionLayer({
    hitRegions,
    hoveredElementId,
-@@ -714,6 +789,7 @@ export function HitRegionLayer({
+@@ -714,6 +782,7 @@ export function HitRegionLayer({
          const cursor =
            cursorByTargetId
              ? cursorOverride ?? "default"
@@ -12785,7 +12871,7 @@ index 13b3ad2b..d4aad884 100644
            : toolMode === "select"
              ? region.shape === "rect" && region.matrixEdgeSelection
                ? region.matrixEdgeSelection.cursor
-@@ -732,7 +808,7 @@ export function HitRegionLayer({
+@@ -732,7 +801,7 @@ export function HitRegionLayer({
          const className = [css.hitRegion, isHovered ? css.hitRegionHovered : ""].filter(Boolean).join(" ");
          const bucketUsesFillHitArea = toolMode === "addBucket" && shouldUseBucketFillHitArea(region);
          const pointerEvents =
@@ -12794,7 +12880,7 @@ index 13b3ad2b..d4aad884 100644
              ? region.pointerMode === "stroke"
                ? "stroke"
                : region.shape === "rect"
-@@ -751,7 +827,7 @@ export function HitRegionLayer({
+@@ -751,7 +820,7 @@ export function HitRegionLayer({
                : "none";
  
          const onEnter = () => {
@@ -12803,7 +12889,7 @@ index 13b3ad2b..d4aad884 100644
              onHoverChange(region.targetId);
              return;
            }
-@@ -760,7 +836,7 @@ export function HitRegionLayer({
+@@ -760,7 +829,7 @@ export function HitRegionLayer({
            }
          };
          const onLeave = () => {
@@ -12812,7 +12898,7 @@ index 13b3ad2b..d4aad884 100644
          };
  
          if (region.shape === "path") {
-@@ -901,12 +977,16 @@ function shouldUseBucketFillHitArea(region: HitRegion): boolean {
+@@ -901,12 +970,16 @@ function shouldUseBucketFillHitArea(region: HitRegion): boolean {
  
  export function SelectionOverlay({
    marqueeBounds,
@@ -12829,7 +12915,7 @@ index 13b3ad2b..d4aad884 100644
    selectionBoxes: ReadonlyArray<SelectionBoxDisplay>;
    adornmentHighlightBoxes: ReadonlyArray<AdornmentHighlightBox>;
    adornmentConnectors: ReadonlyArray<AdornmentConnectorDisplay>;
-@@ -969,7 +1049,21 @@ export function SelectionOverlay({
+@@ -969,7 +1042,21 @@ export function SelectionOverlay({
              strokeWidth={selectionStrokeWidth}
            />
          ))}
@@ -12852,7 +12938,7 @@ index 13b3ad2b..d4aad884 100644
            <rect
              className={css.marqueeRect}
              x={marqueeBounds.minX}
-@@ -1046,15 +1140,24 @@ export function SelectionDragLayer({
+@@ -1046,15 +1133,24 @@ export function SelectionDragLayer({
  
  export function HandleOverlay({
    handleDisplays,
@@ -12878,7 +12964,7 @@ index 13b3ad2b..d4aad884 100644
    handleHalfSize: number;
    handleStrokeWidth: number;
    onHandlePointerDown: (event: ReactPointerEvent<SVGElement>, handle: EditHandle) => void;
-@@ -1078,10 +1181,67 @@ export function HandleOverlay({
+@@ -1078,10 +1174,67 @@ export function HandleOverlay({
      centerPivotWorld: WorldPoint,
      cursor: string
    ) => void;
@@ -12946,7 +13032,7 @@ index 13b3ad2b..d4aad884 100644
          const onPointerDown = (event: ReactPointerEvent<SVGElement>) => {
            if (display.kind === "move-handle") {
              onHandlePointerDown(event, display.handle);
-@@ -1119,7 +1279,7 @@ export function HandleOverlay({
+@@ -1119,7 +1272,7 @@ export function HandleOverlay({
                  y1={display.anchor.y}
                  x2={display.point.x}
                  y2={display.point.y}
@@ -12955,7 +13041,7 @@ index 13b3ad2b..d4aad884 100644
                  onPointerDown={onPointerDown}
                  onContextMenu={onContextMenu}
                  data-handle-kind="rotate-element-stem"
-@@ -1160,7 +1320,9 @@ export function HandleOverlay({
+@@ -1160,7 +1313,9 @@ export function HandleOverlay({
                cy={display.point.y}
                r={handleHalfSize}
                strokeWidth={handleStrokeWidth}
@@ -12966,7 +13052,7 @@ index 13b3ad2b..d4aad884 100644
                onPointerDown={onPointerDown}
                onContextMenu={onContextMenu}
                data-handle-kind={display.kind}
-@@ -1183,7 +1345,9 @@ export function HandleOverlay({
+@@ -1183,7 +1338,9 @@ export function HandleOverlay({
                  ? `rotate(${fmt(display.rotationDeg)} ${fmt(display.point.x)} ${fmt(display.point.y)})`
                  : undefined
              }
@@ -14195,7 +14281,7 @@ index 31816cbd..67fbce22 100644
      activeDocumentId,
      activeFigureId,
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
-index de0ccae2..5905982b 100644
+index de0ccae2..67db6add 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasDerivedState.ts
 @@ -1,13 +1,16 @@
@@ -14218,16 +14304,19 @@ index de0ccae2..5905982b 100644
  import { resolveAddShapeDraft, resolveAddShapeOriginFromDrag } from "./add-shape-draft";
  import {
    pathToolCanClose,
-@@ -16,7 +19,7 @@ import {
+@@ -15,8 +18,10 @@ import {
+   pathToolShouldClose
  } from "./path-tool";
  import { resolveFreehandPreviewSegments } from "./freehand-tool";
++import { smoothPolyline } from "../../original-ink";
++import { useSettingsStore } from "../../settings/useSettingsStore";
  import { buildAnchoredGridPreviewLines } from "./panel-helpers";
 -import type { CanvasSnapshot, DragState, FreehandToolDraft, PathToolDraft, PendingBezier } from "./types";
 +import type { ArcDraft, TapDraft, CanvasSnapshot, DragState, FreehandToolDraft, PathToolDraft, PendingBezier } from "./types";
  import type { ToolPreview } from "./overlays";
  
  const TOOL_PREVIEW_CIRCLE_RADIUS_PT = 0.8 * PT_PER_CM;
-@@ -34,10 +37,13 @@ export type UseCanvasDerivedStateArgs = {
+@@ -34,10 +39,13 @@ export type UseCanvasDerivedStateArgs = {
    toolCursorWorld: WorldPoint | null;
    selectedAddShape: Exclude<NodeShapePresetId, "custom">;
    freehandDraft: FreehandToolDraft | null;
@@ -14242,7 +14331,7 @@ index de0ccae2..5905982b 100644
    bezierBendDraft: Extract<DragState, { kind: "tool-bezier-bend" }> | null;
    canvasTransform: CanvasTransform;
  };
-@@ -50,20 +56,82 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -50,20 +58,84 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
      toolCursorWorld,
      selectedAddShape,
      freehandDraft,
@@ -14258,6 +14347,8 @@ index de0ccae2..5905982b 100644
      canvasTransform
    } = args;
 +  const bezierLattice: BezierLattice = latticeLock ? { transform: latticeTransform } : null;
++  // The pen's mark shows the Pen's smoothing as it is drawn (FR-025).
++  const penSmoothing = useSettingsStore((state) => state.settings.toolbar.penSmoothing);
  
    const toolPreview = useMemo((): ToolPreview | null => {
      if (!svgResult || toolMode === "select") {
@@ -14327,16 +14418,18 @@ index de0ccae2..5905982b 100644
        const liveWorld = toolDraft?.currentWorld ?? toolCursorWorld;
        if (!liveWorld) {
          return null;
-@@ -82,7 +150,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -82,7 +154,9 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        }
  
        const segments: Extract<ToolPreview, { kind: "freehand" }>["segments"] = [];
 -      for (const segment of resolveFreehandPreviewSegments(freehandDraft, freehandSmoothingPx, canvasTransform.scale)) {
-+      for (const segment of resolveFreehandPreviewSegments(freehandDraft)) {
++      const smoothed = penSmoothing === 0 ? freehandDraft
++        : { ...freehandDraft, points: smoothPolyline(freehandDraft.points, penSmoothing).map((point) => worldPoint(pt(point.x), pt(point.y))) };
++      for (const segment of resolveFreehandPreviewSegments(smoothed)) {
          if (segment.kind === "line") {
            const from = worldToSvgPoint(segment.from, svgResult.viewBox);
            const to = worldToSvgPoint(segment.to, svgResult.viewBox);
-@@ -117,7 +185,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -117,7 +191,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
      }
  
      const makeBezierPreview = (startWorld: WorldPoint, endWorld: WorldPoint, bendWorld: WorldPoint): ToolPreview => {
@@ -14345,7 +14438,7 @@ index de0ccae2..5905982b 100644
        const start = worldToSvgPoint(startWorld, svgResult.viewBox);
        const end = worldToSvgPoint(controls.endWorld, svgResult.viewBox);
        const c1 = worldToSvgPoint(controls.control1, svgResult.viewBox);
-@@ -182,7 +250,8 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -182,7 +256,8 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
            const controls = resolveBezierControlsFromBend(
              pathSegmentDraft.startWorld,
              pathSegmentDraft.endWorld,
@@ -14355,7 +14448,7 @@ index de0ccae2..5905982b 100644
            );
            const from = worldToSvgPoint(pathSegmentDraft.startWorld, svgResult.viewBox);
            const c1 = worldToSvgPoint(controls.control1, svgResult.viewBox);
-@@ -394,6 +463,21 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -394,6 +469,21 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        };
      }
  
@@ -14377,16 +14470,16 @@ index de0ccae2..5905982b 100644
      const dx = toolDraft.currentWorld.x - toolDraft.startWorld.x;
      const dy = toolDraft.currentWorld.y - toolDraft.startWorld.y;
      const radius = Math.hypot(dx, dy);
-@@ -404,7 +488,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
+@@ -404,7 +494,7 @@ export function useCanvasDerivedState(args: UseCanvasDerivedStateArgs) {
        cy: start.y,
        r: radius > 1e-4 ? radius : TOOL_PREVIEW_CIRCLE_RADIUS_PT
      };
 -  }, [bezierBendDraft, canvasTransform.scale, freehandDraft, freehandSmoothingPx, pathDraft, pathSegmentDraft, pendingBezier, selectedAddShape, svgResult, toolCursorWorld, toolDraft, toolMode]);
-+  }, [arcDraft, tapDraft, latticeTransform, latticeLock, bezierBendDraft, canvasTransform.scale, freehandDraft, pathDraft, pathSegmentDraft, pendingBezier, selectedAddShape, svgResult, toolCursorWorld, toolDraft, toolMode]);
++  }, [arcDraft, tapDraft, latticeTransform, latticeLock, bezierBendDraft, canvasTransform.scale, freehandDraft, pathDraft, penSmoothing, pathSegmentDraft, pendingBezier, selectedAddShape, svgResult, toolCursorWorld, toolDraft, toolMode]);
  
    return {
      toolPreview
-@@ -442,3 +526,12 @@ function encodeTranslatedPathPreview(
+@@ -442,3 +532,12 @@ function encodeTranslatedPathPreview(
    }
    return parts.join(" ");
  }
