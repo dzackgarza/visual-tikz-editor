@@ -199,4 +199,4 @@ repository or an issue, or a repository fact. Versions follow semantic versionin
 removed or redefined principle, MINOR for a new principle or section, PATCH for wording. Each
 specification and plan MUST record its compliance with the version in force.
 
-**Version**: 2.0.0 | **Ratified**: TODO(RATIFICATION_DATE): the user has not reviewed these principles | **Last Amended**: 2026-11-13
+**Version**: 2.0.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-13
