@@ -401,6 +401,10 @@ function HostBridge() {
 							(restoredState && !state.snapshot.figures.some(figure => figure.id === restoredState.activeFigureId))) return;
 						pendingLoad?.();
 						pendingLoad = null;
+						// A file without a kept view opens with every layer shown and unlocked.
+						state.dispatch(restoredState
+							? { type: 'RESTORE_STATEMENT_MARKS', locked: restoredState.locked, hidden: restoredState.hidden }
+							: { type: 'RESTORE_STATEMENT_MARKS', locked: [], hidden: [] });
 						if (restoredState) {
 							state.dispatch({ type: 'SET_ACTIVE_FIGURE', figureId: restoredState.activeFigureId });
 							state.dispatch({ type: 'SET_TOOL_MODE', mode: restoredState.tool });

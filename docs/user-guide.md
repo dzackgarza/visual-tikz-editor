@@ -86,7 +86,7 @@ After a pen stroke, the editor offers a fitted curve; the canvas shows the recor
 
 ## Layers
 
-A layer is a named top-level TikZ `scope`. In **Layers**, you can create and rename layers, move selected objects into a layer, hide and show layers, change their order, and delete a layer with its contents after a confirmation. The editor refuses a move that puts a named coordinate after a path that uses it. Names, contents, order, and visibility are saved in the source. Layer locks last only for the open session; a reopened file starts with every layer unlocked.
+A layer is a named top-level TikZ `scope`. In **Layers**, you can create and rename layers, move selected objects into a layer, hide and show layers, lock and unlock them, change their order, and delete a layer with its contents after a confirmation. The editor refuses a move that puts a named coordinate after a path that uses it. Names, contents, and order are saved in the source. Hidden and locked layers are view state of the file, like its zoom: the file reopens with the same layers hidden and locked, and the source does not change, so a hidden layer still prints. You cannot select an object in a hidden layer.
 
 ## Settings and shortcuts
 

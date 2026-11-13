@@ -8,12 +8,15 @@ import type { EditorSnapshot, EditorSnapshotResult, SnapshotFailure, SnapshotReq
 /** The view that the canvas shows of the figure `activeFigureId`; null until the canvas shows one. */
 export function editorState(state: ReturnType<typeof useEditorStore.getState>, activeFigureId: string): EditorState | null {
   if (state.canvasView === null) return null;
+  const document = state.documents[state.activeDocumentId];
   return {
     activeFigureId,
     selection: [...state.selectedElementIds], tool: state.toolMode,
     viewport: { ...state.canvasView },
     fitToContent: state.fitToContentModeActive,
     interpretGeometry: state.freehandInterpretGeometry,
+    locked: document.lockedStatements.map(mark => ({ ...mark })),
+    hidden: document.hiddenStatements.map(mark => ({ ...mark })),
   };
 }
 
