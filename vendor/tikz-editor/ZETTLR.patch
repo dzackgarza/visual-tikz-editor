@@ -527,12 +527,12 @@ index 00000000..0e1984ce
 +  window.dispatchEvent(new Event("tikz-embed-redo-request"));
 +}
 diff --git a/packages/app/src/index.ts b/packages/app/src/index.ts
-index 1672d1d6..76d0fb91 100644
+index 1672d1d6..062194f8 100644
 --- a/packages/app/src/index.ts
 +++ b/packages/app/src/index.ts
 @@ -1,4 +1,6 @@
  export { App } from "./ui/App";
-+export { CANVAS_ZOOM_BASE_SCALE } from "./store/workspace-state.js";
++export { PRINTED_SIZE_SCALE } from "./store/workspace-state.js";
 +export { publishOccupiedInsets } from "./ui/canvas-panel/occupied-insets.js";
  export { APP_MENU_COMMAND_IDS, APP_MENU_DEFINITION } from "./app-menu/index.js";
  export { CANVAS_CONTEXT_MENU_DEFINITION } from "./context-menu/index.js";
@@ -2003,7 +2003,7 @@ index 450957d0..03f8f7bc 100644
    | { type: "SET_FIT_TO_CONTENT_MODE"; active: boolean }
    | { type: "SET_CANVAS_FIT_TO_CONTENT_SCALE"; scale: number | null }
 diff --git a/packages/app/src/store/workspace-state.ts b/packages/app/src/store/workspace-state.ts
-index 758bd611..855d41c5 100644
+index 758bd611..9e69cf0c 100644
 --- a/packages/app/src/store/workspace-state.ts
 +++ b/packages/app/src/store/workspace-state.ts
 @@ -1,3 +1,4 @@
@@ -2011,30 +2011,31 @@ index 758bd611..855d41c5 100644
  import type {
    CanvasTransform,
    DocumentFileRef,
-@@ -14,11 +15,21 @@ export const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
+@@ -14,11 +15,22 @@ export const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
  \end{tikzpicture}`;
  
  export const WORKSPACE_VERSION = 3;
-+export const CANVAS_ZOOM_BASE_SCALE = 5;
-+/** Zoom levels the zoom control offers; the startup view snaps down to one so the readout can return to it. */
-+export const CANVAS_ZOOM_PRESET_PERCENTS = [5, 8, 10, 15, 25, 50, 75, 100, 125, 150, 200, 300, 400] as const;
++/** The canvas scale at printed size: 96 CSS px per inch over the 72.27 TeX points per inch that the canvas draws in. */
++export const PRINTED_SIZE_SCALE = 96 / 72.27;
++/** Zoom levels, as percentages of printed size, that the zoom menu offers. */
++export const CANVAS_ZOOM_PRESET_PERCENTS = [10, 20, 50, 100, 200, 500, 1000] as const;
 +
 +/** The largest preset at or below a scale, as a scale: the view it gives holds at least what the scale held. */
 +export function presetScaleAtMost(scale: number): number {
-+  const percent = (scale / CANVAS_ZOOM_BASE_SCALE) * 100;
++  const percent = (scale / PRINTED_SIZE_SCALE) * 100;
 +  const preset = [...CANVAS_ZOOM_PRESET_PERCENTS].reverse().find((level) => level <= percent + 1e-9) ?? CANVAS_ZOOM_PRESET_PERCENTS[0];
-+  return (preset / 100) * CANVAS_ZOOM_BASE_SCALE;
++  return (preset / 100) * PRINTED_SIZE_SCALE;
 +}
  
  export const DEFAULT_CANVAS_TRANSFORM: CanvasTransform = {
    translateX: 0,
    translateY: 0,
 -  scale: 1
-+  scale: CANVAS_ZOOM_BASE_SCALE
++  scale: PRINTED_SIZE_SCALE
  };
  
  export type WorkspaceSeedDocument = {
-@@ -93,9 +104,10 @@ export function createDocumentSession(params: {
+@@ -93,9 +105,10 @@ export function createDocumentSession(params: {
      lastEditPatchBaseRevision: null,
      lastEditWarningMessage: null,
      lastEditWarningToken: 0,
@@ -2047,7 +2048,7 @@ index 758bd611..855d41c5 100644
      focusedScopeId: null,
      activeHandleId: null,
      fileRef: params.fileRef ?? null,
-@@ -209,9 +221,10 @@ export function projectState(workspace: WorkspacePersistedState, ui: WorkspaceEp
+@@ -209,9 +222,10 @@ export function projectState(workspace: WorkspacePersistedState, ui: WorkspaceEp
      lastEditPatchBaseRevision: active.lastEditPatchBaseRevision,
      lastEditWarningMessage: active.lastEditWarningMessage,
      lastEditWarningToken: active.lastEditWarningToken,
@@ -2060,7 +2061,7 @@ index 758bd611..855d41c5 100644
      focusedScopeId: active.focusedScopeId,
      activeHandleId: active.activeHandleId,
      activeDocumentId: normalizedWorkspace.activeDocumentId,
-@@ -221,17 +234,17 @@ export function projectState(workspace: WorkspacePersistedState, ui: WorkspaceEp
+@@ -221,17 +235,17 @@ export function projectState(workspace: WorkspacePersistedState, ui: WorkspaceEp
      recentDocumentIds: normalizedWorkspace.recentDocumentIds,
      toolMode: ui.toolMode,
      canvasTransform: ui.canvasTransform,
@@ -2080,7 +2081,7 @@ index 758bd611..855d41c5 100644
      bucketFillColor: ui.bucketFillColor,
      selectedAddShape: ui.selectedAddShape,
      selectedAddMatrixRows: ui.selectedAddMatrixRows,
-@@ -273,17 +286,17 @@ export function uiStateFromEditorState(state: EditorState): WorkspaceEphemeralSt
+@@ -273,17 +287,17 @@ export function uiStateFromEditorState(state: EditorState): WorkspaceEphemeralSt
    return {
      toolMode: state.toolMode,
      canvasTransform: state.canvasTransform,
@@ -7305,18 +7306,18 @@ index 00000000..a3cd7fb7
 +.action[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/ZoomDisplayControl.tsx b/packages/app/src/ui/ZoomDisplayControl.tsx
 new file mode 100644
-index 00000000..e45afbd7
+index 00000000..75663a53
 --- /dev/null
 +++ b/packages/app/src/ui/ZoomDisplayControl.tsx
 @@ -0,0 +1,53 @@
 +import { useState } from "react";
 +import { useEditorStore } from "../store/store";
-+import { CANVAS_ZOOM_BASE_SCALE, CANVAS_ZOOM_PRESET_PERCENTS } from "../store/workspace-state";
++import { PRINTED_SIZE_SCALE, CANVAS_ZOOM_PRESET_PERCENTS } from "../store/workspace-state";
 +import { ToolbarToolPopup, ToolbarPopupSection } from "./ToolbarToolPopup";
 +import css from "./ZoomDisplayControl.module.css";
 +
 +const MIN_ZOOM_PERCENT = CANVAS_ZOOM_PRESET_PERCENTS[0];
-+const MAX_ZOOM_PERCENT = 400;
++const MAX_ZOOM_PERCENT = CANVAS_ZOOM_PRESET_PERCENTS[CANVAS_ZOOM_PRESET_PERCENTS.length - 1];
 +
 +/** Zoom and canvas aids behind one control showing the zoom percentage. */
 +export function ZoomDisplayControl({ triggerClassName }: { triggerClassName: string }) {
@@ -7329,10 +7330,10 @@ index 00000000..e45afbd7
 +  const canvasFitToContentScale = useEditorStore((state) => state.canvasFitToContentScale);
 +  const dispatch = useEditorStore((state) => state.dispatch);
 +
-+  const zoomPercent = Math.round((canvasTransform.scale / CANVAS_ZOOM_BASE_SCALE) * 100);
++  const zoomPercent = Math.round((canvasTransform.scale / PRINTED_SIZE_SCALE) * 100);
 +  const fitToContentDoubleZoomPercent = canvasFitToContentScale == null
 +    ? MAX_ZOOM_PERCENT
-+    : Math.ceil((canvasFitToContentScale / CANVAS_ZOOM_BASE_SCALE) * 200);
++    : Math.ceil((canvasFitToContentScale / PRINTED_SIZE_SCALE) * 200);
 +  const maxZoomPercent = Math.max(MAX_ZOOM_PERCENT, fitToContentDoubleZoomPercent, zoomPercent);
 +  const sliderZoomPercent = Math.max(MIN_ZOOM_PERCENT, Math.min(maxZoomPercent, zoomPercent));
 +  const zoomOptions = [...new Set([
@@ -7341,7 +7342,7 @@ index 00000000..e45afbd7
 +    zoomPercent
 +  ])].sort((left, right) => left - right);
 +  const requestZoomPercent = (percent: number) =>
-+    dispatch({ type: "REQUEST_ZOOM_SCALE", scale: (percent / 100) * CANVAS_ZOOM_BASE_SCALE });
++    dispatch({ type: "REQUEST_ZOOM_SCALE", scale: (percent / 100) * PRINTED_SIZE_SCALE });
 +
 +  return (
 +    <ToolbarToolPopup open={open} onClose={() => setOpen(false)} popup={

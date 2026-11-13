@@ -666,10 +666,10 @@ describe("standalone workbench host boundary", function () {
         const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
         await input.touch([await stableCenter(zoom)]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "5%", exact: true })),
+          await stableCenter(frame.getByRole("button", { name: "10%", exact: true })),
         ]);
         await input.touch([await stableCenter(zoom)]);
-        await expect(zoom).toHaveText("5%");
+        await expect(zoom).toHaveText("10%");
         const free = await drawLine();
         assert.ok(
           free.some((value) => !Number.isInteger(value)),
@@ -1029,10 +1029,10 @@ describe("standalone workbench host boundary", function () {
         const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
         const fitZoom = await zoom.innerText();
         await tap(zoom);
-        await tap(frame.getByRole("button", { name: "15%", exact: true }));
+        await tap(frame.getByRole("button", { name: "50%", exact: true }));
         await tap(zoom);
-        await expect(zoom).toHaveText("15%");
-        assert.notEqual(fitZoom, "15%", "The preset zoom is the fit zoom");
+        await expect(zoom).toHaveText("50%");
+        assert.notEqual(fitZoom, "50%", "The preset zoom is the fit zoom");
         at = await lattice();
         assert.deepEqual(
           await draw(at(2.3, 1.4), "Endpoint", at(6, 1), "Lattice"),
@@ -1553,7 +1553,7 @@ describe("standalone workbench host boundary", function () {
         const zoom = frame
           .locator("[data-diagram-tools]")
           .getByRole("button", { name: "Zoom and display", exact: true });
-        const levels = ["5%", "8%", "100%", "400%", "Fit diagram"];
+        const levels = ["10%", "20%", "100%", "1000%", "Fit diagram"];
         for (const level of levels) {
           await input.touch([await stableCenter(zoom)]);
           await input.touch([await stableCenter(frame.getByRole("button", { name: level, exact: true }))]);

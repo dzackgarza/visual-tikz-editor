@@ -2,7 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setActiveEditorPlatform } from '@tikz-editor/app/platform/current';
 import { useEditorStore } from '@tikz-editor/app/store';
-import { CANVAS_ZOOM_BASE_SCALE, getEditorSettings, publishOccupiedInsets, reloadEditorSettings, updateEditorGeneralSettings } from '@tikz-editor/app';
+import { PRINTED_SIZE_SCALE, getEditorSettings, publishOccupiedInsets, reloadEditorSettings, updateEditorGeneralSettings } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
@@ -435,8 +435,8 @@ function HostBridge() {
 					reply(command); return;
 				case 'zoom': {
 					const dispatch = useEditorStore.getState().dispatch;
-					if (command.scale !== undefined) dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: command.scale * CANVAS_ZOOM_BASE_SCALE });
-					else if (command.direction === 'normal') dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: CANVAS_ZOOM_BASE_SCALE });
+					if (command.scale !== undefined) dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: command.scale * PRINTED_SIZE_SCALE });
+					else if (command.direction === 'normal') dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: PRINTED_SIZE_SCALE });
 					else if (command.direction === 'fit') dispatch({ type: 'REQUEST_FIT_TO_CONTENT' });
 					else if (command.direction === 'in' || command.direction === 'out') dispatch({ type: 'REQUEST_ZOOM', direction: command.direction });
 					else { reply(command, 'invalid-command'); return; }

@@ -159,14 +159,14 @@ reference, and holds the pen over a lattice point and reads the status line.
 
 ### Stories (red first)
 
-- [ ] T050 [P] [US8] Story "a figure with content opens fitted with the 44 px margin and reopens at its last view" (FR-040, SC-005) in `test/workbench-browser.spec.ts`
-- [ ] T051 [P] [US8] Story "an empty figure opens at 100 % with the origin centred and the axes visible; Normal Size makes 1 cm of the figure 96 / 2.54 CSS px; the ruler labels and the status line read figure coordinates, with no pixel unit" (FR-041, FR-042, Principle VI) in `test/workbench-browser.spec.ts`
-- [ ] T052 [P] [US8] Story "the pen over (1, 2) makes the status line 'Pointer position' read 1 and 2 and nothing else" (FR-044) in `test/workbench-browser.spec.ts`
-- [ ] T053 [P] [US8] Story "the zoom readout opens Zoom to Fit, Zoom to Selection, Normal Size, and 10–1000 %; zooming changes neither source nor selection; Snap toggles and Snapping rules opens Lattice, Objects, Alignment, Angle" (FR-023, FR-043) in `test/workbench-browser.spec.ts`; commit T050–T053 red
+- [X] T050 [P] [US8] Story "a figure with content opens fitted with the 44 px margin and reopens at its last view" (FR-040, SC-005) in `test/workbench-browser.spec.ts`
+- [X] T051 [P] [US8] Story "an empty figure opens at 100 % with the origin centred and the axes visible; Normal Size makes 1 cm of the figure 96 / 2.54 CSS px; the ruler labels and the status line read figure coordinates, with no pixel unit" (FR-041, FR-042, Principle VI) in `test/workbench-browser.spec.ts`
+- [X] T052 [P] [US8] Story "the pen over (1, 2) makes the status line 'Pointer position' read 1 and 2 and nothing else" (FR-044) in `test/workbench-browser.spec.ts`
+- [X] T053 [P] [US8] Story "the zoom readout opens Zoom to Fit, Zoom to Selection, Normal Size, and 10–1000 %; zooming changes neither source nor selection; Snap toggles and Snapping rules opens Lattice, Objects, Alignment, Angle" (FR-023, FR-043) in `test/workbench-browser.spec.ts`; commit T050–T053 red
 
 ### Implementation
 
-- [ ] T054 [US8] Set the scale so that 1 is printed size at 96 CSS px per inch: replace `CANVAS_ZOOM_BASE_SCALE=5` and the presets of `.cache/tikz-editor/packages/app/src/store/workspace-state.ts:18-20` (data-model Viewport `scale`: "1 is printed size at 96 CSS px per inch")
+- [X] T054 [US8] Set the scale so that 1 is printed size at 96 CSS px per inch: replace `CANVAS_ZOOM_BASE_SCALE=5` and the presets of `.cache/tikz-editor/packages/app/src/store/workspace-state.ts:18-20` (data-model Viewport `scale`: "1 is printed size at 96 CSS px per inch")
 - [ ] T055 [US8] Open a figure with content in Zoom to Fit with a 44 px margin, an empty figure at 100 % with the origin centred, and a known file at its kept viewport, in `.cache/tikz-editor/packages/app/src/ui/useCanvasViewportPersistence.ts:143-163` (research R8)
 - [ ] T056 [US8] Label rulers in figure coordinates with Inkscape's `Ruler::draw_scale` step rule in `.cache/tikz-editor/packages/app/src/ui/geometry.ts:99-123` and `useCanvasGuidesAndRulers.ts:200-215`, and draw the origin and axes on the grid (research R9)
 - [ ] T057 [US8] Add the canvas controls of contracts/surfaces.md: Zoom out, the readout "Zoom: *n* %", Zoom in at the lower trailing corner; Snap and Snapping rules at the lower leading corner; wire the `zoom` command of the frame protocol, in `.cache/tikz-editor/packages/app/src/ui/CanvasPanel.tsx`; delete SnapControl and ZoomDisplayControl from `Toolbar.tsx`
