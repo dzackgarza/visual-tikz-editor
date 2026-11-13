@@ -298,6 +298,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 - **FR-063**: The editor MUST keep its files in the XDG base directories: preferences in `$XDG_CONFIG_HOME`, recovery drafts and per-file view state in `$XDG_STATE_HOME`, and the render cache in `$XDG_CACHE_HOME`, each under `visual-tikz-editor/` ([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/); user decision, 2026-11-13).
 - **FR-064**: The editor MUST be a standalone application, and no other application MUST embed it (user decision, 2026-11-13).
 - **FR-065**: Render MUST compile each figure through the pandoc template `~/.pandoc/templates/standalone-tikz.tex`, the one source of packages and macros, and Quiver MUST take its macros from the same template. When the template is missing, Render MUST show an error that names its path (user decision, 2026-11-13).
+- **FR-066**: Each launch of the desktop app MUST write one log in `$XDG_STATE_HOME/visual-tikz-editor/logs/` and keep the ten newest logs. The log MUST hold the output of the app, its file host, and WebKit's processes; each uncaught error, rejected promise, `console.error`, and `console.warn` of every page frame, with the frame; and each end of the web process, with WebKit's reason (#71; the XDG Base Directory Specification places logs in `$XDG_STATE_HOME`; Visual Studio Code keeps one log folder per session).
 
 **Text in the interface** (prior art: HIG offering help)
 
