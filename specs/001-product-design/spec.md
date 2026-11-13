@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft. The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-060a, FR-063, and that the editor is standalone (2026-11-13). Every other requirement is the
+**Status**: Draft. The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-060a, FR-063, and FR-064 (the editor is standalone) (2026-11-13). Every other requirement is the
 maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
