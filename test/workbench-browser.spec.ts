@@ -564,7 +564,7 @@ describe("standalone workbench host boundary", function () {
       await input.penStroke([await strokePoint(page, line, 0.5)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
       const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
-      await tap(strip.getByRole("button", { name: "Edit points", exact: true }));
+      await tap(strip.getByRole("button", { name: "Edit Points", exact: true }));
       const handle = (await frame
         .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
         .first()
@@ -2161,7 +2161,9 @@ describe("standalone workbench host boundary", function () {
         await undo();
 
         const command = async (name: string) => {
-          await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Transform", exact: true }))]);
+          // Transform is a secondary command, under More (contracts/surfaces.md, Object menu).
+          await input.penStroke([await stableCenter(strip.getByRole("button", { name: "More", exact: true }))]);
+          await input.penStroke([await stableCenter(frame.getByRole("menuitem", { name: /^Transform/ }))]);
           await input.penStroke([await stableCenter(frame.getByRole("menu").last().getByRole("menuitem", { name, exact: true }))]);
           await expect.poll(source).not.toBe(authored);
           await undo();
@@ -2924,15 +2926,14 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(source).toBe(authored);
         await fitDiagram(frame, input);
         await chooseTool(frame, input, "Lasso");
-        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
-        const style = frame.getByRole("dialog", { name: "Style" });
+        const style = sidePanel(frame, "Properties");
 
-        // The red line's appearance becomes a named style.
+        // The red line's appearance becomes a named style, saved from Properties (FR-060a).
         await input.penStroke([
           await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.3),
         ]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
-        await tap(strip.getByRole("button", { name: "Style", exact: true }));
+        await tap(documentPanelButton("Properties"));
         await style.getByLabel("Style name", { exact: true }).fill("accent line");
         await tap(style.getByRole("button", { name: "Save style" }));
         await step("The style is not in the source");
@@ -2944,7 +2945,6 @@ describe("standalone workbench host boundary", function () {
           await strokePoint(page, frame.locator('svg [data-source-id="path:1"]').first(), 0.3),
         ]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
-        await tap(strip.getByRole("button", { name: "Style", exact: true }));
         await tap(style.getByRole("button", { name: "Apply accent line" }));
         await step("The second line did not take the style");
         assert.match(last(), /\\draw\[accent line\] \(0,2\) -- \(4,2\)/);
@@ -3044,7 +3044,7 @@ describe("standalone workbench host boundary", function () {
           .poll(async () => (await editorDebug(page)).selection)
           .toEqual(["path:1"]);
         await tap(
-          strip.getByRole("button", { name: "Edit points", exact: true }),
+          strip.getByRole("button", { name: "Edit Points", exact: true }),
         );
         await expect(
           strip.getByRole("button", { name: "Done", exact: true }),
@@ -4349,18 +4349,18 @@ describe("standalone workbench host boundary", function () {
         const first = frame.locator('svg [data-source-id="path:0"]').first();
         await input.penStroke([await strokePoint(page, first, 0.3)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
-        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
-        await tap(strip.getByRole("button", { name: "Style", exact: true }));
-        const dialog = frame.getByRole("dialog", { name: "Style" });
-        await dialog.getByLabel("Style name", { exact: true }).fill("accent line");
-        await tap(dialog.getByRole("button", { name: "Save style" }));
+        await tap(documentPanelButton("Properties"));
+        const properties = sidePanel(frame, "Properties");
+        await properties.getByLabel("Style name", { exact: true }).fill("accent line");
+        await tap(properties.getByRole("button", { name: "Save style" }));
         await expect.poll(async () => (await editorDebug(page)).source).toMatch(/accent line\/\.style=\{red,\s*line width=2pt\}/);
         const saved = (await editorDebug(page)).source;
         assert.match(saved, /\\draw\[xshift=1cm,\s*accent line\] \(0,0\) -- \(4,0\)/);
         const second = frame.locator('svg [data-source-id="path:1"]').first();
         await input.penStroke([await strokePoint(page, second, 0.3)]);
-        await tap(strip.getByRole("button", { name: "Style", exact: true }));
-        await tap(frame.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" }));
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
+        await tap(properties.getByRole("button", { name: "Apply accent line" }));
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[accent line\] \(0,2\)/);
         const source = (await editorDebug(page)).source;
         assert.match(source, /\\draw\[accent line\] \(0,2\) -- \(4,2\)/);
         await page.reload();
@@ -4376,8 +4376,9 @@ describe("standalone workbench host boundary", function () {
         await fitDiagram(reopened, input);
         await chooseTool(reopened, input, "Lasso");
         await input.penStroke([await strokePoint(page, reopened.locator('svg [data-source-id="path:1"]').first(), 0.3)]);
-        await tap(reopened.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Style", exact: true }));
-        await expect(reopened.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" })).toBeVisible();
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
+        await tap(documentPanelButton("Properties"));
+        await expect(sidePanel(reopened, "Properties").getByRole("button", { name: "Apply accent line" })).toBeVisible();
       },
     );
   }
@@ -4401,12 +4402,13 @@ describe("standalone workbench host boundary", function () {
         await chooseTool(frame, input, "Lasso");
         const path = frame.locator('svg [data-source-id^="path:"]').first();
         await input.penStroke([await strokePoint(page, path, 0.3)]);
-        await input.touch([await stableCenter(frame.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Style" }))]);
-        const dialog = frame.getByRole("dialog", { name: "Style" });
+        await expect.poll(async () => (await editorDebug(page)).selection).toHaveLength(1);
+        await input.touch([await stableCenter(documentPanelButton("Properties"))]);
+        const properties = sidePanel(frame, "Properties");
         for (const name of ["outer", "middle", "inner"]) {
-          await expect(dialog.getByRole("button", { name: `Apply ${name}` })).toBeVisible();
+          await expect(properties.getByRole("button", { name: `Apply ${name}` })).toBeVisible();
         }
-        await input.touch([await stableCenter(dialog.getByRole("button", { name: "Apply outer" }))]);
+        await input.touch([await stableCenter(properties.getByRole("button", { name: "Apply outer" }))]);
         await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw\[outer\]/);
         await expect(path).toHaveAttribute("stroke", "#0000ff");
       },
@@ -5318,6 +5320,13 @@ describe("standalone workbench host boundary", function () {
           buttons("Edit Points", "Simplify", "Lock", "Duplicate", "More"),
           "The object menu of one curve",
         );
+        // The figure has room above the curve, so the menu goes there (FR-050).
+        const menuBox = (await menu.boundingBox())!;
+        const curveBox = (await curve.boundingBox())!;
+        assert.ok(
+          menuBox.y + menuBox.height <= curveBox.y,
+          `The object menu of one curve ends at ${menuBox.y + menuBox.height}, below the curve's top at ${curveBox.y}`,
+        );
 
         // Points in Edit Points: of Smooth, Corner, Split, Delete, Done, only those that apply to the
         // joint at (5,6), in that order; Split, Delete, and Done apply to an interior point.
@@ -5519,7 +5528,7 @@ describe("standalone workbench host boundary", function () {
         // Edit Points dims the rest of the figure and locks it (FR-053).
         await input.penStroke([await strokePoint(page, curve, 0.3)]);
         await expect.poll(selection).toEqual(["path:2"]);
-        await tap(menu.getByRole("button", { name: /^Edit points$/i }));
+        await tap(menu.getByRole("button", { name: "Edit Points", exact: true }));
         await expect(menu.getByRole("button", { name: "Done", exact: true })).toBeVisible();
         // The opacity an element is painted with: the product of its own and its ancestors' opacities.
         const paintedOpacity = (element: Locator) =>
@@ -5542,6 +5551,11 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke([grip]);
         await canvasSettled(frame);
         assert.deepEqual(await selection(), ["path:2"], "A tap in Edit Points selected the dimmed rectangle");
+        assert.equal(
+          await frame.locator('[data-hover-highlight="path:3"]').count(),
+          0,
+          "The pen over the dimmed rectangle marks it as if it could take it",
+        );
       },
     );
   }
@@ -7147,7 +7161,7 @@ describe("standalone workbench host boundary", function () {
         const aside = (await panel.boundingBox())!;
         for (const control of [
           frame.getByRole("button", { name: "Lock", exact: true }),
-          frame.getByRole("button", { name: "Edit points", exact: true }),
+          frame.getByRole("button", { name: "Edit Points", exact: true }),
         ]) {
           const box = (await control.boundingBox())!;
           assert.ok(
@@ -8137,7 +8151,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `places a selected curve's control outside the curve and clear of the rail in ${tablet.name}`,
+      `places a selected curve's control off the curve and clear of the rail in ${tablet.name}`,
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -8160,19 +8174,23 @@ describe("standalone workbench host boundary", function () {
           Math.min(a.x + a.width, b.x + b.width) > Math.max(a.x, b.x) &&
           Math.min(a.y + a.height, b.y + b.height) > Math.max(a.y, b.y);
         for (const contact of ["touch", "pen"] as const) {
-          const box = (await curve.boundingBox())!;
-          const point = await curve.evaluate((path: SVGGeometryElement) => {
-            const at = path.getPointAtLength(path.getTotalLength() * 0.2);
-            const matrix = path.getScreenCTM()!;
-            return {
-              x: at.x * matrix.a + at.y * matrix.c + matrix.e,
-              y: at.x * matrix.b + at.y * matrix.d + matrix.f,
-            };
-          });
           const frameBox = (await page
             .locator('iframe[title="TikZ visual editor"]')
             .boundingBox())!;
-          const tapAt = { x: frameBox.x + point.x, y: frameBox.y + point.y };
+          // The curve's stroke, as 101 points on the page.
+          const stroke = (
+            await curve.evaluate((path: SVGGeometryElement) =>
+              Array.from({ length: 101 }, (_, index) => {
+                const at = path.getPointAtLength((path.getTotalLength() * index) / 100);
+                const matrix = path.getScreenCTM()!;
+                return {
+                  x: at.x * matrix.a + at.y * matrix.c + matrix.e,
+                  y: at.x * matrix.b + at.y * matrix.d + matrix.f,
+                };
+              }),
+            )
+          ).map((point) => ({ x: frameBox.x + point.x, y: frameBox.y + point.y }));
+          const tapAt = stroke[20]!;
           if (contact === "touch") {
             await input.touch([tapAt]);
           } else {
@@ -8180,8 +8198,16 @@ describe("standalone workbench host boundary", function () {
           }
           const control = frame.getByRole("toolbar", { name: "Selection", exact: true });
           await expect(control).toBeVisible();
+          await storyScreenshot(page, `curve-control-placed-${contact}-${tablet.name}`);
           const controlBox = (await control.boundingBox())!;
-          assert.ok(!intersects(controlBox, box), `${contact}: the curve control covers the curve`);
+          const covered = stroke.filter(
+            (point) =>
+              point.x >= controlBox.x &&
+              point.x <= controlBox.x + controlBox.width &&
+              point.y >= controlBox.y &&
+              point.y <= controlBox.y + controlBox.height,
+          );
+          assert.deepEqual(covered, [], `${contact}: the curve control covers the curve`);
           assert.ok(
             !intersects(controlBox, (await frame.locator("[data-diagram-tools]").boundingBox())!),
             `${contact}: the curve control covers the rail`,
@@ -8305,7 +8331,9 @@ describe("standalone workbench host boundary", function () {
         await chooseTool(frame, input, "Lasso");
         await input.touch([await strokePoint(page, curve, 0.2)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
-        await expect(frame.getByText("Curve · 3 points", { exact: true })).toBeVisible();
+        await expect(
+          frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Edit Points", exact: true }),
+        ).toBeVisible();
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const middle = await frame
           .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
@@ -8350,9 +8378,9 @@ describe("standalone workbench host boundary", function () {
         await input.touch([await strokePoint(page, rectangle, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
-        await expect(strip.getByRole("button", { name: "Fill and stroke", exact: true })).toBeVisible();
-        await expect(strip.getByText("Rectangle", { exact: true })).toBeVisible();
-        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toHaveCount(0);
+        // One shape: Lock, Duplicate, More (contracts/surfaces.md, Object menu).
+        await expect.poll(() => strip.getByRole("button").allInnerTexts()).toEqual(["Lock", "Duplicate", "More"]);
+        await expect(strip.getByRole("button", { name: "Edit Points", exact: true })).toHaveCount(0);
         await expect(strip.getByRole("button", { name: "Simplify", exact: true })).toHaveCount(0);
       },
     );
@@ -8551,8 +8579,8 @@ describe("standalone workbench host boundary", function () {
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await input.penStroke([await strokePoint(page, curve, 0.3)]);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
-        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toBeVisible();
-        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit points", exact: true }))]);
+        await expect(strip.getByRole("button", { name: "Edit Points", exact: true })).toBeVisible();
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit Points", exact: true }))]);
         const anchor = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]').nth(1);
         const anchorBox = (await anchor.boundingBox())!;
         await input.penHover({ x: anchorBox.x + anchorBox.width / 2 + 9, y: anchorBox.y + anchorBox.height / 2 });
@@ -8561,8 +8589,8 @@ describe("standalone workbench host boundary", function () {
         await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
         await page.keyboard.press("Escape");
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
-        await expect(strip.getByRole("button", { name: "Edit points", exact: true })).toBeVisible();
-        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit points", exact: true }))]);
+        await expect(strip.getByRole("button", { name: "Edit Points", exact: true })).toBeVisible();
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "Edit Points", exact: true }))]);
         await expect(strip.getByRole("button", { name: "Done", exact: true })).toBeVisible();
         assert.equal((await editorDebug(page)).source, authored);
       },
@@ -8602,7 +8630,7 @@ describe("standalone workbench host boundary", function () {
         });
         await input.penStroke([
           await stableCenter(
-            strip.getByRole("button", { name: "Edit points", exact: true }),
+            strip.getByRole("button", { name: "Edit Points", exact: true }),
           ),
         ]);
         await expect(
@@ -8820,7 +8848,7 @@ describe("standalone workbench host boundary", function () {
           await tap({ x: frameBox.x + onCurve.x, y: frameBox.y + onCurve.y });
           await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
           await input.touch([
-            await stableCenter(frame.getByRole("button", { name: "Edit points", exact: true })),
+            await stableCenter(frame.getByRole("button", { name: "Edit Points", exact: true })),
           ]);
           await expect(frame.getByRole("button", { name: "Done", exact: true })).toBeVisible();
           await storyScreenshot(page, `curve-actions-${contact}-${tablet.name}`);
@@ -9042,7 +9070,6 @@ describe("standalone workbench host boundary", function () {
         );
         await expect(anchors.first()).toBeVisible();
         const count = await anchors.count();
-        await expect(frame.getByText(`Curve · ${count} points`, { exact: true })).toBeVisible();
         assert.equal(
           count,
           ((await editorDebug(page)).source.match(/--|\.\. controls/g) ?? []).length + 1,
