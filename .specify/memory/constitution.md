@@ -193,8 +193,10 @@ Requirement: [docs/development.md](../../docs/development.md), Writing a browser
   Constitution Check against Principles I–VIII before research and again after design.
 - An interface issue MUST carry its Prior art section and name the specification items it
   implements.
-- The user reports needs and defects as an end user and sets the priority of repairs. The
-  maintainer MUST NOT rank repairs for the user.
+- The user reports needs and defects as an end user. The maintainer MUST derive the order of the
+  work from the dependencies between stories and from the user's reports, MUST record the
+  evidence with each priority, and MUST NOT ask the user to rank the work. Requirement: the
+  user's statement of 2026-11-13 that the story order is an analysis for the maintainer.
 - The commit hooks run the syntax checks. The Development diagnostics workflow
   (`.github/workflows/development.yml`) is the qualification record of a revision. Each green
   head that changes the product gets a release.
@@ -210,4 +212,4 @@ repository or an issue, or a repository fact. Versions follow semantic versionin
 removed or redefined principle, MINOR for a new principle or section, PATCH for wording. Each
 specification and plan MUST record its compliance with the version in force.
 
-**Version**: 2.2.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-13
+**Version**: 2.3.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-13

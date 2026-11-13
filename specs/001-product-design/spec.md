@@ -10,7 +10,7 @@ maintainer's proposal from the cited prior art and waits for the user's review.
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
 about the app's design and to write a design specification. The audit is
 [audit.md](audit.md). This specification states the editor's users, workflows, and information
-architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 2.2.0.
+architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 2.3.0.
 
 ## Users and purpose
 
@@ -34,7 +34,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 | Canvas controls (canvas corners) | Zoom readout with zoom in and out; Snap with its rules | 2026-10-16 mockups; Inkscape status-bar zoom field; Ipe Snap toolbar |
 | Status line (under the canvas) | The pointer position in figure coordinates | Inkscape status bar (cursor coordinates); Ipe mouse coordinates at the bottom right |
 | Panels (side panel in landscape, sheet in portrait) | Code; Layers; Properties; one at a time | GoodNotes Layers panel; Inkscape XML Editor, a docked dialog beside the canvas; HIG sheets and popovers |
-| More (⋯) menu | Settings (appearance, canvas, colour collections, keyboard shortcuts), Copy TikZ | GoodNotes More menu (Document Editing, toolbar customization) |
+| More (⋯) menu | Settings (appearance, canvas, colour collections, keyboard shortcuts) | GoodNotes More menu (Document Editing, toolbar customization) |
 
 ## Clarifications
 
@@ -153,6 +153,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 **Acceptance Scenarios**:
 
 1. **Given** a figure, **When** the user chooses Share and Export › PDF, **Then** a compiled PDF is written and the source is unchanged.
+2. **Given** a figure, **When** the user chooses Share and Export › Copy TikZ, **Then** the clipboard holds the source as authored.
 
 ### Edge Cases
 

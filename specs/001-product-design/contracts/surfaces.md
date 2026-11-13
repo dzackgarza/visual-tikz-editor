@@ -17,8 +17,8 @@ least 44 × 44 pt (Principle II).
 | Trailing | Code | "Code" | `RiCodeLine` | Opens or closes the Code panel (FR-015) |
 | Trailing | Layers | "Layers" | `RiStackLine` | Opens or closes the Layers panel |
 | Trailing | Properties | "Properties" | `RiEqualizerLine` | Opens or closes Properties: the selection, or the figure with nothing selected (FR-060a) |
-| Trailing | Share and Export | "Share and Export" | `RiShareBoxLine` | Opens PDF…, SVG…, PNG… |
-| Trailing | More | "More" | `RiMoreLine` | Opens Settings…, Copy TikZ |
+| Trailing | Share and Export | "Share and Export" | `RiShareBoxLine` | Opens Copy TikZ, then PDF…, SVG…, PNG… |
+| Trailing | More | "More" | `RiMoreLine` | Opens Settings… |
 
 ## Drawing toolbar
 

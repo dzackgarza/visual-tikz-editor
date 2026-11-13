@@ -233,14 +233,18 @@ actions"; the available actions depend on the selected content
 
 ## R15. Settings and More
 
-**Proposal**: More (⋯) at the end of the document bar holds Settings and Copy TikZ. Settings has
-the categories Appearance (R17), Canvas, Colours (the colour collections), and Keyboard shortcuts; each changed
-setting shows its own reset (FR-062).
+**Proposal**: More (⋯) at the end of the document bar holds Settings. Settings has the categories
+Appearance (R17), Canvas, Colours (the colour collections), and Keyboard shortcuts; each changed
+setting shows its own reset (FR-062). Copy TikZ is the first item of Share and Export, before
+PDF, SVG, and PNG: each of them gives the figure to another program (User Story 7).
 
 **Rationale**: GoodNotes keeps its document settings and toolbar customization in More
 ([Improved User Interface](https://support.goodnotes.com/hc/en-us/articles/13682253498767-Improved-User-Interface));
 HIG Settings: "Avoid adding settings buttons to a window's toolbar"
-([Settings](https://developer.apple.com/design/human-interface-guidelines/settings)).
+([Settings](https://developer.apple.com/design/human-interface-guidelines/settings)). HIG Activity
+views: "Activity views present sharing activities like messaging and actions like Copy and
+Print"; "Photos provides app-specific actions like Copy Photo"
+([Activity views](https://developer.apple.com/design/human-interface-guidelines/activity-views)).
 
 ## R16. Popovers
 
