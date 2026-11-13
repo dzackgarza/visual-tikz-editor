@@ -7,7 +7,7 @@ This document is for contributors. The [README](../README.md) covers installatio
 | Path | Content |
 | --- | --- |
 | `src/` | The Vue workbench component and the typed host interface (`src/host.ts`) |
-| `standalone/` | The standalone app: the local Bun server (`server.ts`), its page, and the embedding test pages |
+| `standalone/` | The standalone app: the local Bun server (`server.ts`) and its page |
 | `src-tauri/` | The desktop shell, which bundles the server and the built page into a Debian package |
 | `vendor/tikz-editor/` | The pinned TikZ Editor fork: the maintained patch, the embed adapter, and the built assets |
 | `vendor/quiver/` | The pinned Quiver fork and its built assets |

@@ -2,7 +2,7 @@
 
 Visual TikZ Editor edits one mathematical diagram and its TikZ source with a pen, touch, or mouse. The file on disk always holds plain TikZ that compiles with LaTeX, so the diagram stays editable in any text editor. A `tikzpicture` opens in a drawing canvas, a pinned fork of [TikZ Editor](https://github.com/DominikPeters/tikz-editor). A `tikzcd` diagram opens in a pinned fork of [Quiver](https://github.com/varkor/quiver). Drawing runs no TeX.
 
-The editor runs on Linux as a desktop window or as a local web page. Its controls are sized for a pen and fingers on a tablet screen, and a mouse and keyboard also work. Other programs embed the same editor through a typed host interface.
+The editor runs on Linux as a desktop window or as a local web page. Its controls are sized for a pen and fingers on a tablet screen, and a mouse and keyboard also work. It is a standalone application, and it keeps its files in the [XDG base directories](https://specifications.freedesktop.org/basedir/latest/) (see [Files, state, and network](#files-state-and-network)).
 
 ## Install
 
@@ -76,7 +76,6 @@ The editor serves its page on `127.0.0.1` only, on a free port. It makes no requ
 - [User guide](docs/user-guide.md): drawing, construction, snapping, layers, views, export, and settings.
 - [Interaction model](docs/interaction-model.md): the rules for tools, selection, undo, snapping, and attachments.
 - [Prior art](docs/prior-art/): the interface specifications, each with the applications, documentation, and screenshots it follows.
-- [Embedding](docs/embedding.md): the host interface for programs that embed the editor.
 - [Development](docs/development.md): building, testing, the vendored editors, and releases.
 
 ## License
