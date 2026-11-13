@@ -240,18 +240,22 @@ another ([Popovers](https://developer.apple.com/design/human-interface-guideline
 
 ## R17. Appearance
 
-**Question**: The user's report of 2026-11-12 asked why the main window has a dedicated Dark Theme
-button. The appearance therefore is not a control of the document bar or the drawing toolbar.
-Where the appearance choice lives, if anywhere, is the user's decision. An embedded editor takes
-its host's appearance in either case.
+**Decided by the user, 2026-11-13**: the appearance follows the iPad notebook apps, GoodNotes and
+Notability. Neither puts an appearance control in the document view. An embedded editor takes its
+host's appearance.
 
-**Alternatives**:
+**Design**: Settings › Appearance holds Match System Appearance, on by default. When it is off, the
+author chooses Light or Dark.
 
-- Follow the system appearance only, with no setting. HIG Dark Mode: "Avoid offering an
-  app-specific appearance setting"
-  ([Dark Mode](https://developer.apple.com/design/human-interface-guidelines/dark-mode)).
-- Settings › Appearance with System (the default), Light, and Dark. Inkscape puts a "Use dark theme"
-  check box in Edit › Preferences › User Interface › Theme
-  ([Inkscape 1.0 release notes](https://wiki.inkscape.org/wiki/Translations:Release_notes/1.0/692/en)).
-  The agent audit [tablet-diagram-workflow.md](../../docs/audits/tablet-diagram-workflow.md) found
-  that the author could not choose a light surface while the system is dark.
+**Rationale**:
+
+- Notability: "Enable **Match Theme to iOS Appearance** to match your device's system settings",
+  with Light and Dark among the themes, in the Settings menu of the Library
+  ([Settings: Appearances, Tools, & Gestures](https://support.gingerlabs.com/en-us/articles/16300218-settings-appearances-tools-gestures)).
+- GoodNotes on iPad has "a dark mode, which tracks the iOS system setting", with no in-app
+  override
+  ([MacStories](https://www.macstories.net/reviews/goodnotes-adds-superior-multiwindowing-dark-mode-and-ocr-scanning/)).
+  This is the behaviour of the default above.
+- The agent audit [tablet-diagram-workflow.md](../../docs/audits/tablet-diagram-workflow.md) found
+  that the author could not choose a light surface while the system is dark; the Light choice
+  covers that.

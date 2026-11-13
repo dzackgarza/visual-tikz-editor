@@ -107,6 +107,6 @@ file like the viewport; they never enter the source, so a hidden layer still pri
 
 ## Preference
 
-A lasting setting in the user's configuration, outside the document: canvas settings, colour
+A lasting setting in the user's configuration, outside the document: appearance, canvas settings, colour
 collections, keyboard shortcuts, tool options, and presets. A changed preference shows its own
 reset (FR-062).

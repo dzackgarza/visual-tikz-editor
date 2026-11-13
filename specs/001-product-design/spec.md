@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft. The user has decided FR-041 (2026-11-13). Every other requirement is the
+**Status**: Draft. The user has decided FR-041 and FR-005 (2026-11-13). Every other requirement is the
 maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
@@ -34,7 +34,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 | Object menu (above the selection) | Only the commands that apply to the selection | GoodNotes Universal Object Menu; HIG context menus |
 | Canvas controls (canvas corners) | Zoom readout with zoom in and out; Snap with its rules | 2026-10-16 mockups; Inkscape status-bar zoom field; Ipe Snap toolbar |
 | Panels (side panel in landscape, sheet in portrait) | Layers; Properties; one at a time per side | GoodNotes Layers panel; HIG sheets and popovers |
-| More (⋯) menu | Settings (canvas, colour collections, keyboard shortcuts), Copy TikZ | GoodNotes More menu (Document Editing, toolbar customization) |
+| More (⋯) menu | Settings (appearance, canvas, colour collections, keyboard shortcuts), Copy TikZ | GoodNotes More menu (Document Editing, toolbar customization) |
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -156,7 +156,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 - **FR-002**: Every menu or popover MUST open anchored to the button that opened it.
 - **FR-003**: A second tap on the button of an open menu, popover, or panel MUST close it; a tap on another button MUST close the open one and open its own.
 - **FR-004**: At most one popover MUST be open at a time.
-- **FR-005**: The appearance MUST NOT be a control of the document bar or the drawing toolbar (the user's report of 2026-11-12). [NEEDS CLARIFICATION: whether the editor follows the system appearance only, or also offers System, Light, and Dark in Settings; see [research](research.md) R17.]
+- **FR-005**: The appearance MUST NOT be a control of the document bar or the drawing toolbar. Settings › Appearance MUST hold Match System Appearance, on by default, and a Light or Dark choice for when it is off, as Notability Settings does ([research](research.md) R17).
 - **FR-006**: The save state MUST be a short status beside the title ("Saved", "Not saved", a conflict) and MUST agree with the disk.
 
 **Drawing toolbar and tool menus** (prior art: GoodNotes toolbar, Active Tool Menu, colour presets; HIG toolbars, buttons)
@@ -211,7 +211,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 
 - **FR-060**: Layers and Properties MUST be separate panels, each opened by its own document-level control.
 - **FR-061**: A panel MUST open at the side in landscape and as a sheet in portrait, and MUST leave the selected object visible.
-- **FR-062**: Settings MUST open from More and MUST hold canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset.
+- **FR-062**: Settings MUST open from More and MUST hold appearance, canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset.
 
 **Text in the interface** (prior art: HIG offering help)
 

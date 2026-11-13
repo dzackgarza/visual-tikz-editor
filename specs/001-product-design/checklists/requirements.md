@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (FR-005 waits for the user)
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -33,6 +33,8 @@
 
 - FR-041 was resolved by the user on 2026-11-13: 100 % is printed size, and an empty figure
   opens at 100 % with the origin centred.
+- FR-005 was resolved by the user on 2026-11-13: the appearance follows the iPad notebook apps,
+  which keep it out of the document view; research R17 records their settings.
 - Story priorities are set by the user (constitution, Development Workflow); the spec lists the
   stories in workflow order.
 - `tikzpicture`, `tikzcd`, and TikZ name the product's document formats, not implementation
