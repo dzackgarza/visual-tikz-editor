@@ -508,8 +508,8 @@ describe("standalone native file workflow", function () {
       [...source.matchAll(/\\begin\{scope\}\n(\\draw[^\n]*)\n\\end\{scope\}/g)].some(
         ([, draw]) => (draw.match(/\(-?[\d.]+(?:pt)?,-?[\d.]+(?:pt)?\)/g) ?? []).length <= 4,
       );
-    const undo = () => frame.getByRole("button", { name: "Undo", exact: true }).click();
-    const redo = () => frame.getByRole("button", { name: "Redo", exact: true }).click();
+    const undo = () => page.locator(".document-bar").getByRole("button", { name: "Undo", exact: true }).click();
+    const redo = () => page.locator(".document-bar").getByRole("button", { name: "Redo", exact: true }).click();
     const exportSvg = async (name: string) => {
       diagramPath = join(directory, `${name}.svg`);
       await page.getByRole("group", { name: "Export" }).locator("summary").click();

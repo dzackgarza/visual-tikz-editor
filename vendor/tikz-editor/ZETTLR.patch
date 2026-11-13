@@ -6152,7 +6152,7 @@ index 00000000..24d32e13
 +.rule:disabled { opacity: 0.5; }
 diff --git a/packages/app/src/ui/SnapControl.tsx b/packages/app/src/ui/SnapControl.tsx
 new file mode 100644
-index 00000000..2e77df1d
+index 00000000..408a421f
 --- /dev/null
 +++ b/packages/app/src/ui/SnapControl.tsx
 @@ -0,0 +1,46 @@
@@ -6182,7 +6182,7 @@ index 00000000..2e77df1d
 +  const updateCanvasSettings = useSettingsStore((state) => state.updateCanvasSettings);
 +
 +  return <>
-+    <button type="button" className={`${triggerClassName} ${canvas.snapping ? activeClassName : ""}`} aria-label="Snapping"
++    <button type="button" className={`${triggerClassName} ${canvas.snapping ? activeClassName : ""}`}
 +      aria-pressed={canvas.snapping} onClick={() => updateCanvasSettings({ snapping: !canvas.snapping })}>
 +      Snap
 +    </button>

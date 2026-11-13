@@ -110,9 +110,9 @@ object menu with the commands that apply.
 ### Stories (red first)
 
 - [ ] T033 [P] [US3] Story "each object menu holds exactly the commands of its selection" for one curve, one shape, several objects, and points in Edit Points, per contracts/surfaces.md Object menu, in `test/workbench-browser.spec.ts`
-- [ ] T034 [P] [US3] Story "a colour preset colours the tool and the selection, and no word names the target; each tool shows its own presets" (FR-020, FR-021) in `test/workbench-browser.spec.ts`
+- [ ] T034 [P] [US3] Story "a colour preset colours the tool and the selection, and no word names the target; each tool shows its own presets" (FR-020, FR-021) in `test/workbench-browser.spec.ts`; it also checks that a Lasso preset colours a selected rectangle's stroke, a Fill preset fills it, a preset chosen with nothing selected leaves every object as written and colours the next line drawn, and that with 12 presets every tool and Add colour stay in view and only the chosen preset is pressed (checks of the T032-deleted stories "applies one color control to selected stroke, selected fill, bucket, and new strokes" and "scrolls 24 saved colours in their own strip, marks the active one, and keeps the tools in view")
 - [ ] T035 [P] [US3] Story "a locked selection survives a tap that misses; Edit Points dims and locks the rest" (FR-052, FR-053) in `test/workbench-browser.spec.ts`
-- [ ] T036 [P] [US3] Story "a second tap on the active preset opens the palette, wheel, opacity, hex, and the exact `xcolor` field, and `red!50!blue` stays as authored" (FR-022) in `test/workbench-browser.spec.ts`; commit T033–T036 red
+- [ ] T036 [P] [US3] Story "a second tap on the active preset opens the palette, wheel, opacity, hex, and the exact `xcolor` field, and `red!50!blue` stays as authored" (FR-022) in `test/workbench-browser.spec.ts`; it also checks that a wheel colour at full opacity is written as `rgb,255:red,255;green,0;blue,0` and never as HTML hex, that an `xcolor` value applied in the exact field becomes the preset and one typed then dismissed by Escape is discarded, and that the palette is the active collection of Settings › Colors laid out in rows, following a new collection, a removed colour, and a switch back to Default (checks of the T032-deleted stories "writes a colour picked at full opacity as an xcolor value" and "picks a drawing colour from saved swatches, one spectrum, and opacity only", and of the rail palette checks removed from "creates, renames, switches and deletes colour collections in Settings"); commit T033–T036 red
 
 ### Implementation
 
@@ -134,9 +134,9 @@ checks the emitted TikZ; at no stage does a sentence appear.
 
 ### Stories (red first)
 
-- [ ] T042 [P] [US4] Story "each construction on lattice points emits its TikZ and shows no sentence at any stage" (independent test, FR-030, FR-031, SC-003) in `test/workbench-browser.spec.ts`
+- [ ] T042 [P] [US4] Story "each construction on lattice points emits its TikZ and shows no sentence at any stage" (independent test, FR-030, FR-031, SC-003) in `test/workbench-browser.spec.ts`; it also checks that the Shapes menu groups its illustrated choices by family (Lines and arrows, Curves, Circles and arcs, Shapes, Diagrams) with every choice drawn, that each construction finishes from its points (and Finish for an open path) and one Undo removes it, and that the Text menu offers Text and Equation, where Equation opens the equation editor (checks of the T032-deleted story "finishes every geometry construction by reading only the picker and the stage instruction")
 - [ ] T043 [P] [US4] Story "after two points of the arc through three points the canvas shows the points, the provisional arc through the pen, and the snap marker" (scenario 1, FR-024) in `test/workbench-browser.spec.ts`
-- [ ] T044 [P] [US4] Story "choosing another tool discards only the provisional construction; Cancel and Finish are in the Active Tool Menu" (scenario 2, FR-032, FR-033) in `test/workbench-browser.spec.ts`
+- [ ] T044 [P] [US4] Story "choosing another tool discards only the provisional construction; Cancel and Finish are in the Active Tool Menu" (scenario 2, FR-032, FR-033) in `test/workbench-browser.spec.ts`; it also checks that Cancel removes only the provisional arc through three points, leaves the source, and keeps Shapes chosen (checks of the T032-deleted story "names the chosen construction and its next step until it finishes or is cancelled")
 - [ ] T045 [P] [US4] Story "a stroke held still at its end becomes a line, rectangle, circle, or ellipse, and Undo returns the stroke" (FR-026) in `test/workbench-browser.spec.ts`; commit T042–T045 red
 
 ### Implementation
