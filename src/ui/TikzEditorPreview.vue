@@ -73,7 +73,6 @@ const emit = defineEmits<{
   (e: "panel", panel: Panel): void;
   (e: "undoRequest"): void;
   (e: "redoRequest"): void;
-  (e: "documentPropertiesClosed"): void;
   (e: "popoverOpened"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
@@ -169,22 +168,12 @@ function zoom(direction: "in" | "out" | "fit" | "selection" | "normal"): void {
   if (loaded.value) postToEditor({ action: "zoom", direction });
 }
 
-// A request made before the editor has loaded opens the dialog once it has.
-let documentPropertiesRequested = false;
-function documentProperties(): void {
-  documentPropertiesRequested = !loaded.value;
-  if (!loaded.value) return;
-  // The dialog lives in the editor frame, so keyboard focus moves into the frame with it.
-  frame.value?.focus();
-  postToEditor({ action: "document-properties" });
-}
-
 // One popover at a time across shell and canvas (FR-004): the shell's menu closes the canvas's.
 function dismissPopover(): void {
   if (loaded.value) postToEditor({ action: "dismiss-popover" });
 }
 
-defineExpose({ snapshot, currentSource, zoom, documentProperties, dismissPopover });
+defineExpose({ snapshot, currentSource, zoom, dismissPopover });
 
 function sendFullLoad(): void {
   if (!hostReady.value) {
@@ -362,7 +351,6 @@ function onMessage(event: MessageEvent): void {
       loaded.value = true;
       errorMessage.value = "";
       reportKeyboard(true);
-      if (documentPropertiesRequested) documentProperties();
       break;
     case "change": {
       applyEditorSource(message.source, message.revision, message.step);
@@ -395,9 +383,6 @@ function onMessage(event: MessageEvent): void {
       break;
     case "redo-request":
       emit("redoRequest");
-      break;
-    case "document-properties-closed":
-      emit("documentPropertiesClosed");
       break;
     case "popover-opened":
       emit("popoverOpened");

@@ -5,12 +5,12 @@ import { snapshotResultSchema } from './snapshot-protocol';
 
 // A change to any message of commands.ts or events.ts raises this version. The shell
 // refuses an editor that reports another one.
-export const FRAME_PROTOCOL_VERSION = '4';
+export const FRAME_PROTOCOL_VERSION = '5';
 
 export const commandFailureSchema = z.enum(['invalid-command', 'stale-target', 'cancelled', 'timeout', 'busy']);
 export type CommandFailure = z.infer<typeof commandFailureSchema>;
 
-const action = z.enum(['load', 'replace-source', 'display', 'panel', 'document-properties',
+const action = z.enum(['load', 'replace-source', 'display', 'panel',
   'dismiss-popover', 'source', 'zoom', 'keyboard', 'clipboard-result', 'cancel']);
 const identity = commandIdentitySchema.shape;
 export const commandReplySchema = z.discriminatedUnion('status', [
@@ -50,7 +50,6 @@ export const editorNotificationSchema = z.discriminatedUnion('event', [
   z.object({ ...notificationIdentity, event: z.literal('message'), title: z.string(), message: z.string(), kind: z.string() }),
   z.object({ ...notificationIdentity, event: z.literal('error'), message: z.string() }),
   z.object({ ...notificationIdentity, event: z.literal('close-request') }),
-  z.object({ ...notificationIdentity, event: z.literal('document-properties-closed') }),
   // The Settings window frame (`view=settings`) was closed.
   z.object({ ...notificationIdentity, event: z.literal('settings-closed') }),
   z.object({ ...notificationIdentity, event: z.literal('source-selection'), source: z.string(), from: z.number().int().nonnegative(), to: z.number().int().nonnegative() }),

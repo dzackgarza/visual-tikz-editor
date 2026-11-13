@@ -18,7 +18,6 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('replace-source'), source: z.string() }),
   z.object({ ...identity, action: z.literal('display'), fullscreen: z.boolean() }),
   z.object({ ...identity, action: z.literal('panel'), panel: panelSchema }),
-  z.object({ ...identity, action: z.literal('document-properties') }),
   // The shell opened a popover of its own, so the canvas closes its open one.
   z.object({ ...identity, action: z.literal('dismiss-popover') }),
   z.object({ ...identity, action: z.literal('source') }),

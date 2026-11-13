@@ -20,8 +20,6 @@
           <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
           <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
           <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
-          <button type="button" :disabled="target?.language !== 'tikz'" aria-keyshortcuts="Control+Shift+D"
-            @click="openDocumentProperties">Document Properties…</button>
           <button v-if="nativeWindow" type="button" @click="requestExit">Exit</button>
         </div>
       </details>
@@ -84,8 +82,7 @@
             :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
             :initial-mode="modeForView(view)" :panel="view === 'canvas' ? canvasPanel : null"
             @panel="canvasPanel = $event" @status="onEditorStatus(view, $event)"
-            @undo-request="undoDocument" @redo-request="redoDocument"
-            @document-properties-closed="documentPropertiesClosed" @popover-opened="closeShellMenus" />
+            @undo-request="undoDocument" @redo-request="redoDocument" @popover-opened="closeShellMenus" />
         </div>
         <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
           aria-orientation="vertical" :aria-valuenow="Math.round(splitPercent)" aria-valuemin="15" aria-valuemax="85"
@@ -337,24 +334,6 @@ const workbenches = new Map<Exclude<ViewId, "code">, InstanceType<typeof TikzWor
 function setWorkbench(view: Exclude<ViewId, "code">, handle: unknown): void {
   if (handle === null) workbenches.delete(view);
   else workbenches.set(view, handle as InstanceType<typeof TikzWorkbench>);
-}
-// Inkscape's File > Document Properties: the figure's own settings, kept in the canvas editor.
-let documentPropertiesOpener: Element | null = null;
-async function openDocumentProperties(): Promise<void> {
-  if (target.value?.language !== "tikz") return;
-  documentPropertiesOpener = window.document.activeElement;
-  if (!isVisible("canvas")) {
-    active[placements.left.includes("canvas") ? "left" : "right"] = "canvas";
-    visited.add("canvas");
-    await nextTick();
-  }
-  workbenches.get("canvas")?.documentProperties();
-}
-function documentPropertiesClosed(): void {
-  // As for the Save changes dialog: focus returns to the invoker, or to its menu's title.
-  const opener = documentPropertiesOpener;
-  documentPropertiesOpener = null;
-  if (opener instanceof HTMLElement) (opener.closest("details")?.querySelector("summary") ?? opener).focus();
 }
 async function currentSource(): Promise<string> {
   const view = target.value?.language === "tikzcd" ? "quiver" : "canvas";
@@ -679,12 +658,6 @@ function onKeydown(event: KeyboardEvent): void {
   if ((event.ctrlKey || event.metaKey) && event.key === "s") {
     event.preventDefault();
     void save();
-    return;
-  }
-  if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === "d" &&
-      target.value?.language === "tikz") {
-    event.preventDefault();
-    void openDocumentProperties();
   }
 }
 

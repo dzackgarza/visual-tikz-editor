@@ -465,10 +465,6 @@ function HostBridge() {
 					window.dispatchEvent(new Event('tikz-embed-dismiss-popover'));
 					reply(command);
 					return;
-				case 'document-properties':
-					window.dispatchEvent(new Event('tikz-embed-document-properties'));
-					reply(command);
-					return;
 			}
 		};
 
@@ -492,8 +488,6 @@ function HostBridge() {
 			['tikz-embed-popover-opened', popoverOpened],
 		];
 		for (const [name, listener] of forkEvents) window.addEventListener(name, listener);
-		const documentPropertiesClosed = () => postToHost({ event: 'document-properties-closed' });
-		window.addEventListener('tikz-embed-document-properties-closed', documentPropertiesClosed);
 		window.addEventListener('message', handleMessage);
 		const imageObserver = new MutationObserver(() => {
 			const images = document.querySelectorAll<SVGImageElement>('image[data-image-file]');
@@ -520,7 +514,6 @@ function HostBridge() {
 			imageObserver.disconnect();
 			unsubscribe();
 			for (const [name, listener] of forkEvents) window.removeEventListener(name, listener);
-			window.removeEventListener('tikz-embed-document-properties-closed', documentPropertiesClosed);
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('keydown', handleKeydown, true);
 		};

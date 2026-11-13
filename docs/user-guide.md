@@ -4,7 +4,7 @@ This guide describes the standalone editor's controls. The [interaction model](i
 
 ## Documents
 
-The **File** menu holds New tikzpicture, New tikzcd, Open, Save, Save As, and Document Properties. A launch without a file opens an untitled tikzpicture. Each kind opens its own view:
+The **File** menu holds New tikzpicture, New tikzcd, Open, Save, and Save As. A launch without a file opens an untitled tikzpicture. Each kind opens its own view:
 
 | Item | View that opens |
 | --- | --- |
@@ -13,9 +13,9 @@ The **File** menu holds New tikzpicture, New tikzcd, Open, Save, Save As, and Do
 
 Each accepted edit to a saved file writes the file. An untitled diagram keeps a recovery draft until **Save** or Ctrl+S opens the native Save As dialog. If the file changes on disk, the editor stops saving, keeps your edits as a recovery draft, and reports the conflict. After a restart the editor restores the last diagram.
 
-**Document Properties** (Ctrl+Shift+D) sets the X and Y scale and the bounds of a tikzpicture. It opens the drawing canvas if that view is closed; Escape closes the dialog.
+**Properties** in the document bar shows the selected objects. With nothing selected, it shows the figure: its X and Y scale, the size of one lattice step, and its bounds.
 
-**Copy source** copies the TikZ source to the clipboard without saving the file. The editor follows the light or dark appearance of the system.
+**Copy source** copies the TikZ source to the clipboard without saving the file. **More › Settings…** › Appearance sets light, dark, or the system's appearance.
 
 ## Views
 
@@ -78,7 +78,7 @@ Attachments are TikZ references in the source. Moving a node, a line, or a point
 
 A circle or arc drawn from its centre takes the second point as its radius. An arc's end keeps the radius and lands on a lattice point of its ray when one is within reach, otherwise on a nearby multiple of 45 or 15 degrees.
 
-Coordinate fields, figure bounds, Repeat, and the readout while you draw show figure coordinates: the numbers the source holds, with no unit word. A line, arrow, or curve readout shows the coordinates of the point you place; a shape readout shows its width and height. On a figure whose axes are not at right angles, Repeat steps read in pt. File > Document Properties… shows the size of one lattice step along x and y in centimetres, from the figure's `x`, `y`, or `scale` options.
+Coordinate fields, figure bounds, Repeat, and the readout while you draw show figure coordinates: the numbers the source holds, with no unit word. A line, arrow, or curve readout shows the coordinates of the point you place; a shape readout shows its width and height. On a figure whose axes are not at right angles, Repeat steps read in pt. Properties, with nothing selected, shows the size of one lattice step along x and y in centimetres, from the figure's `x`, `y`, or `scale` options.
 
 ## Freehand strokes
 

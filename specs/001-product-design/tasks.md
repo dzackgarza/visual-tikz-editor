@@ -234,14 +234,14 @@ without a selection.
 ### Stories (red first)
 
 - [X] T076 [P] [US6] Story "Layers then Properties: one panel at a time; a second tap closes each" (scenarios 1–2, FR-060) in `test/workbench-browser.spec.ts`
-- [ ] T077 [P] [US6] Story "Properties shows the figure with nothing selected and the object after a selection; no other surface holds the figure's attributes" (scenario 3, FR-060a) in `test/workbench-browser.spec.ts`
-- [ ] T078 [P] [US6] Story "a hidden, locked layer reopens hidden and locked, and the source holds only its `scope` with `name=`" (data-model Layer, Principle I) in `test/workbench-files.spec.ts`; commit T076–T078 red
+- [X] T077 [P] [US6] Story "Properties shows the figure with nothing selected and the object after a selection; no other surface holds the figure's attributes" (scenario 3, FR-060a) in `test/workbench-browser.spec.ts`
+- [X] T078 [P] [US6] Story "a hidden, locked layer reopens hidden and locked, and the source holds only its `scope` with `name=`" (data-model Layer, Principle I) in `test/workbench-files.spec.ts`; commit T076–T078 red
 
 ### Implementation
 
 - [X] T079 [US6] Add Layers (`RiStackLine`) and Properties (`RiEqualizerLine`) to the document bar of `standalone/StandaloneApp.vue`, sending `panel` and following the `panel` event, with Code in the same one-panel state (data-model Panel `open`: none, `code`, `layers`, or `properties`)
 - [X] T080 [US6] Split the shared panel of `.cache/tikz-editor/packages/app/src/ui/DockLayout.tsx:702-724` into a Layers panel and a Properties panel, each with its title and close button
-- [ ] T081 [US6] Show `<InspectorPanel figure />` in Properties when the selection is empty and post `selection` (`empty`); delete `DocumentPropertiesDialog.tsx` and its references in `App.tsx` and `editor-command-runtime.ts` under `.cache/tikz-editor/packages/app/src/`; delete the `document-properties` command, the `document-properties-closed` event and action of `vendor/tikz-editor/embed/src/`, the `tikz-embed-document-properties` listeners of `main.tsx`, and Document Properties… with its handlers in `standalone/StandaloneApp.vue`, `src/ui/TikzWorkbench.vue`, and `src/ui/TikzEditorPreview.vue`
+- [X] T081 [US6] Show `<InspectorPanel figure />` in Properties when the selection is empty and post `selection` (`empty`); delete `DocumentPropertiesDialog.tsx` and its references in `App.tsx` and `editor-command-runtime.ts` under `.cache/tikz-editor/packages/app/src/`; delete the `document-properties` command, the `document-properties-closed` event and action of `vendor/tikz-editor/embed/src/`, the `tikz-embed-document-properties` listeners of `main.tsx`, and Document Properties… with its handlers in `standalone/StandaloneApp.vue`, `src/ui/TikzWorkbench.vue`, and `src/ui/TikzEditorPreview.vue`
 - [ ] T082 [US6] Keep layer visibility and lock as per-file view state through `persistence-save`, never in the source, in the fork store `.cache/tikz-editor/packages/app/src/store/`
 - [ ] T083 [US6] Rebuild the fork and run the US6 stories green
 

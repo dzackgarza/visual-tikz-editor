@@ -253,10 +253,10 @@ index f20fa9c3..6441b549 100644
    },
    "devDependencies": {
 diff --git a/packages/app/src/app-menu/default-menu.ts b/packages/app/src/app-menu/default-menu.ts
-index 59fab7a8..c5ade2ae 100644
+index 59fab7a8..d57b17ba 100644
 --- a/packages/app/src/app-menu/default-menu.ts
 +++ b/packages/app/src/app-menu/default-menu.ts
-@@ -112,9 +112,17 @@ export const APP_MENU_DEFINITION = [
+@@ -112,7 +112,8 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.SHOW_COMPILED_PICTURE,
@@ -265,17 +265,8 @@ index 59fab7a8..c5ade2ae 100644
 +        platforms: ["desktop"]
        },
        { kind: "separator" },
-+      {
-+        // Inkscape: File > Document Properties… (Ctrl+Shift+D) holds the figure-wide settings.
-+        kind: "command",
-+        commandId: APP_MENU_COMMAND_IDS.OPEN_DOCUMENT_PROPERTIES,
-+        label: "Document Properties...",
-+        accelerator: "CmdOrCtrl+Shift+D"
-+      },
        {
-         kind: "command",
-         commandId: APP_MENU_COMMAND_IDS.OPEN_SETTINGS,
-@@ -466,8 +474,7 @@ export const APP_MENU_DEFINITION = [
+@@ -466,8 +467,7 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.FIT_TO_CONTENT,
@@ -285,7 +276,7 @@ index 59fab7a8..c5ade2ae 100644
        },
        {
          kind: "command",
-@@ -495,7 +502,7 @@ export const APP_MENU_DEFINITION = [
+@@ -495,7 +495,7 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.TOGGLE_GUIDES,
@@ -294,7 +285,7 @@ index 59fab7a8..c5ade2ae 100644
        },
        {
          kind: "command",
-@@ -504,8 +511,8 @@ export const APP_MENU_DEFINITION = [
+@@ -504,8 +504,8 @@ export const APP_MENU_DEFINITION = [
        },
        {
          kind: "command",
@@ -305,7 +296,7 @@ index 59fab7a8..c5ade2ae 100644
        },
        {
          kind: "submenu",
-@@ -513,23 +520,24 @@ export const APP_MENU_DEFINITION = [
+@@ -513,23 +513,24 @@ export const APP_MENU_DEFINITION = [
          items: [
            {
              kind: "command",
@@ -338,7 +329,7 @@ index 59fab7a8..c5ade2ae 100644
            },
            {
              kind: "command",
-@@ -548,12 +556,12 @@ export const APP_MENU_DEFINITION = [
+@@ -548,12 +549,12 @@ export const APP_MENU_DEFINITION = [
        {
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.TOGGLE_INSPECTOR_PANEL,
@@ -353,7 +344,7 @@ index 59fab7a8..c5ade2ae 100644
        },
        {
          kind: "command",
-@@ -595,7 +603,7 @@ export const APP_MENU_DEFINITION = [
+@@ -595,7 +596,7 @@ export const APP_MENU_DEFINITION = [
          kind: "command",
          commandId: APP_MENU_COMMAND_IDS.TOGGLE_DEV_PANEL,
          label: "Developer Panel",
@@ -363,7 +354,7 @@ index 59fab7a8..c5ade2ae 100644
      ]
    },
 diff --git a/packages/app/src/app-menu/types.ts b/packages/app/src/app-menu/types.ts
-index af9d6c30..c935d68d 100644
+index af9d6c30..88725f49 100644
 --- a/packages/app/src/app-menu/types.ts
 +++ b/packages/app/src/app-menu/types.ts
 @@ -1,4 +1,12 @@
@@ -413,14 +404,6 @@ index af9d6c30..c935d68d 100644
    TOGGLE_SNAP_HAPTICS: "view.toggle-snap-haptics",
    TOGGLE_RULERS: "view.toggle-rulers",
    TOGGLE_GUIDES: "view.toggle-guides",
-@@ -111,6 +122,7 @@ export const APP_MENU_COMMAND_IDS = {
-   SHOW_ABOUT: "help.show-about",
-   SHOW_COMPILED_PICTURE: "file.show-compiled-picture",
-   OPEN_SETTINGS: "file.open-settings",
-+  OPEN_DOCUMENT_PROPERTIES: "file.open-document-properties",
-   CLEAR_RECENT_FILES: "file.clear-recent-files"
- } as const;
- 
 diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
 index bc368718..e8589de3 100644
 --- a/packages/app/src/context-menu/canvas-context-menu.ts
@@ -640,10 +623,10 @@ index 20b8b673..faf832b4 100644
    readCustomText?: (
 diff --git a/packages/app/src/settings/keybindings.ts b/packages/app/src/settings/keybindings.ts
 new file mode 100644
-index 00000000..875dc71c
+index 00000000..05b36e30
 --- /dev/null
 +++ b/packages/app/src/settings/keybindings.ts
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,154 @@
 +import { z } from "zod";
 +import { APP_MENU_COMMAND_IDS as ID, APP_MENU_DEFINITION, type AppMenuCommandId, type AppMenuItem } from "../app-menu";
 +
@@ -654,8 +637,7 @@ index 00000000..875dc71c
 +const embeddedViewCommands = new Set<AppMenuCommandId>([
 +  ID.FIT_TO_CONTENT, ID.ZOOM_IN, ID.ZOOM_OUT, ID.TOGGLE_GRID, ID.TOGGLE_OUTPUT_BOUNDS,
 +  ID.TOGGLE_SNAPPING, ID.TOGGLE_LATTICE_LOCK, ID.TOGGLE_SNAP_OBJECTS, ID.TOGGLE_SNAP_ALIGNMENT,
-+  ID.TOGGLE_RULERS, ID.TOGGLE_GUIDES, ID.TOGGLE_INSPECTOR_PANEL, ID.TOGGLE_OBJECTS_PANEL, ID.OPEN_SETTINGS,
-+  ID.OPEN_DOCUMENT_PROPERTIES
++  ID.TOGGLE_RULERS, ID.TOGGLE_GUIDES, ID.TOGGLE_INSPECTOR_PANEL, ID.TOGGLE_OBJECTS_PANEL, ID.OPEN_SETTINGS
 +]);
 +// App-owned shortcuts keep their existing routes, even without a canvas Settings row.
 +const GLOBAL_SHORTCUT_COMMAND_IDS = new Set<AppMenuCommandId>([
@@ -2266,7 +2248,7 @@ index 758bd611..c582522c 100644
      selectedAddShape: state.selectedAddShape,
      selectedAddMatrixRows: state.selectedAddMatrixRows,
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..a533802c 100644
+index 5818d92b..c7d893de 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
 @@ -12,7 +12,8 @@ import { computeSnapshot, makeEmptySnapshot, setMathJaxFont, type ComputeRequest
@@ -2302,15 +2284,7 @@ index 5818d92b..a533802c 100644
  import { TabStrip } from "./TabStrip";
  import type { UnsavedChangesDecision } from "./UnsavedChangesModal";
  import type { FileConflictDecision } from "./FileConflictModal";
-@@ -43,6 +45,7 @@ import { resolveOpenedFileForDocument, dataTransferHasFilePayload } from "./svg-
- import type { AssistantComposerImageAttachment } from "./assistant-image-attachments";
- import { formatEquationText, type EquationNodeTarget } from "./equation-utils";
- import { useDebouncedEffect } from "./hooks/useDebouncedEffect";
-+import { DocumentPropertiesDialog } from "./DocumentPropertiesDialog";
- import { decideLinkedFileRefresh, isLinkedFileRef, type LinkedTextWriteResult } from "../linked-file-sync";
- import type { DocumentFileRef, DocumentSession, FileRevision } from "../store/types";
- import { createArxivVirtualFileName, type ArxivPaperSession, type ArxivTikzCandidate } from "../arxiv-source";
-@@ -167,7 +170,7 @@ function isEditableShortcutTarget(target: EventTarget | null): target is HTMLEle
+@@ -167,7 +169,7 @@ function isEditableShortcutTarget(target: EventTarget | null): target is HTMLEle
    if (!(target instanceof HTMLElement)) {
      return false;
    }
@@ -2319,7 +2293,7 @@ index 5818d92b..a533802c 100644
  }
  
  function selectAllInEditableTarget(target: HTMLElement): boolean {
-@@ -256,10 +259,8 @@ export function App() {
+@@ -256,10 +258,8 @@ export function App() {
      activeSourceScrubSourceId: s.activeSourceScrubSourceId,
      dispatch: s.dispatch
    })));
@@ -2331,15 +2305,7 @@ index 5818d92b..a533802c 100644
      mathJaxFont: s.settings.rendering.mathJaxFont
    })));
    const platform = getActiveEditorPlatform();
-@@ -273,6 +274,7 @@ export function App() {
-     selectedCandidateId: null
-   });
-   const [showSettingsModal, setShowSettingsModal] = useState(false);
-+  const [showDocumentProperties, setShowDocumentProperties] = useState(false);
-   const [showSaveWorkspaceModal, setShowSaveWorkspaceModal] = useState(false);
-   const [showManageWorkspacesModal, setShowManageWorkspacesModal] = useState(false);
-   const [showAboutModal, setShowAboutModal] = useState(false);
-@@ -298,7 +300,6 @@ export function App() {
+@@ -298,7 +298,6 @@ export function App() {
    } | null>(null);
    const [svgExportSvgResult, setSvgExportSvgResult] = useState<EmitSvgResult | null>(null);
    const [pngExportSvgResult, setPngExportSvgResult] = useState<EmitSvgResult | null>(null);
@@ -2347,34 +2313,7 @@ index 5818d92b..a533802c 100644
    const [pendingClose, setPendingClose] = useState<{ intent: CloseIntent; dirtyDocumentIds: string[] } | null>(null);
    const [pendingFileConflict, setPendingFileConflict] = useState<PendingFileConflict | null>(null);
    const requestCloseIntentRef = useRef<(intent: CloseIntent) => void>(() => {});
-@@ -605,6 +606,18 @@ export function App() {
-   const handleOpenSettingsCommand = useCallback(() => {
-     setShowSettingsModal(true);
-   }, []);
-+  const handleOpenDocumentPropertiesCommand = useCallback(() => {
-+    setShowDocumentProperties(true);
-+  }, []);
-+  // A host menu opens the dialog by event, as it opens Properties; the host learns of the close the same way.
-+  useEffect(() => {
-+    window.addEventListener("tikz-embed-document-properties", handleOpenDocumentPropertiesCommand);
-+    return () => window.removeEventListener("tikz-embed-document-properties", handleOpenDocumentPropertiesCommand);
-+  }, [handleOpenDocumentPropertiesCommand]);
-+  const closeDocumentProperties = useCallback(() => {
-+    setShowDocumentProperties(false);
-+    window.dispatchEvent(new Event("tikz-embed-document-properties-closed"));
-+  }, []);
-   const handleCheckForUpdatesCommand = useCallback(() => {
-     void handleManualUpdateCheck();
-   }, [handleManualUpdateCheck]);
-@@ -658,6 +671,7 @@ export function App() {
-     onOpenPngExport: handleOpenPngExportCommand,
-     onShowCompiledPicture: handleShowCompiledPictureCommand,
-     onOpenSettings: handleOpenSettingsCommand,
-+    onOpenDocumentProperties: handleOpenDocumentPropertiesCommand,
-     onCheckForUpdates: handleCheckForUpdatesCommand,
-     updateCheckBusy: updateCheckBusy || updateModalPhase.status === "installing",
-     onOpenInsertEquation: handleOpenInsertEquationCommand,
-@@ -677,26 +691,7 @@ export function App() {
+@@ -677,26 +676,7 @@ export function App() {
    commandRuntimeRef.current = commandRuntime;
    toolModeRef.current = toolMode;
  
@@ -2402,7 +2341,7 @@ index 5818d92b..a533802c 100644
  
    useEffect(() => {
      if (!platform.updates || startupUpdateCheckStarted) {
-@@ -1534,7 +1529,6 @@ export function App() {
+@@ -1534,7 +1514,6 @@ export function App() {
          };
        },
        setCanvasTransform: (transform) => {
@@ -2410,7 +2349,7 @@ index 5818d92b..a533802c 100644
          requestAnimationFrame(() => {
            dispatch({ type: "SET_CANVAS_TRANSFORM", transform });
          });
-@@ -1596,17 +1590,6 @@ export function App() {
+@@ -1596,17 +1575,6 @@ export function App() {
      });
    }, [platform.id, snapshot.source, source]);
  
@@ -2428,7 +2367,7 @@ index 5818d92b..a533802c 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1648,216 +1631,48 @@ export function App() {
+@@ -1648,216 +1616,48 @@ export function App() {
        }
  
        const runtime = commandRuntimeRef.current;
@@ -2676,7 +2615,7 @@ index 5818d92b..a533802c 100644
      }
  
      window.addEventListener("keydown", onKeyDown);
-@@ -1872,7 +1687,6 @@ export function App() {
+@@ -1872,7 +1672,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -2684,7 +2623,7 @@ index 5818d92b..a533802c 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1705,6 @@ export function App() {
+@@ -1891,7 +1690,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -2692,7 +2631,7 @@ index 5818d92b..a533802c 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +1843,14 @@ export function App() {
+@@ -2030,13 +1828,14 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -2708,7 +2647,7 @@ index 5818d92b..a533802c 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,22 +1863,23 @@ export function App() {
+@@ -2049,22 +1848,23 @@ export function App() {
              : null
          }
        />
@@ -2736,15 +2675,7 @@ index 5818d92b..a533802c 100644
        </Suspense>
        {showOpenExampleModal ? (
          <Suspense fallback={null}>
-@@ -2102,6 +1917,7 @@ export function App() {
-           <SettingsModal onClose={() => { setShowSettingsModal(false); }} />
-         </Suspense>
-       ) : null}
-+      {showDocumentProperties ? <DocumentPropertiesDialog onClose={closeDocumentProperties} /> : null}
-       {equationModalState ? (
-         <Suspense fallback={null}>
-           <EquationModal
-@@ -2150,12 +1966,11 @@ export function App() {
+@@ -2150,12 +1950,11 @@ export function App() {
            <RepeatModal
              columns={repeatModalState.columns}
              rows={repeatModalState.rows}
@@ -2762,7 +2693,7 @@ index 5818d92b..a533802c 100644
              onColumnsChange={(columns) => {
                setRepeatModalState((current) => current == null ? current : {
                  ...current,
-@@ -2168,17 +1983,11 @@ export function App() {
+@@ -2168,17 +1967,11 @@ export function App() {
                  rows: clampRepeatCount(rows)
                });
              }}
@@ -2784,7 +2715,7 @@ index 5818d92b..a533802c 100644
              }}
              onClose={() => {
                setRepeatModalState(null);
-@@ -2345,13 +2154,6 @@ function clampRepeatCount(value: number): number {
+@@ -2345,13 +2138,6 @@ function clampRepeatCount(value: number): number {
    return Math.max(1, Math.floor(value));
  }
  
@@ -5043,37 +4974,6 @@ index ba28ddb9..0e7c2c4e 100644
 +    </div>
    );
  }
-diff --git a/packages/app/src/ui/DocumentPropertiesDialog.tsx b/packages/app/src/ui/DocumentPropertiesDialog.tsx
-new file mode 100644
-index 00000000..9632306f
---- /dev/null
-+++ b/packages/app/src/ui/DocumentPropertiesDialog.tsx
-@@ -0,0 +1,25 @@
-+import { InspectorPanel } from "./inspector-panel/InspectorPanel";
-+import { Modal } from "./Modal";
-+
-+/** File > Document Properties, after Inkscape: the figure's scale and bounds, apart from any selection. */
-+export function DocumentPropertiesDialog({ onClose }: { onClose: () => void }) {
-+  return (
-+    <Modal
-+      onClose={onClose}
-+      size="md"
-+      labelledBy="document-properties-title"
-+      dataTestId="document-properties"
-+    >
-+      <Modal.Header
-+        title="Document Properties"
-+        titleId="document-properties-title"
-+        showCloseButton
-+        onClose={onClose}
-+        closeAriaLabel="Close document properties"
-+      />
-+      <Modal.Body>
-+        <InspectorPanel figure />
-+      </Modal.Body>
-+    </Modal>
-+  );
-+}
 diff --git a/packages/app/src/ui/ExactRange.module.css b/packages/app/src/ui/ExactRange.module.css
 new file mode 100644
 index 00000000..f9ca8e76
@@ -6448,7 +6348,7 @@ index 4fba726b..16c1c9f8 100644
            disabled={!writable}
            onChange={(value) => { onPropertyChange(declaration, property, value); }}
 diff --git a/packages/app/src/ui/Toolbar.module.css b/packages/app/src/ui/Toolbar.module.css
-index 0ddde08e..09422b35 100644
+index 0ddde08e..e59d48f6 100644
 --- a/packages/app/src/ui/Toolbar.module.css
 +++ b/packages/app/src/ui/Toolbar.module.css
 @@ -96,38 +96,6 @@
@@ -6490,7 +6390,7 @@ index 0ddde08e..09422b35 100644
  /* ── Legacy classes (keep for compatibility) ─────────────────────────────── */
  
  .icon {
-@@ -144,6 +112,44 @@
+@@ -144,6 +112,45 @@
    flex: 1;
  }
  
@@ -6526,6 +6426,7 @@ index 0ddde08e..09422b35 100644
 +.exactColorForm label { display: flex; flex: 1 1 150px; flex-direction: column; gap: 4px; }
 +.exactColorForm input { min-width: 0; width: 100%; box-sizing: border-box; }
 +.presetActions, .menuActions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
++.menuHint { margin: 0; color: var(--text-muted); line-height: 1.45; }
 +.menuField { display: grid; grid-template-columns: auto 1fr 72px; gap: 8px; align-items: center; min-height: 44px; }
 +.menuField input[type="number"] { min-height: 44px; box-sizing: border-box; width: 100%; }
 +.numericEntry { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
@@ -6535,7 +6436,7 @@ index 0ddde08e..09422b35 100644
  .updateChip {
    display: inline-flex;
    align-items: center;
-@@ -224,3 +230,24 @@
+@@ -224,3 +231,24 @@
      padding: 8px;
    }
  }
@@ -6561,7 +6462,7 @@ index 0ddde08e..09422b35 100644
 +  grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
 +}
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..519caf96 100644
+index a3293df2..a7d8899d 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,5 +1,7 @@
@@ -6949,7 +6850,7 @@ index a3293df2..519caf96 100644
                      }}
                      data-testid={`toolbar-matrix-picker-cell-${row}-${column}`}
                      aria-label={`${row} rows by ${column} columns`}
-@@ -170,69 +357,301 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,69 +357,302 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -7135,6 +7036,7 @@ index a3293df2..519caf96 100644
 +  </ToolbarPopupSection>;
 +
 +  const renderShapesMenu = () => <ToolbarPopupSection>
++    {constructionStepText ? <p className={css.menuHint}>{constructionStepText}</p> : null}
 +    {constructionStepText ? <div className={css.menuActions}>
 +      {constructionHasFinish ? <button type="button" onClick={() => canvasSession.send({ type: "construction.finish" })}>Finish</button> : null}
 +      <button type="button" onClick={() => canvasSession.send({ type: "construction.cancel" })}>Cancel</button>
@@ -7310,7 +7212,7 @@ index a3293df2..519caf96 100644
    const renderShapeButton = () => {
      const mode = "addShape" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -257,6 +676,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +677,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7318,7 +7220,7 @@ index a3293df2..519caf96 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +719,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +720,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7326,7 +7228,7 @@ index a3293df2..519caf96 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -321,7 +742,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +743,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -7334,7 +7236,7 @@ index a3293df2..519caf96 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +750,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +751,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -7346,7 +7248,7 @@ index a3293df2..519caf96 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +763,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +764,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -7407,7 +7309,7 @@ index a3293df2..519caf96 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -358,9 +829,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -358,9 +830,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
@@ -7418,7 +7320,7 @@ index a3293df2..519caf96 100644
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
-@@ -387,4 +856,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +857,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -17870,7 +17772,7 @@ index 44b105be..f1cfbce3 100644
      logClipboardDebug("Clipboard write unavailable: navigator.clipboard missing.");
      return false;
 diff --git a/packages/app/src/ui/editor-command-runtime.ts b/packages/app/src/ui/editor-command-runtime.ts
-index 3ab44838..edcc654b 100644
+index 3ab44838..49c9e798 100644
 --- a/packages/app/src/ui/editor-command-runtime.ts
 +++ b/packages/app/src/ui/editor-command-runtime.ts
 @@ -5,13 +5,14 @@ import { resolvePropertyTarget } from "tikz-editor/edit/property-target";
@@ -17912,18 +17814,15 @@ index 3ab44838..edcc654b 100644
    showRulers: boolean;
    showGuides: boolean;
    showDocumentBounds: boolean;
-@@ -129,8 +131,10 @@ type RuntimeInput = {
+@@ -129,6 +131,7 @@ type RuntimeInput = {
    onAddNodeAdornment?: (kind: "label" | "pin") => void;
    onPositionNodeRelativeTo?: () => void;
    onConvertNodePositionToAbsolute?: () => void;
 +  onSimplifySelectedPath?: () => void;
    onShowCompiledPicture?: () => void;
    onOpenSettings?: () => void;
-+  onOpenDocumentProperties?: () => void;
    onFocusAssistant?: () => void;
-   onOpenInsertEquation?: () => void;
-   onOpenEditEquation?: (target: EquationNodeTarget) => void;
-@@ -147,6 +151,20 @@ export type EditorCommandRuntime = {
+@@ -147,6 +150,20 @@ export type EditorCommandRuntime = {
    runCommand: (commandId: AppMenuCommandId, origin: CommandOrigin) => boolean;
  };
  
@@ -17944,7 +17843,7 @@ index 3ab44838..edcc654b 100644
  const PGF_TIKZ_MANUAL_URL = "https://tikz.dev";
  const GITHUB_REPOSITORY_URL = "https://github.com/DominikPeters/tikz-editor";
  const GITHUB_ISSUES_URL = "https://github.com/DominikPeters/tikz-editor/issues";
-@@ -161,17 +179,18 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -161,17 +178,18 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      toolMode,
      selectedElementIds,
      activeHandleId,
@@ -17967,18 +17866,15 @@ index 3ab44838..edcc654b 100644
      showRulers,
      showGuides,
      showDocumentBounds,
-@@ -198,8 +217,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -198,6 +216,7 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
      onAddNodeAdornment,
      onPositionNodeRelativeTo,
      onConvertNodePositionToAbsolute,
 +    onSimplifySelectedPath,
      onShowCompiledPicture,
      onOpenSettings,
-+    onOpenDocumentProperties,
      onFocusAssistant,
-     onOpenInsertEquation,
-     onOpenEditEquation,
-@@ -236,8 +257,6 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -236,8 +255,6 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
    };
  
    const availability = actionAvailability(commandContext);
@@ -17987,7 +17883,7 @@ index 3ab44838..edcc654b 100644
    const canExport = snapshot.svg != null;
    const canOpen = typeof getActiveEditorPlatform().files?.openText === "function";
    const canOpenBinary = typeof getActiveEditorPlatform().files?.openBinary === "function";
-@@ -549,13 +568,14 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -549,13 +566,14 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        enabled: canExport && onOpenPngExport != null,
        run: runPngExport
      },
@@ -18006,7 +17902,7 @@ index 3ab44838..edcc654b 100644
      },
      [APP_MENU_COMMAND_IDS.FORMAT_TIKZ]: {
        enabled: showSourcePanel,
-@@ -799,6 +819,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -799,6 +817,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
          splitSelectedPath(commandContext);
        }
      },
@@ -18017,7 +17913,7 @@ index 3ab44838..edcc654b 100644
      [APP_MENU_COMMAND_IDS.PATH_JOIN]: {
        enabled: availability["path-join"].enabled,
        run: () => {
-@@ -841,6 +865,14 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -841,6 +863,14 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
          setSelectedPathPointKind(commandContext, "smooth");
        }
      },
@@ -18032,7 +17928,7 @@ index 3ab44838..edcc654b 100644
      [APP_MENU_COMMAND_IDS.INSERT_NODE]: insertBinding("addNode"),
      [APP_MENU_COMMAND_IDS.INSERT_MATRIX]: insertBinding("addMatrix"),
      [APP_MENU_COMMAND_IDS.INSERT_SHAPE]: insertBinding("addShape"),
-@@ -882,14 +914,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -882,14 +912,15 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        enabled: nodePositioningAction === "convert-absolute" && onConvertNodePositionToAbsolute != null,
        run: () => onConvertNodePositionToAbsolute?.()
      },
@@ -18053,7 +17949,7 @@ index 3ab44838..edcc654b 100644
          dispatch({ type: "REQUEST_FIT_TO_CONTENT" });
        }
      },
-@@ -911,30 +944,35 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
+@@ -911,30 +942,35 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
        checked: showTransparencyGrid,
        run: () => { dispatch({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" }); }
      },
@@ -18106,29 +18002,15 @@ index 3ab44838..edcc654b 100644
      },
      [APP_MENU_COMMAND_IDS.TOGGLE_SNAP_HAPTICS]: {
        enabled: isMacDesktop,
-@@ -1044,6 +1082,10 @@ export function createEditorCommandRuntime(input: RuntimeInput): EditorCommandRu
-       enabled: onOpenSettings != null,
-       run: () => onOpenSettings?.()
-     },
-+    [APP_MENU_COMMAND_IDS.OPEN_DOCUMENT_PROPERTIES]: {
-+      enabled: onOpenDocumentProperties != null,
-+      run: () => onOpenDocumentProperties?.()
-+    },
-     [APP_MENU_COMMAND_IDS.CHECK_FOR_UPDATES]: {
-       enabled: canCheckForUpdates && !updateCheckBusy,
-       run: () => onCheckForUpdates?.()
-@@ -1098,8 +1140,10 @@ export function useEditorCommandRuntime(
+@@ -1098,6 +1134,7 @@ export function useEditorCommandRuntime(
      onAddNodeAdornment?: (kind: "label" | "pin") => void;
      onPositionNodeRelativeTo?: () => void;
      onConvertNodePositionToAbsolute?: () => void;
 +    onSimplifySelectedPath?: () => void;
      onShowCompiledPicture?: () => void;
      onOpenSettings?: () => void;
-+    onOpenDocumentProperties?: () => void;
      onFocusAssistant?: () => void;
-     onOpenInsertEquation?: () => void;
-     onOpenEditEquation?: (target: EquationNodeTarget) => void;
-@@ -1120,17 +1164,18 @@ export function useEditorCommandRuntime(
+@@ -1120,17 +1157,18 @@ export function useEditorCommandRuntime(
    const selectedElementIds = useEditorStore((s) => s.selectedElementIds);
    const activeHandleId = useEditorStore((s) => s.activeHandleId);
    const activeCanvasDragKind = useEditorStore((s) => s.activeCanvasDragKind);
@@ -18151,7 +18033,7 @@ index 3ab44838..edcc654b 100644
    const showRulers = useEditorStore((s) => s.showRulers);
    const showGuides = useEditorStore((s) => s.showGuides);
    const showDocumentBounds = useEditorStore((s) => s.showDocumentBounds);
-@@ -1197,17 +1242,18 @@ export function useEditorCommandRuntime(
+@@ -1197,17 +1235,18 @@ export function useEditorCommandRuntime(
          toolMode,
          selectedElementIds: effectiveCommandInputs.selectedElementIds,
          activeHandleId: effectiveCommandInputs.activeHandleId,
@@ -18174,18 +18056,15 @@ index 3ab44838..edcc654b 100644
          showRulers,
          showGuides,
          showDocumentBounds,
-@@ -1234,8 +1280,10 @@ export function useEditorCommandRuntime(
+@@ -1234,6 +1273,7 @@ export function useEditorCommandRuntime(
          onAddNodeAdornment: options.onAddNodeAdornment,
          onPositionNodeRelativeTo: options.onPositionNodeRelativeTo,
          onConvertNodePositionToAbsolute: options.onConvertNodePositionToAbsolute,
 +        onSimplifySelectedPath: options.onSimplifySelectedPath,
          onShowCompiledPicture: options.onShowCompiledPicture,
          onOpenSettings: options.onOpenSettings,
-+        onOpenDocumentProperties: options.onOpenDocumentProperties,
          onCheckForUpdates: options.onCheckForUpdates,
-         onShowAbout: options.onShowAbout,
-         updateCheckBusy: options.updateCheckBusy,
-@@ -1250,17 +1298,18 @@ export function useEditorCommandRuntime(
+@@ -1250,17 +1290,18 @@ export function useEditorCommandRuntime(
        editAnalysisView,
        effectiveCommandInputs,
        toolMode,
@@ -18208,17 +18087,14 @@ index 3ab44838..edcc654b 100644
        showRulers,
        showGuides,
        showDocumentBounds,
-@@ -1287,8 +1336,10 @@ export function useEditorCommandRuntime(
+@@ -1287,6 +1328,7 @@ export function useEditorCommandRuntime(
        options.onAddNodeAdornment,
        options.onPositionNodeRelativeTo,
        options.onConvertNodePositionToAbsolute,
 +      options.onSimplifySelectedPath,
        options.onShowCompiledPicture,
        options.onOpenSettings,
-+      options.onOpenDocumentProperties,
        options.onCheckForUpdates,
-       options.onShowAbout,
-       options.updateCheckBusy,
 diff --git a/packages/app/src/ui/editor-commands.ts b/packages/app/src/ui/editor-commands.ts
 index e3ffc872..3a088d9c 100644
 --- a/packages/app/src/ui/editor-commands.ts
@@ -18247,7 +18123,7 @@ index e3ffc872..3a088d9c 100644
        const browserWrite = await writeClipboardPayload(nextPayload, { svgText });
        if (!browserWrite) {
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.module.css b/packages/app/src/ui/inspector-panel/InspectorPanel.module.css
-index 3173d35f..cd3fcaa0 100644
+index 3173d35f..439cc518 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.module.css
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.module.css
 @@ -21,6 +21,13 @@
@@ -18264,8 +18140,25 @@ index 3173d35f..cd3fcaa0 100644
  .globalNote {
    margin-top: 2px;
    font-size: calc(var(--app-ui-scale, 1) * 10px);
+@@ -31,16 +38,6 @@
+   user-select: text;
+ }
+ 
+-.toolHint {
+-  font-size: calc(var(--app-ui-scale, 1) * 12px);
+-  color: var(--text-muted);
+-  padding: 7px 9px;
+-  background: color-mix(in srgb, var(--bg-pane) 72%, var(--bg-app));
+-  border: 1px solid var(--border-lighter);
+-  border-radius: 4px;
+-  margin-bottom: 10px;
+-  line-height: 1.45;
+-}
+ 
+ .toolSliderRow {
+   display: flex;
 diff --git a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
-index d5c65582..cde5f3dc 100644
+index d5c65582..e6fc59dc 100644
 --- a/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 +++ b/packages/app/src/ui/inspector-panel/InspectorPanel.tsx
 @@ -1,3 +1,4 @@
@@ -18283,52 +18176,48 @@ index d5c65582..cde5f3dc 100644
  import {
  getInspectorDescriptor,
  NODE_INNER_SEP_DEFAULT,
-@@ -31,9 +33,9 @@ type NodeMinimumDimensionKey,
+@@ -31,11 +33,8 @@ type NodeMinimumDimensionKey,
  type ShadowMutationContext
  } from "tikz-editor/edit/property-write-builders";
  import { propertyIdForWriteKey } from "tikz-editor/edit/property-registry";
 -import { BASIC_PICKER_COLORS } from "../../colors/color-palette";
- import { useProjectNamedColorSwatches } from "../../colors/project-named-colors";
+-import { useProjectNamedColorSwatches } from "../../colors/project-named-colors";
  import { useEditorStore } from "../../store/store";
-+import { useSettingsStore } from "../../settings/useSettingsStore";
  import { getInspectorPropertyCapabilityStatus } from "../capabilities";
- import { ColorPickerField } from "../ColorPicker";
+-import { ColorPickerField } from "../ColorPicker";
  import { MULTI_ARRANGE_ACTIONS,type MultiArrangeAction } from "./arrange-actions";
-@@ -59,6 +61,9 @@ import { useInspectorPreviewScrub } from "./useInspectorPreviewScrub";
+ import { InspectorMultiSection,InspectorSingleSection } from "./InspectorSections";
+ import {
+@@ -59,13 +58,6 @@ import { useInspectorPreviewScrub } from "./useInspectorPreviewScrub";
  import css from "./InspectorPanel.module.css";
  import { RenderedTooltip } from "../RenderedTooltip";
  import { SidePanel } from "../SidePanel";
-+import { useSelector } from "@xstate/react";
-+import { canvasSession, constructionStep, newStrokeSettings, saveNewStrokeDefaults, setNewStrokeSettings } from "../canvas-panel/canvas-session";
-+import { ExactRange } from "../ExactRange";
- import {
- getToolLabel,
- isCreationToolMode,
-@@ -85,13 +90,17 @@ type NumberLabelScrubBinding = {
-   onCommit: (value: number) => void;
- };
+-import {
+-getToolLabel,
+-isCreationToolMode,
+-TOOL_HINTS,
+-toolSupportsFill,
+-toolSupportsStroke
+-} from "../tool-config";
  
--export function InspectorPanel() {
-+export function InspectorPanel({ figure = false }: { figure?: boolean }) {
+ type NumberChangeOptions = {
+   recordInHistory?: boolean;
+@@ -88,11 +80,6 @@ type NumberLabelScrubBinding = {
+ export function InspectorPanel() {
    const selectedIds = useEditorStore((s) => s.selectedElementIds);
    const dispatch = useEditorStore((s) => s.dispatch);
-   const toolMode = useEditorStore((s) => s.toolMode);
-   const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
-   const creationFillColor = useEditorStore((s) => s.creationFillColor);
+-  const toolMode = useEditorStore((s) => s.toolMode);
+-  const creationStrokeColor = useEditorStore((s) => s.creationStrokeColor);
+-  const creationFillColor = useEditorStore((s) => s.creationFillColor);
 -  const freehandSmoothingPx = useEditorStore((s) => s.freehandSmoothingPx);
-+  const freehandInterpretGeometry = useEditorStore((s) => s.freehandInterpretGeometry);
-+  // The freehand fit's simplification and smoothing for new strokes, in lattice units: this session's values over the saved defaults.
-+  const savedCanvasSettings = useSettingsStore((s) => s.settings.canvas);
-+  const sessionNewStrokes = useSelector(canvasSession, (snapshot) => snapshot.context.newStrokes);
-+  const { freehandSimplificationUnits, freehandSmoothingUnits } = newStrokeSettings(savedCanvasSettings, sessionNewStrokes);
-   const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
+-  const toolProjectNamedColorSwatches = useProjectNamedColorSwatches();
  
    const {
-@@ -116,7 +125,18 @@ export function InspectorPanel() {
+     selectedSourceIds,
+@@ -116,6 +103,16 @@ export function InspectorPanel() {
      dispatch,
      getInspectorDescriptor
    });
--
 +  const selectedElement = snapshot.scene?.elements.find((element) => element.sourceRef.sourceId === selectedSourceIds[0]);
 +  const selectedKind = !selectedElement ? "Selection"
 +    : selectedElement.kind === "Text" ? "Node"
@@ -18339,12 +18228,10 @@ index d5c65582..cde5f3dc 100644
 +    : selectedElement.shapeHint === "ellipse" ? "Ellipse"
 +    : selectedElement.commands.some((command) => command.kind === "C" || command.kind === "A") ? "Curve"
 +    : selectedElement.commands.length === 2 ? "Line" : "Path";
-+
-+  const constructionStepText = useSelector(canvasSession, constructionStep);
+ 
    const [manualLineWidthCustomKeys, setManualLineWidthCustomKeys] = useState<Set<string>>(
      () => new Set()
-   );
-@@ -208,7 +228,7 @@ export function InspectorPanel() {
+@@ -208,7 +205,7 @@ export function InspectorPanel() {
      const mutations = buildTransformSetPropertyMutations(
        write.transformContext,
        write.transformContext.key,
@@ -18353,7 +18240,7 @@ index d5c65582..cde5f3dc 100644
      );
      if (mutations.length === 0) {
        return;
-@@ -295,7 +315,7 @@ export function InspectorPanel() {
+@@ -295,7 +292,7 @@ export function InspectorPanel() {
        const mutations = buildTransformSetPropertyMutations(
          write.transformContext,
          write.transformContext.key,
@@ -18362,7 +18249,7 @@ index d5c65582..cde5f3dc 100644
        );
        for (const mutation of mutations) {
          dispatch({
-@@ -886,6 +906,7 @@ export function InspectorPanel() {
+@@ -886,6 +883,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -18370,7 +18257,7 @@ index d5c65582..cde5f3dc 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -958,6 +979,7 @@ export function InspectorPanel() {
+@@ -958,6 +956,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -18378,7 +18265,7 @@ index d5c65582..cde5f3dc 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1034,6 +1056,7 @@ export function InspectorPanel() {
+@@ -1034,6 +1033,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -18386,7 +18273,7 @@ index d5c65582..cde5f3dc 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1107,6 +1130,7 @@ export function InspectorPanel() {
+@@ -1107,6 +1107,7 @@ export function InspectorPanel() {
      const valueProvenance = draftValue === undefined ? effectiveProvenance : null;
      const input = (
        <input
@@ -18394,7 +18281,7 @@ index d5c65582..cde5f3dc 100644
          className={withValueProvenanceClass(css.numberInput, valueProvenance)}
          type="number"
          step={property.step}
-@@ -1183,6 +1207,7 @@ export function InspectorPanel() {
+@@ -1183,6 +1184,7 @@ export function InspectorPanel() {
      const inputValue = draftValue ?? (property.value == null ? "" : formatNumber(property.value));
      const input = (
        <input
@@ -18402,7 +18289,7 @@ index d5c65582..cde5f3dc 100644
          className={withValueProvenanceClass(css.numberInput, provenance)}
          type="number"
          step={property.step}
-@@ -1249,6 +1274,7 @@ export function InspectorPanel() {
+@@ -1249,6 +1251,7 @@ export function InspectorPanel() {
      const inputValue = draftValue ?? (property.mixed || property.value == null ? "" : formatNumber(property.value));
      const input = (
        <input
@@ -18410,7 +18297,7 @@ index d5c65582..cde5f3dc 100644
          className={withValueProvenanceClass(css.numberInput, provenance)}
          type="number"
          step={property.step}
-@@ -1689,21 +1715,11 @@ export function InspectorPanel() {
+@@ -1689,21 +1692,11 @@ export function InspectorPanel() {
      };
    }
  
@@ -18436,7 +18323,7 @@ index d5c65582..cde5f3dc 100644
    }
  
    function applyFigureBoundsValue(next: { x: number; y: number; width: number; height: number }): void {
-@@ -1731,6 +1747,7 @@ export function InspectorPanel() {
+@@ -1731,6 +1724,7 @@ export function InspectorPanel() {
          <div className={css.propertyLabel}>{label}</div>
          <div className={css.controlRow}>
            <input
@@ -18444,7 +18331,7 @@ index d5c65582..cde5f3dc 100644
              className={css.numberInput}
              type="number"
              step={0.1}
-@@ -1742,13 +1759,10 @@ export function InspectorPanel() {
+@@ -1742,13 +1736,10 @@ export function InspectorPanel() {
                if (!Number.isFinite(parsed)) {
                  return;
                }
@@ -18460,7 +18347,7 @@ index d5c65582..cde5f3dc 100644
          </div>
        </div>
      );
-@@ -1756,6 +1770,7 @@ export function InspectorPanel() {
+@@ -1756,6 +1747,7 @@ export function InspectorPanel() {
  
    function renderFigureBoundsControls(): JSX.Element {
      const values = currentFigureBoundsControlsValue();
@@ -18468,7 +18355,7 @@ index d5c65582..cde5f3dc 100644
      const fixed = figureBoundsState.mode === "fixed";
      return (
        <>
-@@ -1797,42 +1812,63 @@ export function InspectorPanel() {
+@@ -1797,120 +1789,50 @@ export function InspectorPanel() {
      );
    }
  
@@ -18478,7 +18365,26 @@ index d5c65582..cde5f3dc 100644
      const yscale = makeGlobalTransformNumberProperty("yscale", "Y scale");
 +    // A figure property, read from its x, y, and scale options, as Inkscape shows grid spacing in Document Properties.
 +    const step = latticeStepCentimetres(resolveFigureCoordinateFrame(commandContext.source, commandContext.parseOptions));
-+    return (
+     return (
+-      <>
+-        <SidePanel.Header>tikzpicture</SidePanel.Header>
+-        <SidePanel.Content className={css.content}>
+-          <div className={css.elementInfo}>
+-            <SidePanel.Section>
+-              <SidePanel.SectionHeader>
+-                <span>Transform</span>
+-              </SidePanel.SectionHeader>
+-              <SidePanel.SectionBody>{renderSingleNumberPair(xscale, yscale)}</SidePanel.SectionBody>
+-            </SidePanel.Section>
+-            <SidePanel.Section>
+-              <SidePanel.SectionHeader>
+-                <span>Figure Bounds</span>
+-              </SidePanel.SectionHeader>
+-              <SidePanel.SectionBody>{renderFigureBoundsControls()}</SidePanel.SectionBody>
+-            </SidePanel.Section>
+-          </div>
+-        </SidePanel.Content>
+-      </>
 +      <div className={css.elementInfo}>
 +        <SidePanel.Section>
 +          <SidePanel.SectionHeader>
@@ -18508,88 +18414,77 @@ index d5c65582..cde5f3dc 100644
 +          <SidePanel.SectionBody>{renderFigureBoundsControls()}</SidePanel.SectionBody>
 +        </SidePanel.Section>
 +      </div>
-+    );
-+  }
-+
-+  function renderGlobalTransformPanel() {
-     return (
-       <>
--        <SidePanel.Header>tikzpicture</SidePanel.Header>
--        <SidePanel.Content className={css.content}>
--          <div className={css.elementInfo}>
--            <SidePanel.Section>
--              <SidePanel.SectionHeader>
--                <span>Transform</span>
--              </SidePanel.SectionHeader>
--              <SidePanel.SectionBody>{renderSingleNumberPair(xscale, yscale)}</SidePanel.SectionBody>
--            </SidePanel.Section>
--            <SidePanel.Section>
--              <SidePanel.SectionHeader>
--                <span>Figure Bounds</span>
--              </SidePanel.SectionHeader>
--              <SidePanel.SectionBody>{renderFigureBoundsControls()}</SidePanel.SectionBody>
--            </SidePanel.Section>
--          </div>
--        </SidePanel.Content>
-+        <SidePanel.Header>{getToolLabel(toolMode)}</SidePanel.Header>
-+        <SidePanel.Content className={css.content}>{renderFigureSections()}</SidePanel.Content>
-       </>
      );
    }
  
-   function renderToolOptionsPanel() {
-     const toolLabel = getToolLabel(toolMode);
+-  function renderToolOptionsPanel() {
+-    const toolLabel = getToolLabel(toolMode);
 -    const hint = TOOL_HINTS[toolMode];
-+    const hint = constructionStepText ?? TOOL_HINTS[toolMode];
-     const showStroke = toolSupportsStroke(toolMode);
-     const showFill = toolSupportsFill(toolMode);
-     const isFreehand = toolMode === "addFreehand";
- 
+-    const showStroke = toolSupportsStroke(toolMode);
+-    const showFill = toolSupportsFill(toolMode);
+-    const isFreehand = toolMode === "addFreehand";
+-
++  // With nothing selected, Properties shows the figure (FR-060a; Keynote for iPad Format shows the slide).
++  function renderFigurePanel() {
      return (
        <>
 -        <SidePanel.Header>{toolLabel} Tool</SidePanel.Header>
-+        <SidePanel.Header>{toolLabel}</SidePanel.Header>
-         <SidePanel.Content className={css.content}>
-           <div className={css.elementInfo}>
-             {hint ? (
-@@ -1842,7 +1878,7 @@ export function InspectorPanel() {
-             {showStroke || showFill ? (
-               <SidePanel.Section>
-                 <SidePanel.SectionHeader>
+-        <SidePanel.Content className={css.content}>
+-          <div className={css.elementInfo}>
+-            {hint ? (
+-              <div className={css.toolHint}>{hint}</div>
+-            ) : null}
+-
+-            {showStroke || showFill ? (
+-              <SidePanel.Section>
+-                <SidePanel.SectionHeader>
 -                  <span>Defaults</span>
-+                  <span>New strokes</span>
-                 </SidePanel.SectionHeader>
-                 <SidePanel.SectionBody>
-                   {showStroke ? (
-@@ -1852,7 +1888,7 @@ export function InspectorPanel() {
-                         ariaLabel="Creation stroke color"
-                         value={creationStrokeColor}
-                         syntaxValue={creationStrokeColor}
+-                </SidePanel.SectionHeader>
+-                <SidePanel.SectionBody>
+-                  {showStroke ? (
+-                    <div className={css.property}>
+-                      <label className={css.propertyLabel}>Stroke</label>
+-                      <ColorPickerField
+-                        ariaLabel="Creation stroke color"
+-                        value={creationStrokeColor}
+-                        syntaxValue={creationStrokeColor}
 -                        options={BASIC_PICKER_COLORS}
-+                        allowNone={false}
-                         namedColorSwatches={toolProjectNamedColorSwatches}
-                         onChange={(nextValue) => {
-                           dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
-@@ -1867,7 +1903,7 @@ export function InspectorPanel() {
-                         ariaLabel="Creation fill color"
-                         value={creationFillColor === "none" ? "" : creationFillColor}
-                         syntaxValue={creationFillColor}
+-                        namedColorSwatches={toolProjectNamedColorSwatches}
+-                        onChange={(nextValue) => {
+-                          dispatch({ type: "SET_CREATION_STROKE_COLOR", value: nextValue });
+-                        }}
+-                      />
+-                    </div>
+-                  ) : null}
+-                  {showFill ? (
+-                    <div className={css.property}>
+-                      <label className={css.propertyLabel}>Fill</label>
+-                      <ColorPickerField
+-                        ariaLabel="Creation fill color"
+-                        value={creationFillColor === "none" ? "" : creationFillColor}
+-                        syntaxValue={creationFillColor}
 -                        options={BASIC_PICKER_COLORS}
-+                        allowNone
-                         namedColorSwatches={toolProjectNamedColorSwatches}
-                         onChange={(nextValue) => {
-                           dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
-@@ -1886,25 +1922,19 @@ export function InspectorPanel() {
-                 </SidePanel.SectionHeader>
-                 <SidePanel.SectionBody>
-                   <div className={css.property}>
+-                        namedColorSwatches={toolProjectNamedColorSwatches}
+-                        onChange={(nextValue) => {
+-                          dispatch({ type: "SET_CREATION_FILL_COLOR", value: nextValue || "none" });
+-                        }}
+-                      />
+-                    </div>
+-                  ) : null}
+-                </SidePanel.SectionBody>
+-              </SidePanel.Section>
+-            ) : null}
+-
+-            {isFreehand ? (
+-              <SidePanel.Section>
+-                <SidePanel.SectionHeader>
+-                  <span>Freehand</span>
+-                </SidePanel.SectionHeader>
+-                <SidePanel.SectionBody>
+-                  <div className={css.property}>
 -                    <label className={css.propertyLabel} htmlFor="inspector-freehand-smoothing">
 -                      Smoothing
-+                    <label className={css.checkboxControl} style={{ minHeight: 44, width: "100%" }}>
-+                      <input type="checkbox" checked={freehandInterpretGeometry}
-+                        onChange={(event) => dispatch({ type: "SET_FREEHAND_INTERPRETATION", enabled: event.currentTarget.checked })} />
-+                      Interpret geometry
-                     </label>
+-                    </label>
 -                    <div className={css.toolSliderRow}>
 -                      <input
 -                        id="inspector-freehand-smoothing"
@@ -18606,24 +18501,19 @@ index d5c65582..cde5f3dc 100644
 -                      />
 -                      <span className={css.toolSliderValue}>{freehandSmoothingPx}px</span>
 -                    </div>
-+                    {([
-+                      { key: "freehandSimplificationUnits", label: "Simplification", min: 0.01, max: 2, step: 0.01, value: freehandSimplificationUnits },
-+                      { key: "freehandSmoothingUnits", label: "Smoothing", min: 0, max: 1, step: 0.01, value: freehandSmoothingUnits }
-+                    ] as const).map(({ key, label, min, max, step, value }) => (
-+                      <ExactRange key={key} label={label} min={min} max={max} step={step} value={value}
-+                        onChange={(next) => setNewStrokeSettings({ [key]: next })} />
-+                    ))}
-+                    <button type="button" onClick={saveNewStrokeDefaults}>Save as default</button>
-                   </div>
-                 </SidePanel.SectionBody>
-               </SidePanel.Section>
-@@ -1970,22 +2000,22 @@ export function InspectorPanel() {
+-                  </div>
+-                </SidePanel.SectionBody>
+-              </SidePanel.Section>
+-            ) : null}
+-          </div>
+-        </SidePanel.Content>
++        <SidePanel.Header>Figure</SidePanel.Header>
++        <SidePanel.Content className={css.content}>{renderFigureSections()}</SidePanel.Content>
+       </>
      );
    }
+@@ -1972,20 +1894,17 @@ export function InspectorPanel() {
  
-+  // Document Properties shows the figure's own settings with the same controls and edits.
-+  if (figure) return renderFigureSections();
-+
    return (
      <SidePanel className={css.panel}>
 -      {isCreationToolMode(toolMode) ? (
@@ -18647,7 +18537,7 @@ index d5c65582..cde5f3dc 100644
                  {renderedDescriptor.readOnlyReason ? (
                    <div className={css.globalNote}>{renderedDescriptor.readOnlyReason}</div>
                  ) : null}
-@@ -2016,13 +2046,14 @@ export function InspectorPanel() {
+@@ -2016,13 +1935,14 @@ export function InspectorPanel() {
              </SidePanel.Content>
            </>
          )
@@ -18664,12 +18554,12 @@ index d5c65582..cde5f3dc 100644
                {renderMultiArrangeQuickActions()}
                {!renderedMultiModel || renderedMultiModel.sections.length === 0 ? (
                  <p className={css.hint}>No shared editable properties were found across the selected elements.</p>
-@@ -2050,7 +2081,7 @@ export function InspectorPanel() {
+@@ -2050,7 +1970,7 @@ export function InspectorPanel() {
              </div>
            </SidePanel.Content>
          </>
 -      )}
-+      ) : isCreationToolMode(toolMode) ? renderToolOptionsPanel() : renderGlobalTransformPanel()}
++      ) : renderFigurePanel()}
      </SidePanel>
    );
  }
