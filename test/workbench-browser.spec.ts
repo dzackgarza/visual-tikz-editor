@@ -8254,7 +8254,7 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke([await stableCenter(frame.locator("[data-diagram-tools]").getByRole("button", { name: "Undo", exact: true }))]);
         await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
         await editorReady(page);
-        await input.penStroke([await pointAt(1)]);
+        // The step changed the cornered point, which stays selected (FR-054).
         await expect(strip.getByText("1 point selected", { exact: true })).toBeVisible();
         await input.penStroke([await pointAt(2)]);
         await expect(strip.getByText("2 points selected", { exact: true })).toBeVisible();
