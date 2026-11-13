@@ -24,7 +24,6 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `source`, `snapshot` | — | Reads the source or a rendered snapshot |
 | `keyboard` | `bottom` | The height of the on-screen keyboard over the frame |
 | `clipboard-result` | `targetRequestId`, `text` or `error` | Answers `clipboard-read` |
-| `import-ink`, `interpret-ink`, `restore-ink` | `source`, `strokes` or `key` | Ink import and Restore Original Stroke (FR-027) |
 | `cancel` | `targetRequestId` | Cancels a running command |
 
 ## Canvas editor: events to the workbench
