@@ -44,7 +44,14 @@
         </div>
       </details>
       <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
+      <details class="file-menu more-menu" aria-label="More" @click="closeFileMenu" @toggle="onShellMenuToggle">
+        <summary aria-label="More" title="More"><RiMoreLine aria-hidden="true" size="22" /></summary>
+        <div class="file-menu-items">
+          <button type="button" @click="openSettings">Settings…</button>
+        </div>
+      </details>
     </header>
+    <SettingsWindow v-if="settingsUrl !== null" :url="settingsUrl" :host="host" :theme="theme" @close="settingsUrl = null" />
     <div v-if="unsavedPrompt" class="dialog-backdrop">
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" @keydown.esc.stop.prevent="resolveUnsaved('cancel')">
         <h2 id="unsaved-title">Save changes?</h2>
@@ -108,7 +115,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { RiArrowGoBackLine, RiArrowGoForwardLine, RiEqualizerLine, RiStackLine } from "@remixicon/vue";
+import { RiArrowGoBackLine, RiArrowGoForwardLine, RiEqualizerLine, RiMoreLine, RiStackLine } from "@remixicon/vue";
+import { z } from "zod";
+import SettingsWindow from "./SettingsWindow.vue";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { DocumentHistory } from "../src/document-history";
 import { editorStateSchema, type EditorState, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../src/host";
@@ -139,8 +148,20 @@ function savePreference(key: string, value: string): Promise<void> {
     const response = await fetch("/api/preferences", { method: "PUT", body: JSON.stringify({ key, value }) });
     if (!response.ok) throw new Error(await response.text());
     preferences[key] = value;
+    host.editorUrl = editorPageUrl({});
+    if (key === SETTINGS_KEY) colorScheme.value = savedColorScheme();
   });
   return preferenceWrite;
+}
+// Each editor page starts from the saved preferences.
+function editorPageUrl(view: { view?: "settings" }): string {
+  const url = new URL("/tikz-editor/index.html", window.location.href);
+  url.hash = new URLSearchParams({ storage: JSON.stringify(preferences), ...view }).toString();
+  return url.href;
+}
+const settingsUrl = ref<string | null>(null);
+function openSettings(): void {
+  settingsUrl.value = editorPageUrl({ view: "settings" });
 }
 // The view at which the canvas shows the open file, kept outside its source (FR-040).
 // Writes go one at a time, and each sends the newest view.
@@ -347,12 +368,23 @@ let applyingDocument = false;
 let documentWrite = Promise.resolve();
 const loadError = ref("");
 const hostError = ref("");
-// The system appearance owns light and dark; Apple's HIG: "Avoid offering an app-specific appearance setting."
-const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
-const theme = ref<TikzWorkbenchTheme>(systemDark.matches ? "dark" : "light");
-function followSystemAppearance(event: MediaQueryListEvent): void {
-  theme.value = event.matches ? "dark" : "light";
+// Settings › Appearance (FR-062): the system appearance while Match System Appearance is on,
+// else the chosen one. The canvas editor's settings hold it.
+const SETTINGS_KEY = "tikz-editor:settings";
+const savedSettingsSchema = z.object({
+  settings: z.object({ general: z.object({ colorScheme: z.enum(["system", "light", "dark"]) }) }),
+});
+function savedColorScheme(): "system" | TikzWorkbenchTheme {
+  const saved = preferences[SETTINGS_KEY];
+  return saved === undefined ? "system" : savedSettingsSchema.parse(JSON.parse(saved)).settings.general.colorScheme;
 }
+const colorScheme = ref<"system" | TikzWorkbenchTheme>("system");
+const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+const systemTheme = ref<TikzWorkbenchTheme>(systemDark.matches ? "dark" : "light");
+function followSystemAppearance(event: MediaQueryListEvent): void {
+  systemTheme.value = event.matches ? "dark" : "light";
+}
+const theme = computed<TikzWorkbenchTheme>(() => colorScheme.value === "system" ? systemTheme.value : colorScheme.value);
 
 const dirty = computed(() => document.value !== null && (source.value !== savedSource.value ||
   document.value.recovery === "conflict" || (!document.value.saved && recoverySaved.value)));
@@ -507,9 +539,8 @@ async function load(): Promise<void> {
   try {
     const response = await fetch("/api/preferences");
     Object.assign(preferences, JSON.parse(await responseText(response)) as Record<string, string>);
-    const editorUrl = new URL("/tikz-editor/index.html", window.location.href);
-    editorUrl.hash = new URLSearchParams({ storage: JSON.stringify(preferences) }).toString();
-    host.editorUrl = editorUrl.href;
+    colorScheme.value = savedColorScheme();
+    host.editorUrl = editorPageUrl({});
     await applyDocument(await fetch("/api/document"));
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
@@ -876,7 +907,8 @@ body,
   margin-left: auto;
 }
 
-.export-menu {
+.export-menu,
+.more-menu {
   margin-left: 0;
 }
 

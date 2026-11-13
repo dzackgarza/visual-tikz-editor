@@ -2,7 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setActiveEditorPlatform } from '@tikz-editor/app/platform/current';
 import { useEditorStore } from '@tikz-editor/app/store';
-import { PRINTED_SIZE_SCALE, getEditorSettings, publishOccupiedInsets, reloadEditorSettings, updateEditorGeneralSettings } from '@tikz-editor/app';
+import { PRINTED_SIZE_SCALE, getEditorSettings, publishOccupiedInsets, reloadEditorSettings } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
@@ -16,13 +16,10 @@ const App = lazy(async () => {
 	const mod = await import('@tikz-editor/app');
 	return { default: mod.App };
 });
-
-type HostSettingsPatch = {
-	general?: {
-		colorScheme?: 'system' | 'light' | 'dark';
-		canvasInvert?: boolean;
-	};
-};
+const SettingsWindow = lazy(async () => {
+	const mod = await import('@tikz-editor/app');
+	return { default: mod.SettingsWindow };
+});
 
 const WORKSPACE_KEY = 'tikz-editor:workspace';
 const SETTINGS_KEY = 'tikz-editor:settings';
@@ -75,10 +72,6 @@ function postToHost(message: Record<string, unknown>) {
 
 function wantsSvg(format?: string) {
 	return typeof format === 'string' && format.toLowerCase().includes('svg');
-}
-
-function applyHostSettings(settings?: HostSettingsPatch) {
-  if (settings?.general) updateEditorGeneralSettings(settings.general);
 }
 
 function makeExportPayload(format: string | undefined) {
@@ -400,7 +393,6 @@ function HostBridge() {
 					nativeClipboard = command.nativeClipboard === true;
 					imageBaseUrl = command.imageBaseUrl ?? '';
 					imageBaseErrorReported = false;
-					applyHostSettings(command.settings);
 					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: restoredState ? { source: command.source, view: restoredState.viewport, fitToContent: restoredState.fitToContent } : null });
 					loadIntoEditor(command.source, command.fileName);
 					const finishLoad = () => {
@@ -459,10 +451,6 @@ function HostBridge() {
 					else { reply(command, 'invalid-command'); return; }
 					reply(command); return;
 				}
-				case 'settings':
-					applyHostSettings(command.settings);
-					reply(command);
-					return;
 				case 'display':
 					fullscreenRef.current = command.fullscreen;
 					setFullscreen(command.fullscreen);
@@ -552,6 +540,13 @@ function HostBridge() {
 
 setActiveEditorPlatform(createEmbedPlatform(DEFAULT_SOURCE));
 reloadEditorSettings();
+// The Settings window is its own frame; its changes reach the open editor frames through
+// the storage they share.
+window.addEventListener('storage', (event) => {
+	if (event.key !== SETTINGS_KEY || event.newValue === null) return;
+	persistenceValues.set(SETTINGS_KEY, event.newValue);
+	reloadEditorSettings();
+});
 
 Object.defineProperty(window, 'visualTikzEditorDebug', {
 	value: () => {
@@ -589,11 +584,21 @@ Object.defineProperty(window, 'visualTikzEditorDebug', {
 	},
 });
 
+// `view=settings` opens the Settings window alone, over another editor of the host.
+const settingsView = new URLSearchParams(window.location.hash.slice(1)).get('view') === 'settings';
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>
-		<HostBridge />
-		<Suspense fallback={null}>
-			<App />
-		</Suspense>
+		{settingsView ? (
+			<Suspense fallback={null}>
+				<SettingsWindow onClose={() => postToHost({ event: 'settings-closed' })} />
+			</Suspense>
+		) : (
+			<>
+				<HostBridge />
+				<Suspense fallback={null}>
+					<App />
+				</Suspense>
+			</>
+		)}
 	</StrictMode>,
 );

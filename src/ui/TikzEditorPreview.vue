@@ -204,22 +204,6 @@ function sendFullLoad(): void {
     imageBaseUrl: props.host.imageBaseUrl(props.target.docPath),
     nativeClipboard: props.host.clipboard !== undefined,
     state: props.host.viewState(),
-    settings: {
-      general: {
-        colorScheme: props.theme,
-        canvasInvert: false,
-      },
-    },
-  });
-}
-
-function sendTheme(): void {
-  if (!hostReady.value) {
-    return;
-  }
-  postToEditor({
-    action: "settings",
-    settings: { general: { colorScheme: props.theme, canvasInvert: false } },
   });
 }
 
@@ -247,8 +231,6 @@ watch(
     else sendFullLoad();
   },
 );
-
-watch(() => props.theme, sendTheme);
 
 watch(
   () => props.panel,
@@ -379,7 +361,6 @@ function onMessage(event: MessageEvent): void {
       }
       loaded.value = true;
       errorMessage.value = "";
-      sendTheme();
       reportKeyboard(true);
       if (documentPropertiesRequested) documentProperties();
       break;

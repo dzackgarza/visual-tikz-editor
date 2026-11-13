@@ -8,19 +8,14 @@ export const commandIdentitySchema = z.object({
   requestId: z.string().min(1),
 });
 const identity = commandIdentitySchema.shape;
-const settings = z.object({ general: z.object({
-  colorScheme: z.enum(['system', 'light', 'dark']).optional(),
-  canvasInvert: z.boolean().optional(),
-}).optional() });
 export const panelSchema = z.enum(['layers', 'properties']).nullable();
 export type Panel = z.infer<typeof panelSchema>;
 
 export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('load'), source: z.string(), fileName: z.string(),
-    imageBaseUrl: z.string().optional(), nativeClipboard: z.boolean().optional(), settings: settings.optional(), state: editorStateSchema.optional(), autosave: z.literal(0).optional() }),
+    imageBaseUrl: z.string().optional(), nativeClipboard: z.boolean().optional(), state: editorStateSchema.optional(), autosave: z.literal(0).optional() }),
   // The source that the shell's document history restored; the viewport and the tool stay.
   z.object({ ...identity, action: z.literal('replace-source'), source: z.string() }),
-  z.object({ ...identity, action: z.literal('settings'), settings }),
   z.object({ ...identity, action: z.literal('display'), fullscreen: z.boolean() }),
   z.object({ ...identity, action: z.literal('panel'), panel: panelSchema }),
   z.object({ ...identity, action: z.literal('document-properties') }),
