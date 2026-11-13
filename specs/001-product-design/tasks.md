@@ -9,7 +9,9 @@ constitution 2.3.0.
 story phase the stories come first: write them, run them against the present code with
 `bun run test:browser --grep '<title>'`, check that each failure shows the gap that the scenario
 names, and commit them before the repair (`ai-review-ci red-commit --issue <issue> -m <message>`
-when a hook rejects the red commit). A story that this work replaces is rewritten to the new rule
+when a hook rejects the red commit). The red commit names the open issue that reports the gap; when
+none exists, the maintainer files one with its Prior art section and the specification items it
+serves (constitution, Development Workflow). A story that this work replaces is rewritten to the new rule
 in the same phase; its old assertion is deleted, not weakened.
 
 **Fork rules**: Fork code changes are made in `.cache/tikz-editor/packages/app/src/` (from
@@ -37,7 +39,7 @@ and `just update-quiver-vendor`. Nothing under `vendor/*/src/` is edited in plac
 **Purpose**: the standalone shell with one document history and the new frame protocol. Every
 story phase depends on this phase.
 
-### The editor is standalone (research R2)
+### The editor is standalone (FR-064, research R2)
 
 - [ ] T004 Move each of the 20 stories that open `embedding.html` or `quiver-embedding.html` in `test/workbench-browser.spec.ts` (from "persists the completed Quiver edit through the embedding owner…" near line 8580 to line 9621) to the standalone page `index.html`, asserting the same behaviour through the standalone shell; delete a story whose only subject is the host interface
 - [ ] T005 Trash the embedding pages and their test with `trash standalone/embedding.html standalone/embedding.ts standalone/hosted.html standalone/hosted.ts standalone/HostedApp.vue standalone/quiver-embedding.html standalone/quiver-embedding.ts standalone/QuiverEmbedding.vue test/hosted-browser.spec.ts`, and delete their entries `quiverEmbedding`, `embedding`, `hosted` from `vite.config.ts`
@@ -50,16 +52,16 @@ story phase depends on this phase.
 - [ ] T009 In `vendor/tikz-editor/embed/src/commands.ts` add `replace-source` (`source`), rename `inspector` to `panel` with `panel: 'layers' | 'properties' | null`, add `dismiss-popover` and `zoom` (`direction: 'in' | 'out' | 'fit' | 'selection' | 'normal'` or `scale`), and delete `document-properties`, `undo`, `redo`, `history`, and `input`; raise the protocol version that `init` reports
 - [ ] T010 In `vendor/tikz-editor/embed/src/events.ts` add `undo-request`, `redo-request`, `selection` (`empty`), `panel` (`panel: 'layers' | 'properties' | null`), and `popover-opened`; delete `document-properties-closed` and the `document-properties` action
 - [ ] T011 Wire the new commands and events in `vendor/tikz-editor/embed/src/main.tsx`: `replace-source` loads the source and keeps viewport and tool; the canvas Undo and Redo shortcuts post `undo-request` and `redo-request` instead of acting on the fork's history; delete the `tikz-embed-document-properties` events (lines 481-526)
-- [ ] T012 In the fork, stop recording undo steps in `.cache/tikz-editor/packages/app/src/` (the editor command runtime and the store) so the canvas keeps no history of its own, and route `Mod-z` and `Mod-Shift-z` to the embed's `undo-request` and `redo-request`
+- [ ] T012 In the fork, delete the past and future stacks of the store (`UNDO` and its pair in `.cache/tikz-editor/packages/app/src/store/reducer.ts:958` and `store/types.ts`) so the canvas keeps no history of its own, and keep the points where the reducer records a step: at each one the embed posts one `change`, so a gesture is one step and not one debounce flush (`vendor/tikz-editor/embed/src/main.tsx:302-312`); route the Undo and Redo commands of `ui/editor-command-runtime.ts`, `app-menu/default-menu.ts:148`, `context-menu/canvas-context-menu.ts:287,505`, and the shortcut of `ui/canvas-panel/useCanvasKeyboardClipboard.ts:248-249` to `undo-request` and `redo-request`. Keep `undoTransientCanvasStep`, which removes the last placed point of a construction, as it stands: the spec does not yet say what Undo does during a construction, and that rule needs its prior art first
 - [ ] T013 In `vendor/quiver/ZETTLR.patch` post `zettlr-quiver:undo-request` and `zettlr-quiver:redo-request` from Quiver's Undo and Redo shortcuts, accept `zettlr-quiver:source` after Undo or Redo, delete the `undo`, `redo`, `history`, and `input` messages, and hide Undo, Redo, Save, autosave, theme, and About in Quiver's toolbar; rebuild with `just update-quiver-vendor`
 - [ ] T014 Update `src/host.ts` exports and `src/editor-bridge.ts` to the new command and event schemas, and refuse an editor whose `init` version differs
 
 ### One document history (FR-012b, research R3, data-model History)
 
-- [ ] T015 Write the red story "Undo acts on the one document history in every view" in `test/workbench-browser.spec.ts`: edit in the Code view, then on the canvas, then tap Undo twice; the first Undo removes the canvas edit and the second the Code edit, and after each the canvas and the Code view show the same source; repeat with Quiver for a `tikzcd`; commit it red
-- [ ] T016 Create `src/document-history.ts`: the document is a headless CodeMirror `EditorState` from `@codemirror/state` with `history({ newGroupDelay: 500 })` from `@codemirror/commands`; canvas and Quiver `change` events enter as transactions annotated `isolateHistory.of("full")`; Undo and Redo are `undo` and `redo` on that state; `undoDepth` and `redoDepth` dim the buttons; a new edit after Undo empties `future` (data-model History: "A step is one edit of the source in any view; typing in the Code view groups changes no more than 500 ms apart")
-- [ ] T017 Mount the Code view of `standalone/SourceEditor.vue` on the document state of `src/document-history.ts`, so it keeps no history of its own: delete its `history()` extension and `historyKeymap` (`standalone/SourceEditor.vue:12,58-59`) and bind `Mod-z` and `Mod-Shift-z` to the document history
-- [ ] T018 In `src/ui/TikzWorkbench.vue` add Undo (`RiArrowGoBackLine`, "Undo") and Redo (`RiArrowGoForwardLine`, "Redo") to the centre of the document bar, act on `src/document-history.ts`, answer `undo-request` and `redo-request` from both frames, and send `replace-source` to the canvas and `zettlr-quiver:source` to Quiver after each step; run the T015 story green
+- [ ] T015 Write the red story "Undo acts on the one document history in every view" in `test/workbench-browser.spec.ts`: type in the source editor, then drag one point on the canvas, then tap Undo twice; the first Undo removes the whole drag and the second the typing, and after each the canvas and the source editor show the same source; repeat with Quiver for a `tikzcd`; commit it red
+- [ ] T016 Create `src/document-history.ts`: the document is a headless CodeMirror `EditorState` from `@codemirror/state` with `history({ newGroupDelay: 500 })` from `@codemirror/commands`; canvas and Quiver `change` events enter as transactions annotated `isolateHistory.of("full")`; Undo and Redo are `undo` and `redo` on that state; `undoDepth` and `redoDepth` dim the buttons; a new edit after Undo empties `future` (data-model History: "A step is one edit of the source in any view; typing in the Code panel groups changes no more than 500 ms apart")
+- [ ] T017 Mount the source editor of `standalone/SourceEditor.vue` (the later Code panel) on the document state of `src/document-history.ts`, so it keeps no history of its own: delete its `history()` extension and `historyKeymap` (`standalone/SourceEditor.vue:12,58-59`) and bind `Mod-z` and `Mod-Shift-z` to the document history
+- [ ] T018 In `src/ui/TikzWorkbench.vue` replace the header of `:150-187` (`showHeader`) with the document bar of contracts/surfaces.md: the title leading; Undo (`RiArrowGoBackLine`, "Undo") and Redo (`RiArrowGoForwardLine`, "Redo") in the centre; View (`RiLayoutColumnLine`, "View") trailing, as a popover anchored to its button that lists the views the shell has now (US5 sets its contents). Undo and Redo act on `src/document-history.ts`, answer `undo-request` and `redo-request` from both frames, and send `replace-source` to the canvas and `zettlr-quiver:source` to Quiver after each step; run the T015 story green
 
 **Checkpoint**: the shell is standalone, the protocol is at its new version, and Undo acts on the document in every view.
 
@@ -75,7 +77,7 @@ the other two, moves them, and undoes the move.
 
 ### Stories (red first)
 
-- [ ] T019 [P] [US1] Story "the pen marks on first contact and the source gains a path" (scenario 1) in `test/workbench-browser.spec.ts`, with the pen helpers of `test/tablet.ts`
+- [ ] T019 [P] [US1] Story "the pen marks on first contact and the source gains a path; a width chosen in the Pen's Active Tool Menu applies to the next stroke as it is drawn" (scenario 1, FR-025) in `test/workbench-browser.spec.ts`, with the pen helpers of `test/tablet.ts`
 - [ ] T020 [P] [US1] Story "the eraser sweep removes the crossed parts of two strokes in one undo step" (scenario 2) in `test/workbench-browser.spec.ts`
 - [ ] T021 [P] [US1] Story "the drawing toolbar holds Lasso, Pen, Eraser, Shapes, Text, Fill, the active tool's presets, and Add colour, all as symbols, and nothing else" (scenario 3, FR-007, FR-008, FR-011, SC-002) in `test/workbench-browser.spec.ts`
 - [ ] T022 [P] [US1] Story "a second tap closes the Active Tool Menu; a tap on View closes it and opens View" (scenario 4, FR-003, FR-004, FR-009) in `test/workbench-browser.spec.ts`
@@ -84,7 +86,7 @@ the other two, moves them, and undoes the move.
 
 ### Implementation
 
-- [ ] T025 [US1] Rebuild the dock of `.cache/tikz-editor/packages/app/src/ui/Toolbar.tsx:699-760` to the order Lasso, Pen, Eraser, Shapes, Text, Fill, separator, presets, Add colour; delete Select (the Lasso is the one selection tool), the Lasso word, the colour target word (`:419-436`), Undo and Redo, SnapControl and ZoomDisplayControl (they move to the canvas controls, US8), the Layers, Properties, and Settings words (`:744-748`), and the step lane (`:750-754`)
+- [ ] T025 [US1] Rebuild the dock of `.cache/tikz-editor/packages/app/src/ui/Toolbar.tsx:699-760` to the order Lasso, Pen, Eraser, Shapes, Text, Fill, separator, presets, Add colour, with SnapControl and ZoomDisplayControl after the presets until T057 moves them; delete Select (the Lasso is the one selection tool), the Lasso word, the colour target word (`:419-436`), Undo and Redo, the Layers, Properties, and Settings words (`:744-748`), and the step lane (`:750-754`)
 - [ ] T026 [US1] Use Lucide `lasso` for the Lasso and `RiEraserLine` for the Eraser, give each item the accessible name of the surfaces contract and a 44 × 44 pt hit region in `.cache/tikz-editor/packages/app/src/ui/Toolbar.tsx`
 - [ ] T027 [US1] Make the Lasso the one selection tool with the Active Tool Menu option Freehand (default), Rectangle, Oval in `.cache/tikz-editor/packages/app/src/ui/tool-config.tsx` and the canvas selection handlers of `CanvasPanel.tsx`
 - [ ] T028 [US1] Open the Active Tool Menu on a second tap on the active tool and close it on a further tap in `.cache/tikz-editor/packages/app/src/ui/ToolbarToolPopup.tsx` (`openPopupMode` at `:83`); hold the options of data-model Tool per tool
@@ -108,7 +110,7 @@ object menu with the commands that apply.
 ### Stories (red first)
 
 - [ ] T033 [P] [US3] Story "each object menu holds exactly the commands of its selection" for one curve, one shape, several objects, and points in Edit Points, per contracts/surfaces.md Object menu, in `test/workbench-browser.spec.ts`
-- [ ] T034 [P] [US3] Story "a colour preset colours the tool and the selection, and no word names the target" (FR-021) in `test/workbench-browser.spec.ts`
+- [ ] T034 [P] [US3] Story "a colour preset colours the tool and the selection, and no word names the target; each tool shows its own presets" (FR-020, FR-021) in `test/workbench-browser.spec.ts`
 - [ ] T035 [P] [US3] Story "a locked selection survives a tap that misses; Edit Points dims and locks the rest" (FR-052, FR-053) in `test/workbench-browser.spec.ts`
 - [ ] T036 [P] [US3] Story "a second tap on the active preset opens the palette, wheel, opacity, hex, and the exact `xcolor` field, and `red!50!blue` stays as authored" (FR-022) in `test/workbench-browser.spec.ts`; commit T033–T036 red
 
@@ -158,7 +160,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 ### Stories (red first)
 
 - [ ] T050 [P] [US8] Story "a figure with content opens fitted with the 44 px margin and reopens at its last view" (FR-040, SC-005) in `test/workbench-browser.spec.ts`
-- [ ] T051 [P] [US8] Story "an empty figure opens at 100 % with the origin centred and the axes visible; Normal Size makes 1 cm of the figure 96 / 2.54 CSS px" (FR-041, FR-042) in `test/workbench-browser.spec.ts`
+- [ ] T051 [P] [US8] Story "an empty figure opens at 100 % with the origin centred and the axes visible; Normal Size makes 1 cm of the figure 96 / 2.54 CSS px; the ruler labels and the status line read figure coordinates, with no pixel unit" (FR-041, FR-042, Principle VI) in `test/workbench-browser.spec.ts`
 - [ ] T052 [P] [US8] Story "the pen over (1, 2) makes the status line 'Pointer position' read 1 and 2 and nothing else" (FR-044) in `test/workbench-browser.spec.ts`
 - [ ] T053 [P] [US8] Story "the zoom readout opens Zoom to Fit, Zoom to Selection, Normal Size, and 10–1000 %; zooming changes neither source nor selection; Snap toggles and Snapping rules opens Lattice, Objects, Alignment, Angle" (FR-023, FR-043) in `test/workbench-browser.spec.ts`; commit T050–T053 red
 
@@ -167,9 +169,9 @@ reference, and holds the pen over a lattice point and reads the status line.
 - [ ] T054 [US8] Set the scale so that 1 is printed size at 96 CSS px per inch: replace `CANVAS_ZOOM_BASE_SCALE=5` and the presets of `.cache/tikz-editor/packages/app/src/store/workspace-state.ts:18-20` (data-model Viewport `scale`: "1 is printed size at 96 CSS px per inch")
 - [ ] T055 [US8] Open a figure with content in Zoom to Fit with a 44 px margin, an empty figure at 100 % with the origin centred, and a known file at its kept viewport, in `.cache/tikz-editor/packages/app/src/ui/useCanvasViewportPersistence.ts:143-163` (research R8)
 - [ ] T056 [US8] Label rulers in figure coordinates with Inkscape's `Ruler::draw_scale` step rule in `.cache/tikz-editor/packages/app/src/ui/geometry.ts:99-123` and `useCanvasGuidesAndRulers.ts:200-215`, and draw the origin and axes on the grid (research R9)
-- [ ] T057 [US8] Add the canvas controls of contracts/surfaces.md: Zoom out, the readout "Zoom: *n* %", Zoom in at the lower trailing corner; Snap and Snapping rules at the lower leading corner; wire the `zoom` command of the frame protocol, in `.cache/tikz-editor/packages/app/src/ui/CanvasPanel.tsx`
+- [ ] T057 [US8] Add the canvas controls of contracts/surfaces.md: Zoom out, the readout "Zoom: *n* %", Zoom in at the lower trailing corner; Snap and Snapping rules at the lower leading corner; wire the `zoom` command of the frame protocol, in `.cache/tikz-editor/packages/app/src/ui/CanvasPanel.tsx`; delete SnapControl and ZoomDisplayControl from `Toolbar.tsx`
 - [ ] T058 [US8] Add the status line under the canvas with the accessible name "Pointer position", reading the pointer's *x* and *y* in figure coordinates as the source writes them, in `.cache/tikz-editor/packages/app/src/ui/CanvasPanel.tsx` (research R10)
-- [ ] T059 [US8] Reproduce the small startup window of COMPLAINTS.md:57 in the desktop window, whose size is `inner_size(1280.0, 800.0)` in `src-tauri/src/main.rs:34`; when it reproduces, open the window maximized and add the desktop check to the US8 stories
+- [ ] T059 [US8] Reproduce the small startup window of COMPLAINTS.md:57 in the desktop window, whose size is `inner_size(1280.0, 800.0)` in `src-tauri/src/main.rs:34`; when it reproduces, file the defect with the prior art for the startup window size, and build the size that the prior art gives (Principle III)
 - [ ] T060 [US8] Rebuild the fork and run the US8 stories green
 
 ---
@@ -205,7 +207,7 @@ source is highlighted without taking focus.
 
 ### Stories (red first)
 
-- [ ] T068 [P] [US5] Story "View offers Canvas and Render for a `tikzpicture` and Quiver and Render for a `tikzcd`, with no explanation of the other kind" (scenarios 1–2, FR-014, FR-016) in `test/workbench-browser.spec.ts`
+- [ ] T068 [P] [US5] Story "View offers Canvas and Render for a `tikzpicture` and Quiver and Render for a `tikzcd`, with no explanation of the other kind; a `.tikz` file opens in the canvas and a `.tikzcd` file in Quiver" (scenarios 1–2, FR-013, FR-014, FR-016) in `test/workbench-browser.spec.ts`
 - [ ] T069 [P] [US5] Story "Code opens the panel beside the canvas and Quiver; edits show at once in the other; a selection highlights its source without focus; a second tap closes it; Layers closes it" (scenario 3, independent test, FR-015, FR-060) in `test/workbench-browser.spec.ts`
 - [ ] T070 [P] [US5] Story "switching between the editor and Render keeps selection, viewport, and tool" (FR-015) in `test/workbench-browser.spec.ts`; commit T068–T070 red
 
@@ -262,10 +264,10 @@ without a selection.
 
 ## Phase 11: Polish and cross-cutting rules
 
-- [ ] T088 Story "Settings › Appearance: Match System Appearance on follows the system; off with Light shows a light surface under a dark system" (FR-005), replacing the theme story at line 208 of `test/workbench-browser.spec.ts`; commit it red
+- [ ] T088 Story "Settings › Appearance: Match System Appearance on follows the system; off with Light shows a light surface under a dark system; the choice is kept in `$XDG_CONFIG_HOME/visual-tikz-editor/` and nothing is written beside the figure" (FR-005, FR-063), replacing the theme story at line 208 of `test/workbench-browser.spec.ts`; commit it red
 - [ ] T089 Add More (`RiMoreLine`) with Settings… to the document bar of `src/ui/TikzWorkbench.vue`; build Settings with Appearance, Canvas, Colours, and Keyboard shortcuts, each changed setting with its own reset; delete the `prefers-color-scheme` theme of `standalone/StandaloneApp.vue:253-258` and the theme control; send `settings.general.colorScheme` to the canvas and `zettlr-quiver:theme` to Quiver; extend `.cache/tikz-editor/packages/app/src/ui/SettingsModal.tsx:11-14` (FR-062, research R15, R17)
-- [ ] T090 Delete the header of `src/ui/TikzWorkbench.vue:150-187` (`showHeader`) that the document bar replaces
-- [ ] T091 Story "every surface holds exactly the controls of contracts/surfaces.md, found by accessible name, in portrait and landscape" (SC-002) in `test/workbench-browser.spec.ts`
+- [ ] T090 Story "Code, Layers, and Properties open as a side pane in landscape and as a sheet in portrait, and the selected object stays visible" (FR-061, Principle IV) in `test/workbench-browser.spec.ts`
+- [ ] T091 Story "every surface holds exactly the controls of contracts/surfaces.md, found by accessible name, in portrait and landscape, each with a hit region of at least 44 × 44 CSS px" (SC-002, Principle II) in `test/workbench-browser.spec.ts`
 - [ ] T092 Story "no reached state shows an instruction sentence, and every command is reached by pen taps alone" (SC-003, SC-004) in `test/workbench-browser.spec.ts`
 - [ ] T093 [P] Correct `docs/interaction-model.md` and `docs/user-guide.md` where they disagree with the spec
 - [ ] T094 [P] Correct `docs/prior-art/drawing-dock.md`, `shell.md`, `zoom-and-view.md` (item 4 puts the zoom readout in the status line), `panels.md`, `instructional-text.md`, and `selection-and-settings.md` where they disagree with the spec

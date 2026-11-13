@@ -16,7 +16,7 @@ views; the TikZ Editor fork owns every surface inside the canvas; the Quiver for
 [frame protocol](contracts/frame-protocol.md). The surfaces and their controls are fixed by
 [surfaces](contracts/surfaces.md); the state they show is in the [data model](data-model.md).
 
-The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-060a, FR-063, and that the editor is standalone. The other requirements and the research entries are the
+The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-060a, FR-063, and FR-064 (the editor is standalone). The other requirements and the research entries are the
 maintainer's proposals, which the user reviews. The story priorities in the spec follow from the
 dependencies between the stories and the user's reports; `/speckit-tasks` orders the work by them.
 
@@ -28,7 +28,7 @@ JavaScript in the Quiver fork; Rust in the Tauri 2 desktop shell.
 **Primary Dependencies**: The TikZ Editor fork at upstream 0.5.2
 (`vendor/tikz-editor/PROVENANCE.toml`) with `@remixicon/react` 4.9, `@uiw/react-color-wheel`
 2.10, xstate 5, and zustand 5; the Quiver fork (`vendor/quiver/PROVENANCE.toml`); CodeMirror 6
-for the Code view; zod 4 for the protocol schemas. Research R6 and R7 add
+for the Code panel; zod 4 for the protocol schemas. Research R6 and R7 add
 `@uiw/react-color-alpha`, `@uiw/react-color-editable-input`, `@remixicon/vue`, and `lucide-react`
 1.64.
 

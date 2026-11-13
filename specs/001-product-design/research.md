@@ -36,7 +36,7 @@ reused on a restart (view, layout, open files, undo history, …)" in `$XDG_STAT
 **Decision** (the user, 2026-11-13): Undo and Redo act on the one history of the document. Every
 view shows the same document, so the history belongs to the document and not to a view (FR-012b).
 A step is one edit of the source, made in any view: a canvas gesture, a Quiver edit, or a burst of
-typing in the Code view. Undo restores the source before the last step, and every view then shows
+typing in the Code panel. Undo restores the source before the last step, and every view then shows
 that source. A new edit after Undo discards the steps that Redo would restore. The canvas and
 Quiver keep no history of their own: their Undo and Redo shortcuts ask the shell, and Quiver's
 toolbar shows no Undo or Redo.

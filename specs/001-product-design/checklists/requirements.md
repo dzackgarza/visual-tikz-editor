@@ -37,7 +37,7 @@
   which keep it out of the document view; research R17 records their settings.
 - The user resolved on 2026-11-13: FR-012a (one Lasso), FR-012b (one document history), FR-015
   (Code is a panel), FR-044 (status line with the pointer position), FR-060a (Properties shows the
-  figure with nothing selected), FR-063 (XDG directories), and the standalone editor.
+  figure with nothing selected), FR-063 (XDG directories), and FR-064 (the standalone editor).
 - Story priorities follow from the dependencies between the stories and the user's reports
   (constitution, Development Workflow); each story states its evidence.
 - `tikzpicture`, `tikzcd`, and TikZ name the product's document formats, not implementation

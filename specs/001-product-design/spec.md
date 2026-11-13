@@ -160,6 +160,10 @@ opens Properties for a selection.
 visibility and lock (User Story 2). The report that Layers and Properties share one popup is
 about it.
 
+**Independent Test**: A story opens Layers, adds a layer, moves an object into it, hides and
+locks it, reopens the file, and finds the layer hidden and locked with only its `scope` in the
+source; it then opens Properties with and without a selection.
+
 **Acceptance Scenarios**:
 
 1. **Given** Layers is open, **When** the user taps Properties, **Then** Layers closes and Properties opens; each is its own panel.
@@ -174,6 +178,9 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 
 **Why this priority**: It needs a saved source (User Story 2) and the compile path. No item of
 COMPLAINTS.md is about export; the audit's only export row is the unattached Export menu.
+
+**Independent Test**: A story exports a PDF, copies the TikZ, and compares the source and the
+clipboard with the authored file byte for byte.
 
 **Acceptance Scenarios**:
 
@@ -234,7 +241,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 
 - **FR-013**: The document kind MUST decide the editor: a `tikzpicture` opens in the canvas, a `tikzcd` in Quiver.
 - **FR-014**: View MUST offer the document's editor and Render, and MUST NOT offer the other kind's editor.
-- **FR-015**: The Code view MUST be a panel, opened by Code in the document bar, beside the canvas or Quiver; an edit in either MUST show at once in the other. Render MUST replace the editor in the window. Switching between the editor and Render MUST keep selection, viewport, and tool (user decision, 2026-11-13; Inkscape XML Editor).
+- **FR-015**: Code MUST be a panel, opened by Code in the document bar, beside the canvas or Quiver; an edit in either MUST show at once in the other. Render MUST replace the editor in the window. Switching between the editor and Render MUST keep selection, viewport, and tool (user decision, 2026-11-13; Inkscape XML Editor).
 - **FR-016**: No view MUST show an explanation of why another view is unavailable.
 
 **Colour, snapping, and tool options** (prior art: GoodNotes colour presets; Ipe snapping; HIG colour wells)
@@ -277,6 +284,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 - **FR-061**: A panel MUST open at the side in landscape and as a sheet in portrait, and MUST leave the selected object visible.
 - **FR-062**: Settings MUST open from More and MUST hold appearance, canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset.
 - **FR-063**: The editor MUST keep its files in the XDG base directories: preferences in `$XDG_CONFIG_HOME`, recovery drafts and per-file view state in `$XDG_STATE_HOME`, and the render cache in `$XDG_CACHE_HOME`, each under `visual-tikz-editor/` ([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/); user decision, 2026-11-13).
+- **FR-064**: The editor MUST be a standalone application, and no other application MUST embed it (user decision, 2026-11-13).
 
 **Text in the interface** (prior art: HIG offering help)
 
@@ -286,7 +294,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 
 - **Document**: one TikZ file; its kind is `tikzpicture` or `tikzcd`; its source is the only document state.
 - **Figure**: the drawing that the source describes; its coordinates are TikZ coordinates.
-- **View**: a presentation of the document (the editor or Render, and the Code panel); not document state.
+- **View**: a presentation of the document that fills the window: the editor or Render; the Code panel shows the source beside the editor; not document state.
 - **Tool**: the active drawing tool with its options and colour presets.
 - **Selection**: the selected objects, with a lock state; session state.
 - **Layer**: a named top-level TikZ `scope`; saved in the source.
