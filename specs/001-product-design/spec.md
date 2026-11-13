@@ -4,7 +4,8 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft
+**Status**: Draft. The user has decided FR-041 (2026-11-13). Every other requirement is the
+maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
 about the app's design and to write a design specification. The audit is
@@ -27,7 +28,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 
 | Surface | Holds | Prior art |
 | --- | --- | --- |
-| Document bar (top) | Leading: document title with its save state; a tap on the title opens the document commands (New, Open, Save, Save As, Document Properties). Centre: Undo, Redo. Trailing: View, Layers, Share and Export, More (⋯) | GoodNotes navigation bar (left, middle, right sections; Share and Export and More at the right; Undo and Redo in the bar); HIG The menu bar (File menu contents, recorded in docs/prior-art/shell.md); the 2026-10-16 mockups |
+| Document bar (top) | Leading: document title with its save state; a tap on the title opens the document commands (New, Open, Save, Save As, Document Properties). Centre: Undo, Redo. Trailing: View, Layers, Properties, Share and Export, More (⋯) | GoodNotes navigation bar (left, middle, right sections; Share and Export and More at the right; Undo and Redo in the bar); HIG The menu bar (File menu contents, recorded in docs/prior-art/shell.md); the 2026-10-16 mockups |
 | Drawing toolbar (movable, docks to a screen edge) | Lasso first, then Pen, Eraser, Shapes and constructions, Text and Equation, Fill; then the active tool's colour presets and a + slot | GoodNotes toolbar (Lasso first and fixed; tools; floating menus dock to any edge); GoodNotes colour presets per tool |
 | Active tool menu (beside the toolbar) | The options of the active tool: width, style, smoothing, the construction variant | GoodNotes Active Tool Menu |
 | Object menu (above the selection) | Only the commands that apply to the selection | GoodNotes Universal Object Menu; HIG context menus |
@@ -143,7 +144,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 ### Edge Cases
 
 - An empty untitled figure has no content to fit (see FR-041).
-- The system appearance changes while the editor runs: the editor follows it.
+- The system appearance changes while the editor runs: with the default appearance, the editor follows it (FR-005).
 
 ## Requirements *(mandatory)*
 
@@ -151,11 +152,11 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 
 **Document bar** (prior art: GoodNotes navigation bar; HIG popovers, toolbars, dark mode)
 
-- **FR-001**: The document bar MUST hold, in this order, the title with save state and title menu; Undo and Redo; View, Layers, Share and Export, and More, as symbols.
+- **FR-001**: The document bar MUST hold, in this order, the title with save state and title menu; Undo and Redo; View, Layers, Properties, Share and Export, and More, as symbols. HIG Toolbars puts "buttons that open nearby inspectors" at the trailing edge.
 - **FR-002**: Every menu or popover MUST open anchored to the button that opened it.
 - **FR-003**: A second tap on the button of an open menu, popover, or panel MUST close it; a tap on another button MUST close the open one and open its own.
 - **FR-004**: At most one popover MUST be open at a time.
-- **FR-005**: The editor MUST follow the system light or dark appearance and MUST NOT offer its own appearance control.
+- **FR-005**: The appearance MUST NOT be a control of the document bar or the drawing toolbar (the user's report of 2026-11-12). [NEEDS CLARIFICATION: whether the editor follows the system appearance only, or also offers System, Light, and Dark in Settings; see [research](research.md) R17.]
 - **FR-006**: The save state MUST be a short status beside the title ("Saved", "Not saved", a conflict) and MUST agree with the disk.
 
 **Drawing toolbar and tool menus** (prior art: GoodNotes toolbar, Active Tool Menu, colour presets; HIG toolbars, buttons)
@@ -178,7 +179,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 
 - **FR-020**: Each drawing tool MUST keep its own colour presets, up to 12, shown in the toolbar.
 - **FR-021**: A tap on a preset MUST set the active tool's colour and, when a selection exists, the selection's colour; no word names the target.
-- **FR-022**: A second tap on the active preset MUST open its colour options: the palette, a colour wheel, a hex code, and opacity (opacity from COMPLAINTS.md, the colour item); editing, adding, removing, and reordering presets happen there.
+- **FR-022**: A second tap on the active preset MUST open its colour options: the palette, a colour wheel, a hex code, opacity (opacity from COMPLAINTS.md, the colour item), and the exact `xcolor` expression, which keeps an authored colour such as `red!50!blue` editable (Principle I); editing, adding, removing, and reordering presets happen there.
 - **FR-023**: Snap MUST be a canvas control that turns snapping off and on and opens its rules: lattice, objects, alignment, angle.
 - **FR-024**: Before a point is placed, a marker MUST show the snap target.
 - **FR-025**: Tool options (width, style, smoothing) MUST live in the Active Tool Menu and apply to strokes as they are drawn.
