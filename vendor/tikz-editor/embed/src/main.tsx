@@ -8,8 +8,7 @@ import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
 import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
 import { createSnapshotRequests } from './snapshots';
-import type { CommandFailure } from './events';
-import { executeInkCommand } from './ink-commands';
+import { FRAME_PROTOCOL_VERSION, type CommandFailure } from './events';
 import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
 import { walkStatements } from 'tikz-editor/ast/walk';
 
@@ -25,16 +24,9 @@ type HostSettingsPatch = {
 	};
 };
 
-type PendingEditorMessage = {
-	source: string;
-	sourceRevision: number;
-	revision: number;
-};
-
 const WORKSPACE_KEY = 'tikz-editor:workspace';
 const SETTINGS_KEY = 'tikz-editor:settings';
 const STORAGE_HASH_KEY = 'storage';
-const CHANGE_THROTTLE_MS = 250;
 const TEXT_FILE_ACCEPT = '.tex,.tikz,.pgf,.svg,.ipe,text/plain,text/x-tex,text/xml,application/xml,image/svg+xml';
 const DEFAULT_SOURCE = String.raw`\begin{tikzpicture}
   \draw[thick, blue] (0,0) circle (1cm);
@@ -288,34 +280,27 @@ function loadIntoEditor(source: string, fileName = currentFileName) {
 function HostBridge() {
 	const [fullscreen, setFullscreen] = useState(false);
 	const fullscreenRef = useRef(false);
-	const previousSourceRef = useRef<string | null>(null);
 	const previousRenderRef = useRef(-1);
-	const pendingChangeRef = useRef<PendingEditorMessage | null>(null);
-	const changeTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
 		const pendingCommands = new Map<string, { command: HostCommand; timer: number }>();
 		let pendingLoad: (() => void) | null = null;
 		const snapshots = createSnapshotRequests(reply => postToHost({ ...reply }), () => imageBaseUrl);
-		postToHost({ event: 'init', version: '0.5.2-zettlr.1' });
+		postToHost({ event: 'init', version: FRAME_PROTOCOL_VERSION });
 		useEditorStore.getState().dispatch({ type: 'SET_TOOL_MODE', mode: 'addFreehand' });
 
-		const flushChange = () => {
-			changeTimerRef.current = null;
-			const pending = pendingChangeRef.current;
-			pendingChangeRef.current = null;
-			if (!pending) return;
-			postToHost({ event: 'change', revision: pending.revision, source: pending.source, sourceRevision: pending.sourceRevision });
-		};
-
-		const scheduleChange = (source: string, sourceRevision: number, revision: number) => {
-			pendingChangeRef.current = { source, sourceRevision, revision };
-			if (changeTimerRef.current !== null) return;
-			changeTimerRef.current = window.setTimeout(flushChange, CHANGE_THROTTLE_MS);
-		};
-
+		// The store records one step per edit and merges the frames of one gesture into it, so
+		// each new or merged step is one `change`, and changes with the same `step` are one
+		// gesture. A preview, a load, and a `replace-source` record no step and post nothing.
+		let previousStep = useEditorStore.getState().lastStep;
 		let previousSelection = '';
+		let previousSelectionEmpty: boolean | null = null;
 		const unsubscribe = useEditorStore.subscribe((state) => {
+			const selectionEmpty = state.selectedElementIds.size === 0 && state.activeHandleId === null;
+			if (selectionEmpty !== previousSelectionEmpty) {
+				previousSelectionEmpty = selectionEmpty;
+				postToHost({ event: 'selection', empty: selectionEmpty });
+			}
 			if (state.snapshot.source === state.source) {
 				const handle = state.activeHandleId === null ? undefined : state.snapshot.editHandles.find(item => item.id === state.activeHandleId);
 				// A selected statement shows its whole statement; a selected node or
@@ -341,13 +326,10 @@ function HostBridge() {
 				postToHost({ event: 'rendered', sourceRevision: state.sourceRevision });
 			}
 
-			if (previousSourceRef.current === null) {
-				previousSourceRef.current = state.source;
-				return;
-			}
-			if (state.source === previousSourceRef.current) return;
-			previousSourceRef.current = state.source;
-			scheduleChange(state.source, state.sourceRevision, currentHostRevision);
+			if (state.lastStep === previousStep) return;
+			previousStep = state.lastStep;
+			if (state.lastStep === null) return;
+			postToHost({ event: 'change', revision: currentHostRevision, source: state.source, sourceRevision: state.sourceRevision, step: state.historyStep });
 		});
 
 		const reply = (command: HostCommand, error?: CommandFailure) => {
@@ -381,14 +363,9 @@ function HostBridge() {
 				return;
 			}
 			switch (command.action) {
-				case 'import-ink':
-				case 'interpret-ink':
-				case 'restore-ink':
-					try { reply(command, executeInkCommand(command)); }
-					catch (error) {
-						postToHost({ event: 'error', message: error instanceof Error ? error.message : String(error) });
-						reply(command, 'invalid-original-ink');
-					}
+				case 'replace-source':
+					useEditorStore.getState().dispatch({ type: 'CODE_EDITED', source: command.source });
+					reply(command);
 					return;
 				case 'load': {
 					const restoredState = command.state;
@@ -413,7 +390,6 @@ function HostBridge() {
 					imageBaseUrl = command.imageBaseUrl ?? '';
 					imageBaseErrorReported = false;
 					applyHostSettings(command.settings);
-					pendingChangeRef.current = null;
 					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: restoredState ? { source: command.source, transform: restoredState.viewport, fitToContent: restoredState.fitToContent } : null });
 					loadIntoEditor(command.source, command.fileName);
 					const finishLoad = () => {
@@ -460,10 +436,15 @@ function HostBridge() {
 				case 'keyboard':
 					publishOccupiedInsets({ '--keyboard-inset-bottom': command.bottom });
 					reply(command); return;
-				case 'zoom':
-					if (command.direction === 'reset') useEditorStore.getState().dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: CANVAS_ZOOM_BASE_SCALE });
-					else useEditorStore.getState().dispatch({ type: 'REQUEST_ZOOM', direction: command.direction });
+				case 'zoom': {
+					const dispatch = useEditorStore.getState().dispatch;
+					if (command.scale !== undefined) dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: command.scale * CANVAS_ZOOM_BASE_SCALE });
+					else if (command.direction === 'normal') dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: CANVAS_ZOOM_BASE_SCALE });
+					else if (command.direction === 'fit') dispatch({ type: 'REQUEST_FIT_TO_CONTENT' });
+					else if (command.direction === 'in' || command.direction === 'out') dispatch({ type: 'REQUEST_ZOOM', direction: command.direction });
+					else { reply(command, 'invalid-command'); return; }
 					reply(command); return;
+				}
 				case 'settings':
 					applyHostSettings(command.settings);
 					reply(command);
@@ -473,9 +454,13 @@ function HostBridge() {
 					setFullscreen(command.fullscreen);
 					reply(command);
 					return;
-				case 'inspector':
-					document.documentElement.dataset.embedInspector = command.inspector ? 'open' : 'closed';
-					window.dispatchEvent(new Event('tikz-embed-inspector'));
+				case 'panel':
+					document.documentElement.dataset.embedPanel = command.panel ?? '';
+					window.dispatchEvent(new Event('tikz-embed-panel'));
+					reply(command);
+					return;
+				case 'dismiss-popover':
+					window.dispatchEvent(new Event('tikz-embed-dismiss-popover'));
 					reply(command);
 					return;
 				case 'document-properties':
@@ -493,8 +478,18 @@ function HostBridge() {
 			postToHost({ event: 'close-request' });
 		};
 
-		const inspectorClosed = () => postToHost({ event: 'inspector-closed' });
-		window.addEventListener('tikz-embed-inspector-closed', inspectorClosed);
+		// The fork reports these gestures as window events; the shell owns what they act on.
+		const panelChanged = () => postToHost({ event: 'panel', panel: document.documentElement.dataset.embedPanel || null });
+		const undoRequested = () => postToHost({ event: 'undo-request' });
+		const redoRequested = () => postToHost({ event: 'redo-request' });
+		const popoverOpened = () => postToHost({ event: 'popover-opened' });
+		const forkEvents: [string, () => void][] = [
+			['tikz-embed-panel-changed', panelChanged],
+			['tikz-embed-undo-request', undoRequested],
+			['tikz-embed-redo-request', redoRequested],
+			['tikz-embed-popover-opened', popoverOpened],
+		];
+		for (const [name, listener] of forkEvents) window.addEventListener(name, listener);
 		const documentPropertiesClosed = () => postToHost({ event: 'document-properties-closed' });
 		window.addEventListener('tikz-embed-document-properties-closed', documentPropertiesClosed);
 		window.addEventListener('message', handleMessage);
@@ -522,11 +517,10 @@ function HostBridge() {
 			pendingCommands.clear();
 			imageObserver.disconnect();
 			unsubscribe();
-			window.removeEventListener('tikz-embed-inspector-closed', inspectorClosed);
+			for (const [name, listener] of forkEvents) window.removeEventListener(name, listener);
 			window.removeEventListener('tikz-embed-document-properties-closed', documentPropertiesClosed);
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('keydown', handleKeydown, true);
-			if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
 		};
 	}, []);
 
@@ -562,8 +556,8 @@ Object.defineProperty(window, 'visualTikzEditorDebug', {
 			snapshot: state.snapshot,
 			scene: state.snapshot.scene,
 			editHandles: state.snapshot.editHandles,
-			historyIndex: state.historyIndex,
-			historyLength: state.history.length,
+			lastStep: state.lastStep,
+			historyStep: state.historyStep,
 			canvasAids: { grid: state.showGrid, rulers: state.showRulers, documentBounds: state.showDocumentBounds },
 			diagnostics: {
 				parse: state.snapshot.parseResult?.diagnostics ?? [],

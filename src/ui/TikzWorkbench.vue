@@ -84,7 +84,6 @@
         :host="props.host"
         :theme="props.theme"
         :fullscreen="fullscreen"
-        :show-inspector="props.showInspector"
         @exit-fullscreen="fullscreen = false"
         @status="onProviderStatus('tikz', $event)"
         @busy="onProviderBusy('tikz', $event)"
@@ -102,9 +101,11 @@
         :host="props.host"
         :theme="props.theme"
         :fullscreen="fullscreen"
-        :show-inspector="props.showInspector"
+        :panel="props.panel"
         @exit-fullscreen="fullscreen = false"
-        @inspector-closed="emit('inspectorClosed')"
+        @panel="emit('panel', $event)"
+        @undo-request="emit('undoRequest')"
+        @redo-request="emit('redoRequest')"
         @document-properties-closed="emit('documentPropertiesClosed')"
         @status="onProviderStatus(provider.id, $event)"
         @busy="onProviderBusy(provider.id, $event)"
@@ -134,6 +135,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { TikzWorkbenchHost, TikzWorkbenchTheme } from "../host";
 import type { TikzLivePreviewTarget } from "../live-preview";
 import { defaultTikzPreviewMode, type TikzPreviewModeId } from "../preview-modes";
+import type { Panel } from "../../vendor/tikz-editor/embed/src/commands";
 import { TIKZ_PREVIEW_PROVIDERS, type TikzPreviewProvider } from "./providers";
 
 const props = withDefaults(
@@ -143,7 +145,7 @@ const props = withDefaults(
     theme: TikzWorkbenchTheme;
     initialMode?: TikzPreviewModeId;
     requestedMode?: TikzPreviewModeId;
-    showInspector?: boolean;
+    panel?: Panel;
     showModeSwitcher?: boolean;
     showStatus?: boolean;
     showFullscreen?: boolean;
@@ -152,6 +154,7 @@ const props = withDefaults(
   {
     initialMode: undefined,
     requestedMode: undefined,
+    panel: null,
     showModeSwitcher: true,
     showStatus: true,
     showFullscreen: true,
@@ -161,7 +164,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: "mode", mode: TikzPreviewModeId): void;
-  (e: "inspectorClosed"): void;
+  (e: "panel", panel: Panel): void;
+  (e: "undoRequest"): void;
+  (e: "redoRequest"): void;
   (e: "documentPropertiesClosed"): void;
   (e: "status", status: string): void;
 }>();
@@ -198,7 +203,7 @@ const copyError = ref("");
 const sourceEditor = ref<TikzPreviewModeId>(requestedMode.value);
 type EditorHandle = {
   currentSource?: (signal: AbortSignal) => Promise<string>;
-  zoom?: (direction: "in" | "out" | "reset") => void;
+  zoom?: (direction: "in" | "out" | "fit" | "selection" | "normal") => void;
   documentProperties?: () => void;
 };
 const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
@@ -212,7 +217,7 @@ async function currentSource(signal: AbortSignal): Promise<string> {
   if (editor?.currentSource) return editor.currentSource(signal);
   return props.target.source;
 }
-function zoom(direction: "in" | "out" | "reset"): void {
+function zoom(direction: "in" | "out" | "fit" | "selection" | "normal"): void {
   editorHandles.get("visual")?.zoom?.(direction);
 }
 function documentProperties(): void {

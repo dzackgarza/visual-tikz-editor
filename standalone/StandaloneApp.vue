@@ -531,7 +531,7 @@ function onKeydown(event: KeyboardEvent): void {
       (event.key === "-" || event.key === "=" || event.key === "+" || event.key === "0")) {
     if (isVisible("canvas")) {
       event.preventDefault();
-      workbenches.get("canvas")?.zoom(event.key === "0" ? "reset" : event.key === "-" ? "out" : "in");
+      workbenches.get("canvas")?.zoom(event.key === "0" ? "normal" : event.key === "-" ? "out" : "in");
     }
     return;
   }

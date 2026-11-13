@@ -35,9 +35,11 @@
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import type { HostCommand, Panel } from "../../vendor/tikz-editor/embed/src/commands";
 import {
   type EditorNotification,
   editorNotificationSchema,
+  FRAME_PROTOCOL_VERSION,
 } from "../../vendor/tikz-editor/embed/src/events";
 import {
   type TikzEditorSourceSession,
@@ -63,12 +65,14 @@ const props = defineProps<{
   host: TikzWorkbenchHost;
   theme: TikzWorkbenchTheme;
   fullscreen: boolean;
-  showInspector?: boolean;
+  panel: Panel;
 }>();
 
 const emit = defineEmits<{
   (e: "exitFullscreen"): void;
-  (e: "inspectorClosed"): void;
+  (e: "panel", panel: Panel): void;
+  (e: "undoRequest"): void;
+  (e: "redoRequest"): void;
   (e: "documentPropertiesClosed"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
@@ -120,7 +124,14 @@ function sameBlockIdentity(a: TikzEditorSourceSession, b: TikzEditorSourceSessio
   return a.kind === b.kind && a.blockFrom === b.blockFrom;
 }
 
-function postToEditor(message: Record<string, unknown>): void {
+// A command without the identity that postToEditor adds; a load names its own revision.
+type EditorCommand = HostCommand extends infer C
+  ? C extends HostCommand
+    ? Omit<C, "sessionId" | "revision" | "requestId"> & Partial<Pick<C, "sessionId" | "revision">>
+    : never
+  : never;
+
+function postToEditor(message: EditorCommand): void {
   const target = frame.value?.contentWindow;
   if (target === undefined || target === null) {
     return;
@@ -152,7 +163,7 @@ function reportKeyboard(always = false): void {
   postToEditor({ action: "keyboard", bottom });
 }
 
-function zoom(direction: "in" | "out" | "reset"): void {
+function zoom(direction: "in" | "out" | "fit" | "selection" | "normal"): void {
   if (loaded.value) postToEditor({ action: "zoom", direction });
 }
 
@@ -233,10 +244,10 @@ watch(
 watch(() => props.theme, sendTheme);
 
 watch(
-  () => props.showInspector,
-  (visible) => {
+  () => props.panel,
+  (panel) => {
     if (hostReady.value) {
-      postToEditor({ action: "inspector", inspector: visible === true });
+      postToEditor({ action: "panel", panel });
     }
   },
 );
@@ -337,10 +348,15 @@ function onMessage(event: MessageEvent): void {
       }
       break;
     case "init":
+      // An editor built from another protocol would misread every command, so it gets none.
+      if (message.version !== FRAME_PROTOCOL_VERSION) {
+        errorMessage.value = `The editor speaks frame protocol ${message.version}; this shell speaks ${FRAME_PROTOCOL_VERSION}.`;
+        break;
+      }
       hostReady.value = true;
       sendFullLoad();
       postToEditor({ action: "display", fullscreen: props.fullscreen });
-      postToEditor({ action: "inspector", inspector: props.showInspector === true });
+      postToEditor({ action: "panel", panel: props.panel });
       break;
     case "loaded":
       if (message.revision !== session.value.revision) {
@@ -375,8 +391,14 @@ function onMessage(event: MessageEvent): void {
         emit("exitFullscreen");
       }
       break;
-    case "inspector-closed":
-      emit("inspectorClosed");
+    case "panel":
+      emit("panel", message.panel);
+      break;
+    case "undo-request":
+      emit("undoRequest");
+      break;
+    case "redo-request":
+      emit("redoRequest");
       break;
     case "document-properties-closed":
       emit("documentPropertiesClosed");

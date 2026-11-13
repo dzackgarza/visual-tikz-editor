@@ -1,7 +1,7 @@
 /** One way to materialize the patched tikz-editor fork: the pinned upstream commit plus ZETTLR.patch and the embed app. */
 
 import { execFileSync } from 'node:child_process'
-import { appendFile, cp, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, cp, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -47,6 +47,8 @@ export async function materialize (upstream) {
 /** Copy the repository-owned embed app and the original-ink codec into the checkout. */
 export async function syncEmbed (upstream) {
   const embedApp = path.join(upstream, 'apps', 'zettlr-embed')
+  // The copy mirrors the source: a file deleted from the embed source leaves the copy too.
+  await rm(path.join(embedApp, 'src'), { recursive: true, force: true })
   await cp(path.join(vendor, 'embed'), embedApp, { recursive: true })
   // The drawing tools and public host boundary use one original-ink codec.
   await cp(path.join(vendor, 'embed/src/original-ink.ts'), path.join(upstream, 'packages/app/src/original-ink.ts'))
