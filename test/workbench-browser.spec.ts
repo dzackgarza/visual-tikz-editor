@@ -21,7 +21,7 @@ import {
   editorFrame,
   editorReady,
   emptyCanvasGesture,
-  dockEdgePoint,
+  dockGripPoint,
   fitDiagram,
   layoutBox,
   type Point,
@@ -127,14 +127,27 @@ describe("standalone workbench host boundary", function () {
   /** The zoom control at the canvas's lower trailing corner; T057 turns it into the readout "Zoom: n %". */
   const zoomControl = (frame: FrameLocator) => frame.getByRole("button", { name: "Zoom and display", exact: true });
 
+  /**
+   * Makes a tool the active tool by a tap, or by a click for "mouse". It taps only an inactive
+   * tool: a tap on the active tool opens its Active Tool Menu instead (FR-009).
+   */
+  async function chooseTool(
+    frame: FrameLocator,
+    input: TabletInput | "mouse",
+    name: "Lasso" | "Pen" | "Eraser" | "Shapes" | "Text" | "Fill",
+  ): Promise<void> {
+    const tool = toolbarItem(frame, name);
+    if ((await tool.getAttribute("aria-pressed")) !== "true") {
+      await (input === "mouse" ? tool.click() : input.touch([await stableCenter(tool)]));
+    }
+    await expect(tool).toHaveAttribute("aria-pressed", "true");
+  }
+
   /** Chooses one construction in the Shapes Active Tool Menu, which closes on the choice. */
   async function chooseShape(frame: FrameLocator, input: TabletInput, construction: string): Promise<void> {
     const shapes = toolbarItem(frame, "Shapes");
     const menu = activeToolMenu(frame);
-    if ((await shapes.getAttribute("aria-pressed")) !== "true") {
-      await input.touch([await stableCenter(shapes)]);
-      await expect(shapes).toHaveAttribute("aria-pressed", "true");
-    }
+    await chooseTool(frame, input, "Shapes");
     await input.touch([await stableCenter(shapes)]);
     await expect(menu).toBeVisible();
     await input.touch([await stableCenter(menu.getByRole("option", { name: construction, exact: true }))]);
@@ -539,7 +552,7 @@ describe("standalone workbench host boundary", function () {
       const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
       await fitDiagram(frame, input);
       const line = frame.locator('svg [data-source-id="path:0"]').first();
-      await tap(toolbarItem(frame, "Lasso"));
+      await chooseTool(frame, input, "Lasso");
       await input.penStroke([await strokePoint(page, line, 0.5)]);
       await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
       const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
@@ -1219,7 +1232,7 @@ describe("standalone workbench host boundary", function () {
         );
         await undo();
         // A selection move stays on its dominant axis and names it.
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         const grip = await strokePoint(page, rectangle, 0.06);
         await input.penDown(grip);
         await input.penMove(offset(grip, 1.5, 0.4));
@@ -1273,7 +1286,7 @@ describe("standalone workbench host boundary", function () {
         await setSnapRule(frame, input, "Lattice", true);
         await pick("Circle");
         const circle = await drag(at(2, -4), at(5, -4), "Lattice");
-        assert.match(circle, /\(2,-4\) circle \(\{3cm\}\)/, circle);
+        assert.match(circle, /\(2,-4\) circle \(3cm\)/, circle);
         await undo();
         await pick("Arc");
         const ray = (centre: { x: number; y: number }, radius: number, degrees: number) =>
@@ -1448,9 +1461,7 @@ describe("standalone workbench host boundary", function () {
           y:
             frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         const guides = frame.locator('[class*="snapOverlay"] [class*="snapLine"]');
         for (const locked of [true, false]) {
           await setSnapRule(frame, input, "Lattice", locked);
@@ -1801,7 +1812,7 @@ describe("standalone workbench host boundary", function () {
           }
         };
         const drag = async (to: { x: number; y: number }) => {
-          const from = await dockEdgePoint(rail);
+          const from = await dockGripPoint(rail);
           await input.touch(
             Array.from({ length: 13 }, (_, i) => ({
               x: from.x + ((to.x - from.x) * i) / 12,
@@ -2036,9 +2047,9 @@ describe("standalone workbench host boundary", function () {
           at(3, 0),
           at(0, -3),
         ]);
-        assert.match(three, /\(0,0\) circle \(\{3cm\}\)/, three);
+        assert.match(three, /\(0,0\) circle \(3cm\)/, three);
         const diameter = await construct("Circle on a diameter", [at(-6, -2), at(-2, -2)]);
-        assert.match(diameter, /\(-4,-2\) circle \(\{2cm\}\)/, diameter);
+        assert.match(diameter, /\(-4,-2\) circle \(2cm\)/, diameter);
         const arc = await construct("Arc through three points", [at(6, 0), at(8, 2), at(10, 0)]);
         const angle = (raw: string) => {
           const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
@@ -2075,9 +2086,7 @@ describe("standalone workbench host boundary", function () {
         await expect(square).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, square, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         const handle = await settledCenter(frame.getByTestId("canvas-rotate-handle"));
@@ -2119,7 +2128,7 @@ describe("standalone workbench host boundary", function () {
         const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const selected = async () => (await editorDebug(page)).selection;
@@ -2197,17 +2206,13 @@ describe("standalone workbench host boundary", function () {
           y:
             frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         // A loop round both circles and clear of the axes.
-        await input.penStroke([at(0.5, 0.5), at(8, 0.5), at(8, 3.6), at(0.5, 3.6), at(0.5, 0.6)]);
+        await input.penStroke([at(8, 3.6), at(0.5, 3.6), at(0.5, 0.5), at(8, 0.5), at(8, 3.5)]);
         await expect
           .poll(async () => [...(await editorDebug(page)).selection].sort())
           .toEqual(["path:2", "path:3"]);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await expect
           .poll(async () => [...(await editorDebug(page)).selection].sort())
           .toEqual(["path:2", "path:3"]);
@@ -2314,9 +2319,7 @@ describe("standalone workbench host boundary", function () {
           y:
             frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([at(2, 4)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
         // A second tap on the selected square switches its frame to rotate-and-shear handles, as in Inkscape.
@@ -2599,16 +2602,12 @@ describe("standalone workbench host boundary", function () {
           y:
             frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
         });
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
-        await input.penStroke([at(0.5, 0.5), at(8, 0.5), at(8, 3.6), at(0.5, 3.6), at(0.5, 0.6)]);
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([at(8, 3.6), at(0.5, 3.6), at(0.5, 0.5), at(8, 0.5), at(8, 3.5)]);
         await expect
           .poll(async () => [...(await editorDebug(page)).selection].sort())
           .toEqual(["path:2", "path:3"]);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await expect
           .poll(async () => [...(await editorDebug(page)).selection].sort())
           .toEqual(["path:2", "path:3"]);
@@ -2656,26 +2655,22 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `states the freehand tool's properties without pixels in ${tablet.name}`,
+      `states the pen's options in its Active Tool Menu without pixels in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Pen")),
-        ]);
+        await chooseTool(frame, input, "Pen");
         assert.equal((await editorDebug(page)).tool, "addFreehand");
-        await input.touch([
-          await stableCenter(documentPanelButton("Properties")),
-        ]);
-        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
-        await expect(panel).toBeVisible();
-        await expect(panel.getByText("Freehand", { exact: false }).first()).toBeVisible();
-        const text = await panel.innerText();
+        // A tap on the active Pen opens its options (FR-009).
+        await input.touch([await stableCenter(toolbarItem(frame, "Pen"))]);
+        const menu = activeToolMenu(frame);
+        await expect(menu.getByRole("slider", { name: "Width", exact: true })).toBeVisible();
+        const text = await menu.innerText();
         assert.doesNotMatch(
           text,
           /\d\s*px\b/,
-          `The freehand properties state pixels: ${text.match(/[^\n]*\d\s*px[^\n]*/)?.[0]}`,
+          `The pen's options state pixels: ${text.match(/[^\n]*\d\s*px[^\n]*/)?.[0]}`,
         );
       },
     );
@@ -2821,7 +2816,7 @@ describe("standalone workbench host boundary", function () {
         };
 
         // A pen stroke shows its fit as a preview; accepting it makes the fit a history step after the stroke.
-        await tap(toolbarItem(frame, "Pen"));
+        await chooseTool(frame, input, "Pen");
         await input.penStroke(waveAcross(viewport, 0.15, 0.12, 140));
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         await expect(result).toBeVisible();
@@ -2843,7 +2838,7 @@ describe("standalone workbench host boundary", function () {
         assert.equal(lines(last()), 2);
 
         // The authored red line, picked with the pen and deleted from the selection strip's menu.
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, redLine, 0.5)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
         await tap(
@@ -2858,7 +2853,7 @@ describe("standalone workbench host boundary", function () {
         assert.ok(!last().includes("\\draw[red]"), last());
 
         // An eraser sweep across the constructed line cuts it in two.
-        await tap(toolbarItem(frame, "Eraser"));
+        await chooseTool(frame, input, "Eraser");
         await input.penStroke(
           Array.from({ length: 9 }, (_, i) => ({ x: lineFrom + 80, y: lineY - 20 + i * 5 })),
         );
@@ -2923,7 +2918,7 @@ describe("standalone workbench host boundary", function () {
         };
         await expect.poll(source).toBe(authored);
         await fitDiagram(frame, input);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const style = frame.getByRole("dialog", { name: "Style" });
 
@@ -3026,7 +3021,7 @@ describe("standalone workbench host boundary", function () {
         const line = frame.locator('svg [data-source-id="path:1"]').first();
 
         // The rectangle's stroke takes a color from the rail.
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
         await expect
           .poll(async () => (await editorDebug(page)).selection)
@@ -3071,10 +3066,13 @@ describe("standalone workbench host boundary", function () {
           `Both ends of the line moved:\n${last()}`,
         );
 
-        // The bucket fills the rectangle.
-        await tap(toolbarItem(frame, "Fill"));
-        await tap(toolbarItem(frame, "Colour 2: blue!20"));
+        // The bucket fills the rectangle. A preset tap also colours a selection (FR-021), so a tap on empty canvas clears it first.
+        // The Fill tool previews its fill under the pen, which redraws the rectangle, so the rectangle is measured before.
         const box = (await rectangle.boundingBox())!;
+        await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+        await chooseTool(frame, input, "Fill");
+        await tap(toolbarItem(frame, "Colour 2: blue!20"));
         await input.penStroke([
           { x: box.x + box.width / 2, y: box.y + box.height / 2 },
         ]);
@@ -3082,7 +3080,7 @@ describe("standalone workbench host boundary", function () {
         assert.match(last(), /blue/);
 
         // A text label goes on empty canvas.
-        await tap(toolbarItem(frame, "Text"));
+        await chooseTool(frame, input, "Text");
         await expect(toolbarItem(frame, "Text")).toHaveAttribute("aria-pressed", "true");
         await input.penStroke([{ x: box.x + box.width / 2, y: box.y - 40 }]);
         await step("The label is not in the source");
@@ -3184,12 +3182,15 @@ describe("standalone workbench host boundary", function () {
         await tap(frame.getByRole("button", { name: "Figure 2", exact: true }));
         await fitDiagram(frame, input);
         const rectangle = frame.locator("svg [data-source-id]").first();
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
         await tap(toolbarItem(frame, "Colour 3: red"));
         await step("The stroke color is not in the source");
-        await tap(toolbarItem(frame, "Fill"));
+        // A preset tap also colours a selection (FR-021), so a tap on empty canvas clears it before the bucket.
+        await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+        await chooseTool(frame, input, "Fill");
         await tap(toolbarItem(frame, "Colour 2: blue!20"));
         // The color choice redraws the picture; the pen waits for the redrawn rectangle.
         await input.penStroke([await settledCenter(rectangle)]);
@@ -3201,8 +3202,9 @@ describe("standalone workbench host boundary", function () {
         // Back in the first figure, the authored line is deleted; the second figure keeps its edits.
         await tap(frame.getByRole("button", { name: "Figure 1", exact: true }));
         await fitDiagram(frame, input);
-        await tap(toolbarItem(frame, "Lasso"));
-        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5)]);
+        await chooseTool(frame, input, "Lasso");
+        // At a landscape fit the constructed line snaps onto the authored line's row from x=2, so the tap is near x=1.
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await tap(strip.getByRole("button", { name: "More", exact: true }));
         await tap(frame.getByRole("menu").first().getByRole("menuitem", { name: "Delete", exact: true }));
@@ -3344,7 +3346,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const draws = async () =>
-          Array.from((await editorDebug(page)).source.matchAll(/\\draw[^;]*;/g), (match) => match[0]);
+          Array.from((await editorDebug(page)).source.matchAll(/\\draw(?:\{[^}]*\}|[^;{])*;/g), (match) => match[0]);
         await input.penStroke(waveAcross(viewport, 0.3, 0.4, 120));
         await expect.poll(async () => (await draws()).length).toBe(1);
         await page.keyboard.press("Escape");
@@ -3407,11 +3409,7 @@ describe("standalone workbench host boundary", function () {
           .poll(fittedDraws, { message: "Drawing again reverted the earlier automatic fit" })
           .toBe(2);
         const fitted = (await editorDebug(page)).source;
-        await input.touch([
-          await stableCenter(
-            toolbarItem(frame, "Lasso"),
-          ),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("select");
         await expect(result).toHaveCount(0);
         assert.equal(
@@ -3449,7 +3447,7 @@ describe("standalone workbench host boundary", function () {
         await expect(line).toBeVisible();
         await fitDiagram(frame, input);
         const source = async () => (await editorDebug(page)).source;
-        const draws = async () => Array.from((await source()).matchAll(/\\draw[^;]*;/g), (match) => match[0]);
+        const draws = async () => Array.from((await source()).matchAll(/\\draw(?:\{[^}]*\}|[^;{])*;/g), (match) => match[0]);
         // The stroke is written against the point's name, so it follows the point (docs/interaction-model.md, "Attached relationships").
         const named = String.raw`\draw (0.37,0.61) coordinate (p1) -- (4.23,2.29);`;
         // The delay that turns a held pen into a move is a setting.
@@ -3459,7 +3457,7 @@ describe("standalone workbench host boundary", function () {
           "450",
         );
         await tap(settings.getByRole("button", { name: "Close settings" }));
-        await tap(toolbarItem(frame, "Pen"));
+        await chooseTool(frame, input, "Pen");
         const start = await strokePoint(page, line, 0);
         // Hovering the pen over a point marks it as the stroke's attachment, before any contact.
         await input.penHover(start);
@@ -3476,17 +3474,13 @@ describe("standalone workbench host boundary", function () {
             message: "The stroke from the point did not draw",
           })
           .toBe(2);
-        assert.match(
-          (await draws())[1],
-          /^\s*\\draw(?:\[[^\]]*\])?\s*\(p1\)/,
-          "The stroke did not start at the point",
-        );
+        const stroke = (await draws())[1];
+        assert.match(stroke, /^\s*\\draw(?:\[[^\]]*\])?\s*\(p1\)/, `The stroke did not start at the point: ${stroke}`);
         assert.equal((await draws())[0].trim(), named, "Drawing from the point moved it");
-        await page.keyboard.press("Escape");
         const drawn = await source();
         // With a finger of the other hand held down, a pen drag on a point moves the point.
         const clear = (await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0];
-        // Closing the result and selecting the moved point can pan the view, so each step measures the point again.
+        // Selecting the moved point can pan the view, so each step measures the point again.
         const endPoint = () => strokePoint(page, line, 1);
         const end = await endPoint();
         await input.fingerDown(clear);
@@ -3631,7 +3625,7 @@ describe("standalone workbench host boundary", function () {
         await storyScreenshot(page, `attached-arrow-${tablet.name}`);
 
         // A label placed on a line is a path-attached node: the mark says "On line" before commit.
-        await tap(toolbarItem(frame, "Text"));
+        await chooseTool(frame, input, "Text");
         await expect(toolbarItem(frame, "Text")).toHaveAttribute("aria-pressed", "true");
         await input.penHover(at(7, 3));
         await expect.poll(targetLabel, { message: "Hovering the line did not name it" }).toBe("On line");
@@ -3646,7 +3640,7 @@ describe("standalone workbench host boundary", function () {
         await storyScreenshot(page, `attached-label-${tablet.name}`);
 
         // A stroke that starts on a point is written against the point's name.
-        await tap(toolbarItem(frame, "Pen"));
+        await chooseTool(frame, input, "Pen");
         const host = frame.locator('svg [data-source-id="path:4"]').first();
         const start = await strokePoint(page, host, 0);
         await input.penHover(start);
@@ -3669,7 +3663,7 @@ describe("standalone workbench host boundary", function () {
 
         // Moving the node moves the arrow end; the arrow's source keeps the reference; one undo restores all.
         // A press on the node's text edits the text, so the drag starts on the node's drawn border.
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         const arrowEndBefore = (await ends(arrowId))[1];
         const grip = await strokePoint(page, frame.locator('svg path[data-source-id="path:2"]').first(), 0.5);
         const lift = { x: at(2, 8).x - at(2, 6).x, y: at(2, 8).y - at(2, 6).y };
@@ -3702,7 +3696,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
 
         // Moving the point under a held finger moves the stroke's start with it.
-        await tap(toolbarItem(frame, "Pen"));
+        await chooseTool(frame, input, "Pen");
         const clear = (await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0];
         const point = await strokePoint(page, host, 0);
         await input.fingerDown(clear);
@@ -3984,7 +3978,7 @@ describe("standalone workbench host boundary", function () {
           left: { x: viewport.x + 10, y: viewport.y + viewport.height / 2 },
         };
         for (const [dock, target] of Object.entries(dockTargets)) {
-          const from = await dockEdgePoint(rail);
+          const from = await dockGripPoint(rail);
           await input.touch(
             Array.from({ length: 13 }, (_, i) => ({
               x: from.x + ((target.x - from.x) * i) / 12,
@@ -4118,9 +4112,7 @@ describe("standalone workbench host boundary", function () {
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, curve, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
@@ -4175,9 +4167,7 @@ describe("standalone workbench host boundary", function () {
           await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         // Start from an empty selection, then tap the fitted path.
         await input.touch([
           { x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 },
@@ -4222,9 +4212,7 @@ describe("standalone workbench host boundary", function () {
           await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
         ]);
         await expect(result).toHaveCount(0);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         // The fit is the path inside the stroke's envelope scope.
         const ids = await frame
           .locator('svg [data-source-id^="path:"]')
@@ -4347,7 +4335,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         await fitDiagram(frame, input);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         const first = frame.locator('svg [data-source-id="path:0"]').first();
         await input.penStroke([await strokePoint(page, first, 0.3)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
@@ -4376,7 +4364,7 @@ describe("standalone workbench host boundary", function () {
         await expect(reopened.locator('svg [data-source-id="path:1"]').first()).toHaveAttribute("stroke", "#ff0000");
         await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
         await fitDiagram(reopened, input);
-        await tap(toolbarItem(reopened, "Lasso"));
+        await chooseTool(reopened, input, "Lasso");
         await input.penStroke([await strokePoint(page, reopened.locator('svg [data-source-id="path:1"]').first(), 0.3)]);
         await tap(reopened.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Style", exact: true }));
         await expect(reopened.getByRole("dialog", { name: "Style" }).getByRole("button", { name: "Apply accent line" })).toBeVisible();
@@ -4400,7 +4388,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         const path = frame.locator('svg [data-source-id^="path:"]').first();
         await input.penStroke([await strokePoint(page, path, 0.3)]);
         await input.touch([await stableCenter(frame.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Style" }))]);
@@ -4434,7 +4422,7 @@ describe("standalone workbench host boundary", function () {
         const source = async () => (await editorDebug(page)).source;
         await expect.poll(source).toBe(authored);
         await fitDiagram(frame, input);
-        await tap(toolbarItem(frame, "Fill"));
+        await chooseTool(frame, input, "Fill");
         await tap(toolbarItem(frame, "Colour 2: blue!20"));
         const box = (await frame.locator('svg [data-source-id="path:0"]').first().boundingBox())!;
         await input.penStroke([{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]);
@@ -4446,7 +4434,7 @@ describe("standalone workbench host boundary", function () {
         // The fill is a committed mark: it stays when the pen leaves and when another tool is chosen.
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.penHover({ x: viewport.x + viewport.width - 30, y: viewport.y + viewport.height - 30 });
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("select");
         assert.equal(await source(), filled, "The fill left the source with the bucket");
         await tap(documentHistory("Undo"));
@@ -4456,14 +4444,14 @@ describe("standalone workbench host boundary", function () {
         // A pen that hovers first shows the fill as a preview; its tap then commits the same single step.
         await tap(documentHistory("Undo"));
         await expect.poll(source).toBe(authored);
-        await tap(toolbarItem(frame, "Fill"));
+        await chooseTool(frame, input, "Fill");
         const inside = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
         await input.penHover({ x: inside.x - 6, y: inside.y });
         await input.penHover(inside);
         await expect.poll(source, { message: "The hover did not preview the fill" }).toBe(filled);
         await input.penStroke([inside]);
         await input.penHover({ x: viewport.x + viewport.width - 30, y: viewport.y + viewport.height - 30 });
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("select");
         assert.equal(await source(), filled, "The previewed fill left the source with the bucket");
         await tap(documentHistory("Undo"));
@@ -4551,6 +4539,7 @@ describe("standalone workbench host boundary", function () {
   story({}, "loads stored settings that hold the retired toolbar items and saves them without it", async function () {
     const stored = {
       settings: {
+        general: { uiFontSizePx: 11, colorScheme: "system", canvasInvert: false },
         colorPicker: {
           collections: [
             { id: "default", name: "Default", colors: ["black", "white"] },
@@ -4597,9 +4586,7 @@ describe("standalone workbench host boundary", function () {
         const line = frame.locator('svg [data-source-id="path:0"]').first();
         await expect(line).toBeVisible();
         const input = await TabletInput.attach(page);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await fitDiagram(frame, input);
         await input.longPress(await strokePoint(page, line, 0.5));
         await input.touch([
@@ -4646,9 +4633,7 @@ describe("standalone workbench host boundary", function () {
         const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         // Figure coordinates are bare numbers in TikZ, so no unit word follows them.
         const unitWord = /\d\s*(cm|px)\b|\((cm|px|units)\)|\bunits\b/;
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch([await strokePoint(page, line, 0.5)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await input.touch([
@@ -4762,7 +4747,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const pen = toolbarItem(frame, "Pen");
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch([await stableCenter(pen)]);
         await expect(pen).toHaveAttribute("aria-pressed", "true");
         await expect(activeToolMenu(frame)).toHaveCount(0);
@@ -5024,7 +5009,7 @@ describe("standalone workbench host boundary", function () {
         await expect(frame.locator("[data-source-id]")).toHaveCount(3);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([await stableCenter(toolbarItem(frame, "Eraser"))]);
+        await chooseTool(frame, input, "Eraser");
         const middleOf = (id: string) =>
           strokePoint(page, frame.locator(`svg [data-source-id="${id}"]`).first(), 0.5);
         const [left, middle, right] = [await middleOf("path:0"), await middleOf("path:1"), await middleOf("path:2")];
@@ -5035,7 +5020,7 @@ describe("standalone workbench host boundary", function () {
           Array.from({ length: 16 }, (_, i) => ({ x: from + (i * (to - from)) / 15, y: left.y })),
         );
         const statements = async () =>
-          Array.from((await editorDebug(page)).source.matchAll(/\\draw[^;]*;/g), (match) => match[0]);
+          Array.from((await editorDebug(page)).source.matchAll(/\\draw(?:\{[^}]*\}|[^;{])*;/g), (match) => match[0]);
         await expect
           .poll(async () => (await statements()).length, {
             message: "The sweep did not leave two pieces of each stroke it crossed",
@@ -5070,7 +5055,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        await input.touch([await stableCenter(toolbarItem(frame, "Pen"))]);
+        await chooseTool(frame, input, "Pen");
         const items = await drawingToolbar(frame)
           .locator(
             'button, input, select, textarea, [role="button"], [role="slider"], [role="option"], [tabindex]:not([tabindex="-1"])',
@@ -5122,7 +5107,7 @@ describe("standalone workbench host boundary", function () {
         const pen = toolbarItem(frame, "Pen");
         const menu = activeToolMenu(frame);
         const file = page.locator('details.file-menu[aria-label="File"]');
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch([await stableCenter(pen)]);
         await expect(menu).toHaveCount(0);
         await input.touch([await stableCenter(pen)]);
@@ -5168,8 +5153,12 @@ describe("standalone workbench host boundary", function () {
           await strokePoint(page, frame.locator('svg [data-source-id="path:4"]').first(), 0.5),
         ]);
         await expect.poll(selection, { message: "A tap did not select the line" }).toEqual(["path:4"]);
+        // The line's selection strip sits beside it and, at the landscape fit, over the loop's start;
+        // a tap on empty canvas clears both first.
+        await input.penStroke([at(10, 10)]);
+        await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
         // Freehand is the default shape: a loop round both circles.
-        await input.penStroke([at(0.5, 2.5), at(8, 2.5), at(8, 5.5), at(0.5, 5.5), at(0.5, 2.6)]);
+        await input.penStroke([at(8, 5.5), at(0.5, 5.5), at(0.5, 2.5), at(8, 2.5), at(8, 5.4)]);
         await expect
           .poll(selection, { message: "The Freehand loop did not select both circles" })
           .toEqual(["path:2", "path:3"]);
@@ -5230,7 +5219,7 @@ describe("standalone workbench host boundary", function () {
           x: area.left + (area.right - area.left) * fx,
           y: area.top + (area.bottom - area.top) * fy,
         });
-        await input.touch([await stableCenter(toolbarItem(frame, "Pen"))]);
+        await chooseTool(frame, input, "Pen");
         // Three upright strokes; each one's text is the drawing it added to the source. Its record lines
         // such as \begin{scope} repeat between strokes, so only the \draw lines identify it.
         const strokes: string[] = [];
@@ -5246,7 +5235,7 @@ describe("standalone workbench host boundary", function () {
           strokes.push(drawn[0]);
         }
         // A sweep across the first stroke only.
-        await input.touch([await stableCenter(toolbarItem(frame, "Eraser"))]);
+        await chooseTool(frame, input, "Eraser");
         const sweptFrom = await source();
         await input.penStroke(Array.from({ length: 10 }, (_, i) => point(0.2 + (i * 0.2) / 9, 0.45)));
         await expect.poll(source, { message: "The sweep erased nothing" }).not.toBe(sweptFrom);
@@ -5257,7 +5246,7 @@ describe("standalone workbench host boundary", function () {
           "The sweep changed a stroke it did not cross",
         );
         // A Freehand lasso round the other two, then a drag on one of them moves both.
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([point(0.42, 0.22), point(0.8, 0.22), point(0.8, 0.68), point(0.42, 0.68), point(0.42, 0.23)]);
         await expect
           .poll(async () => (await editorDebug(page)).selection.length, {
@@ -5328,9 +5317,7 @@ describe("standalone workbench host boundary", function () {
         const circle = frame.locator("circle[data-source-id]");
         await expect(circle).toBeAttached();
         const input = await TabletInput.attach(page);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         // The startup view depends on the canvas size at mount; the user fits the figure through the zoom popup.
         await fitDiagram(frame, input);
         await expect(circle).toBeInViewport();
@@ -5481,7 +5468,7 @@ describe("standalone workbench host boundary", function () {
         await storyScreenshot(page, `option-surface-text-${tablet.name}`);
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         // The Freehand result names its sliders and its buttons (item 8); its values are figure coordinates, with no unit word.
-        await tap(toolbarItem(frame, "Pen"));
+        await chooseTool(frame, input, "Pen");
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 160));
@@ -5514,9 +5501,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(2);
         const input = await TabletInput.attach(page);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.longPress({
           x: viewport.x + viewport.width * 0.85,
@@ -5552,7 +5537,7 @@ describe("standalone workbench host boundary", function () {
           await settings.getByRole("searchbox", { name: "Find command", exact: true }).fill("Insert: Line");
         };
         // The shipped default acts before we replace it.
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await page.keyboard.press("l");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
         await openShortcuts();
@@ -5566,14 +5551,14 @@ describe("standalone workbench host boundary", function () {
         await expect(row).toContainText("Ctrl+Alt+L");
         await storyScreenshot(page, `keyboard-shortcuts-${tablet.name}`);
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await page.keyboard.press("l");
         assert.equal((await editorDebug(page)).tool, "select", "The replaced shortcut still ran");
         await page.keyboard.press("Control+Alt+l");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
         await page.reload();
         await editorReady(page);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await page.keyboard.press("Control+Alt+l");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
         await openShortcuts();
@@ -5585,14 +5570,14 @@ describe("standalone workbench host boundary", function () {
         await rowMenu("Remove Shortcut");
         await expect(row.locator("kbd")).toHaveCount(0);
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await page.keyboard.press("Control+Alt+l");
         await page.keyboard.press("l");
         assert.equal((await editorDebug(page)).tool, "select", "A removed shortcut still ran");
         await openShortcuts();
         await rowMenu("Reset Shortcut");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await page.keyboard.press("l");
         await expect.poll(async () => (await editorDebug(page)).tool).toBe("addLine");
       },
@@ -5718,7 +5703,7 @@ describe("standalone workbench host boundary", function () {
         // A double tap on an equation opens its editor, as a double-click opens an equation in Word.
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await fitDiagram(frame, input);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await input.doubleTap(await stableCenter(frame.locator('svg [data-source-id="path:0"]').first()));
         await expect(frame.getByRole("button", { name: "Close equation editor", exact: true })).toBeVisible();
       },
@@ -5800,7 +5785,7 @@ describe("standalone workbench host boundary", function () {
         await search.press("q");
         await expect(search).toHaveValue("q");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await tap(documentPanelButton("Properties"));
         const mode = frame
           .getByRole("complementary", { name: "Properties", exact: true })
@@ -5836,7 +5821,7 @@ describe("standalone workbench host boundary", function () {
         await tap(settings.getByRole("list", { name: "Commands", exact: true }).getByRole("button"));
         await page.keyboard.press("Control+Alt+p");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
-        await tap(toolbarItem(frame, "Pen"));
+        await chooseTool(frame, input, "Pen");
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.penStroke(
           Array.from({ length: 60 }, (_, i) => ({
@@ -5847,7 +5832,7 @@ describe("standalone workbench host boundary", function () {
         const result = frame.getByRole("dialog", { name: "Freehand result" });
         await tap(result.getByRole("button", { name: "Accept", exact: true }));
         await expect(result).toHaveCount(0);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         const ids = await frame
           .locator('svg [data-source-id^="path:"]')
           .evaluateAll((nodes) => [
@@ -5905,7 +5890,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         await fitDiagram(frame, input);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await input.touch([
           await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5),
         ]);
@@ -6033,7 +6018,7 @@ describe("standalone workbench host boundary", function () {
           width > 10 && Math.abs(width - height) < 0.4,
           `The constrained rectangle was ${width} by ${height}`,
         );
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await fitDiagram(frame, input);
         const shape = frame.locator('svg [data-source-id="path:0"]').first();
         const drag = async () => {
@@ -6225,9 +6210,7 @@ describe("standalone workbench host boundary", function () {
           `The placed line's ends are not the nearest whole lattice points: ${placed}`,
         );
         // A Bézier control point dragged to an off-lattice pen position lands on a whole lattice point.
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         // The placed line stays selected, with its controls near the curve; clear it on empty canvas first.
         // The canvas corner is clear of the selection strip, which follows the selection.
         const canvas = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
@@ -6365,11 +6348,11 @@ describe("standalone workbench host boundary", function () {
 
         // With a drawing tool chosen and nothing selected, Properties still shows the figure;
         // the tool's options live in its Active Tool Menu.
-        await tap(toolbarItem(frame, "Pen"));
+        await chooseTool(frame, input, "Pen");
         await showsFigure();
 
         // A selection replaces the figure with the object.
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, line, 0.5)]);
         await expect.poll(selection, { message: "A tap did not select the line" }).toEqual(["path:0"]);
         await expect(properties.getByText(/^Selected /u)).toBeVisible();
@@ -6447,7 +6430,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await fitDiagram(frame, input);
         const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
         const checkControls = async () => {
@@ -6506,9 +6489,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
-        await tap(
-          toolbarItem(frame, "Lasso"),
-        );
+        await chooseTool(frame, input, "Lasso");
         await fitDiagram(frame, input);
         await input.longPress(
           await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.5),
@@ -6564,9 +6545,7 @@ describe("standalone workbench host boundary", function () {
           .poll(async () => (await editorDebug(page)).source)
           .toMatch(/\\draw[^;]*--[^;]*;/);
 
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         // The inserted line stays selected and its control may cover the circle; tap empty canvas to dismiss it.
         await input.touch([
           { x: viewport.x + viewport.width - 12, y: viewport.y + viewport.height - 12 },
@@ -6673,7 +6652,7 @@ describe("standalone workbench host boundary", function () {
         await expect(frame.locator("svg [data-source-id]")).toHaveCount(1);
         assert.equal(await source(), layered);
         // The pen drags the line of an unlocked layer, and not of a locked one.
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         // With the panel open, the fitted view keeps the line in the canvas left of it.
         await fitDiagram(frame, input);
         const drag = async () => {
@@ -6778,11 +6757,7 @@ describe("standalone workbench host boundary", function () {
           }),
           "The Layer badge is clipped by the title",
         );
-        await input.touch([
-          await stableCenter(
-            toolbarItem(frame, "Lasso"),
-          ),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         const zoom = frame
           .locator("[data-diagram-tools]")
           .getByRole("button", { name: "Zoom and display", exact: true });
@@ -6912,7 +6887,7 @@ describe("standalone workbench host boundary", function () {
         };
         await fitDiagram(frame, input);
         const rail = drawingToolbar(frame);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, corner, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
         await tap(documentPanelButton("Properties"));
@@ -7001,7 +6976,7 @@ describe("standalone workbench host boundary", function () {
           await input.touch([await stableCenter(locator)]);
         };
         await fitDiagram(frame, input);
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, corner, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:1"]);
         await tap(documentPanelButton("Properties"));
@@ -7085,14 +7060,14 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `moves the dock by a drag from its edge to each screen edge, with drop zones that hold no words, in ${tablet.name}`,
+      `moves the dock by a drag from its grip to each screen edge, and by no other drag, with drop zones that hold no words, in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const rail = drawingToolbar(frame);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const edgePoint = () => dockEdgePoint(rail);
+        const gripPoint = () => dockGripPoint(rail);
         const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) =>
           input.touch(
             Array.from({ length: 13 }, (_, i) => ({
@@ -7126,17 +7101,20 @@ describe("standalone workbench host boundary", function () {
           bottom: { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height - 10 },
         };
         await expect(rail).toHaveAttribute("data-dock", "bottom");
-        // A drag that starts on a tool is not a dock drag.
+        // A drag that starts on a tool or on the toolbar's edge is not a dock drag (FR-010).
         await drag(await stableCenter(toolbarItem(frame, "Lasso")), edges.right);
         await expect(rail).toHaveAttribute("data-dock", "bottom");
+        const railBox = await layoutBox(rail);
+        await drag({ x: railBox.x + railBox.width / 2, y: railBox.y + 3 }, edges.right);
+        await expect(rail).toHaveAttribute("data-dock", "bottom");
         for (const [dock, target] of Object.entries(edges)) {
-          await drag(await edgePoint(), target);
+          await drag(await gripPoint(), target);
           await expect(rail).toHaveAttribute("data-dock", dock);
           await expect.poll(storedDock).toBe(dock);
           await clearOfRulers();
         }
         // While a drag runs, each screen edge shows a drop zone, and no zone holds a word.
-        const from = await edgePoint();
+        const from = await gripPoint();
         await page.mouse.move(from.x, from.y);
         await page.mouse.down();
         await page.mouse.move(viewport.x + viewport.width / 2, viewport.y + viewport.height / 2, { steps: 6 });
@@ -7166,9 +7144,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         await expect(frame.locator("circle[data-source-id]")).toHaveCount(1);
         const input = await TabletInput.attach(page);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await fitDiagram(frame, input);
         await input.longPress(
           await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
@@ -7263,9 +7239,7 @@ describe("standalone workbench host boundary", function () {
         const line = frame.locator("[data-source-id]").first();
         await expect(line).toBeVisible();
         const input = await TabletInput.attach(page);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await fitDiagram(frame, input);
         await input.longPress(await strokePoint(page, line, 0.5));
         const menu = frame.getByRole("menu").first();
@@ -7318,7 +7292,7 @@ describe("standalone workbench host boundary", function () {
           Array.from({ length: 16 }, (_, i) => ({ x: from + (i * (to - from)) / 15, y })),
         );
         const statements = async () =>
-          Array.from((await editorDebug(page)).source.matchAll(/\\draw[^;]*;/g), (match) => match[0]);
+          Array.from((await editorDebug(page)).source.matchAll(/\\draw(?:\{[^}]*\}|[^;{])*;/g), (match) => match[0]);
         await expect
           .poll(async () => (await statements()).length, {
             message: "The sweep did not leave two pieces of each stroke it crossed",
@@ -7413,7 +7387,7 @@ describe("standalone workbench host boundary", function () {
         ]);
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const statements = async () =>
-          Array.from((await editorDebug(page)).source.matchAll(/\\draw[^;]*;/g), (match) => match[0]);
+          Array.from((await editorDebug(page)).source.matchAll(/\\draw(?:\{[^}]*\}|[^;{])*;/g), (match) => match[0]);
         // Each shape's top point is the top centre of its box; a short vertical sweep crosses only that point.
         const sweepTop = async (statement: string) => {
           await editorReady(page);
@@ -7585,9 +7559,7 @@ describe("standalone workbench host boundary", function () {
               .map((line) => line.textContent)
               .join("\n");
           });
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch([
           await strokePoint(page, frame.locator("circle[data-source-id]").first(), 0.5),
         ]);
@@ -7652,9 +7624,7 @@ describe("standalone workbench host boundary", function () {
         await expect(frame.locator("[data-source-id]")).toHaveCount(2);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         const circle = frame.locator("circle[data-source-id]").first();
         const line = frame.locator("path[data-source-id]").first();
         const circleId = await circle.getAttribute("data-source-id");
@@ -7716,9 +7686,7 @@ describe("standalone workbench host boundary", function () {
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         const intersects = (
           a: { x: number; y: number; width: number; height: number },
           b: typeof a,
@@ -7791,9 +7759,7 @@ describe("standalone workbench host boundary", function () {
               }, fraction);
             return { x: frameBox.x + point.x, y: frameBox.y + point.y };
           };
-          await input.touch([
-            await stableCenter(toolbarItem(frame, "Lasso")),
-          ]);
+          await chooseTool(frame, input, "Lasso");
           await tap(await onCurve(0.3));
           await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
           await expect(frame.locator('[data-selection-highlight="path:0"]')).toBeVisible();
@@ -7869,9 +7835,7 @@ describe("standalone workbench host boundary", function () {
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch([await strokePoint(page, curve, 0.2)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await expect(frame.getByText("Curve · 3 points", { exact: true })).toBeVisible();
@@ -7915,9 +7879,7 @@ describe("standalone workbench host boundary", function () {
         await expect(rectangle).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch([await strokePoint(page, rectangle, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
@@ -7982,7 +7944,7 @@ describe("standalone workbench host boundary", function () {
           }
         };
 
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         const rectangle = frame.locator('svg [data-source-id="path:2"]').first();
         await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
         await expect.poll(selection).toEqual(["path:2"]);
@@ -8064,10 +8026,10 @@ describe("standalone workbench host boundary", function () {
         // empty canvas: the strip of the previous selection may stand over the shapes.
         await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
         await expect.poll(selection).toEqual([]);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
-        await input.penStroke([at(0.5, 0.5), at(6.5, 0.5), at(6.5, 3.6), at(0.5, 3.6), at(0.5, 0.6)]);
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([at(6.5, 3.6), at(0.5, 3.6), at(0.5, 0.5), at(6.5, 0.5), at(6.5, 3.5)]);
         await expect.poll(selection).toEqual(["path:2", "path:3"]);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         await expect(strip.getByText("2 objects", { exact: true })).toBeVisible();
         for (const name of ["Align", "Transform", "More"]) {
           await expect(button(name)).toBeVisible();
@@ -8087,10 +8049,10 @@ describe("standalone workbench host boundary", function () {
 
         await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
         await expect.poll(selection).toEqual([]);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
-        await input.penStroke([at(0.5, 0.5), at(13, 0.5), at(13, 10), at(0.5, 10), at(0.5, 0.6)]);
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([at(13, 10), at(0.5, 10), at(0.5, 0.5), at(13, 0.5), at(13, 9.9)]);
         await expect.poll(selection).toEqual(["path:2", "path:3", "path:4"]);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         await expect(strip.getByText("3 objects", { exact: true })).toBeVisible();
         await expect(button("Distribute")).toBeVisible();
         await stripIsClean();
@@ -8118,7 +8080,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await input.penStroke([await strokePoint(page, curve, 0.3)]);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
@@ -8159,11 +8121,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(
-            toolbarItem(frame, "Lasso"),
-          ),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([
           await strokePoint(
             page,
@@ -8256,7 +8214,7 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
         await input.penStroke([await strokePoint(page, curve, 0.15)]);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
@@ -8324,11 +8282,11 @@ describe("standalone workbench host boundary", function () {
         const right = Math.max(...boxes.map((box) => box!.x + box!.width)) + 12;
         const top = Math.min(...boxes.map((box) => box!.y)) - 12;
         const bottom = Math.max(...boxes.map((box) => box!.y + box!.height)) + 12;
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         await input.penStroke([{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }, { x: left, y: top + 1 }]);
         const selected = async () => [...(await editorDebug(page)).selection].sort();
         await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
-        await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch([await stableCenter(documentPanelButton("Properties"))]);
         const properties = frame.getByRole("complementary", { name: "Properties", exact: true });
         await expect(properties.getByText("3 selected objects", { exact: true })).toBeVisible();
@@ -8386,9 +8344,7 @@ describe("standalone workbench host boundary", function () {
             .boundingBox())!;
           const tap = async (point: { x: number; y: number }) =>
             contact === "touch" ? input.touch([point]) : input.penStroke([point]);
-          await input.touch([
-            await stableCenter(toolbarItem(frame, "Lasso")),
-          ]);
+          await chooseTool(frame, input, "Lasso");
           const onCurve = await curve.evaluate((path: SVGGeometryElement) => {
             const p = path.getPointAtLength(path.getTotalLength() * 0.15);
             const m = path.getScreenCTM()!;
@@ -8487,9 +8443,7 @@ describe("standalone workbench host boundary", function () {
           await fitDiagram(frame, input);
           const tap = async (point: { x: number; y: number }) =>
             contact === "touch" ? input.touch([point]) : input.penStroke([point]);
-          await input.touch([
-            await stableCenter(toolbarItem(frame, "Lasso")),
-          ]);
+          await chooseTool(frame, input, "Lasso");
           await tap(await strokePoint(page, curve, 0.15));
           await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
           const pointAt = async (x: number) => {
@@ -8566,9 +8520,7 @@ describe("standalone workbench host boundary", function () {
         await expect(curve).toBeVisible();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch([await strokePoint(page, curve, 0.25)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         const hint = await frame.locator("body").innerText();
@@ -8617,9 +8569,7 @@ describe("standalone workbench host boundary", function () {
           { x: box.x - pad, y: box.y - pad + 1 },
         ]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([drawn[0]]);
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         const anchors = frame.locator(
           `rect[data-handle-kind="move-handle"][data-source-id="${drawn[0]}"]`,
         );
@@ -8876,12 +8826,10 @@ describe("standalone workbench host boundary", function () {
         await input.touch([await stableCenter(zoom)]);
         await expect(frame.getByRole("dialog", { name: "Tool options" })).toHaveCount(0);
         // A tap on empty canvas clears the selection, so each trace starts with none.
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         await input.touch(await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]));
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
-        await input.touch([await stableCenter(toolbarItem(frame, "Pen"))]);
+        await chooseTool(frame, input, "Pen");
         await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
         // The drawing tool's properties hold its choice of interpretation.
         await documentPanelButton("Properties").click();
@@ -9053,9 +9001,7 @@ describe("standalone workbench host boundary", function () {
           error <= trace.error + 0.3,
           `${trace.name}: bidirectional geometric error ${error} exceeds ${trace.error} for samples ${JSON.stringify(stroke.samples.map(({ x, y }) => [x, y]))} drawn as ${recordedDrawing(accepted.source)}`,
         );
-        await input.touch([
-          await stableCenter(toolbarItem(frame, "Lasso")),
-        ]);
+        await chooseTool(frame, input, "Lasso");
         const drawing = frame
           .locator(`svg [data-source-id="${accepted.originalInk[0].sourceIds[0]}"]`)
           .first();
@@ -9143,8 +9089,7 @@ describe("standalone workbench host boundary", function () {
       await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
       await expect.poll(() => frame.locator("[data-source-id]").count()).toBeGreaterThan(1);
       await editorReady(page);
-      await toolbarItem(frame, "Pen").click();
-      await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
+      await chooseTool(frame, "mouse", "Pen");
       const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
       await page.mouse.down();
@@ -9402,7 +9347,7 @@ describe("standalone workbench host boundary", function () {
     async function () {
       await author(circleFigure);
       const frame = editorFrame(page);
-      await toolbarItem(frame, "Pen").click();
+      await chooseTool(frame, "mouse", "Pen");
       const viewport = frame.locator('[data-canvas-viewport="true"]');
       await viewport.scrollIntoViewIfNeeded();
       const bounds = (await viewport.boundingBox())!;
@@ -9555,7 +9500,7 @@ describe("standalone workbench host boundary", function () {
     async function () {
       await author(circleFigure);
       const frame = editorFrame(page);
-      await toolbarItem(frame, "Pen").click();
+      await chooseTool(frame, "mouse", "Pen");
       const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       const x = box.x + box.width * 0.3,
         y = box.y + box.height * 0.55;
@@ -9608,7 +9553,7 @@ describe("standalone workbench host boundary", function () {
         await context.grantPermissions(["clipboard-read", "clipboard-write"]);
         await author(circleFigure);
         const frame = editorFrame(page);
-        await toolbarItem(frame, "Pen").click();
+        await chooseTool(frame, "mouse", "Pen");
         const input = await TabletInput.attach(page);
         const viewport = frame.locator('[data-canvas-viewport="true"]');
         await viewport.scrollIntoViewIfNeeded();
@@ -9976,7 +9921,7 @@ describe("standalone workbench host boundary", function () {
       await expect(readout).toHaveAccessibleName("Zoom: 100 %");
 
       // Select the rectangle with the Lasso.
-      await input.touch([await stableCenter(toolbarItem(frame, "Lasso"))]);
+      await chooseTool(frame, input, "Lasso");
       const corners = await Promise.all(
         [[-0.3, -0.3], [2.3, -0.3], [2.3, 1.3], [-0.3, 1.3], [-0.3, -0.2]].map(([x, y]) => figurePoint(frame, x, y)),
       );
@@ -10024,7 +9969,7 @@ describe("standalone workbench host boundary", function () {
     story({}, "restores its accepted tool and viewport in a fresh editor session", async function () {
     await author(circleFigure);
     const frame = editorFrame(page);
-    await toolbarItem(frame, "Pen").click();
+    await chooseTool(frame, "mouse", "Pen");
     const viewport = frame.locator('[data-canvas-viewport="true"]');
     await viewport.scrollIntoViewIfNeeded();
     const box = (await viewport.boundingBox())!;
@@ -10118,7 +10063,7 @@ describe("standalone workbench host boundary", function () {
       assert.equal(loaded.revision, initial.revision);
 
       // A drawn stroke reaches the source pane; every authored line stays as written.
-      await toolbarItem(frame, "Pen").click();
+      await chooseTool(frame, "mouse", "Pen");
       await draw(0.2, 0.25);
       await expect.poll(storedSource).toMatch(/\.\. controls/);
       const drawn = await storedSource();
@@ -10224,7 +10169,7 @@ describe("standalone workbench host boundary", function () {
       const authored = circleFigure;
       const body = authored.slice(0, authored.lastIndexOf("\\end{tikzpicture}"));
       assert.ok(body.endsWith(";\n"), "The fixture's last authored line ends before the closing line");
-      await toolbarItem(frame, "Pen").click();
+      await chooseTool(frame, "mouse", "Pen");
       const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       await page.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.25);
       await page.mouse.down();
@@ -10269,7 +10214,7 @@ describe("standalone workbench host boundary", function () {
       // One gesture in the same view of the first figure, so both drawings record the same samples.
       const draw = async () => {
         await fitDiagram(frame, input);
-        await tap(toolbarItem(frame, "Pen"));
+        await chooseTool(frame, input, "Pen");
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const start = { x: bounds.x + bounds.width * 0.35, y: bounds.y + bounds.height * 0.6 };
         await input.penStroke(
@@ -10281,7 +10226,7 @@ describe("standalone workbench host boundary", function () {
         await tap(result.getByRole("button", { name: "Accept", exact: true }));
         await expect(result).toHaveCount(0);
         // The stroke stays selected; its restore control belongs to the Select tool.
-        await tap(toolbarItem(frame, "Lasso"));
+        await chooseTool(frame, input, "Lasso");
         await expect(restore).toBeVisible();
       };
       await author(`${first}\n${second}`);
@@ -10360,7 +10305,7 @@ describe("standalone workbench host boundary", function () {
       const tap = async (target: Locator) => input.touch([await stableCenter(target)]);
       await author(circleFigure);
       // New strokes take #112233 at half opacity, from the Pen's first preset.
-      await tap(toolbarItem(frame, "Pen"));
+      await chooseTool(frame, input, "Pen");
       const colour = drawingToolbar(frame).getByRole("button", { name: /^Colour 1: / });
       await tap(colour);
       const popup = frame.getByRole("dialog", { name: "Colour options" });
@@ -10384,7 +10329,7 @@ describe("standalone workbench host boundary", function () {
       await tap(result.getByRole("button", { name: "Accept", exact: true }));
       await expect(result).toHaveCount(0);
       const released = await currentSource();
-      await tap(toolbarItem(frame, "Lasso"));
+      await chooseTool(frame, input, "Lasso");
       await tap(restore);
       await expect.poll(currentSource).not.toBe(released);
       const raw = await currentSource();
@@ -10414,7 +10359,7 @@ describe("standalone workbench host boundary", function () {
         reopened.originalInk.map(({ stroke }) => stroke),
         [record.stroke],
       );
-      await tap(toolbarItem(frame, "Lasso"));
+      await chooseTool(frame, input, "Lasso");
       const drawing = frame
         .locator(`svg [data-source-id="${reopened.originalInk[0].sourceIds[0]}"]`)
         .first();
