@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { type Browser, chromium, expect, type Page } from "@playwright/test";
+import { type Browser, chromium, expect, type FrameLocator, type Page } from "@playwright/test";
 import {
   buildWorkbench,
   editorReady,
@@ -595,11 +595,12 @@ describe("standalone native file workflow", function () {
   });
 
   for (const tablet of TABLET_VIEWPORTS) {
-  it(`reopens layered source from disk with its names, order, visibility, and references in ${tablet.name}`, async function () {
+  it(`a hidden, locked layer reopens hidden and locked, and the source holds only its scope with name=, in ${tablet.name}`, async function () {
     await page.setViewportSize(tablet);
+    // Visibility and lock are per-file view state; the source keeps each layer's name and order only (data-model Layer).
     const authored = String.raw`\begin{tikzpicture}
 \coordinate (anchor) at (0,0);
-\begin{scope}[name=Rear, transparent]
+\begin{scope}[name=Rear]
 \draw (anchor) -- (4,0);
 \end{scope}
 \begin{scope}[name=Front]
@@ -613,10 +614,14 @@ describe("standalone native file workflow", function () {
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     await page.locator(".cm-content").fill(authored);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    const layersButton = page.locator(".document-bar").getByRole("button", { name: "Layers", exact: true });
+    const layersPanel = (frame: FrameLocator) => frame.getByRole("complementary", { name: "Layers", exact: true });
     const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
-    await frame.getByRole("button", { name: "Layers", exact: true }).click();
-    await frame.getByRole("button", { name: "Lock Front", exact: true }).click();
-    await expect(frame.getByRole("button", { name: "Unlock Front", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await layersButton.click();
+    await layersPanel(frame).getByRole("button", { name: "Hide Rear", exact: true }).click();
+    await layersPanel(frame).getByRole("button", { name: "Lock Front", exact: true }).click();
+    await expect(layersPanel(frame).getByRole("button", { name: "Show Rear", exact: true })).toBeVisible();
+    await expect(layersPanel(frame).getByRole("button", { name: "Unlock Front", exact: true })).toHaveAttribute("aria-pressed", "true");
     await fileMenu().click();
     await page.getByRole("button", { name: "Save As…", exact: true }).click();
     await chooseFile("save");
@@ -632,12 +637,12 @@ describe("standalone native file workflow", function () {
     await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(authored);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     const reopened = page.frameLocator('iframe[title="TikZ visual editor"]');
-    await reopened.getByRole("button", { name: "Layers", exact: true }).click();
-    const panel = reopened.getByRole("complementary", { name: "Properties" }).getByRole("tabpanel");
+    await layersButton.click();
+    const panel = layersPanel(reopened);
     await expect.poll(() => panel.getByRole("group", { name: / layer$/ }).evaluateAll((groups) => groups.map((group) => group.getAttribute("aria-label")))).toEqual(["Front layer", "Rear layer"]);
     await expect(panel.getByRole("button", { name: "Show Rear", exact: true })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Lock Front", exact: true })).toHaveAttribute("aria-pressed", "false");
-    await expect(reopened.locator('svg [data-source-id^="path:"]')).toHaveCount(2);
+    await expect(panel.getByRole("button", { name: "Unlock Front", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(reopened.locator('svg [data-source-id^="path:"]')).toHaveCount(1);
     await expect(page.locator(".tikz-standalone-status")).toContainText("Saved");
   });
   }

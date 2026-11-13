@@ -7056,6 +7056,63 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `Properties shows the figure with nothing selected and the object after a selection, in ${tablet.name}`,
+      async function () {
+        await author(String.raw`\begin{tikzpicture}
+\draw (0,0) -- (4,2);
+\path[use as bounding box] (-2,-2) rectangle (8,6);
+\end{tikzpicture}`);
+        const frame = editorFrame(page);
+        const line = frame.locator('svg [data-source-id="path:0"]').first();
+        await expect(line).toBeAttached();
+        const input = await TabletInput.attach(page);
+        const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const properties = frame.getByRole("complementary", { name: "Properties", exact: true });
+        const selection = async () => [...(await editorDebug(page)).selection];
+        // The figure's attributes: its scale, lattice step, and bounds (FR-060a).
+        const showsFigure = async () => {
+          await expect(properties.getByLabel("X scale", { exact: true })).toBeVisible();
+          await expect(properties.getByText("Figure Bounds", { exact: true })).toBeVisible();
+          await expect(properties.getByText("New strokes", { exact: true })).toHaveCount(0);
+        };
+
+        await tap(documentPanelButton("Properties"));
+        await expect(properties).toBeVisible();
+        await showsFigure();
+
+        // With a drawing tool chosen and nothing selected, Properties still shows the figure;
+        // the tool's options live in its Active Tool Menu.
+        await tap(toolbarItem(frame, "Pen"));
+        await showsFigure();
+
+        // A selection replaces the figure with the object.
+        await tap(toolbarItem(frame, "Lasso"));
+        await input.penStroke([await strokePoint(page, line, 0.5)]);
+        await expect.poll(selection, { message: "A tap did not select the line" }).toEqual(["path:0"]);
+        await expect(properties.getByText(/^Selected /u)).toBeVisible();
+        await expect(properties.getByText("Figure Bounds", { exact: true })).toHaveCount(0);
+        await storyScreenshot(page, `properties-object-${tablet.name}`);
+
+        // A tap on empty canvas clears the selection, and the figure returns.
+        await input.penStroke([at(7, 5)]);
+        await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
+        await showsFigure();
+
+        // No other surface holds the figure's attributes.
+        await page.getByRole("group", { name: "File" }).locator("summary").click();
+        await expect(page.getByRole("button", { name: "Document Properties…", exact: true })).toHaveCount(0);
+        await page.keyboard.press("Escape");
+        await page.keyboard.press("Control+Shift+D");
+        await expect(frame.getByTestId("document-properties")).toHaveCount(0);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `closes each popover on a second press of its button, and keeps one popover open, in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
