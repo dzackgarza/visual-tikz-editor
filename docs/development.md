@@ -54,6 +54,10 @@ bunx playwright show-trace test-results-*/workbench/failed-*.zip
 
 `bun run coverage` (`scripts/coverage.mjs`) runs the suite with V8 coverage for Mocha and for every story page, and merges both into `coverage/lcov.info`. `standalone/server.ts` runs under Bun, which reports coverage only inside `bun test` ([oven-sh/bun#17867](https://github.com/oven-sh/bun/issues/17867)), so the report omits it.
 
+### Reviewing what the stories show
+
+A passing story is not evidence that a surface looks right. Each story writes its last state as `test-results/workbench/<story>.png`. A task or a phase of `specs/001-product-design/tasks.md` is complete only after these screenshots are viewed, in portrait and in landscape, and compared with [contracts/surfaces.md](../specs/001-product-design/contracts/surfaces.md). Each difference that is seen gets a red story, or goes to the open task that owns it.
+
 ### Writing a browser story
 
 - A story drives the real page with pen, touch, and mouse events through the helpers in `test/tablet.ts`. Each story runs in portrait and in landscape.
