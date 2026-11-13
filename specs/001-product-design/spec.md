@@ -49,15 +49,17 @@ The editor has these surfaces. Each control appears on exactly one of them.
 
 ## User Scenarios & Testing *(mandatory)*
 
-The user sets the priority of each story; the stories are listed in workflow order.
+Each priority follows from the dependencies between the stories and from the user's reports (constitution, Development Workflow); each story states its evidence. A story needs only the stories of higher priority.
 
-### User Story 1 - Draw a figure by pen (Priority: set by the user)
+### User Story 1 - Draw a figure by pen (Priority: P1)
 
 The user opens the editor, draws strokes with the pen, erases by sweeping, lassoes and moves
 marks, and undoes mistakes, without reading any text.
 
-**Why this matters**: Drawing is the first thing a notebook-app user does; the reports show that
-the drawing surface carries controls and text of other scopes.
+**Why this priority**: Every other canvas story uses its toolbar, Lasso, Active Tool Menu, and
+Undo, and it needs no other story. The eraser is the first item of COMPLAINTS.md, the toolbar
+items follow it, and four rows of the [audit](audit.md) are about the drawing dock. The pen makes
+its mark at once (Principle II).
 
 **Independent Test**: A story with pen events draws three strokes, erases one by sweeping,
 lassoes the other two, moves them, and undoes the move.
@@ -67,14 +69,18 @@ lassoes the other two, moves them, and undoes the move.
 1. **Given** a new `tikzpicture`, **When** the pen touches the canvas, **Then** a mark appears at once and the source gains a path.
 2. **Given** the Eraser, **When** the pen sweeps across two strokes, **Then** both lose the crossed parts in one undo step.
 3. **Given** the drawing toolbar, **When** the user looks at it, **Then** it shows only Lasso, the drawing tools, and the active tool's colours, all as symbols.
+4. **Given** the Pen's Active Tool Menu is open, **When** the user taps the Pen again, **Then** it closes; **When** it is open and the user taps View, **Then** it closes and View opens (FR-003, FR-004).
 
 ---
 
-### User Story 2 - Open, save, and reopen a TikZ file (Priority: set by the user)
+### User Story 2 - Open, save, and reopen a TikZ file (Priority: P5)
 
 The user opens a `.tikz` file, edits it, and finds the file on disk changed only where edited.
 
-**Why this matters**: Authored TikZ is the document (constitution, Principle I).
+**Why this priority**: Authored TikZ is the document (Principle I), and Layers (layer state on
+reopen) and Export (an unchanged source) need this story. Its test needs an edit from User Story 1
+or 3. The user's reports about files are few, and the file round trip already holds except the
+save conflict ([HANDOFF](../../HANDOFF.md), item A).
 
 **Independent Test**: A story opens a file with unsupported constructs, moves one point, and
 compares the file byte for byte outside the edited statement.
@@ -86,11 +92,15 @@ compares the file byte for byte outside the edited statement.
 
 ---
 
-### User Story 3 - Edit a selected object (Priority: set by the user)
+### User Story 3 - Edit a selected object (Priority: P2)
 
 The user taps or lassoes an object; the object is highlighted and its object menu appears above
 it with only the commands that apply. The user edits points, changes colour, locks the
 selection, duplicates, and transforms.
+
+**Why this priority**: It needs the objects and the Lasso of User Story 1, and a figure file opens
+as the quickstart runs it. The selection and point-editing items are the longest and earliest
+group in COMPLAINTS.md.
 
 **Independent Test**: A story selects a curve, a circle, and two objects in turn and compares
 each object menu with the commands that apply to that selection.
@@ -102,10 +112,15 @@ each object menu with the commands that apply to that selection.
 
 ---
 
-### User Story 4 - Construct exact geometry (Priority: set by the user)
+### User Story 4 - Construct exact geometry (Priority: P3)
 
 The user chooses a construction (for example an arc through three points), places its points
 with snapping, and sees the stage of the construction by its preview and markers.
+
+**Why this priority**: It needs the Shapes tool and the Active Tool Menu of User Story 1 and the
+Snap controls, not a selection. COMPLAINTS.md has six items on construction and snapping, and the
+audit row "The app teaches at every step" is about it. It follows User Story 3 because the
+selection items come first and are more in the user's reports.
 
 **Independent Test**: A story chooses each construction, places its points on lattice points,
 and checks the emitted TikZ; at no stage does a sentence appear.
@@ -117,10 +132,13 @@ and checks the emitted TikZ; at no stage does a sentence appear.
 
 ---
 
-### User Story 5 - See the source and the compiled figure (Priority: set by the user)
+### User Story 5 - See the source and the compiled figure (Priority: P6)
 
 The user opens the Code panel beside the editor that the document kind uses, or the TeX render
 instead of it.
+
+**Why this priority**: The Code panel highlights the source of the selection, so it needs User
+Story 3. The user's reports include the source view and Quiver offered for a `tikzpicture`.
 
 **Independent Test**: A story opens Code beside the canvas, selects an object, and checks that
 its source is highlighted without taking focus.
@@ -133,10 +151,14 @@ its source is highlighted without taking focus.
 
 ---
 
-### User Story 6 - Organize with layers and properties (Priority: set by the user)
+### User Story 6 - Organize with layers and properties (Priority: P7)
 
 The user opens Layers from the document bar, adds a layer, moves objects into it, hides it, and
 opens Properties for a selection.
+
+**Why this priority**: It needs a selection (User Story 3) and a reopen that keeps layer
+visibility and lock (User Story 2). The report that Layers and Properties share one popup is
+about it.
 
 **Acceptance Scenarios**:
 
@@ -146,14 +168,38 @@ opens Properties for a selection.
 
 ---
 
-### User Story 7 - Export and reuse (Priority: set by the user)
+### User Story 7 - Export and reuse (Priority: P8)
 
 The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
+
+**Why this priority**: It needs a saved source (User Story 2) and the compile path. No item of
+COMPLAINTS.md is about export; the audit's only export row is the unattached Export menu.
 
 **Acceptance Scenarios**:
 
 1. **Given** a figure, **When** the user chooses Share and Export › PDF, **Then** a compiled PDF is written and the source is unchanged.
 2. **Given** a figure, **When** the user chooses Share and Export › Copy TikZ, **Then** the clipboard holds the source as authored.
+
+---
+
+### User Story 8 - Navigate the figure (Priority: P4)
+
+The user opens a figure and sees all of it, zooms by pinch or by the zoom readout, sees the origin
+and the axes on the grid, and reads the pen position in figure coordinates.
+
+**Why this priority**: It needs only the canvas of User Story 1. The user's reports include the
+15 % default zoom (audit), the small startup window, centimetre coordinates, and the missing
+origin and axes (COMPLAINTS.md). It precedes User Story 2 because those reports are more.
+
+**Independent Test**: A story opens a figure with content and checks that all of it is visible
+with the fit margin, chooses Normal Size and checks that 1 cm of the figure is 1 cm at the CSS
+reference, and holds the pen over a lattice point and reads the status line.
+
+**Acceptance Scenarios**:
+
+1. **Given** a figure with content, **When** it opens, **Then** all its content is visible, fitted (FR-040).
+2. **Given** an empty figure, **When** it opens, **Then** it is at 100 % with the origin centred and the axes visible (FR-041, FR-042).
+3. **Given** the pen over the lattice point (1, 2), **When** the user looks at the status line, **Then** it reads 1 and 2 (FR-044).
 
 ### Edge Cases
 

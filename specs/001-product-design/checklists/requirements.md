@@ -35,7 +35,10 @@
   opens at 100 % with the origin centred.
 - FR-005 was resolved by the user on 2026-11-13: the appearance follows the iPad notebook apps,
   which keep it out of the document view; research R17 records their settings.
-- Story priorities are set by the user (constitution, Development Workflow); the spec lists the
-  stories in workflow order.
+- The user resolved on 2026-11-13: FR-012a (one Lasso), FR-012b (one document history), FR-015
+  (Code is a panel), FR-044 (status line with the pointer position), FR-060a (Properties shows the
+  figure with nothing selected), FR-063 (XDG directories), and the standalone editor.
+- Story priorities follow from the dependencies between the stories and the user's reports
+  (constitution, Development Workflow); each story states its evidence.
 - `tikzpicture`, `tikzcd`, and TikZ name the product's document formats, not implementation
   choices.

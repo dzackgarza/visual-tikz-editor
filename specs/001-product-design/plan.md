@@ -17,8 +17,8 @@ views; the TikZ Editor fork owns every surface inside the canvas; the Quiver for
 [surfaces](contracts/surfaces.md); the state they show is in the [data model](data-model.md).
 
 The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-060a, FR-063, and that the editor is standalone. The other requirements and the research entries are the
-maintainer's proposals; the user reviews them and sets the story priorities before
-`/speckit-tasks` orders the work.
+maintainer's proposals, which the user reviews. The story priorities in the spec follow from the
+dependencies between the stories and the user's reports; `/speckit-tasks` orders the work by them.
 
 ## Technical Context
 
@@ -48,7 +48,7 @@ touch, and mouse helpers of `test/tablet.ts`, in portrait and landscape; the for
 **Constraints**: The page is served on `127.0.0.1` and makes no requests to other hosts. Fork
 code changes go through `.cache/tikz-editor` and `ZETTLR.patch`, never `vendor/` in place.
 
-**Scale/Scope**: Seven user stories; the surfaces of the surfaces contract; two document kinds.
+**Scale/Scope**: Eight user stories; the surfaces of the surfaces contract; two document kinds.
 
 ## Constitution Check
 

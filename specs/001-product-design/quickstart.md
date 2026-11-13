@@ -26,7 +26,7 @@ A failed story keeps its Playwright trace in `test-results/workbench/`
 
 | Scenario | Expected outcome | Owner |
 | --- | --- | --- |
-| Each surface | It holds exactly the controls of [surfaces](contracts/surfaces.md), in order, found by accessible name (SC-002) | User Stories 1–7 |
+| Each surface | It holds exactly the controls of [surfaces](contracts/surfaces.md), in order, found by accessible name (SC-002) | User Stories 1–8 |
 | Any reached state | No instruction sentence is visible (SC-003) | FR-070 |
 | Every command | Reached by pen taps alone, with no hover, right-click, or modifier key (SC-004) | Principle II |
 | Popovers | A second tap on a button closes its popover; a tap on another button closes it and opens its own, across the document bar and the canvas | FR-003, FR-004 |
