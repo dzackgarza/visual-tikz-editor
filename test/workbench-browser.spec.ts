@@ -5375,6 +5375,44 @@ describe("standalone workbench host boundary", function () {
         );
       },
     );
+
+    story(
+      { viewport: tablet },
+      `simplifies an authored curve with a straight segment and a named end, in ${tablet.name}`,
+      async function () {
+        await author(String.raw`\begin{tikzpicture}
+\coordinate (a) at (9,3);
+\draw[blue] (1,6) .. controls (2,7) and (3,7) .. (4,6) .. controls (5,5) and (6,5) .. (7,6) -- (a);
+\path[use as bounding box] (-2,-2) rectangle (12,12);
+\end{tikzpicture}`);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const tap = async (target: Locator) => input.touch([await stableCenter(target)]);
+        const currentSource = async () => (await editorDebug(page)).source;
+        const curve = frame.locator('svg [data-source-id^="path:"]').first();
+        await expect(curve).toBeAttached();
+        await fitDiagram(frame, input);
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([await strokePoint(page, curve, 0.2)]);
+        await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+        const menu = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const before = await currentSource();
+        // Simplify is an object-menu command of every curve it can refit, authored ones included (FR-027).
+        await tap(menu.getByRole("button", { name: "Simplify", exact: true }));
+        const refinement = frame.getByRole("dialog", { name: "Curve refinement" });
+        await expect(refinement).toBeVisible();
+        await storyScreenshot(page, `simplify-authored-curve-${tablet.name}`);
+        await tap(refinement.getByRole("button", { name: "Accept", exact: true }));
+        await expect(refinement).toHaveCount(0);
+        await expect.poll(currentSource).not.toBe(before);
+        const drawn = /\\draw\[blue\][^;]*;/.exec(await currentSource())?.[0] ?? "";
+        const segments = (drawn.match(/\.\. controls|--/g) ?? []).length;
+        assert.ok(segments >= 1 && segments < 3, `Simplify left ${segments} segments: ${drawn}`);
+        // The refit keeps the draw options and the coordinates written at both ends, so the curve stays attached to (a).
+        assert.match(drawn, /^\\draw\[blue\] \(1,6\) /, `Simplify rewrote the start: ${drawn}`);
+        assert.match(drawn, / \(a\);$/, `Simplify detached the end from (a): ${drawn}`);
+      },
+    );
   }
 
   /** Two animation frames of the canvas frame, after which a handled tap shows in its state. */
@@ -9276,7 +9314,7 @@ describe("standalone workbench host boundary", function () {
       const cdp = await context.newCDPSession(page);
       const viewport = frame.locator('[data-canvas-viewport="true"]');
       const result = frame.getByRole("dialog", { name: "Freehand result" });
-      const restore = frame.getByRole("button", { name: "Restore original stroke", exact: true });
+      const restore = frame.getByRole("button", { name: "Restore Original Stroke", exact: true });
       const currentSource = async () => (await editorDebug(page)).source;
       // The whole width goes to the canvas.
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -10699,7 +10737,7 @@ describe("standalone workbench host boundary", function () {
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
       const result = frame.getByRole("dialog", { name: "Freehand result" });
-      const restore = frame.getByRole("button", { name: "Restore original stroke", exact: true });
+      const restore = frame.getByRole("button", { name: "Restore Original Stroke", exact: true });
       const currentSource = async () => (await editorDebug(page)).source;
       const tap = async (target: Locator) => input.touch([await stableCenter(target)]);
       const first = String.raw`\begin{tikzpicture}
@@ -10795,11 +10833,29 @@ describe("standalone workbench host boundary", function () {
     async function () {
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
-      const result = frame.getByRole("dialog", { name: "Freehand result" });
-      const restore = frame.getByRole("button", { name: "Restore original stroke", exact: true });
-      const reapply = frame.getByRole("button", { name: "Reapply original fit", exact: true });
+      const restore = frame.getByRole("button", { name: "Restore Original Stroke", exact: true });
+      const refinement = frame.getByRole("dialog", { name: "Curve refinement" });
       const currentSource = async () => (await editorDebug(page)).source;
       const tap = async (target: Locator) => input.touch([await stableCenter(target)]);
+      const selectStroke = async () => {
+        const [entry] = (await canvasSnapshot()).originalInk;
+        const drawing = frame.locator(`svg [data-source-id="${entry.sourceIds[0]}"]`).first();
+        await input.touch([await strokePoint(page, drawing, 0.5)]);
+        // A tap that lands on an anchor selects that point; Done returns to the stroke.
+        const whole = frame.getByRole("button", { name: "Done", exact: true });
+        if (await whole.isVisible()) {
+          await tap(whole);
+        }
+      };
+      // Simplify refits the selected stroke from its recorded ink; Accept writes the refit (FR-027).
+      const simplify = async () => {
+        const before = await currentSource();
+        await tap(frame.getByRole("button", { name: "Simplify", exact: true }));
+        await expect(refinement).toBeVisible();
+        await tap(refinement.getByRole("button", { name: "Accept", exact: true }));
+        await expect(refinement).toHaveCount(0);
+        await expect.poll(currentSource).not.toBe(before);
+      };
       await author(circleFigure);
       // New strokes take #112233 at half opacity, from the Pen's first preset.
       await chooseTool(frame, input, "Pen");
@@ -10823,28 +10879,25 @@ describe("standalone workbench host boundary", function () {
           y: start.y + Math.sin(i) * 0.5,
         })),
       );
-      await tap(result.getByRole("button", { name: "Accept", exact: true }));
-      await expect(result).toHaveCount(0);
-      const released = await currentSource();
-      await chooseTool(frame, input, "Lasso");
-      await tap(restore);
-      await expect.poll(currentSource).not.toBe(released);
+      // The Pen keeps the stroke as drawn, with its recorded ink (FR-025).
+      await expect.poll(async () => (await canvasSnapshot()).originalInk.length).toBe(1);
       const raw = await currentSource();
       const [record] = (await canvasSnapshot()).originalInk;
-      assert.equal(record.stroke.intent, "geometry");
       assert.equal(record.stroke.color, "rgba(17,34,51,0.5)");
-      await tap(reapply);
-      await expect.poll(currentSource).not.toBe(raw);
+      await chooseTool(frame, input, "Lasso");
+      await selectStroke();
+      await simplify();
       const refitted = await currentSource();
       const refit = recordedDrawing(refitted);
       assert.match(refit, /draw opacity=0\.5/, `The refit loses the ink's opacity: ${refit}`);
-      assert.notEqual(refit, recordedDrawing(raw), "Reapply original fit left the recorded drawing");
-      // Restore and refit repeat exactly from the same record.
+      assert.match(refit, /\.\. controls/, `Simplify did not refit the ink as a curve: ${refit}`);
+      // Restore and Simplify repeat exactly from the same record.
+      await selectStroke();
       await tap(restore);
       await expect.poll(currentSource).toBe(raw);
-      await tap(reapply);
+      await simplify();
       await expect
-        .poll(currentSource, { message: "The canvas refits the same ink differently" })
+        .poll(currentSource, { message: "Simplify refits the same ink differently" })
         .toBe(refitted);
       // The record survives a reopened session and still drives restore and refit.
       await expect.poll(storedSource).toBe(refitted);
@@ -10857,18 +10910,10 @@ describe("standalone workbench host boundary", function () {
         [record.stroke],
       );
       await chooseTool(frame, input, "Lasso");
-      const drawing = frame
-        .locator(`svg [data-source-id="${reopened.originalInk[0].sourceIds[0]}"]`)
-        .first();
-      await input.touch([await strokePoint(page, drawing, 0.5)]);
-      // A tap that lands on an anchor selects that point; Done returns to the stroke.
-      const whole = frame.getByRole("button", { name: "Done", exact: true });
-      if (await whole.isVisible()) {
-        await tap(whole);
-      }
+      await selectStroke();
       await tap(restore);
       await expect.poll(currentSource).toBe(raw);
-      await tap(reapply);
+      await simplify();
       await expect.poll(currentSource).toBe(refitted);
     },
   );
