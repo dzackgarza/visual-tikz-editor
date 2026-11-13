@@ -5535,6 +5535,64 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `the Shapes Active Tool Menu takes a circle or an arc by numbers for the chosen construction, in ${tablet.name}`,
+      async function () {
+        await author(String.raw`\begin{tikzpicture}
+\end{tikzpicture}`);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const shapes = toolbarItem(frame, "Shapes");
+        const menu = activeToolMenu(frame);
+        await input.touch([await stableCenter(shapes)]);
+        // Choosing a construction closes the menu; a second tap on Shapes opens it with that construction's numbers.
+        const choose = async (construction: string) => {
+          await input.touch([await stableCenter(shapes)]);
+          await expect(menu).toBeVisible();
+          await input.touch([await stableCenter(menu.getByRole("option", { name: construction, exact: true }))]);
+          await expect(menu).toHaveCount(0);
+          await input.touch([await stableCenter(shapes)]);
+          await expect(menu).toBeVisible();
+        };
+        const enter = async (values: Record<string, string>, insert: string) => {
+          for (const [label, value] of Object.entries(values)) {
+            await menu.getByRole("textbox", { name: label, exact: true }).fill(value);
+          }
+          await input.touch([await stableCenter(menu.getByRole("button", { name: insert, exact: true }))]);
+        };
+        const fields = () => menu.getByRole("textbox").evaluateAll((boxes) => boxes.map((box) => box.getAttribute("aria-label")));
+        const source = async () => (await editorDebug(page)).source;
+
+        await choose("Circle");
+        assert.deepEqual(await fields(), ["Centre X", "Centre Y", "Radius"]);
+        await enter({ "Centre X": "1", "Centre Y": "2", Radius: "2" }, "Insert circle");
+        await expect
+          .poll(source, { message: "The circle entered by centre and radius is not in the source" })
+          .toMatch(/\\draw \(1,2\) circle \(2(cm)?\);/);
+
+        await choose("Arc");
+        assert.deepEqual(await fields(), ["Centre X", "Centre Y", "Radius", "Start angle (°)", "End angle (°)"]);
+        await enter({ "Centre X": "0", "Centre Y": "0", Radius: "2", "Start angle (°)": "0", "End angle (°)": "90" }, "Insert arc");
+        await expect
+          .poll(source, { message: "The arc entered by centre, radius, and angles is not in the source" })
+          .toMatch(/\\draw \(2,0\) arc\[start angle=\{?0\}?, end angle=\{?90\}?, radius=\{?2(cm)?\}?\];/);
+
+        // The arc through three points runs from the first point through the second to the third.
+        await choose("Arc through three points");
+        assert.deepEqual(await fields(), ["Point 1 X", "Point 1 Y", "Point 2 X", "Point 2 Y", "Point 3 X", "Point 3 Y"]);
+        await enter(
+          { "Point 1 X": "2", "Point 1 Y": "0", "Point 2 X": "0", "Point 2 Y": "2", "Point 3 X": "-2", "Point 3 Y": "0" },
+          "Insert arc",
+        );
+        await expect
+          .poll(source, { message: "The arc entered by three points is not in the source" })
+          .toMatch(/\\draw \(2,0\) arc\[start angle=\{?0\}?, end angle=\{?180\}?, radius=\{?2(cm)?\}?\];/);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `the eraser sweep removes the crossed parts of two strokes in one undo step, in ${tablet.name}`,
       async function () {
         const authored = String.raw`\begin{tikzpicture}
