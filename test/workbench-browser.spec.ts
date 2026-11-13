@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { randomUUID } from "node:crypto";
 import {
   type Browser,
   type BrowserContext,
@@ -8,7 +9,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import type { EditorSnapshot, EditorSnapshotResult } from "../src/host";
+import type { EditorSnapshot, EditorSnapshotResult, HostCommand } from "../src/host";
 import { snapshotResultSchema } from "../vendor/tikz-editor/embed/src/snapshot-protocol";
 import { geometryTraces } from "./geometry-traces";
 import {
@@ -37,6 +38,50 @@ import {
 const freehandTool = (frame: FrameLocator) =>
   frame.getByRole("button", { name: "Freehand", exact: true });
 
+/** The canvas frame's session as its last `loaded` notification names it, and its snapshot replies by request. */
+type CanvasProtocol = {
+  session: { sessionId: string; revision: number } | null;
+  snapshots: Record<string, EditorSnapshotResult>;
+};
+
+/** The sensor channels of one pen event as the canvas frame received it. */
+type PenChannels = { time: number; pressure: number; tiltX: number; tiltY: number };
+
+declare global {
+  interface Window {
+    canvasProtocol: CanvasProtocol;
+    receivedPen: PenChannels[];
+  }
+}
+
+/** Records in the top page what the canvas frame tells the shell about its session and its snapshots. */
+function recordCanvasProtocol(): void {
+  if (window !== window.top) {
+    return;
+  }
+  const protocol: CanvasProtocol = { session: null, snapshots: {} };
+  window.canvasProtocol = protocol;
+  window.addEventListener("message", (event) => {
+    const canvas = document.querySelector<HTMLIFrameElement>('iframe[title="TikZ visual editor"]');
+    // The canvas frame posts each notification as a JSON string (vendor/tikz-editor/embed/src/main.tsx).
+    if (canvas === null || event.source !== canvas.contentWindow || typeof event.data !== "string") {
+      return;
+    }
+    const message = JSON.parse(event.data);
+    if (message.event === "loaded") {
+      protocol.session = { sessionId: message.sessionId, revision: message.revision };
+    }
+    if (message.event === "snapshot") {
+      protocol.snapshots[message.requestId] = message;
+    }
+  });
+}
+
+/** The fixture of the canvas stories: one authored circle, whose last authored line ends before the closing line. */
+const circleFigure = String.raw`\begin{tikzpicture}
+\draw[blue] (0,0) circle (1cm);
+\end{tikzpicture}`;
+
 describe("standalone workbench host boundary", function () {
   let workbench: Workbench;
   let browser: Browser;
@@ -44,7 +89,12 @@ describe("standalone workbench host boundary", function () {
   let page: Page;
   let url: string;
 
-  type StorySetup = { viewport?: { width: number; height: number }; initialPage?: "blank" };
+  type StorySetup = {
+    viewport?: { width: number; height: number };
+    initialPage?: "blank";
+    /** The directory from which the document's relative image paths resolve. */
+    resources?: string;
+  };
   const storySetups = new Map<string, StorySetup>();
   function story(setup: StorySetup, title: string, run: Mocha.AsyncFunc): void {
     storySetups.set(title, setup);
@@ -75,36 +125,63 @@ describe("standalone workbench host boundary", function () {
     await expect(popup).toHaveCount(0);
   }
 
-  async function snapshotResult(): Promise<EditorSnapshotResult> {
-    return snapshotResultSchema.parse(JSON.parse(await page.locator("#result").innerText()));
+  /** The shell's current canvas session. */
+  async function canvasSession(): Promise<{ sessionId: string; revision: number }> {
+    const session = await page.evaluate(() => window.canvasProtocol.session);
+    assert.ok(session !== null, "The canvas has not loaded a source");
+    return session;
   }
 
-  async function readySnapshot(): Promise<EditorSnapshot> {
-    const result = await snapshotResult();
-    if (result.status !== "ready") {
-      throw new Error(`Snapshot failed: ${result.error}`);
-    }
-    return result;
+  /** Posts one frame-protocol command to the canvas from the shell's window. */
+  async function postCanvasCommand(command: HostCommand): Promise<void> {
+    await page.evaluate((command) => {
+      document
+        .querySelector<HTMLIFrameElement>('iframe[title="TikZ visual editor"]')!
+        .contentWindow!.postMessage(command, location.origin);
+    }, command);
   }
 
-  async function hostSnapshot(): Promise<EditorSnapshot> {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText(/Snapshot ready|Snapshot failed/, {
+  /** Requests a snapshot of the canvas's current source in the shell's session and returns its request id. */
+  async function requestCanvasSnapshot(): Promise<string> {
+    const { source } = await editorDebug(page);
+    const requestId = randomUUID();
+    await postCanvasCommand({ action: "snapshot", ...(await canvasSession()), requestId, source });
+    return requestId;
+  }
+
+  async function canvasSnapshotReply(requestId: string): Promise<EditorSnapshotResult> {
+    await expect
+      .poll(() => page.evaluate((id) => id in window.canvasProtocol.snapshots, requestId), {
         timeout: 12000,
-      });
-      const result = await snapshotResult();
+      })
+      .toBe(true);
+    return snapshotResultSchema.parse(
+      await page.evaluate((id) => window.canvasProtocol.snapshots[id], requestId),
+    );
+  }
+
+  async function canvasSnapshot(): Promise<EditorSnapshot> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await editorReady(page);
+      const result = await canvasSnapshotReply(await requestCanvasSnapshot());
       if (result.status === "ready") {
         return result;
       }
       if (result.error !== "source-changed") {
         throw new Error(`Snapshot failed: ${result.error}`);
       }
-      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
     }
     throw new Error("Source changed during three consecutive snapshot requests");
   }
 
+  /**
+   * The document source that the shell has stored. The source pane is no witness for it:
+   * CodeMirror renders only the visible part of a long line such as a stroke record.
+   */
+  const storedSource = async (): Promise<string> =>
+    (await page.request.get(`${url}api/document`)).text();
+
+  /** The geometry attributes of each painted source element of an exported SVG, in document order. */
   async function paintedGeometry(svg: string): Promise<string[][]> {
     return page.evaluate(
       (markup) =>
@@ -123,17 +200,38 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  /** The drawing inside the first stroke record's scope. */
+  const recordedDrawing = (source: string): string =>
+    /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(source)![1];
+
+  /** Fills the source pane, opening it for the fill when it is closed. */
+  async function author(source: string): Promise<void> {
+    await editorReady(page);
+    const code = page.getByRole("button", { name: "Code: left sidebar", exact: true });
+    const closed = (await code.getAttribute("aria-pressed")) === "false";
+    if (closed) {
+      await code.click();
+    }
+    await page.locator(".cm-content").fill(source);
+    await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
+    if (closed) {
+      await code.click();
+    }
+    await editorReady(page);
+  }
+
   before(async function () {
     await buildWorkbench();
     browser = await chromium.launch();
   });
 
   beforeEach(async function () {
-    workbench = await startWorkbench(process.env);
-    url = workbench.url;
     const setup = storySetups.get(this.currentTest!.title);
+    workbench = await startWorkbench(process.env, undefined, setup?.resources);
+    url = workbench.url;
     const viewport = setup?.viewport;
     context = await browser.newContext(viewport ? { viewport } : {});
+    await context.addInitScript(recordCanvasProtocol);
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     page = await context.newPage();
     await startPageCoverage(page);
@@ -8576,67 +8674,7 @@ describe("standalone workbench host boundary", function () {
   });
 
   story(
-    { initialPage: "blank" },
-    "persists the completed Quiver edit through the embedding owner before delayed change delivery",
-    async function () {
-      await page.goto(`${url}quiver-embedding.html`);
-      const frame = page.frameLocator("iframe");
-      await expect(frame.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
-      await frame.locator(".vertex").nth(1).click();
-      // Deliver the edit and save gesture in one browser task, before Quiver's
-      // 40ms change notification can update the embedding document.
-      await frame.locator(".label-input").evaluate((input: HTMLInputElement) => {
-        input.value = "Completed";
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(
-          new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true }),
-        );
-      });
-      await expect(page.getByLabel("Persisted document")).toContainText("Completed");
-      const saved = await page.evaluate(() => localStorage.getItem("embedded-diagram"));
-      assert.equal(saved, await page.getByLabel("Host document").inputValue());
-      await frame.locator(".label-input").fill("Subsequent");
-      await frame.locator(".label-input").press("Control+s");
-      await expect(page.getByLabel("Persisted document")).toContainText("Subsequent");
-      assert.equal(
-        await page.evaluate(() => localStorage.getItem("embedded-diagram")),
-        await page.getByLabel("Host document").inputValue(),
-      );
-      const persisted = await page.evaluate(() => localStorage.getItem("embedded-diagram"));
-      await page.getByRole("checkbox", { name: "Read-only document" }).check();
-      await frame.locator(".label-input").fill("Rejected");
-      await frame.locator(".label-input").press("Control+s");
-      await expect(page.getByLabel("Host error")).toContainText("read-only");
-      assert.equal(await page.evaluate(() => localStorage.getItem("embedded-diagram")), persisted);
-      assert.equal(await page.getByLabel("Host document").inputValue(), persisted);
-      await page.getByRole("checkbox", { name: "Read-only document" }).uncheck();
-      const newer = String.raw`\begin{tikzcd}HostAuthority \arrow[r] & Newer\end{tikzcd}`;
-      await page.getByLabel("Host document").evaluate((input: HTMLTextAreaElement, value) => {
-        input.value = value;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        document
-          .querySelector("iframe")!
-          .contentDocument!.querySelector(".label-input")!
-          .dispatchEvent(
-            new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true }),
-          );
-      }, newer);
-      await expect(frame.locator(".vertex").first()).toContainText("HostAuthority");
-      assert.equal(await page.getByLabel("Host document").inputValue(), newer);
-      assert.equal(await page.evaluate(() => localStorage.getItem("embedded-diagram")), persisted);
-      await frame.locator(".vertex").nth(1).click();
-      await frame.locator(".label-input").fill("Resumed");
-      await frame.locator(".label-input").press("Control+s");
-      await expect(page.getByLabel("Persisted document")).toContainText("Resumed");
-      assert.equal(
-        await page.evaluate(() => localStorage.getItem("embedded-diagram")),
-        await page.getByLabel("Host document").inputValue(),
-      );
-    },
-  );
-
-  story(
-    { initialPage: "blank" },
+    {},
     "matches compiled geometry for filled primitives and transformed curves",
     async function () {
       const examples = [
@@ -8644,18 +8682,10 @@ describe("standalone workbench host boundary", function () {
         String.raw`\begin{tikzpicture}\begin{scope}[rotate=25]\fill[blue] (0,0) ellipse (2cm and 1cm);\end{scope}\fill[red] (3,1) rectangle (4,2);\end{tikzpicture}`,
       ];
       for (const authored of examples) {
-        await page.goto(`${url}embedding.html`);
-        await expect(page.locator("#status")).toHaveText("Loaded");
-        await page.getByLabel("Authored source").fill(authored);
-        await page.getByRole("button", { name: "Load source", exact: true }).click();
-        await expect(page.locator("#status")).toHaveText("Loaded");
-        await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-        await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-        const visualSvg = (await readySnapshot()).svg;
         await page.goto(url);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await editorReady(page);
-        await page.locator(".cm-content").fill(authored);
+        await author(authored);
+        const visualSvg = (await canvasSnapshot()).svg;
         await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
         await expect(page.locator(".tikz-view-status")).toContainText("Up to date", {
           timeout: 40000,
@@ -8741,52 +8771,179 @@ describe("standalone workbench host boundary", function () {
   );
 
   story(
-    { initialPage: "blank" },
+    {},
     "preserves representative trace geometry through fitting and original restoration",
     async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const cdp = await context.newCDPSession(page);
+      const rail = frame.locator("[data-diagram-tools]");
+      const viewport = frame.locator('[data-canvas-viewport="true"]');
+      const result = frame.getByRole("dialog", { name: "Freehand result" });
+      const restore = frame.getByRole("button", { name: "Restore original stroke", exact: true });
+      const currentSource = async () => (await editorDebug(page)).source;
+      // The whole width goes to the canvas.
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+      // The corpus measures the fitter on the drawn samples, so no snap moves a stroke's ends.
+      await setSnapRule(frame, input, "Lattice", false);
+      await setSnapRule(frame, input, "Objects", false);
+      await frame.locator("body").evaluate(() => {
+        window.receivedPen = [];
+        for (const kind of ["pointerdown", "pointermove", "pointerup"]) {
+          window.addEventListener(
+            kind,
+            (event) => {
+              const pointer = event as PointerEvent;
+              if (pointer.pointerType !== "pen") {
+                return;
+              }
+              const coalesced = pointer.getCoalescedEvents();
+              for (const sample of coalesced.length ? coalesced : [pointer]) {
+                window.receivedPen.push({
+                  time: sample.timeStamp,
+                  pressure: sample.pressure,
+                  tiltX: sample.tiltX,
+                  tiltY: sample.tiltY,
+                });
+              }
+            },
+            true,
+          );
+        }
+      });
       for (const trace of geometryTraces) {
-        await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
+        await author(String.raw`\begin{tikzpicture}
 % corpus authored comment
 \end{tikzpicture}`);
-        await page.getByRole("button", { name: "Load source", exact: true }).click();
-        const stroke = {
-          key: trace.name,
-          intent: trace.intent ?? "geometry",
-          color: "#204080",
-          samples: trace.points.map(([x, y], i) => ({
-            x,
-            y,
-            time: i * 8,
-            pressure: 0.4 + 0.1 * Math.sin(i),
-          })),
+        // A view of 50% puts a few screen pixels on each point and the whole trace on the canvas.
+        const zoom = rail.getByRole("button", { name: "Zoom and display", exact: true });
+        await input.touch([await stableCenter(zoom)]);
+        await input.touch([
+          await stableCenter(frame.getByRole("button", { name: "50%", exact: true })),
+        ]);
+        await input.touch([await stableCenter(zoom)]);
+        await expect(frame.getByRole("dialog", { name: "Tool options" })).toHaveCount(0);
+        // A tap on empty canvas clears the selection, so each trace starts with none.
+        await input.touch([
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
+        ]);
+        await input.touch(await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]));
+        await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
+        await input.touch([await stableCenter(freehandTool(frame))]);
+        await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
+        // The drawing tool's properties hold its choice of interpretation.
+        await frame.getByRole("button", { name: "Properties", exact: true }).click();
+        await frame
+          .getByRole("checkbox", { name: "Interpret geometry", exact: true })
+          .setChecked(trace.intent !== "ink");
+        await frame.getByRole("button", { name: "Close properties", exact: true }).click();
+        // Screen pixels per point of the figure, from the canvas's own drawing surface.
+        const pixelsPerPoint = await viewport.evaluate(
+          (element) => element.querySelector<SVGSVGElement>("svg[viewBox]")!.getScreenCTM()!.a,
+        );
+        // The free canvas is the part above the floating rail.
+        const box = (await viewport.boundingBox())!;
+        const free = { x: box.x, y: box.y, width: box.width, height: (await rail.boundingBox())!.y - box.y };
+        const xs = trace.points.map(([x]) => x),
+          ys = trace.points.map(([, y]) => y);
+        const middle = {
+          x: (Math.min(...xs) + Math.max(...xs)) / 2,
+          y: (Math.min(...ys) + Math.max(...ys)) / 2,
         };
-        await page.getByLabel("Original strokes").fill(JSON.stringify([stroke]));
-        await page.getByRole("button", { name: "Import strokes", exact: true }).click();
-        await expect(page.locator("#command-result")).toHaveText("import-ink:ok:");
-        await expect(page.getByLabel("Authored source")).toHaveValue(
-          new RegExp(`workbench-ink-end:${trace.name}`),
+        // The trace drawn about the canvas centre at the figure's scale; screen y runs down.
+        const screen = trace.points.map(([x, y]) => ({
+          x: free.x + free.width / 2 + (x - middle.x) * pixelsPerPoint,
+          y: free.y + free.height / 2 - (y - middle.y) * pixelsPerPoint,
+        }));
+        assert.ok(
+          pixelsPerPoint >= 1.5 &&
+            screen.every(
+              ({ x, y }) =>
+                x > free.x && x < free.x + free.width && y > free.y && y < free.y + free.height,
+            ),
+          `${trace.name} at ${pixelsPerPoint} px/pt does not fit the free canvas ${JSON.stringify(free)}`,
         );
-        const original = await page.getByLabel("Authored source").inputValue();
-        await page.getByLabel("Stroke key").fill(trace.name);
-        await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
-        await expect(page.locator("#command-result")).toHaveText(
-          trace.intent === "ink"
-            ? "interpret-ink:failed:ink-is-not-geometry"
-            : trace.unchanged === true
-              ? "interpret-ink:failed:no-fit"
-              : "interpret-ink:ok:",
-        );
-        // Read current bytes through the public source operation before snapshotting.
-        await page.getByRole("button", { name: "Copy current source", exact: true }).click();
-        await expect(page.locator("#command-result")).toHaveText("source:ok:");
-        await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-        await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-        const accepted = await readySnapshot();
+        await frame.locator("body").evaluate(() => {
+          window.receivedPen.length = 0;
+        });
+        for (const [index, point] of screen.entries()) {
+          await cdp.send("Input.dispatchMouseEvent", {
+            type: index === 0 ? "mousePressed" : "mouseMoved",
+            ...point,
+            button: "left",
+            buttons: 1,
+            clickCount: index === 0 ? 1 : 0,
+            pointerType: "pen",
+            force: 0.4 + 0.1 * Math.sin(index),
+            tiltX: 12,
+            tiltY: -8,
+          });
+        }
+        await cdp.send("Input.dispatchMouseEvent", {
+          type: "mouseReleased",
+          ...screen.at(-1)!,
+          button: "left",
+          buttons: 0,
+          clickCount: 1,
+          pointerType: "pen",
+        });
+        await expect.poll(currentSource).toMatch(/workbench-ink-end:/);
+        // The source as drawn: the recorded original, or the fit the result previews over it.
+        const drawn = await currentSource();
+        let original = drawn;
+        if (trace.intent === "ink") {
+          await expect(result).toHaveCount(0);
+        } else {
+          await input.touch([
+            await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
+          ]);
+          await expect(result).toHaveCount(0);
+          if (trace.unchanged !== true) {
+            // The recorded original is the history step before the accepted fit.
+            await input.touch([
+              await stableCenter(rail.getByRole("button", { name: "Undo", exact: true })),
+            ]);
+            await expect.poll(currentSource).not.toBe(drawn);
+            original = await currentSource();
+            await input.touch([
+              await stableCenter(rail.getByRole("button", { name: "Redo", exact: true })),
+            ]);
+            await expect.poll(currentSource).toBe(drawn);
+          }
+        }
+        const accepted = await canvasSnapshot();
         assert.ok(accepted.source.includes(trace.primitive), trace.name);
-        assert.deepEqual(accepted.originalInk[0].stroke, stroke, trace.name);
+        assert.equal(accepted.originalInk.length, 1, trace.name);
+        const stroke = accepted.originalInk[0].stroke;
+        assert.equal(stroke.intent, trace.intent ?? "geometry", trace.name);
+        // Every pen event's channels, in order, are in the record.
+        assert.deepEqual(
+          stroke.samples.map(({ time, pressure, tiltX, tiltY }) => ({ time, pressure, tiltX, tiltY })),
+          await frame.locator("body").evaluate(() => window.receivedPen),
+          trace.name,
+        );
+        // The recorded samples are the corpus trace, moved to where the pen drew it.
+        const [first] = stroke.samples;
+        for (const [index, [x, y]] of trace.points.entries()) {
+          const sample = stroke.samples[index];
+          assert.ok(
+            Math.abs(sample.x - first.x - (x - trace.points[0][0])) < 0.5 &&
+              Math.abs(sample.y - first.y - (y - trace.points[0][1])) < 0.5,
+            `${trace.name}: sample ${index} at (${sample.x}, ${sample.y}) is off the trace`,
+          );
+        }
         if (trace.unchanged === true) {
+          // No fit: the drawing is the recorded samples joined by straight segments.
+          const drawing = recordedDrawing(drawn);
+          assert.deepEqual(
+            [...drawing.matchAll(/\(([-\d.e]+)pt,([-\d.e]+)pt\)/g)].map(([, x, y]) => [
+              Number(x),
+              Number(y),
+            ]),
+            stroke.samples.map(({ x, y }) => [x, y]),
+            `${trace.name} is drawn as ${drawing}`,
+          );
+          assert.doesNotMatch(drawing, / controls /, trace.name);
           assert.equal(accepted.source, original, trace.name);
         }
         const error = await page.evaluate(
@@ -8834,15 +8991,30 @@ describe("standalone workbench host boundary", function () {
             );
             return Math.max(inputError, outputError);
           },
-          { svg: accepted.svg, points: trace.points, viewBox: accepted.viewBox },
+          {
+            svg: accepted.svg,
+            points: stroke.samples.map(({ x, y }): [number, number] => [x, y]),
+            viewBox: accepted.viewBox,
+          },
         );
         assert.ok(
           error <= trace.error + 0.3,
-          `${trace.name}: bidirectional geometric error ${error} exceeds ${trace.error}`,
+          `${trace.name}: bidirectional geometric error ${error} exceeds ${trace.error} for samples ${JSON.stringify(stroke.samples.map(({ x, y }) => [x, y]))} drawn as ${recordedDrawing(accepted.source)}`,
         );
-        await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
-        await expect(page.locator("#command-result")).toHaveText("restore-ink:ok:");
-        await expect(page.getByLabel("Authored source")).toHaveValue(original);
+        await input.touch([
+          await stableCenter(rail.getByRole("button", { name: "Select", exact: true })),
+        ]);
+        const drawing = frame
+          .locator(`svg [data-source-id="${accepted.originalInk[0].sourceIds[0]}"]`)
+          .first();
+        await input.touch([await strokePoint(page, drawing, 0.3)]);
+        // A tap that lands on an anchor of a short stroke selects that point; Done returns to the stroke.
+        const whole = frame.getByRole("button", { name: "Done", exact: true });
+        if (await whole.isVisible()) {
+          await input.touch([await stableCenter(whole)]);
+        }
+        await input.touch([await stableCenter(restore)]);
+        await expect.poll(currentSource, { message: trace.name }).toBe(original);
       }
     },
   );
@@ -8968,28 +9140,24 @@ describe("standalone workbench host boundary", function () {
     assert.equal(await sourcePane.innerText(), authored);
   });
 
-  story(
-    { initialPage: "blank" },
-    "keeps the drawing when another frame sends an explicit load command",
-    async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const accepted = await readySnapshot();
-      await page.evaluate(async () => {
-        const sibling = document.createElement("iframe");
-        sibling.id = "unrelated-frame";
-        sibling.src = "about:blank";
-        const loaded = new Promise((resolve) =>
-          sibling.addEventListener("load", resolve, { once: true }),
-        );
-        document.body.append(sibling);
-        await loaded;
-      });
-      const sibling = page.frames().find((frame) => frame.url() === "about:blank")!;
-      await sibling.evaluate(({ sessionId, revision }) => {
-        parent.frames[0].postMessage(
+  story({}, "keeps the drawing when another frame sends an explicit load command", async function () {
+    await author(circleFigure);
+    const accepted = await canvasSnapshot();
+    await page.evaluate(async () => {
+      const sibling = document.createElement("iframe");
+      sibling.name = "unrelated-frame";
+      sibling.src = "about:blank";
+      const loaded = new Promise((resolve) =>
+        sibling.addEventListener("load", resolve, { once: true }),
+      );
+      document.body.append(sibling);
+      await loaded;
+    });
+    const sibling = page.frame({ name: "unrelated-frame" })!;
+    await sibling.evaluate(({ sessionId, revision }) => {
+      parent.document
+        .querySelector<HTMLIFrameElement>('iframe[title="TikZ visual editor"]')!
+        .contentWindow!.postMessage(
           {
             action: "load",
             sessionId,
@@ -9001,14 +9169,12 @@ describe("standalone workbench host boundary", function () {
           },
           parent.location.origin,
         );
-      }, accepted);
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const retained = await readySnapshot();
-      assert.equal(retained.source, accepted.source);
-      assert.equal(retained.svg, accepted.svg);
-    },
-  );
+    }, accepted);
+    const retained = await canvasSnapshot();
+    assert.equal(retained.source, accepted.source);
+    assert.equal(retained.svg, accepted.svg);
+    await expect.poll(storedSource).toBe(circleFigure);
+  });
 
   story(
     { viewport: { width: 768, height: 1024 } },
@@ -9049,122 +9215,78 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
-  story(
-    { initialPage: "blank" },
-    "returns a revision-matched drawing through the mounted embedding surface",
-    async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      const source = String.raw`\begin{tikzpicture}
+  story({}, "returns a revision-matched drawing of the authored source", async function () {
+    const initial = await canvasSession();
+    const source = String.raw`\begin{tikzpicture}
 % preserve authored bytes
 \draw[red] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
-      await page.getByLabel("Authored source").fill(source);
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const result = await readySnapshot();
-      assert.equal(result.source, source);
-      assert.equal(result.revision, 2);
-      assert.ok(result.localBounds, "The accepted drawing includes its local placement bounds");
-      assert.ok(Math.abs(result.localBounds.maxX - result.localBounds.minX - 85.358) < 1);
-      assert.ok(Math.abs(result.localBounds.maxY - result.localBounds.minY - 56.906) < 1);
-      const drawing = await page.evaluate((svg) => {
-        const document = new DOMParser().parseFromString(svg, "image/svg+xml");
-        return {
-          paths: [...document.querySelectorAll("path")].map((path) => path.getAttribute("d")),
-          errors: document.querySelectorAll("parsererror").length,
-        };
-      }, result.svg);
-      assert.equal(drawing.errors, 0);
-      assert.ok(
-        drawing.paths.some((path) => path !== null && path.includes("85.358")),
-        "The exported view must contain the authored 3cm rectangle",
-      );
-      await page.screenshot({ path: "test-results/workbench/embedding-snapshot.png" });
-      await page.getByRole("button", { name: "Dispose", exact: true }).click();
-      await expect(page.locator("iframe")).toHaveCount(0);
-    },
-  );
+    await author(source);
+    const result = await canvasSnapshot();
+    assert.equal(result.source, source);
+    assert.ok(result.revision > initial.revision, "The authored source arrives in a later load");
+    assert.equal(result.revision, (await canvasSession()).revision);
+    assert.ok(result.localBounds, "The accepted drawing includes its local placement bounds");
+    assert.ok(Math.abs(result.localBounds.maxX - result.localBounds.minX - 85.358) < 1);
+    assert.ok(Math.abs(result.localBounds.maxY - result.localBounds.minY - 56.906) < 1);
+    const drawing = await page.evaluate((svg) => {
+      const document = new DOMParser().parseFromString(svg, "image/svg+xml");
+      return {
+        paths: [...document.querySelectorAll("path")].map((path) => path.getAttribute("d")),
+        errors: document.querySelectorAll("parsererror").length,
+      };
+    }, result.svg);
+    assert.equal(drawing.errors, 0);
+    assert.ok(
+      drawing.paths.some((path) => path !== null && path.includes("85.358")),
+      "The exported view must contain the authored 3cm rectangle",
+    );
+    await page.screenshot({ path: "test-results/workbench/canvas-snapshot.png" });
+  });
 
-  story(
-    { initialPage: "blank" },
-    "replies consistently when a completed snapshot request is repeated",
-    async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const accepted = await readySnapshot();
-      await page.evaluate((accepted) => {
-        const editor = document.querySelector<HTMLIFrameElement>("#editor")!;
-        const output = document.createElement("pre");
-        output.id = "repeated-result";
-        document.querySelector("section")!.append(output);
-        window.addEventListener("message", (event) => {
-          if (event.source !== editor.contentWindow || event.origin !== location.origin) {
-            return;
-          }
-          const reply = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-          if (reply.event === "snapshot" && reply.requestId === accepted.requestId) {
-            output.textContent = JSON.stringify(reply);
-          }
-        });
-        editor.contentWindow!.postMessage(
-          {
-            action: "snapshot",
-            sessionId: accepted.sessionId,
-            revision: accepted.revision,
-            requestId: accepted.requestId,
-            source: accepted.source,
-          },
-          location.origin,
-        );
-      }, accepted);
-      await expect(page.locator("#repeated-result")).not.toBeEmpty();
-      assert.deepEqual(JSON.parse(await page.locator("#repeated-result").innerText()), accepted);
-      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(accepted.source);
-    },
-  );
+  story({}, "replies consistently when a completed snapshot request is repeated", async function () {
+    await author(circleFigure);
+    const accepted = await canvasSnapshot();
+    await page.evaluate((id) => {
+      delete window.canvasProtocol.snapshots[id];
+    }, accepted.requestId);
+    await postCanvasCommand({
+      action: "snapshot",
+      sessionId: accepted.sessionId,
+      revision: accepted.revision,
+      requestId: accepted.requestId,
+      source: accepted.source,
+    });
+    assert.deepEqual(await canvasSnapshotReply(accepted.requestId), accepted);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(accepted.source);
+  });
 
-  story(
-    { initialPage: "blank" },
-    "retains the current drawing when an older load arrives from its host",
-    async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
+  story({}, "retains the current drawing when an older load arrives from the shell", async function () {
+    await author(String.raw`\begin{tikzpicture}
 \draw[red] (0,0) rectangle (3,2);
 \end{tikzpicture}`);
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const accepted = await readySnapshot();
-      await page.evaluate(({ sessionId }) => {
-        document.querySelector<HTMLIFrameElement>("iframe")!.contentWindow!.postMessage(
-          {
-            action: "load",
-            sessionId,
-            revision: 1,
-            requestId: crypto.randomUUID(),
-            fileName: "fixture.tikz",
-            autosave: 0,
-            source: String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`,
-          },
-          location.origin,
-        );
-      }, accepted);
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const retained = await readySnapshot();
-      assert.equal(retained.source, accepted.source);
-      assert.equal(retained.svg, accepted.svg);
-    },
-  );
+    const accepted = await canvasSnapshot();
+    assert.ok(accepted.revision > 1, "The authored source arrives in a later load than the first");
+    await postCanvasCommand({
+      action: "load",
+      sessionId: accepted.sessionId,
+      revision: accepted.revision - 1,
+      requestId: randomUUID(),
+      fileName: "fixture.tikz",
+      autosave: 0,
+      source: String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`,
+    });
+    const retained = await canvasSnapshot();
+    assert.equal(retained.source, accepted.source);
+    assert.equal(retained.svg, accepted.svg);
+  });
 
   story(
-    { initialPage: "blank" },
+    {},
     "keeps exported clipping local to each independently edited diagram",
     async function () {
       const exports: string[] = [];
@@ -9172,13 +9294,10 @@ describe("standalone workbench host boundary", function () {
         String.raw`\begin{tikzpicture}\clip (0,0) circle (.5);\fill[red] (-1,-1) rectangle (1,1);\end{tikzpicture}`,
         String.raw`\begin{tikzpicture}\clip (0,0) rectangle (1,1);\fill[blue] (-1,-1) rectangle (1,1);\end{tikzpicture}`,
       ]) {
-        await page.goto(`${url}embedding.html`);
-        await expect(page.locator("#status")).toHaveText("Loaded");
-        await page.getByLabel("Authored source").fill(source);
-        await page.getByRole("button", { name: "Load source", exact: true }).click();
-        await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-        await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-        const accepted = await readySnapshot();
+        await page.goto(url);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await author(source);
+        const accepted = await canvasSnapshot();
         assert.equal(accepted.source, source);
         exports.push(accepted.svg);
       }
@@ -9199,402 +9318,13 @@ describe("standalone workbench host boundary", function () {
   );
 
   story(
-    { initialPage: "blank" },
-    "imports and restores ink in the selected earlier inline figure and reopens the selected snapshot",
-    async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      const first = String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (1cm);\end{tikzpicture}`;
-      const second = String.raw`\begin{tikzpicture}\fill[red] (0,0) rectangle (3,2);\end{tikzpicture}`;
-      const authored = `${first} ${second}`;
-      await page.getByLabel("Authored source").fill(authored);
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
-      const frame = page.frameLocator("#editor");
-      await frame.getByRole("button", { name: "Figure 2", exact: true }).click();
-      const untouched = await hostSnapshot();
-      await frame.getByRole("button", { name: "Figure 1", exact: true }).click();
-      const before = await hostSnapshot();
-      const stroke = {
-        key: "earlier-figure-stroke",
-        intent: "geometry",
-        color: "#00aa00",
-        samples: Array.from({ length: 16 }, (_, i) => ({
-          x: i * 4,
-          y: 8 + Math.sin(i) * 0.1,
-          time: i * 10,
-          pressure: 0.4,
-        })),
-      };
-      await page.getByLabel("Original strokes").fill(JSON.stringify([stroke]));
-      await page.getByRole("button", { name: "Import strokes", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(/earlier-figure-stroke/);
-      const imported = await hostSnapshot();
-      assert.equal(
-        imported.source.slice(
-          imported.source.indexOf("\\end{tikzpicture}") + "\\end{tikzpicture}".length,
-        ),
-        ` ${second}`,
-      );
-      assert.deepEqual(
-        imported.originalInk.map((entry) => entry.stroke),
-        [stroke],
-      );
-      assert.equal(imported.state.activeFigureId, before.state.activeFigureId);
-      const associated = imported.originalInk[0].sourceIds[0];
-      await expect(frame.locator(`path[data-source-id="${associated}"]`).first()).toHaveAttribute(
-        "stroke",
-        "#00aa00",
-      );
-      await page.getByLabel("Stroke key").fill(stroke.key);
-      await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).not.toHaveValue(imported.source);
-      const fitted = await hostSnapshot();
-      assert.equal(
-        fitted.source.slice(
-          fitted.source.indexOf("\\end{tikzpicture}") + "\\end{tikzpicture}".length,
-        ),
-        ` ${second}`,
-      );
-      await frame.locator('[data-canvas-viewport="true"]').press("Control+z");
-      await expect(page.getByLabel("Authored source")).toHaveValue(imported.source);
-      await frame.locator('[data-canvas-viewport="true"]').press("Control+Shift+z");
-      await expect(page.getByLabel("Authored source")).toHaveValue(fitted.source);
-      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(imported.source);
-      assert.deepEqual((await hostSnapshot()).originalInk, imported.originalInk);
-      await frame.getByRole("button", { name: "Figure 2", exact: true }).click();
-      const later = await hostSnapshot();
-      assert.deepEqual(await paintedGeometry(later.svg), await paintedGeometry(untouched.svg));
-      assert.deepEqual(later.originalInk, []);
-      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
-      await expect(page.locator("#command-result")).toHaveText("restore-ink:failed:missing-stroke");
-      assert.equal(await page.getByLabel("Authored source").inputValue(), imported.source);
-      await page.reload();
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Saved snapshot").fill(JSON.stringify(later));
-      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      const reopened = await hostSnapshot();
-      assert.equal(reopened.state.activeFigureId, later.state.activeFigureId);
-      assert.equal(reopened.source, later.source);
-      assert.deepEqual(await paintedGeometry(reopened.svg), await paintedGeometry(later.svg));
-      await page.evaluate((snapshot) => {
-        document.querySelector<HTMLIFrameElement>("#editor")!.contentWindow!.postMessage(
-          {
-            action: "load",
-            sessionId: snapshot.sessionId,
-            revision: snapshot.revision + 1,
-            requestId: "invalid-figure-state",
-            source: snapshot.source,
-            state: { ...snapshot.state, activeFigureId: "figure:999" },
-            fileName: "fixture.tikz",
-          },
-          location.origin,
-        );
-      }, reopened);
-      await expect(page.locator("#command-result")).toHaveText("load:failed:invalid-command");
-      const afterRejectedLoad = await hostSnapshot();
-      assert.equal(afterRejectedLoad.source, reopened.source);
-      assert.equal(afterRejectedLoad.state.activeFigureId, reopened.state.activeFigureId);
-      assert.deepEqual(
-        await paintedGeometry(afterRejectedLoad.svg),
-        await paintedGeometry(reopened.svg),
-      );
-    },
-  );
-
-  story(
-    { initialPage: "blank" },
-    "interprets the newly drawn stroke instead of identical drawing text in a later figure",
-    async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      const first = String.raw`\begin{tikzpicture}
-\draw[blue] (0,0) circle (1cm);
-\end{tikzpicture}`;
-      const second = String.raw`\begin{tikzpicture}
-\draw[red] (0,0) rectangle (3,2);
-\end{tikzpicture}`;
-      await page.getByLabel("Authored source").fill(`${first}\n${second}`);
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
-      const frame = page.frameLocator("#editor");
-      await frame.getByRole("button", { name: "Figure 1", exact: true }).click();
-      await freehandTool(page.frameLocator("#editor")).click();
-      const before = await hostSnapshot();
-      const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-      const draw = async () => {
-        await freehandTool(frame).click();
-        await page.mouse.move(bounds.x + bounds.width * 0.35, bounds.y + bounds.height * 0.6);
-        await page.mouse.down();
-        await page.mouse.move(
-          bounds.x + bounds.width * 0.35 + 110,
-          bounds.y + bounds.height * 0.6 + 25,
-          { steps: 15 },
-        );
-        await page.mouse.up();
-        await frame
-          .getByRole("dialog", { name: "Freehand result" })
-          .getByRole("button", { name: "Accept", exact: true })
-          .click();
-        // The stroke stays selected; its restore control belongs to the Select tool.
-        await frame.getByRole("button", { name: "Select", exact: true }).click();
-        await expect(
-          frame.getByRole("button", { name: "Restore original stroke", exact: true }),
-        ).toBeVisible();
-      };
-      await draw();
-      const fittedSource = await page.getByLabel("Authored source").inputValue();
-      await frame.getByRole("button", { name: "Restore original stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).not.toHaveValue(fittedSource);
-      const raw = await hostSnapshot();
-      const originalDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(raw.source)![1];
-      const duplicateFigure = second.replace(
-        "\\end{tikzpicture}",
-        `${originalDrawing}\n\\end{tikzpicture}`,
-      );
-      const duplicateSource = `${first}\n${duplicateFigure}`;
-      await page
-        .getByLabel("Saved snapshot")
-        .fill(JSON.stringify({ ...before, source: duplicateSource }));
-      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await expect(page.getByLabel("Authored source")).toHaveValue(duplicateSource);
-      await frame.getByRole("button", { name: "Figure 2", exact: true }).click();
-      const laterBeforeDraw = await hostSnapshot();
-      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await hostSnapshot();
-      await draw();
-      const fitted = await hostSnapshot();
-      assert.equal(
-        fitted.source.slice(
-          fitted.source.indexOf("\\end{tikzpicture}") + "\\end{tikzpicture}".length,
-        ),
-        `\n${duplicateFigure}`,
-      );
-      assert.equal(fitted.originalInk.length, 1);
-      assert.notEqual(fitted.originalInk[0].stroke.key, raw.originalInk[0].stroke.key);
-      assert.deepEqual(
-        fitted.originalInk[0].stroke.samples.map(({ x, y }) => [x, y]),
-        raw.originalInk[0].stroke.samples.map(({ x, y }) => [x, y]),
-      );
-      const fittedDrawing = /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(fitted.source)![1];
-      assert.notEqual(fittedDrawing, originalDrawing);
-      await frame.locator('[data-canvas-viewport="true"]').press("Control+z");
-      await expect(page.getByLabel("Authored source")).toHaveValue(
-        fitted.source.replace(fittedDrawing, originalDrawing),
-      );
-      const restored = await hostSnapshot();
-      assert.equal(
-        /\\begin\{scope\}\n([\s\S]*?)\n\\end\{scope\}/.exec(restored.source)![1],
-        originalDrawing,
-      );
-      assert.deepEqual(restored.originalInk, fitted.originalInk);
-      await frame.locator('[data-canvas-viewport="true"]').press("Control+Shift+z");
-      await expect(page.getByLabel("Authored source")).toHaveValue(fitted.source);
-      await page.getByLabel("Stroke key").fill(fitted.originalInk[0].stroke.key);
-      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(restored.source);
-      await frame.getByRole("button", { name: "Figure 2", exact: true }).click();
-      const other = await hostSnapshot();
-      assert.deepEqual(other.originalInk, []);
-      assert.deepEqual(
-        await paintedGeometry(other.svg),
-        await paintedGeometry(laterBeforeDraw.svg),
-      );
-    },
-  );
-
-  story(
-    { initialPage: "blank" },
-    "preserves imported stroke channels and outlines after saving and reopening its source",
-    async function () {
-      const strokes = [
-        {
-          key: "lecture-stroke-1",
-          intent: "geometry",
-          color: "#112233",
-          samples: Array.from({ length: 20 }, (_, i) => ({
-            x: i * 4,
-            y: 12 + Math.sin(i) * 0.2,
-            time: i * 8,
-            pressure: 0.3 + i / 40,
-            altitude: 1.1,
-            azimuth: 0.7,
-            roll: 0.2,
-            hoverHeight: 0,
-            buttons: 1,
-            capabilities: 15,
-            id: i,
-            tool: 0,
-            phase: i === 0 ? 0 : 1,
-            predicted: false,
-          })),
-          outline: { path: "M0 5L76 5L76 35L0 35Z", fill: "#e02040" },
-        },
-      ];
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Original strokes").fill(JSON.stringify(strokes));
-      await page.getByRole("button", { name: "Import strokes", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(/lecture-stroke-1/);
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const saved = await readySnapshot();
-      assert.deepEqual(
-        saved.originalInk.map((entry: { stroke: unknown }) => entry.stroke),
-        strokes,
-      );
-      async function assertPaintedOutline(svg: string): Promise<void> {
-        const paint = await page.evaluate((markup) => {
-          const root = new DOMParser().parseFromString(markup, "image/svg+xml").documentElement;
-          document.body.append(root);
-          const path = root.querySelector("path[data-source-id]") as SVGPathElement;
-          const box = path.getBBox();
-          const matrix = (root as unknown as SVGSVGElement)
-            .getCTM()!
-            .inverse()
-            .multiply(path.getCTM()!);
-          const corners = [
-            new DOMPoint(box.x, box.y),
-            new DOMPoint(box.x + box.width, box.y + box.height),
-          ].map((point) => point.matrixTransform(matrix));
-          const origin = root.querySelector("circle") as SVGCircleElement;
-          const result = {
-            fill: getComputedStyle(path).fill,
-            bounds: corners.map((point) => [
-              point.x - origin.cx.baseVal.value,
-              point.y - origin.cy.baseVal.value,
-            ]),
-            interior: path.isPointInFill(
-              new DOMPoint(box.x + box.width / 2, box.y + box.height / 2),
-            ),
-          };
-          root.remove();
-          return result;
-        }, svg);
-        assert.equal(paint.fill, "rgb(224, 32, 64)");
-        assert.equal(paint.interior, true);
-        assert.ok(Math.abs(paint.bounds[0][0]) < 0.01 && Math.abs(paint.bounds[1][0] - 76) < 0.01);
-        const ys = paint.bounds.map((point) => point[1]).sort((a, b) => a - b);
-        assert.ok(Math.abs(ys[0] + 35) < 0.01 && Math.abs(ys[1] + 5) < 0.01, JSON.stringify(paint));
-      }
-      await assertPaintedOutline(saved.svg);
-      await page.getByLabel("Stroke key").fill(strokes[0].key);
-      await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).not.toHaveValue(saved.source);
-      const fitted = await page.getByLabel("Authored source").inputValue();
-      await page.reload();
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Authored source").fill(fitted);
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const reopened = await readySnapshot();
-      assert.equal(reopened.source, fitted);
-      assert.deepEqual(
-        reopened.originalInk.map((entry: { stroke: unknown }) => entry.stroke),
-        strokes,
-      );
-      assert.ok(reopened.svg.includes("#112233"));
-      await page.getByLabel("Stroke key").fill(strokes[0].key);
-      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(saved.source);
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const restored = await readySnapshot();
-      await assertPaintedOutline(restored.svg);
-      assert.deepEqual(restored.originalInk, saved.originalInk);
-      await page.frameLocator("iframe").locator('[data-canvas-viewport="true"]').press("Control+z");
-      await expect(page.getByLabel("Authored source")).toHaveValue(fitted);
-      const frame = page.frameLocator("#editor");
-      await frame.locator('[data-canvas-viewport="true"]').scrollIntoViewIfNeeded();
-      await frame.locator('[data-canvas-viewport="true"]').press("v");
-      const line = (await frame
-        .locator(`path[data-source-id="${reopened.originalInk[0].sourceIds[0]}"]`)
-        .first()
-        .boundingBox())!;
-      // A horizontal SVG line has a zero-height DOM box, but its painted stroke
-      // is hittable. Send the real pointer to its midpoint.
-      await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
-      const selected = await hostSnapshot();
-      assert.equal(selected.state.selection.length, 1);
-      await frame.getByRole("button", { name: "Restore original stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(saved.source);
-      await frame.getByRole("button", { name: "Reapply original fit", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(fitted);
-    },
-  );
-
-  story(
-    { initialPage: "blank" },
-    "refits translucent ink the same way from the host and from the canvas",
-    async function () {
-      const strokes = [
-        {
-          key: "translucent-stroke",
-          intent: "geometry",
-          color: "#11223380",
-          samples: Array.from({ length: 20 }, (_, i) => ({
-            x: i * 4,
-            y: 12 + Math.sin(i) * 0.2,
-            time: i * 8,
-            pressure: 0.5,
-            altitude: 1.1,
-            azimuth: 0.7,
-            roll: 0.2,
-            hoverHeight: 0,
-            buttons: 1,
-            capabilities: 15,
-            id: i,
-            tool: 0,
-            phase: i === 0 ? 0 : 1,
-            predicted: false,
-          })),
-        },
-      ];
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Original strokes").fill(JSON.stringify(strokes));
-      await page.getByRole("button", { name: "Import strokes", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(/translucent-stroke/);
-      const imported = await page.getByLabel("Authored source").inputValue();
-      await page.getByLabel("Stroke key").fill(strokes[0].key);
-      await page.getByRole("button", { name: "Interpret stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).not.toHaveValue(imported);
-      const hostFit = await page.getByLabel("Authored source").inputValue();
-      await page.getByRole("button", { name: "Restore stroke", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(imported);
-      const frame = page.frameLocator("#editor");
-      await frame.locator('[data-canvas-viewport="true"]').scrollIntoViewIfNeeded();
-      await frame.locator('[data-canvas-viewport="true"]').press("v");
-      const snapshot = await hostSnapshot();
-      const line = (await frame
-        .locator(`path[data-source-id="${snapshot.originalInk[0].sourceIds[0]}"]`)
-        .first()
-        .boundingBox())!;
-      await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
-      await frame.getByRole("button", { name: "Reapply original fit", exact: true }).click();
-      await expect(
-        page.getByLabel("Authored source"),
-        "The canvas refit differs from the host refit",
-      ).toHaveValue(hostFit);
-    },
-  );
-
-  story(
-    { initialPage: "blank" },
+    { resources: "standalone/public" },
     "exports an image resource that renders outside its document while offline",
     async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Authored source").fill(String.raw`\begin{tikzpicture}
+      await author(String.raw`\begin{tikzpicture}
 \node[inner sep=0pt] at (0,0) {\includegraphics[width=4cm]{image-resource.svg}};
 \end{tikzpicture}`);
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const exported = await readySnapshot();
+      const exported = await canvasSnapshot();
       await page.goto(`${url}svg-viewer.html`);
       await context.setOffline(true);
       await page.getByLabel("Exported SVG").fill(exported.svg);
@@ -9615,13 +9345,12 @@ describe("standalone workbench host boundary", function () {
   );
 
   story(
-    { initialPage: "blank" },
+    {},
     "retains pen samples when the drawing rail fits a stroke",
     async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      const frame = page.frameLocator("#editor");
-      await freehandTool(page.frameLocator("#editor")).click();
+      await author(circleFigure);
+      const frame = editorFrame(page);
+      await freehandTool(frame).click();
       const viewport = frame.locator('[data-canvas-viewport="true"]');
       await viewport.scrollIntoViewIfNeeded();
       const bounds = (await viewport.boundingBox())!;
@@ -9662,10 +9391,8 @@ describe("standalone workbench host boundary", function () {
         clickCount: 1,
         pointerType: "pen",
       });
-      await expect(page.getByLabel("Authored source")).toHaveValue(/workbench-ink:/);
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const snapshot = await readySnapshot();
+      await expect.poll(storedSource).toMatch(/workbench-ink:/);
+      const snapshot = await canvasSnapshot();
       assert.equal(snapshot.originalInk.length, 1);
       const samples = snapshot.originalInk[0].stroke.samples;
       assert.ok(samples.length >= 22);
@@ -9771,13 +9498,12 @@ describe("standalone workbench host boundary", function () {
   });
 
   story(
-    { initialPage: "blank" },
+    {},
     "preserves a short pen stroke even when interpretation has no fit",
     async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      const frame = page.frameLocator("#editor");
-      await freehandTool(page.frameLocator("#editor")).click();
+      await author(circleFigure);
+      const frame = editorFrame(page);
+      await freehandTool(frame).click();
       const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
       const x = box.x + box.width * 0.3,
         y = box.y + box.height * 0.55;
@@ -9810,35 +9536,26 @@ describe("standalone workbench host boundary", function () {
         clickCount: 1,
         pointerType: "pen",
       });
-      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
-      await expect(page.getByLabel("Authored source")).toHaveValue(/workbench-ink:/);
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const result = await readySnapshot();
+      await expect.poll(storedSource).toMatch(/workbench-ink:/);
+      const result = await canvasSnapshot();
       assert.equal(result.originalInk.length, 1);
       assert.ok(result.originalInk[0].stroke.samples.length >= 3);
       assert.ok(result.svg.includes(`data-source-id="${result.originalInk[0].sourceIds[0]}"`));
-      await expect(freehandTool(page.frameLocator("#editor"))).toHaveAttribute(
+      await expect(freehandTool(frame)).toHaveAttribute(
         "aria-pressed",
         "true",
       );
     },
   );
 
-  async function embeddingSnapshot(): Promise<EditorSnapshot> {
-    await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-    await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-    return readySnapshot();
-  }
-
   for (const tablet of TABLET_VIEWPORTS) {
     story(
-      { viewport: tablet, initialPage: "blank" },
+      { viewport: tablet },
       `keeps palm contact out of pen drawing and supports finger pan and pinch afterward in ${tablet.name}`,
       async function () {
-        await page.goto(`${url}embedding.html`);
-        await expect(page.locator("#status")).toHaveText("Loaded");
-        const frame = page.frameLocator("#editor");
+        await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+        await author(circleFigure);
+        const frame = editorFrame(page);
         await freehandTool(frame).click();
         const input = await TabletInput.attach(page);
         const viewport = frame.locator('[data-canvas-viewport="true"]');
@@ -9863,10 +9580,12 @@ describe("standalone workbench host boundary", function () {
           .getByRole("button", { name: "Accept", exact: true })
           .click();
         await expect(frame.getByRole("dialog", { name: "Freehand result" })).toHaveCount(0);
-        await page.getByRole("button", { name: "Copy current source", exact: true }).click();
-        await expect(page.getByLabel("Authored source")).toHaveValue(/workbench-ink:/);
+        await page.getByRole("button", { name: "Copy source", exact: true }).click();
+        await expect
+          .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+          .toMatch(/workbench-ink:/);
         await fitDiagram(frame, input);
-        const drawn = await embeddingSnapshot();
+        const drawn = await canvasSnapshot();
         assert.equal(drawn.originalInk.length, 1);
         assert.ok(
           drawn.originalInk[0].stroke.samples.length >= 22,
@@ -9877,13 +9596,13 @@ describe("standalone workbench host boundary", function () {
           { x, y },
           { x: x + 55, y: y + 35 },
         ]);
-        const panned = await embeddingSnapshot();
+        const panned = await canvasSnapshot();
         assert.equal(panned.source, drawn.source);
         assert.notDeepEqual(panned.state.viewport, drawn.state.viewport);
         await fitDiagram(frame, input);
-        const beforePinch = await embeddingSnapshot();
+        const beforePinch = await canvasSnapshot();
         await input.pinch({ x: x + 40, y }, 80, 140);
-        const pinched = await embeddingSnapshot();
+        const pinched = await canvasSnapshot();
         assert.equal(pinched.source, drawn.source);
         assert.ok(pinched.state.viewport.scale > beforePinch.state.viewport.scale);
         await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
@@ -9893,7 +9612,7 @@ describe("standalone workbench host boundary", function () {
   }
 
   story(
-    { initialPage: "blank" },
+    { resources: "standalone/public" },
     "cancels a resource-pending snapshot and continues with a newer drawing",
     async function () {
       let release!: () => void;
@@ -9908,32 +9627,31 @@ describe("standalone workbench host boundary", function () {
         await delayed;
         await route.continue();
       });
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page
-        .getByLabel("Authored source")
-        .fill(
-          String.raw`\begin{tikzpicture}\node at (0,0) {\includegraphics[width=4cm]{image-resource.svg}};\end{tikzpicture}`,
-        );
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Loaded", { timeout: 15000 });
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+      await author(
+        String.raw`\begin{tikzpicture}\node at (0,0) {\includegraphics[width=4cm]{image-resource.svg}};\end{tikzpicture}`,
+      );
+      const pending = await requestCanvasSnapshot();
       await expect.poll(() => exporting).toBe(true);
-      await expect(page.locator("#status")).toHaveText("Awaiting snapshot");
-      await page.getByRole("button", { name: "Cancel snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot failed");
-      const cancelled = await snapshotResult();
+      assert.equal(
+        await page.evaluate((id) => id in window.canvasProtocol.snapshots, pending),
+        false,
+        "The snapshot waits for its image resource",
+      );
+      await postCanvasCommand({
+        action: "cancel",
+        ...(await canvasSession()),
+        requestId: randomUUID(),
+        targetRequestId: pending,
+      });
+      const cancelled = await canvasSnapshotReply(pending);
       assert.ok(
         cancelled.status === "failed" && cancelled.error === "cancelled",
         JSON.stringify(cancelled),
       );
       const next = String.raw`\begin{tikzpicture}\draw[red] (0,0) rectangle (3,2);\end{tikzpicture}`;
-      await page.getByLabel("Authored source").fill(next);
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
+      await author(next);
       release();
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const accepted = await readySnapshot();
+      const accepted = await canvasSnapshot();
       assert.equal(accepted.source, next);
       assert.ok(accepted.svg.includes("85.358"));
       assert.ok(!accepted.svg.includes("<image"));
@@ -9949,67 +9667,54 @@ describe("standalone workbench host boundary", function () {
     await expect(page.getByRole("group", { name: "File" })).toBeVisible();
   });
 
-  story(
-    { initialPage: "blank" },
-    "restores its accepted tool and viewport in a fresh editor session",
-    async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      const frame = page.frameLocator("#editor");
-      await freehandTool(page.frameLocator("#editor")).click();
-      const viewport = frame.locator('[data-canvas-viewport="true"]');
-      await viewport.scrollIntoViewIfNeeded();
-      const box = (await viewport.boundingBox())!;
-      const originalScale = await frame
-        .locator("[data-canvas-scale]")
-        .getAttribute("data-canvas-scale");
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.keyboard.down("Control");
-      await page.mouse.wheel(0, -180);
-      await page.keyboard.up("Control");
-      await expect(frame.locator("[data-canvas-scale]")).not.toHaveAttribute(
-        "data-canvas-scale",
-        originalScale!,
-      );
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const saved = await readySnapshot();
-      assert.equal(saved.state.tool, "addFreehand");
-      const displayedCircle = frame.locator(
-        '[data-canvas-viewport="true"] circle[data-source-id="path:0"]',
-      );
-      await expect(displayedCircle).toBeVisible();
-      const before = await layoutBox(displayedCircle);
-      await page.reload();
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Saved snapshot").fill(JSON.stringify(saved));
-      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot ready", { timeout: 12000 });
-      const restored = await readySnapshot();
-      assert.deepEqual(restored.state, saved.state);
-      await expect(freehandTool(page.frameLocator("#editor"))).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      assert.equal(
-        await frame.locator("[data-canvas-scale]").getAttribute("data-canvas-scale"),
-        String(saved.state.viewport.scale),
-      );
-      await expect(async () => {
-        const after = await layoutBox(displayedCircle);
-        const keys = ["x", "y", "width", "height"] as const;
-        expect(
-          Math.max(...keys.map((key) => Math.abs(after[key] - before[key]))),
-          "The restored circle is drawn where it was saved",
-        ).toBeLessThan(1);
-      }).toPass({ timeout: 5_000 });
-    },
-  );
+  story({}, "restores its accepted tool and viewport in a fresh editor session", async function () {
+    await author(circleFigure);
+    const frame = editorFrame(page);
+    await freehandTool(frame).click();
+    const viewport = frame.locator('[data-canvas-viewport="true"]');
+    await viewport.scrollIntoViewIfNeeded();
+    const box = (await viewport.boundingBox())!;
+    const originalScale = await frame
+      .locator("[data-canvas-scale]")
+      .getAttribute("data-canvas-scale");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.keyboard.down("Control");
+    await page.mouse.wheel(0, -180);
+    await page.keyboard.up("Control");
+    await expect(frame.locator("[data-canvas-scale]")).not.toHaveAttribute(
+      "data-canvas-scale",
+      originalScale!,
+    );
+    const saved = await canvasSnapshot();
+    assert.equal(saved.state.tool, "addFreehand");
+    const displayedCircle = frame.locator(
+      '[data-canvas-viewport="true"] circle[data-source-id="path:0"]',
+    );
+    await expect(displayedCircle).toBeVisible();
+    const before = await layoutBox(displayedCircle);
+    await page.reload();
+    await editorReady(page);
+    const restored = await canvasSnapshot();
+    assert.equal(restored.source, saved.source);
+    assert.deepEqual(restored.state, saved.state);
+    await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
+    assert.equal(
+      await frame.locator("[data-canvas-scale]").getAttribute("data-canvas-scale"),
+      String(saved.state.viewport.scale),
+    );
+    await expect(async () => {
+      const after = await layoutBox(displayedCircle);
+      const keys = ["x", "y", "width", "height"] as const;
+      expect(
+        Math.max(...keys.map((key) => Math.abs(after[key] - before[key]))),
+        "The restored circle is drawn where it was saved",
+      ).toBeLessThan(1);
+    }).toPass({ timeout: 5_000 });
+  });
 
   story(
-    { initialPage: "blank" },
-    "carries one hosted drawing through drawing, a stale load, undo, redo, a cancelled snapshot, disposal, and a restored session",
+    { resources: "standalone/public" },
+    "carries one drawing through drawing, a stale load, undo, redo, a cancelled snapshot, and a reopened session",
     async function () {
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);
       let gate: Promise<void> | null = null;
@@ -10027,8 +9732,7 @@ describe("standalone workbench host boundary", function () {
 \foreach \k in {0,1,2} { \draw[blue] (\k,0) rectangle ++(\side/2,1); }
 \node at (5,0) {\includegraphics[width=1cm]{image-resource.svg}};
 \end{tikzpicture}`;
-      const frame = page.frameLocator("#editor");
-      const hostSource = page.getByLabel("Authored source");
+      const frame = editorFrame(page);
       const strokes = (source: string) => (source.match(/^[ \t]*% workbench-ink:/gm) ?? []).length;
       // A bowed stroke, so its fit is a curve and not a straight line.
       const draw = async (across: number, down: number) => {
@@ -10052,66 +9756,53 @@ describe("standalone workbench host boundary", function () {
       const undo = () => frame.getByRole("button", { name: "Undo", exact: true }).click();
       const redo = () => frame.getByRole("button", { name: "Redo", exact: true }).click();
 
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await hostSource.fill(authored);
-      await page.getByRole("button", { name: "Load source", exact: true }).click();
-      const loaded = await hostSnapshot();
+      const initial = await canvasSession();
+      await author(authored);
+      const loaded = await canvasSnapshot();
       assert.equal(loaded.source, authored);
-      assert.equal(loaded.revision, 2);
+      assert.ok(loaded.revision > initial.revision, "The authored source arrives in a later load");
 
-      // A drawn stroke reaches the host; every authored line stays as written.
+      // A drawn stroke reaches the source pane; every authored line stays as written.
       await freehandTool(frame).click();
       await draw(0.2, 0.25);
-      await expect(hostSource).toHaveValue(/\.\. controls/);
-      const drawn = await hostSource.inputValue();
+      await expect.poll(storedSource).toMatch(/\.\. controls/);
+      const drawn = await storedSource();
       assert.equal(strokes(drawn), 1);
       for (const line of authored.split("\n")) {
         assert.ok(drawn.includes(line), `The drawn source lost the authored line ${line}:\n${drawn}`);
       }
-      const accepted = await hostSnapshot();
+      const accepted = await canvasSnapshot();
       assert.equal(accepted.source, drawn);
       assert.equal(accepted.revision, loaded.revision);
       assert.notEqual(accepted.svg, loaded.svg, "The snapshot does not show the drawn stroke");
 
-      // A load the host sent before this drawing does not replace it.
-      await page.evaluate(
-        ({ sessionId, source }) => {
-          document.querySelector<HTMLIFrameElement>("#editor")!.contentWindow!.postMessage(
-            {
-              action: "load",
-              sessionId,
-              revision: 1,
-              requestId: crypto.randomUUID(),
-              fileName: "fixture.tikz",
-              autosave: 0,
-              source,
-            },
-            location.origin,
-          );
-        },
-        {
-          sessionId: accepted.sessionId,
-          source: String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`,
-        },
-      );
-      const retained = await hostSnapshot();
+      // A load the shell sent before this drawing does not replace it.
+      await postCanvasCommand({
+        action: "load",
+        sessionId: accepted.sessionId,
+        revision: accepted.revision - 1,
+        requestId: randomUUID(),
+        fileName: "fixture.tikz",
+        autosave: 0,
+        source: String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`,
+      });
+      const retained = await canvasSnapshot();
       assert.equal(retained.source, drawn);
       assert.equal(retained.svg, accepted.svg);
 
       // Undo steps back through the fit and the stroke to the authored bytes; Redo returns both.
       await undo();
-      await expect(hostSource).not.toHaveValue(/\.\. controls/);
-      assert.equal(strokes(await hostSource.inputValue()), 1);
+      await expect.poll(storedSource).not.toMatch(/\.\. controls/);
+      assert.equal(strokes(await storedSource()), 1);
       await undo();
-      await expect(hostSource).toHaveValue(authored);
-      assert.equal((await hostSnapshot()).svg, loaded.svg);
+      await expect.poll(storedSource).toBe(authored);
+      assert.equal((await canvasSnapshot()).svg, loaded.svg);
       await redo();
       await redo();
-      await expect(hostSource).toHaveValue(drawn);
-      await page.getByRole("button", { name: "Copy current source", exact: true }).click();
+      await expect.poll(storedSource).toBe(drawn);
+      await page.getByRole("button", { name: "Copy source", exact: true }).click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(drawn);
-      const redone = await hostSnapshot();
+      const redone = await canvasSnapshot();
       assert.equal(redone.source, drawn);
       assert.equal(redone.svg, accepted.svg);
 
@@ -10120,39 +9811,43 @@ describe("standalone workbench host boundary", function () {
       gate = new Promise<void>((resolve) => {
         release = resolve;
       });
-      await page.getByRole("button", { name: "Snapshot", exact: true }).click();
+      const pending = await requestCanvasSnapshot();
       await expect.poll(() => exporting).toBe(true);
-      await page.getByRole("button", { name: "Cancel snapshot", exact: true }).click();
-      await expect(page.locator("#status")).toHaveText("Snapshot failed");
-      const cancelled = await snapshotResult();
+      await postCanvasCommand({
+        action: "cancel",
+        ...(await canvasSession()),
+        requestId: randomUUID(),
+        targetRequestId: pending,
+      });
+      const cancelled = await canvasSnapshotReply(pending);
       assert.ok(
         cancelled.status === "failed" && cancelled.error === "cancelled",
         JSON.stringify(cancelled),
       );
       release();
       gate = null;
-      const saved = await hostSnapshot();
+      const saved = await canvasSnapshot();
       assert.equal(saved.source, drawn);
       assert.equal(saved.svg, accepted.svg);
       assert.equal(saved.state.tool, "addFreehand");
 
-      // A disposed editor is gone; a new session restored from the snapshot goes on editing.
-      await page.getByRole("button", { name: "Dispose", exact: true }).click();
-      await expect(page.locator("iframe")).toHaveCount(0);
+      // The reopened document shows the same drawing in the same editor state and goes on editing.
       await page.reload();
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      await page.getByLabel("Saved snapshot").fill(JSON.stringify(saved));
-      await page.getByRole("button", { name: "Load snapshot", exact: true }).click();
-      const restored = await hostSnapshot();
+      await editorReady(page);
+      const code = page.getByRole("button", { name: "Code: left sidebar", exact: true });
+      if ((await code.getAttribute("aria-pressed")) === "false") {
+        await code.click();
+      }
+      const restored = await canvasSnapshot();
       assert.equal(restored.source, drawn);
       assert.deepEqual(restored.state, saved.state);
       assert.equal(restored.svg, saved.svg);
       await expect(freehandTool(frame)).toHaveAttribute("aria-pressed", "true");
       await draw(0.2, 0.45);
-      await expect.poll(async () => strokes(await hostSource.inputValue())).toBe(2);
-      await expect(hostSource).toHaveValue(/\.\. controls[\s\S]*\.\. controls/);
-      const continued = await hostSnapshot();
-      assert.equal(continued.source, await hostSource.inputValue());
+      await expect.poll(async () => strokes(await storedSource())).toBe(2);
+      await expect.poll(storedSource).toMatch(/\.\. controls[\s\S]*\.\. controls/);
+      const continued = await canvasSnapshot();
+      assert.equal(continued.source, await storedSource());
       assert.ok(
         continued.source.includes(drawn.slice(0, drawn.lastIndexOf("\\end{tikzpicture}"))),
         `The first stroke changed:\n${continued.source}`,
@@ -10160,19 +9855,18 @@ describe("standalone workbench host boundary", function () {
       assert.notEqual(continued.svg, saved.svg, "The snapshot does not show the second stroke");
       await undo();
       await undo();
-      await expect(hostSource).toHaveValue(drawn);
+      await expect.poll(storedSource).toBe(drawn);
     },
   );
 
   story(
-    { initialPage: "blank" },
+    {},
     "writes a drawn stroke's record on whole lines directly after the authored lines",
     async function () {
-      await page.goto(`${url}embedding.html`);
-      await expect(page.locator("#status")).toHaveText("Loaded");
-      const frame = page.frameLocator("#editor");
-      const hostSource = page.getByLabel("Authored source");
-      const authored = await hostSource.inputValue();
+      await author(circleFigure);
+      const frame = editorFrame(page);
+      await expect.poll(storedSource).toBe(circleFigure);
+      const authored = circleFigure;
       const body = authored.slice(0, authored.lastIndexOf("\\end{tikzpicture}"));
       assert.ok(body.endsWith(";\n"), "The fixture's last authored line ends before the closing line");
       await freehandTool(frame).click();
@@ -10183,8 +9877,8 @@ describe("standalone workbench host boundary", function () {
         steps: 12,
       });
       await page.mouse.up();
-      await expect(hostSource).toHaveValue(/% workbench-ink-end:/);
-      const drawn = await hostSource.inputValue();
+      await expect.poll(storedSource).toMatch(/% workbench-ink-end:/);
+      const drawn = await storedSource();
       const record = drawn.slice(body.length, drawn.lastIndexOf("\\end{tikzpicture}"));
       assert.ok(drawn.startsWith(body), `The authored lines changed:\n${drawn}`);
       // The record's lines are the opening record, the scope, its drawing, and the closing record: none blank, none indented.
@@ -10198,6 +9892,189 @@ describe("standalone workbench host boundary", function () {
       assert.match(lines[0], /^% workbench-ink:/);
       assert.equal(lines[1], "\\begin{scope}");
       assert.match(lines[lines.length - 1], /^% workbench-ink-end:/);
+    },
+  );
+
+  story(
+    {},
+    "interprets the newly drawn stroke instead of identical drawing text in a later figure",
+    async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator("[data-diagram-tools]");
+      const result = frame.getByRole("dialog", { name: "Freehand result" });
+      const restore = frame.getByRole("button", { name: "Restore original stroke", exact: true });
+      const currentSource = async () => (await editorDebug(page)).source;
+      const tap = async (target: Locator) => input.touch([await stableCenter(target)]);
+      const first = String.raw`\begin{tikzpicture}
+\draw[blue] (0,0) circle (1cm);
+\end{tikzpicture}`;
+      const second = String.raw`\begin{tikzpicture}
+\draw[red] (0,0) rectangle (3,2);
+\end{tikzpicture}`;
+      // One gesture in the same view of the first figure, so both drawings record the same samples.
+      const draw = async () => {
+        await fitDiagram(frame, input);
+        await tap(freehandTool(frame));
+        const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        const start = { x: bounds.x + bounds.width * 0.35, y: bounds.y + bounds.height * 0.6 };
+        await input.penStroke(
+          Array.from({ length: 16 }, (_, i) => ({
+            x: start.x + (110 * i) / 15,
+            y: start.y + (25 * i) / 15,
+          })),
+        );
+        await tap(result.getByRole("button", { name: "Accept", exact: true }));
+        await expect(result).toHaveCount(0);
+        // The stroke stays selected; its restore control belongs to the Select tool.
+        await tap(rail.getByRole("button", { name: "Select", exact: true }));
+        await expect(restore).toBeVisible();
+      };
+      await author(`${first}\n${second}`);
+      await tap(frame.getByRole("button", { name: "Figure 1", exact: true }));
+      await draw();
+      const fittedSource = await currentSource();
+      await tap(restore);
+      await expect.poll(currentSource).not.toBe(fittedSource);
+      const raw = await canvasSnapshot();
+      const originalDrawing = recordedDrawing(raw.source);
+      // The later figure carries the recorded drawing's text without its record.
+      const duplicateFigure = second.replace(
+        "\\end{tikzpicture}",
+        `${originalDrawing}\n\\end{tikzpicture}`,
+      );
+      const duplicateSource = `${first}\n${duplicateFigure}`;
+      await author(duplicateSource);
+      await tap(frame.getByRole("button", { name: "Figure 2", exact: true }));
+      const laterBeforeDraw = await canvasSnapshot();
+      assert.equal(laterBeforeDraw.state.activeFigureId, "figure:1");
+      await tap(frame.getByRole("button", { name: "Figure 1", exact: true }));
+      await draw();
+      const fitted = await canvasSnapshot();
+      assert.equal(fitted.state.activeFigureId, "figure:0");
+      // The later figure stays byte for byte.
+      assert.equal(
+        fitted.source.slice(
+          fitted.source.indexOf("\\end{tikzpicture}") + "\\end{tikzpicture}".length,
+        ),
+        `\n${duplicateFigure}`,
+      );
+      assert.equal(fitted.originalInk.length, 1);
+      assert.notEqual(fitted.originalInk[0].stroke.key, raw.originalInk[0].stroke.key);
+      assert.deepEqual(
+        fitted.originalInk[0].stroke.samples.map(({ x, y }) => [x, y]),
+        raw.originalInk[0].stroke.samples.map(({ x, y }) => [x, y]),
+      );
+      const fittedDrawing = recordedDrawing(fitted.source);
+      assert.notEqual(fittedDrawing, originalDrawing);
+      await frame.locator('[data-canvas-viewport="true"]').press("Control+z");
+      await expect
+        .poll(currentSource)
+        .toBe(fitted.source.replace(fittedDrawing, originalDrawing));
+      const restored = await canvasSnapshot();
+      assert.equal(recordedDrawing(restored.source), originalDrawing);
+      assert.deepEqual(restored.originalInk, fitted.originalInk);
+      await frame.locator('[data-canvas-viewport="true"]').press("Control+Shift+z");
+      await expect.poll(currentSource).toBe(fitted.source);
+      const drawing = frame
+        .locator(`svg [data-source-id="${fitted.originalInk[0].sourceIds[0]}"]`)
+        .first();
+      await input.touch([await strokePoint(page, drawing, 0.3)]);
+      await tap(restore);
+      await expect.poll(currentSource).toBe(restored.source);
+      await tap(frame.getByRole("button", { name: "Figure 2", exact: true }));
+      const other = await canvasSnapshot();
+      assert.equal(other.state.activeFigureId, "figure:1");
+      assert.deepEqual(other.originalInk, []);
+      assert.deepEqual(
+        await paintedGeometry(other.svg),
+        await paintedGeometry(laterBeforeDraw.svg),
+      );
+    },
+  );
+
+  story(
+    {},
+    "refits translucent ink from the canvas with its colour and opacity before and after reopening",
+    async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      const rail = frame.locator("[data-diagram-tools]");
+      const result = frame.getByRole("dialog", { name: "Freehand result" });
+      const restore = frame.getByRole("button", { name: "Restore original stroke", exact: true });
+      const reapply = frame.getByRole("button", { name: "Reapply original fit", exact: true });
+      const currentSource = async () => (await editorDebug(page)).source;
+      const tap = async (target: Locator) => input.touch([await stableCenter(target)]);
+      await author(circleFigure);
+      // New strokes take #112233 at half opacity.
+      const colour = rail.getByRole("button", { name: /^Color: New strokes:/ });
+      await tap(colour);
+      const popup = frame.getByRole("dialog", { name: "Tool options" });
+      await popup.getByLabel("Choose color").fill("#112233");
+      const opacity = popup.getByRole("slider", { name: "Opacity" });
+      await opacity.focus();
+      for (let step = 0; step < 50; step++) {
+        await opacity.press("ArrowLeft");
+      }
+      await expect(opacity).toHaveValue("0.5");
+      await tap(colour);
+      await expect(popup).toHaveCount(0);
+      await tap(freehandTool(frame));
+      const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const start = { x: bounds.x + bounds.width * 0.3, y: bounds.y + bounds.height * 0.3 };
+      await input.penStroke(
+        Array.from({ length: 20 }, (_, i) => ({
+          x: start.x + i * 8,
+          y: start.y + Math.sin(i) * 0.5,
+        })),
+      );
+      await tap(result.getByRole("button", { name: "Accept", exact: true }));
+      await expect(result).toHaveCount(0);
+      const released = await currentSource();
+      await tap(rail.getByRole("button", { name: "Select", exact: true }));
+      await tap(restore);
+      await expect.poll(currentSource).not.toBe(released);
+      const raw = await currentSource();
+      const [record] = (await canvasSnapshot()).originalInk;
+      assert.equal(record.stroke.intent, "geometry");
+      assert.equal(record.stroke.color, "rgba(17,34,51,0.5)");
+      await tap(reapply);
+      await expect.poll(currentSource).not.toBe(raw);
+      const refitted = await currentSource();
+      const refit = recordedDrawing(refitted);
+      assert.match(refit, /draw opacity=0\.5/, `The refit loses the ink's opacity: ${refit}`);
+      assert.notEqual(refit, recordedDrawing(raw), "Reapply original fit left the recorded drawing");
+      // Restore and refit repeat exactly from the same record.
+      await tap(restore);
+      await expect.poll(currentSource).toBe(raw);
+      await tap(reapply);
+      await expect
+        .poll(currentSource, { message: "The canvas refits the same ink differently" })
+        .toBe(refitted);
+      // The record survives a reopened session and still drives restore and refit.
+      await expect.poll(storedSource).toBe(refitted);
+      await page.reload();
+      await editorReady(page);
+      const reopened = await canvasSnapshot();
+      assert.equal(reopened.source, refitted);
+      assert.deepEqual(
+        reopened.originalInk.map(({ stroke }) => stroke),
+        [record.stroke],
+      );
+      await tap(rail.getByRole("button", { name: "Select", exact: true }));
+      const drawing = frame
+        .locator(`svg [data-source-id="${reopened.originalInk[0].sourceIds[0]}"]`)
+        .first();
+      await input.touch([await strokePoint(page, drawing, 0.5)]);
+      // A tap that lands on an anchor selects that point; Done returns to the stroke.
+      const whole = frame.getByRole("button", { name: "Done", exact: true });
+      if (await whole.isVisible()) {
+        await tap(whole);
+      }
+      await tap(restore);
+      await expect.poll(currentSource).toBe(raw);
+      await tap(reapply);
+      await expect.poll(currentSource).toBe(refitted);
     },
   );
 

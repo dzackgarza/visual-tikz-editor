@@ -34,9 +34,14 @@ export type Workbench = { url: string; configHome: string; stop: () => Promise<v
  * one story (theme, editor settings, toolbar dock) never reach another story or
  * the author's own configuration.
  */
-export async function startWorkbench(env: NodeJS.ProcessEnv, persistentHome?: string): Promise<Workbench> {
+export async function startWorkbench(
+  env: NodeJS.ProcessEnv,
+  persistentHome?: string,
+  resources?: string,
+): Promise<Workbench> {
   const configHome = persistentHome ?? await mkdtemp(join(tmpdir(), "workbench-config-"));
-  const server: ChildProcess = spawn("bun", ["run", "standalone/server.ts", ""], {
+  const launch = resources === undefined ? [] : ["--resources", resources];
+  const server: ChildProcess = spawn("bun", ["run", "standalone/server.ts", ...launch, ""], {
     env: { ...env, XDG_CONFIG_HOME: configHome, XDG_STATE_HOME: configHome },
     stdio: ["ignore", "pipe", "inherit"],
     detached: true,
