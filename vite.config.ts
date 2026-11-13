@@ -29,9 +29,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: path.join(import.meta.dirname, "standalone/index.html"),
-        quiverEmbedding: path.join(import.meta.dirname, "standalone/quiver-embedding.html"),
-        embedding: path.join(import.meta.dirname, "standalone/embedding.html"),
-        hosted: path.join(import.meta.dirname, "standalone/hosted.html"),
       },
     },
     // The page loads once from 127.0.0.1; Vue, CodeMirror and Viewer.js in one

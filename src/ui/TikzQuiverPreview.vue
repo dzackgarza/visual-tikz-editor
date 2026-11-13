@@ -85,9 +85,6 @@ const emit = defineEmits<{
 }>();
 
 const quiver = props.host.quiver;
-if (quiver === undefined) {
-  throw new Error("The host has no Quiver editor");
-}
 
 const quiverOrigin = new URL(quiver.url, location.href).origin;
 const frame = ref<HTMLIFrameElement | null>(null);

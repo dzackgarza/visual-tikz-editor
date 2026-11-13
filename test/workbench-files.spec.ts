@@ -286,6 +286,61 @@ describe("standalone native file workflow", function () {
     }
   });
 
+  it("saves the completed Quiver edit when its Save shortcut arrives before Quiver's change notification", async function () {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    // Copy source writes the clipboard after it reads the source from the open view.
+    const copiesSavedFile = async (): Promise<void> => {
+      const saved = await readFile(diagramPath, "utf8");
+      await page.getByRole("button", { name: "Copy source", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(saved);
+    };
+    diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-quiver-save-")), "quiver.tikz");
+    await page.request.post(`${url}api/new`, { data: "tikzcd" });
+    await page.goto(url);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+    await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
+    await quiver.locator(".vertex").nth(1).click();
+    // Deliver the edit and the Save shortcut in one browser task, before Quiver's
+    // 40ms change notification can update the document of the shell.
+    await quiver.locator(".label-input").evaluate((input: HTMLInputElement) => {
+      input.value = "Completed";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true }),
+      );
+    });
+    await chooseFile("save");
+    await expect.poll(() => existsSync(diagramPath)).toBe(true);
+    const browserWindow = await execute("xdotool", ["search", "--onlyvisible", "--class", "chromium"], {
+      env: desktopEnv,
+    });
+    await execute("xdotool", ["windowfocus", "--sync", browserWindow.stdout.trim().split("\n")[0]], {
+      env: desktopEnv,
+    });
+    await page.bringToFront();
+    await page.locator(".document-bar strong").click();
+    assert.match(await readFile(diagramPath, "utf8"), /Completed/);
+    await copiesSavedFile();
+
+    await quiver.locator(".vertex").nth(1).click();
+    await quiver.locator(".label-input").fill("Subsequent");
+    await quiver.locator(".label-input").press("Control+s");
+    await expect.poll(() => readFile(diagramPath, "utf8")).toContain("Subsequent");
+    await copiesSavedFile();
+
+    const newer = String.raw`\begin{tikzcd}SourcePane \arrow[r] & Newer\end{tikzcd}`;
+    await page.locator(".cm-content").fill(newer);
+    await expect(quiver.locator(".vertex").first()).toContainText("SourcePane");
+    await quiver.locator(".vertex").nth(1).click();
+    await quiver.locator(".label-input").fill("Resumed");
+    await quiver.locator(".label-input").press("Control+s");
+    await expect.poll(() => readFile(diagramPath, "utf8")).toContain("Resumed");
+    assert.match(await readFile(diagramPath, "utf8"), /SourcePane/);
+    await copiesSavedFile();
+  });
+
   it("keeps both sources intact when an existing file changes on disk before the source editor Save shortcut", async function () {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     diagramPath = join(await mkdtemp(join(tmpdir(), "workbench-save-conflict-")), "conflict.tikz");

@@ -1,9 +1,8 @@
 /**
- * The boundary between the TikZ workbench and the application that embeds it.
- * The host owns the document that stores the TikZ source and every URL.
- * It may supply TeX rendering and Quiver for additional views. The workbench
- * owns drawing and visual feedback. Zettlr supplies a CodeMirror range and
- * its IPC services; the standalone server supplies a file and HTTP endpoints.
+ * The boundary between the TikZ workbench and the standalone shell.
+ * The shell owns the file that stores the TikZ source, every URL, TeX
+ * rendering and Quiver, through the standalone server's HTTP endpoints.
+ * The workbench owns drawing and visual feedback.
  */
 
 import type { TikzRenderSuccess } from "./live-preview";
@@ -51,16 +50,16 @@ export interface TikzWorkbenchHost {
    * with one `step` are one step of the document history.
    */
   writeSource: (from: number, to: number, insert: string, step: string) => void;
-  /** Present only when the host supplies a compiled TeX view. */
-  rendering?: TikzWorkbenchRendering;
-  /** Present only when the host supplies a tikzcd editor. */
-  quiver?: TikzWorkbenchQuiver;
+  /** The compiled TeX view. */
+  rendering: TikzWorkbenchRendering;
+  /** The tikzcd editor. */
+  quiver: TikzWorkbenchQuiver;
   /** The URL against which the visual editor resolves image paths in a document. */
   imageBaseUrl: (docPath: string) => string;
   /** The page of the pinned visual editor (vendor/tikz-editor/src/index.html). */
   editorUrl: string;
-  /** Navigate an available source editor without taking focus from the canvas. */
-  selectSource?: (from: number, to: number) => void;
+  /** Navigate the source editor without taking focus from the canvas. */
+  selectSource: (from: number, to: number) => void;
   /** Native clipboard services when the host runs in a desktop window. */
   clipboard?: { readText: () => Promise<string>; writeText: (text: string) => Promise<void> };
   /** Persist editor preferences independently of the source document. */
