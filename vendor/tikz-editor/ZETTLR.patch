@@ -5480,7 +5480,7 @@ index dd056fad..f8d4f504 100644
 +  box-sizing: border-box;
 +}
 diff --git a/packages/app/src/ui/SettingsModal.tsx b/packages/app/src/ui/SettingsModal.tsx
-index e849b257..13c1db61 100644
+index e849b257..a91f9b35 100644
 --- a/packages/app/src/ui/SettingsModal.tsx
 +++ b/packages/app/src/ui/SettingsModal.tsx
 @@ -1,34 +1,31 @@
@@ -5870,7 +5870,7 @@ index e849b257..13c1db61 100644
                      </label>
                      <select
                        id="setting-grid-size"
-@@ -330,12 +176,23 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -330,12 +176,24 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                        <option value="standard">Standard</option>
                        <option value="coarse">Coarse</option>
                      </select>
@@ -5882,7 +5882,8 @@ index e849b257..13c1db61 100644
 +                      Grid Opacity
 +                      <span className={css.settingValue}>{settings.canvas.gridOpacity}%</span>
 +                    </label>
-+                    <input id="setting-grid-opacity" className={css.range} type="range"
++                    <input id="setting-grid-opacity" className={css.range} type="range" aria-label="Grid Opacity"
++                      aria-valuetext={`${settings.canvas.gridOpacity}%`}
 +                      min={0} max={100} step={1} value={settings.canvas.gridOpacity}
 +                      onChange={(event) => { updateCanvasSettings({ gridOpacity: Number(event.currentTarget.value) }); }} />
 +                    {canvasReset("gridOpacity", "Grid Opacity")}
@@ -5895,7 +5896,7 @@ index e849b257..13c1db61 100644
                      </label>
                      <select
                        id="setting-handle-size"
-@@ -347,14 +204,32 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -347,14 +205,33 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                        <option value={9}>Medium</option>
                        <option value={11}>Large</option>
                      </select>
@@ -5907,7 +5908,8 @@ index e849b257..13c1db61 100644
 +                      Hold to move a point
 +                      <span className={css.settingValue}>{settings.canvas.pointMoveHoldMs} ms</span>
 +                    </label>
-+                    <input id="setting-point-hold" className={css.range} type="range"
++                    <input id="setting-point-hold" className={css.range} type="range" aria-label="Hold to move a point"
++                      aria-valuetext={`${settings.canvas.pointMoveHoldMs} ms`}
 +                      min={200} max={1000} step={50} value={settings.canvas.pointMoveHoldMs}
 +                      onChange={(event) => { updateCanvasSettings({ pointMoveHoldMs: Number(event.currentTarget.value) }); }} />
 +                    {canvasReset("pointMoveHoldMs", "Hold to move a point")}
@@ -5931,7 +5933,7 @@ index e849b257..13c1db61 100644
                      </label>
                      <input
                        id="setting-zoom-speed"
-@@ -370,47 +245,38 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
+@@ -370,47 +247,38 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                      <datalist id="zoom-speed-ticks">
                        <option value={0.0045} />
                      </datalist>
