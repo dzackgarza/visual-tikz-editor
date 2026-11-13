@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft. The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-063, and that the editor is standalone (2026-11-13). Every other requirement is the
+**Status**: Draft. The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-060a, FR-063, and that the editor is standalone (2026-11-13). Every other requirement is the
 maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
@@ -27,7 +27,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 
 | Surface | Holds | Prior art |
 | --- | --- | --- |
-| Document bar (top) | Leading: document title with its save state; a tap on the title opens the document commands (New, Open, Save, Save As, Document Properties). Centre: Undo, Redo. Trailing: View, Code, Layers, Properties, Share and Export, More (⋯) | GoodNotes navigation bar (left, middle, right sections; Share and Export and More at the right; Undo and Redo in the bar); HIG The menu bar (File menu contents, recorded in docs/prior-art/shell.md); the 2026-10-16 mockups |
+| Document bar (top) | Leading: document title with its save state; a tap on the title opens the document commands (New, Open, Save, Save As). Centre: Undo, Redo. Trailing: View, Code, Layers, Properties, Share and Export, More (⋯) | GoodNotes navigation bar (left, middle, right sections; Share and Export and More at the right; Undo and Redo in the bar); HIG The menu bar (File menu contents, recorded in docs/prior-art/shell.md); the 2026-10-16 mockups |
 | Drawing toolbar (movable, docks to a screen edge) | Lasso first, then Pen, Eraser, Shapes and constructions, Text and Equation, Fill; then the active tool's colour presets and a + slot | GoodNotes toolbar (Lasso first and fixed; tools; floating menus dock to any edge); GoodNotes colour presets per tool |
 | Active tool menu (beside the toolbar) | The options of the active tool: width, style, smoothing, the construction variant | GoodNotes Active Tool Menu |
 | Object menu (above the selection) | Only the commands that apply to the selection | GoodNotes Universal Object Menu; HIG context menus |
@@ -45,6 +45,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 - Q: Which history does Undo act on? → A: All views show the same document, so there is one document history; a history per view is incoherent.
 - Q: Does the editor have a status line, and what does it show? → A: A status line shows the pointer position in figure coordinates only.
 - Q: In a wide window, are two views shown side by side? → A: No. Code is a panel beside the canvas or Quiver, like Layers and Properties; Render stays a full view.
+- Q: What does Properties show when nothing is selected? → A: The figure's properties; Properties is the one place for them.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -141,6 +142,7 @@ opens Properties for a selection.
 
 1. **Given** Layers is open, **When** the user taps Properties, **Then** Layers closes and Properties opens; each is its own panel.
 2. **Given** Layers is open, **When** the user taps the Layers button again, **Then** Layers closes.
+3. **Given** nothing is selected, **When** the user opens Properties, **Then** it shows the figure's properties; **When** the user then selects an object, **Then** it shows the object's properties.
 
 ---
 
@@ -224,6 +226,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 **Panels and settings** (prior art: GoodNotes Layers panel and More menu; HIG sheets, settings)
 
 - **FR-060**: Code, Layers, and Properties MUST be separate panels, one open at a time, each opened by its own document-level control.
+- **FR-060a**: Properties MUST show the attributes of the selection and, with nothing selected, the attributes of the figure; no other surface MUST hold the figure's attributes (user decision, 2026-11-13; Keynote for iPad Format and Layout).
 - **FR-061**: A panel MUST open at the side in landscape and as a sheet in portrait, and MUST leave the selected object visible.
 - **FR-062**: Settings MUST open from More and MUST hold appearance, canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset.
 - **FR-063**: The editor MUST keep its files in the XDG base directories: preferences in `$XDG_CONFIG_HOME`, recovery drafts and per-file view state in `$XDG_STATE_HOME`, and the render cache in `$XDG_CACHE_HOME`, each under `visual-tikz-editor/` ([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/); user decision, 2026-11-13).

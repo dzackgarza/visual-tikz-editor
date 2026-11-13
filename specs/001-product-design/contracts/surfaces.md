@@ -9,14 +9,14 @@ least 44 × 44 pt (Principle II).
 
 | Group | Control | Accessible name | Symbol | Press |
 | --- | --- | --- | --- | --- |
-| Leading | Title | the file name | text | Opens the title menu: New tikzpicture, New tikzcd, Open…, Save, Save As…, Document Properties… |
+| Leading | Title | the file name | text | Opens the title menu: New tikzpicture, New tikzcd, Open…, Save, Save As… |
 | Leading | Save state | "Saved", "Not saved", "Saving", "Changed on disk" | text, beside the title | None |
 | Centre | Undo | "Undo" | `RiArrowGoBackLine` | Undoes the last edit of the document, in every view (FR-012b); dimmed when nothing to undo |
 | Centre | Redo | "Redo" | `RiArrowGoForwardLine` | Redoes the last undone edit, in every view; dimmed when nothing to redo |
 | Trailing | View | "View" | `RiLayoutColumnLine` | Opens View: the document's editor, Render; then Grid, Rulers, Guides, Output Bounds |
 | Trailing | Code | "Code" | `RiCodeLine` | Opens or closes the Code panel (FR-015) |
 | Trailing | Layers | "Layers" | `RiStackLine` | Opens or closes the Layers panel |
-| Trailing | Properties | "Properties" | `RiEqualizerLine` | Opens or closes Properties; dimmed with nothing selected (research R13) |
+| Trailing | Properties | "Properties" | `RiEqualizerLine` | Opens or closes Properties: the selection, or the figure with nothing selected (FR-060a) |
 | Trailing | Share and Export | "Share and Export" | `RiShareBoxLine` | Opens PDF…, SVG…, PNG… |
 | Trailing | More | "More" | `RiMoreLine` | Opens Settings…, Copy TikZ |
 

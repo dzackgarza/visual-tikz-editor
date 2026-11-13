@@ -36,7 +36,7 @@ A failed story keeps its Playwright trace in `test-results/workbench/`
 | A `tikzcd` | View offers Quiver and Render | FR-014 |
 | Tap Code, then edit on the canvas, then type in the panel | The Code panel opens beside the canvas; each edit shows at once in the other; opening Layers closes Code | FR-015, FR-060 |
 | Edit in Code, then on the canvas (or in Quiver), then Undo twice | The first Undo removes the canvas edit and the second the Code edit; after each, every view shows the same source | FR-012b |
-| Layers, then Properties | One panel open at a time; Properties dimmed with nothing selected | User Story 6, research R13 |
+| Layers, then Properties | One panel open at a time; with nothing selected Properties shows the figure, and with a selection the selection | User Story 6, FR-060a |
 | Settings › Appearance | Match System Appearance on follows the system; off with Light shows a light surface under a dark system | FR-005 |
 | Every edit | Leaves untouched constructs as authored; session state never enters the source | Principle I |
 | Change a preference, then reopen a figure | The preference is in `$XDG_CONFIG_HOME/visual-tikz-editor/`, the figure's view state in `$XDG_STATE_HOME/visual-tikz-editor/`; nothing is written beside the figure but the figure | FR-063 |

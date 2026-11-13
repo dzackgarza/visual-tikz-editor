@@ -199,17 +199,22 @@ The specification ties the editor to the document kind (FR-013–FR-016).
 the document bar. In landscape an open panel is a pane at the trailing edge; in portrait it is a
 nonmodal sheet with medium and large detents. One panel is open at a time: opening another
 replaces it.
-Properties is the inspector of the selection; with nothing selected its button is dimmed, because
-the next object's attributes are the active tool's options (R5) and the figure's attributes are in
-Document Properties.
+
+**Decision** (the user, 2026-11-13): Properties is the inspector of the selection, and with
+nothing selected it is the inspector of the figure: its scale, its bounds, and the options of the
+`tikzpicture` (FR-060a). The figure's attributes have this one place. The next object's
+attributes are the active tool's options (R5).
+
+Keynote for iPad shows the slide's Layout in Format only with nothing selected: "If you don't see
+Layout, make sure nothing is selected on the slide"
+([Keynote User Guide for iPad](https://support.apple.com/guide/keynote-ipad/tan584189747/ipados)).
+The fork's inspector has this figure mode (`InspectorPanel figure`).
 
 **Rationale**: GoodNotes opens its Layers panel from the document controls, not from the writing
 tools ([Organize content with layers](https://support.goodnotes.com/hc/en-us/articles/16536297803535-Organize-content-with-layers));
 HIG Panels: "An inspector displays the details of the currently selected item"
 ([Panels](https://developer.apple.com/design/human-interface-guidelines/panels)); HIG Toolbars puts
-"buttons that open nearby inspectors" at the trailing edge; User Story 6. The dimmed button
-follows the rule for an unavailable menu-bar item (Principle IV), because the document bar takes
-the menu bar's place.
+"buttons that open nearby inspectors" at the trailing edge; User Story 6.
 
 **Alternatives considered**: Both panels open in one column. Rejected by User Story 6.
 

@@ -18,7 +18,6 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `settings` | `general.colorScheme`: `system` \| `light` \| `dark` | Sets the appearance from Settings › Appearance (FR-005) |
 | `display` | `fullscreen` | Fills the window |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | Opens one panel or closes the open one; `null` also when the shell opens the Code panel (FR-060, research R13) |
-| `document-properties` | — | Opens Document Properties from the title menu |
 | `replace-source` | `source` | Shows the source that Undo or Redo restored; keeps the viewport and the tool (research R3) |
 | `dismiss-popover` | — | Closes the canvas popover, because the shell opened one (research R16) |
 | `zoom` | `direction`: `in` \| `out` \| `fit` \| `selection` \| `normal`, or `scale` | The zoom commands of the readout ([surfaces](surfaces.md), Canvas controls; research R8) |
@@ -37,7 +36,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `change` | `source`, `sourceRevision` | An edit: one step of the document history (research R3); the save state goes to unsaved (FR-006) |
 | `save` | `source`, `fileName` | The Save shortcut inside the canvas |
 | `undo-request`, `redo-request` | — | The Undo or Redo shortcut inside the canvas; the shell acts on the document history (FR-012b) |
-| `selection` | `empty` | Dims Properties with nothing selected (research R13) |
+| `selection` | `empty` | Properties shows the figure when the selection is empty (FR-060a) |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | The panel that is open, after any change, including its own close button |
 | `popover-opened` | — | The canvas opened a popover; the shell closes its own (research R16) |
 | `persistence-save` | `key`, `value` | A preference or per-file view state to keep outside the source |

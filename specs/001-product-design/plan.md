@@ -16,7 +16,7 @@ views; the TikZ Editor fork owns every surface inside the canvas; the Quiver for
 [frame protocol](contracts/frame-protocol.md). The surfaces and their controls are fixed by
 [surfaces](contracts/surfaces.md); the state they show is in the [data model](data-model.md).
 
-The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-063, and that the editor is standalone. The other requirements and the research entries are the
+The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-060a, FR-063, and that the editor is standalone. The other requirements and the research entries are the
 maintainer's proposals; the user reviews them and sets the story priorities before
 `/speckit-tasks` orders the work.
 
@@ -60,7 +60,7 @@ code changes go through `.cache/tikz-editor` and `ZETTLR.patch`, never `vendor/`
 | I. Authored TikZ is the document | Pass: the spec keeps session state out of the source; one document history for every view (FR-012b) | Pass: the data model puts only Document source and Layer name and order in the source; layer visibility and lock are view state; the History holds source revisions, and no editor frame keeps its own (R3) |
 | II. Pen and touch first | Pass: every surface is tap-driven | Pass: every control in the surfaces contract has a 44 × 44 pt hit region; tooltips carry no command (R11) |
 | III. Established conventions, cited | Pass: each requirement cites its prior art | Pass: each research entry cites its source; R17 cites Notability and GoodNotes |
-| IV. The canvas has the attention | Pass: no instruction text (FR-070); the status line shows the pointer position only (FR-044) | Pass: the status line holds no step instruction (R10); the object menu hides inapplicable commands (R14); Properties is dimmed, as a menu-bar item, with nothing selected (R13) |
+| IV. The canvas has the attention | Pass: no instruction text (FR-070); the status line shows the pointer position only (FR-044) | Pass: the status line holds no step instruction (R10); the object menu hides inapplicable commands (R14); Properties shows the figure with nothing selected (R13) |
 | V. One scope per surface | Pass: the information architecture gives each control one surface | Pass: the surfaces contract lists each control once; popovers are anchored and single across the shell and the fork (R16, frame protocol) |
 | VI. One coordinate system | Pass: FR-042 | Pass: rulers and the status line in figure coordinates (R9, R10); 100 % is printed size (FR-041) |
 | VII. Design before implementation | Pass: this plan follows the spec | Pass: every surface and message traces to a spec item |
