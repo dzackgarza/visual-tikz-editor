@@ -60,7 +60,7 @@ try {
   const stagedSource = path.join(temporary, 'src')
   await cp(path.join(upstream, 'src'), stagedSource, { recursive: true })
 
-  // The public website uses generated/service-worker assets that Zettlr's local
+  // The public website uses generated/service-worker assets that the workbench's local
   // iframe neither loads nor owns. Keep the vendor to source/editor assets.
   for (const relative of [
     'KaTeX', 'Workbox', 'service-worker.js', 'icon-192.png', 'icon-512.png'

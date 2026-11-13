@@ -25,7 +25,7 @@ try {
   await cp(path.join(embedApp, 'dist'), staged, { recursive: true })
 
   // tikz-editor's browser text engine normally bootstraps MathJax from a CDN.
-  // The Zettlr fork points that loader at ./mathjax instead, so ship the exact
+  // The workbench fork points that loader at ./mathjax instead, so ship the exact
   // component package selected by the pinned upstream lockfile. The default
   // NewCM SVG font lives under MathJax's expected output/fonts component path.
   const coreRequire = createRequire(path.join(upstream, 'packages/core/package.json'))

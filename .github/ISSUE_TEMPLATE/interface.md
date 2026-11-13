@@ -26,4 +26,4 @@ Issues that must land first, or "—".
 
 ## Acceptance
 
-Browser stories with mouse, pen, and finger, in the standalone app and the Zettlr embed, that fail on the present build and pass after the change. Name the existing stories that assert the replaced behaviour; they are rewritten in the same change.
+Browser stories with mouse, pen, and finger, in the standalone app, that fail on the present build and pass after the change. Name the existing stories that assert the replaced behaviour; they are rewritten in the same change.

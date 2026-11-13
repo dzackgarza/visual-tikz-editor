@@ -10,7 +10,7 @@
  *                  the KaTeX-compatible subset of the actual TikZ template
  *                  graph into the vendored Quiver renderer. The template
  *                  graph has final precedence, matching TeX's include order;
- *                  Zettlr owns no independent macro semantics.
+ *                  the workbench owns no independent macro semantics.
  *
  * END HEADER
  */

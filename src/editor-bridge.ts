@@ -8,7 +8,7 @@
  *
  * Description:     Owns the exact source/range contract between one authored
  *                  ordinary TikZ block and the vendored tikz-editor iframe.
- *                  Zettlr does not parse or canonicalize the TikZ here: the
+ *                  The workbench does not parse or canonicalize the TikZ here: the
  *                  complete current bytes are handed to tikz-editor and its
  *                  complete edited bytes replace only the active block.
  *
