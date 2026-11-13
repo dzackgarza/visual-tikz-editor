@@ -233,6 +233,10 @@ actions"; the available actions depend on the selected content
 
 ## R15. Settings and More
 
+**Decided by the user, 2026-11-14**: Settings is the canvas editor's Settings window, extended with
+Appearance; for a tikzcd document it opens over Quiver, and its Canvas, Colours, and Keyboard
+shortcuts pages apply to tikzpicture documents only.
+
 **Proposal**: More (⋯) at the end of the document bar holds Settings. Settings has the categories
 Appearance (R17), Canvas, Colours (the colour collections), and Keyboard shortcuts; each changed
 setting shows its own reset (FR-062). Copy TikZ is the first item of Share and Export, before

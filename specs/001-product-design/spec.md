@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft. The user has decided FR-005, FR-006a, FR-012a, FR-012b, FR-015, FR-017 (the Figures panel), FR-034, FR-041, FR-044, FR-054, FR-060a, FR-063, FR-064 (the editor is standalone), and FR-065 (2026-11-13). Every other requirement is the
+**Status**: Draft. The user has decided FR-005, FR-006a, FR-012a, FR-012b, FR-015, FR-017 (the Figures panel), FR-034, FR-041, FR-044, FR-054, FR-060a, FR-063, FR-064 (the editor is standalone), and FR-065 (2026-11-13), and FR-062 (2026-11-14). Every other requirement is the
 maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
@@ -51,6 +51,10 @@ The editor has these surfaces. Each control appears on exactly one of them.
 - Q: How does the editor treat a file with more than one figure? → A: It edits one figure at a time; a Figures panel with thumbnails picks the figure, and the other figures stay byte for byte.
 - Q: Where does Render get the LaTeX preamble and macros? → A: From the pandoc template `~/.pandoc/templates/standalone-tikz.tex`, the one source of packages and macros; a missing template is an error that names the path.
 - Q: After Undo or Redo, what is selected on the canvas? → A: The objects that the step changed; nothing when the step removed them.
+
+### Session 2026-11-14
+
+- Q: Which Settings window does More › Settings… open? → A: The canvas editor's Settings window, extended with Appearance. For a tikzcd document it opens over Quiver. Its Canvas, Colours, and Keyboard shortcuts pages apply to tikzpicture documents only.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -294,7 +298,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 - **FR-060**: Code, Layers, Properties, and Figures MUST be separate panels, one open at a time, each opened by its own document-level control.
 - **FR-060a**: Properties MUST show the attributes of the selection and, with nothing selected, the attributes of the figure; no other surface MUST hold the figure's attributes (user decision, 2026-11-13; Keynote for iPad Format and Layout).
 - **FR-061**: A panel MUST open at the side in landscape and as a sheet in portrait, and MUST leave the selected object visible.
-- **FR-062**: Settings MUST open from More and MUST hold appearance, canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset.
+- **FR-062**: Settings MUST open from More and MUST hold appearance, canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset. Settings is the canvas editor's Settings window with an Appearance page added; for a tikzcd document it opens over Quiver. The Canvas, Colours, and Keyboard shortcuts pages apply to tikzpicture documents only (user decision, 2026-11-14).
 - **FR-063**: The editor MUST keep its files in the XDG base directories: preferences in `$XDG_CONFIG_HOME`, recovery drafts and per-file view state in `$XDG_STATE_HOME`, and the render cache in `$XDG_CACHE_HOME`, each under `visual-tikz-editor/` ([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/); user decision, 2026-11-13).
 - **FR-064**: The editor MUST be a standalone application, and no other application MUST embed it (user decision, 2026-11-13).
 - **FR-065**: Render MUST compile each figure through the pandoc template `~/.pandoc/templates/standalone-tikz.tex`, the one source of packages and macros, and Quiver MUST take its macros from the same template. When the template is missing, Render MUST show an error that names its path (user decision, 2026-11-13).

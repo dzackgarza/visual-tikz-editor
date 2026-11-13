@@ -1,8 +1,8 @@
 import { strict as assert } from "node:assert";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type Browser,
   type BrowserContext,
@@ -332,31 +332,111 @@ describe("standalone workbench host boundary", function () {
   );
 
   story(
-    { initialPage: "blank" },
-    "follows the system appearance in every view and offers no theme control of its own",
+    {
+      initialPage: "blank",
+      document: String.raw`\begin{tikzpicture}
+\draw (0,0) -- (2,1);
+\end{tikzpicture}
+`,
+    },
+    "Settings › Appearance follows the system by default, holds Light under a dark system across a restart, is kept in the config directory, and opens over Quiver",
     async function () {
       await page.emulateMedia({ colorScheme: "dark" });
       await page.goto(url);
-      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       await editorReady(page);
+      const bar = page.locator(".document-bar");
+      // The appearance is a setting, not a control of the document bar (FR-005).
+      await expect(bar.getByRole("button", { name: /\b(theme|appearance|dark|light)\b/iu })).toHaveCount(0);
       const canvas = editorFrame(page).locator("html");
       const views = async (scheme: "light" | "dark") => {
         const dark = scheme === "dark" ? /\bdark\b/u : /^(?![\s\S]*\bdark\b)/u;
         await expect(page.locator(".tikz-standalone")).toHaveClass(dark);
-        await expect(page.locator(".tikz-source-editor")).toHaveClass(dark);
         await expect(canvas).toHaveAttribute("data-color-scheme", scheme);
       };
+      const settings = page.frameLocator('iframe[title="Settings"]').getByRole("dialog", { name: "Settings" });
+      const openSettings = async () => {
+        await page.getByRole("group", { name: "More" }).locator("summary").click();
+        await page.getByRole("button", { name: "Settings…", exact: true }).click();
+        await expect(settings).toBeVisible({ timeout: 30_000 });
+      };
+      const match = settings.getByRole("checkbox", { name: "Match System Appearance" });
+      const resetAppearance = settings.getByRole("button", { name: "Reset Appearance", exact: true });
+
+      // By default the editor follows the system.
       await views("dark");
       await page.emulateMedia({ colorScheme: "light" });
       await views("light");
-      await expect(page.getByRole("button", { name: /\btheme\b/iu })).toHaveCount(0);
+      await page.emulateMedia({ colorScheme: "dark" });
+      await views("dark");
+
+      // Settings holds Appearance, Canvas, Colours, and Keyboard shortcuts (FR-062).
+      await openSettings();
+      for (const category of ["Appearance", "Canvas", "Colors", "Keyboard shortcuts"]) {
+        await expect(settings.getByRole("button", { name: category, exact: true })).toBeVisible();
+      }
+      await settings.getByRole("button", { name: "Appearance", exact: true }).click();
+      await expect(match).toBeChecked();
+      await expect(resetAppearance).toHaveCount(0);
+      await expect(settings.getByRole("radio", { name: "Light", exact: true })).toBeDisabled();
+      await match.uncheck();
+      await settings.getByRole("radio", { name: "Light", exact: true }).check();
+      await expect(resetAppearance).toBeVisible();
+
+      // A changed canvas setting shows its own reset, which restores that setting only.
+      await settings.getByRole("button", { name: "Canvas", exact: true }).click();
+      const gridSize = settings.getByRole("combobox", { name: "Grid Size" });
+      const resetGrid = settings.getByRole("button", { name: "Reset Grid Size", exact: true });
+      await expect(resetGrid).toHaveCount(0);
+      await gridSize.selectOption("Coarse");
+      await expect(resetGrid).toBeVisible();
+      await resetGrid.click();
+      await expect(gridSize).toHaveValue("standard");
+      await expect(resetGrid).toHaveCount(0);
+
+      await settings.getByRole("button", { name: "Close settings", exact: true }).click();
+      await expect(page.locator('iframe[title="Settings"]')).toHaveCount(0);
+
+      // Light holds under a dark system, in the shell, the code panel, and the canvas.
+      await views("light");
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+      await expect(page.locator(".tikz-source-editor")).not.toHaveClass(/\bdark\b/u);
+
+      // The choice survives a restart; it lives in the config directory, and the figure's
+      // directory holds the figure alone.
+      const configHome = workbench.configHome;
+      await workbench.stop();
+      workbench = await startWorkbench(process.env, configHome, undefined, documentPath);
+      url = workbench.url;
+      await page.goto(url);
+      await editorReady(page);
+      await views("light");
+      assert.deepEqual(await readdir(dirname(documentPath!)), ["figure.tikz"]);
+      assert.ok(
+        Object.keys(JSON.parse(await readFile(join(configHome, "visual-tikz-editor", "preferences.json"), "utf8"))).length > 0,
+      );
+
+      // For a tikzcd document, Settings opens over Quiver and its appearance reaches Quiver.
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
       await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
+      const quiverFrame = page.locator('iframe[title="Quiver diagram editor"]');
       const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]').locator("body");
+      await expect(quiverFrame).toBeVisible();
       await expect(quiver).not.toHaveClass(/\bdark-theme\b/u);
+      await openSettings();
+      await settings.getByRole("button", { name: "Appearance", exact: true }).click();
+      await settings.getByRole("radio", { name: "Dark", exact: true }).check();
+      await expect(quiver).toHaveClass(/\bdark-theme\b/u);
+      await expect(page.locator(".tikz-standalone")).toHaveClass(/\bdark\b/u);
+      await page.emulateMedia({ colorScheme: "light" });
+      await resetAppearance.click();
+      await expect(match).toBeChecked();
+      await expect(quiver).not.toHaveClass(/\bdark-theme\b/u);
+      await settings.getByRole("button", { name: "Close settings", exact: true }).click();
+      await expect(page.locator('iframe[title="Settings"]')).toHaveCount(0);
+      await expect(quiverFrame).toBeVisible();
       await page.emulateMedia({ colorScheme: "dark" });
       await expect(quiver).toHaveClass(/\bdark-theme\b/u);
-      await expect(page.locator(".tikz-source-editor")).toHaveClass(/\bdark\b/u);
     },
   );
 
