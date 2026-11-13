@@ -348,6 +348,47 @@ describe("standalone workbench host boundary", function () {
 
   story(
     {},
+    "Quiver's Undo shortcut takes back a label typed letter by letter as one step of the document",
+    async function () {
+      const bar = page.locator(".document-bar");
+      const code = page.locator(".cm-content");
+      const diagram = String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`;
+      await code.fill(diagram);
+      await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
+      const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+      await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
+      await expect(quiver.locator('.toolbar .action[data-name="undo"]')).toHaveCount(0);
+      await expect(quiver.locator('.toolbar .action[data-name="redo"]')).toHaveCount(0);
+
+      await quiver.locator(".vertex").nth(1).click();
+      const label = quiver.locator(".label-input");
+      await label.click();
+      await page.keyboard.press("Control+A");
+      // One letter per 150 ms: each letter reaches the document as its own change.
+      await label.pressSequentially("Typed", { delay: 150 });
+      await expect.poll(() => code.innerText(), { message: "The Quiver label did not reach the source" }).toContain("Typed");
+      const relabelled = await code.innerText();
+      await expect(bar.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
+
+      // Escape leaves the label field; Quiver's own Undo shortcut then acts on the document.
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => code.innerText(), { message: "Quiver's Undo did not take back the whole label" }).toBe(diagram);
+      await expect(quiver.locator(".vertex").nth(1)).toContainText("B");
+      // The step Quiver's Undo took back is on the document's Redo.
+      await expect(bar.getByRole("button", { name: "Redo", exact: true })).toBeEnabled();
+      await page.keyboard.press("Control+Shift+z");
+      await expect.poll(() => code.innerText(), { message: "Quiver's Redo did not restore the label" }).toBe(relabelled);
+      await expect(bar.getByRole("button", { name: "Redo", exact: true })).toBeDisabled();
+
+      // The document's own Undo also takes back the whole label in one step.
+      await bar.getByRole("button", { name: "Undo", exact: true }).click();
+      await expect.poll(() => code.innerText(), { message: "The document's Undo took back only part of the label" }).toBe(diagram);
+    },
+  );
+
+  story(
+    {},
     "opens Document Properties from File and by Ctrl+Shift+D, writes the scale Properties writes, and closes on Escape",
     async function () {
       await editorReady(page);
