@@ -448,7 +448,11 @@ describe("standalone native file workflow", function () {
       await result.getByRole("button", { name: "Accept", exact: true }).click();
       await expect(result).toHaveCount(0);
     };
-    const fitted = (source: string) => (source.match(/\.\. controls/g) ?? []).length > 0;
+    // A fit replaces the recorded samples, one point each, by a segment or a Bézier curve: at most four points.
+    const fitted = (source: string) =>
+      [...source.matchAll(/\\begin\{scope\}\n(\\draw[^\n]*)\n\\end\{scope\}/g)].some(
+        ([, draw]) => (draw.match(/\(-?[\d.]+(?:pt)?,-?[\d.]+(?:pt)?\)/g) ?? []).length <= 4,
+      );
     const undo = () => frame.getByRole("button", { name: "Undo", exact: true }).click();
     const redo = () => frame.getByRole("button", { name: "Redo", exact: true }).click();
     const exportSvg = async (name: string) => {
@@ -473,6 +477,8 @@ describe("standalone native file workflow", function () {
     await expect.poll(() => existsSync(filePath)).toBe(true);
     await expect.poll(onDisk).toBe(authored);
     const authoredPicture = await exportSvg("authored");
+    await editorReady(page);
+    const authoredElements = await frame.locator("[data-source-id]").count();
 
     // A drawn stroke is added to the file; every authored line stays as written.
     await draw(0.3, 0.7);
@@ -482,7 +488,9 @@ describe("standalone native file workflow", function () {
     for (const line of authored.split("\n")) {
       assert.ok(drawn.includes(line), `The drawn file lost the authored line ${line}:\n${drawn}`);
     }
-    const drawnElements = await frame.locator("[data-source-id]").count();
+    // The stroke is one element of the canvas.
+    const drawnElements = authoredElements + 1;
+    await expect(frame.locator("[data-source-id]")).toHaveCount(drawnElements);
 
     // Undo steps back through the fit and the stroke to the authored bytes; Redo returns both.
     await undo();
