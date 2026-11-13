@@ -21,6 +21,7 @@ import { z } from "zod";
 import { editorStateSchema } from "../vendor/tikz-editor/embed/src/editor-state";
 import { parseMathJaxMacros } from "../src/mathjax-config";
 import { projectQuiverMacros } from "../src/quiver-macros";
+import { reportPageErrors } from "./page-reporter";
 import {
   renderTikz,
   resolveTikzDataDir,
@@ -148,6 +149,12 @@ function revisionOf(source: string): string {
   return `"${createHash("sha256").update(source).digest("hex")}"`;
 }
 
+// Each page frame reports its errors to the launch log (FR-066). The script goes first in
+// <head>, before any module script, as Vite's dev server injects its client into each page.
+const PAGE_REPORTER = `(${reportPageErrors})();`;
+const PAGE_REPORTER_TAG = '<script src="/api/page-reporter.js"></script>';
+const PageLogEntry = z.object({ level: z.enum(["error", "warn"]), frame: z.string(), message: z.string() });
+
 /** Serve `relative` from `root`; a path that resolves outside `root` is not found. */
 async function serveUnder(root: string, relative: string): Promise<Response> {
   const requested = path.resolve(root, `.${relative}`);
@@ -160,7 +167,12 @@ async function serveUnder(root: string, relative: string): Promise<Response> {
     return new Response("Not found", { status: 404 });
   }
   if (!actual.startsWith(`${root}${path.sep}`)) return new Response("Not found", { status: 404 });
-  return new Response(Bun.file(actual));
+  if (path.extname(actual) !== ".html") return new Response(Bun.file(actual));
+  const page = await readFile(actual, "utf8");
+  if (!/<head>/i.test(page)) throw new Error(`A served page has no <head>: ${actual}`);
+  return new Response(page.replace(/<head>/i, (head) => head + PAGE_REPORTER_TAG), {
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
 }
 
 async function currentSource(): Promise<string> {
@@ -376,11 +388,22 @@ const server = Bun.serve({
   // Handler failures reach the page as their message, not as Bun's development error page.
   // https://bun.com/docs/runtime/http/error-handling
   error(error) {
+    console.error(`${new Date().toISOString()} file host: ${error.stack ?? error.message}`);
     return new Response(error.message, { status: 500, headers: { "content-type": "text/plain; charset=utf-8" } });
   },
   async fetch(request) {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/document") return await handleDocument(request);
+    if (pathname === "/api/page-reporter.js" && request.method === "GET") {
+      return new Response(PAGE_REPORTER, { headers: { "content-type": "text/javascript; charset=utf-8" } });
+    }
+    if (pathname === "/api/log" && request.method === "POST") {
+      const entry = PageLogEntry.safeParse(JSON.parse(await request.text()));
+      if (!entry.success) return new Response(entry.error.message, { status: 400 });
+      const { level, frame, message } = entry.data;
+      console.error(`${new Date().toISOString()} page ${level} ${frame}: ${message}`);
+      return new Response(null, { status: 204 });
+    }
     if (pathname === "/api/export" && request.method === "POST") return await handleExport(request);
     if (pathname === "/api/preferences" && request.method === "GET") return Response.json(preferences);
     if (pathname === "/api/preferences" && request.method === "PUT") {

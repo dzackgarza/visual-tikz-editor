@@ -10,3 +10,5 @@ tauri-build = { version = "2", features = ["config-toml"] }
 tauri = { version = "2", features = ["config-toml"] }
 tauri-plugin-shell = "2"
 tauri-plugin-clipboard-manager = "=2.3.2"
+libc = "0.2"
+webkit2gtk = "2.0"
