@@ -6500,7 +6500,7 @@ index 0ddde08e..e59d48f6 100644
 +  grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
 +}
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..a7d8899d 100644
+index a3293df2..2687db85 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,5 +1,7 @@
@@ -6636,7 +6636,7 @@ index a3293df2..a7d8899d 100644
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
    const matrixPreviewColumns = matrixHoverSize?.columns ?? selectedAddMatrixColumns;
-@@ -56,70 +130,180 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,70 +130,183 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -6696,7 +6696,10 @@ index a3293df2..a7d8899d 100644
 +      // Grid row/column 2 already excludes the visible ruler cells.
 +      const bounds = viewport.getBoundingClientRect();
 +      if (bounds.width <= 16 || bounds.height <= 16) return;
-+      const next = { left: bounds.left + 8, right: bounds.right - 8, top: bounds.top + 8, bottom: bounds.bottom - 8 };
++      // The toolbar stays above the canvas's corner controls (Snap, zoom), so it never covers them.
++      const cornerTop = Math.min(bounds.bottom, ...Array.from(
++        document.querySelectorAll<HTMLElement>("[data-canvas-corner]"), (corner) => corner.getBoundingClientRect().top));
++      const next = { left: bounds.left + 8, right: bounds.right - 8, top: bounds.top + 8, bottom: cornerTop - 8 };
 +      setSafeRect((current) => current?.left === next.left && current.right === next.right && current.top === next.top && current.bottom === next.bottom ? current : next);
 +    }
 +    const observer = new ResizeObserver(measureCanvas);
@@ -6858,7 +6861,7 @@ index a3293df2..a7d8899d 100644
              }}
              testIdPrefix="toolbar-shape-choice"
            />
-@@ -132,9 +316,11 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -132,9 +319,11 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        const isSelected = (row: number, column: number): boolean =>
          row <= matrixPreviewRows && column <= matrixPreviewColumns;
        return (
@@ -6871,7 +6874,7 @@ index a3293df2..a7d8899d 100644
              data-testid="toolbar-matrix-picker-grid"
              onMouseLeave={() => { setMatrixHoverSize(null); }}
            >
-@@ -144,6 +330,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -144,6 +333,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                    <button
                      key={`${row}-${column}`}
                      type="button"
@@ -6879,7 +6882,7 @@ index a3293df2..a7d8899d 100644
                      className={[
                        popupCss.matrixPickerCell,
                        isSelected(row, column) ? popupCss.matrixPickerCellSelected : ""
-@@ -154,7 +341,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -154,7 +344,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                        dispatch({ type: "SET_ADD_MATRIX_PRESET", rows: row, columns: column });
                        dispatch({ type: "SET_TOOL_MODE", mode: "addMatrix" });
                        setMatrixHoverSize(null);
@@ -6888,7 +6891,7 @@ index a3293df2..a7d8899d 100644
                      }}
                      data-testid={`toolbar-matrix-picker-cell-${row}-${column}`}
                      aria-label={`${row} rows by ${column} columns`}
-@@ -170,69 +357,302 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,69 +360,302 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -7250,7 +7253,7 @@ index a3293df2..a7d8899d 100644
    const renderShapeButton = () => {
      const mode = "addShape" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -257,6 +677,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +680,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7258,7 +7261,7 @@ index a3293df2..a7d8899d 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +720,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +723,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7266,7 +7269,7 @@ index a3293df2..a7d8899d 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -321,7 +743,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +746,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -7274,7 +7277,7 @@ index a3293df2..a7d8899d 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +751,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +754,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -7286,7 +7289,7 @@ index a3293df2..a7d8899d 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +764,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +767,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -7347,7 +7350,7 @@ index a3293df2..a7d8899d 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -358,9 +830,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -358,9 +833,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
@@ -7358,7 +7361,7 @@ index a3293df2..a7d8899d 100644
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
-@@ -387,4 +857,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +860,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -10619,7 +10622,7 @@ index 4e22ccfa..b5118ab1 100644
          <Suspense fallback={null}>
            <EquationModal
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
-index f0ff59f8..cc04b93e 100644
+index f0ff59f8..b7ade8f0 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanelView.tsx
 @@ -14,6 +14,7 @@ import type { CanvasContextMenuDefinition } from "../../context-menu";
@@ -11000,10 +11003,10 @@ index f0ff59f8..cc04b93e 100644
          </div>
 +        {/* Without a status bar the canvas's view controls sit in its lower corners, off the drawing toolbar (FR-007). */}
 +        {platform.id === "zettlr-embed" ? <>
-+          <div className={[css.canvasCorner, css.canvasCornerStart].join(" ")}>
++          <div className={[css.canvasCorner, css.canvasCornerStart].join(" ")} data-canvas-corner>
 +            <SnapControl triggerClassName={css.cornerButton} activeClassName={css.cornerButtonActive} />
 +          </div>
-+          <div className={[css.canvasCorner, css.canvasCornerEnd].join(" ")}>
++          <div className={[css.canvasCorner, css.canvasCornerEnd].join(" ")} data-canvas-corner>
 +            <ZoomDisplayControl triggerClassName={css.cornerButton} />
 +          </div>
 +        </> : null}
