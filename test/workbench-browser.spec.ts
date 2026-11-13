@@ -2928,7 +2928,7 @@ describe("standalone workbench host boundary", function () {
         ]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
         await tap(strip.getByRole("button", { name: "Style", exact: true }));
-        await style.getByLabel("Style name").fill("accent line");
+        await style.getByLabel("Style name", { exact: true }).fill("accent line");
         await tap(style.getByRole("button", { name: "Save style" }));
         await step("The style is not in the source");
         assert.match(last(), /accent line\/\.style=\{red,\s*line width=2pt\}/);
@@ -4342,7 +4342,7 @@ describe("standalone workbench host boundary", function () {
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         await tap(strip.getByRole("button", { name: "Style", exact: true }));
         const dialog = frame.getByRole("dialog", { name: "Style" });
-        await dialog.getByLabel("Style name").fill("accent line");
+        await dialog.getByLabel("Style name", { exact: true }).fill("accent line");
         await tap(dialog.getByRole("button", { name: "Save style" }));
         await expect.poll(async () => (await editorDebug(page)).source).toMatch(/accent line\/\.style=\{red,\s*line width=2pt\}/);
         const saved = (await editorDebug(page)).source;
@@ -4492,7 +4492,7 @@ describe("standalone workbench host boundary", function () {
         assert.deepEqual(await names(), ["Default"]);
         // A new collection starts from the current colours and becomes the active one.
         await tap(dialog.getByRole("button", { name: "New collection" }));
-        await dialog.getByLabel("Collection name").fill("Roots");
+        await dialog.getByLabel("Collection name", { exact: true }).fill("Roots");
         assert.deepEqual(await names(), ["Default", "Roots"]);
         assert.equal(await collection.locator("option:checked").innerText(), "Roots");
         await expect.poll(async () => (await activeColors())?.length ?? 0).toBeGreaterThan(1);
@@ -5370,7 +5370,7 @@ describe("standalone workbench host boundary", function () {
           "Toolbar Position",
           "Generated Source Indent",
         ]);
-        await dialog.getByLabel("Toolbar Position").selectOption("right");
+        await dialog.getByLabel("Toolbar Position", { exact: true }).selectOption("right");
         await expect(frame.locator("[data-diagram-tools]")).toHaveAttribute("data-dock", "right");
       },
     );
@@ -5729,9 +5729,9 @@ describe("standalone workbench host boundary", function () {
         await tap(zoomControl(frame));
         const settings = await openSettings();
         await tap(settings.getByRole("button", { name: "Canvas", exact: true }));
-        await settings.getByLabel("Grid Size").selectOption("coarse");
-        await settings.getByLabel("Grid Opacity").fill("42");
-        await settings.getByLabel("Edit Handle Size").selectOption("11");
+        await settings.getByLabel("Grid Size", { exact: true }).selectOption("coarse");
+        await settings.getByLabel("Grid Opacity", { exact: true }).fill("42");
+        await settings.getByLabel("Edit Handle Size", { exact: true }).selectOption("11");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
         await setSnapRule(frame, input, "Lattice", false);
         await setSnapRule(frame, input, "Objects", false);
@@ -5756,9 +5756,9 @@ describe("standalone workbench host boundary", function () {
         await tap(zoomControl(reopened));
         const reopenedSettings = await openSettings();
         await tap(reopenedSettings.getByRole("button", { name: "Canvas", exact: true }));
-        await expect(reopenedSettings.getByLabel("Grid Size")).toHaveValue("coarse");
-        await expect(reopenedSettings.getByLabel("Grid Opacity")).toHaveValue("42");
-        await expect(reopenedSettings.getByLabel("Edit Handle Size")).toHaveValue("11");
+        await expect(reopenedSettings.getByLabel("Grid Size", { exact: true })).toHaveValue("coarse");
+        await expect(reopenedSettings.getByLabel("Grid Opacity", { exact: true })).toHaveValue("42");
+        await expect(reopenedSettings.getByLabel("Edit Handle Size", { exact: true })).toHaveValue("11");
       },
     );
   }
@@ -9300,7 +9300,7 @@ describe("standalone workbench host boundary", function () {
       }
       await page.goto(`${url}svg-viewer.html`);
       for (const svg of exports) {
-        await page.getByLabel("Exported SVG").fill(svg);
+        await page.getByLabel("Exported SVG", { exact: true }).fill(svg);
         await page.getByRole("button", { name: "Append diagram" }).click();
       }
       const owners = await page.locator("figure").evaluateAll((figures) =>
@@ -9324,7 +9324,7 @@ describe("standalone workbench host boundary", function () {
       const exported = await canvasSnapshot();
       await page.goto(`${url}svg-viewer.html`);
       await context.setOffline(true);
-      await page.getByLabel("Exported SVG").fill(exported.svg);
+      await page.getByLabel("Exported SVG", { exact: true }).fill(exported.svg);
       await page.getByRole("button", { name: "Append diagram" }).click();
       const href = await page.locator("figure image").getAttribute("href");
       assert.ok(
@@ -10309,7 +10309,7 @@ describe("standalone workbench host boundary", function () {
       const colour = drawingToolbar(frame).getByRole("button", { name: /^Colour 1: / });
       await tap(colour);
       const popup = frame.getByRole("dialog", { name: "Colour options" });
-      await popup.getByLabel("Choose color").fill("#112233");
+      await popup.getByLabel("Choose color", { exact: true }).fill("#112233");
       const opacity = popup.getByRole("slider", { name: "Opacity" });
       await opacity.focus();
       for (let step = 0; step < 50; step++) {
