@@ -96,6 +96,11 @@ watch(
   },
 );
 
+function focus(): void {
+  view?.focus();
+}
+defineExpose({ focus });
+
 onBeforeUnmount(() => {
   unsubscribe?.();
   view?.destroy();

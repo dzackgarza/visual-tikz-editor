@@ -37,6 +37,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `selection` | `empty` | Properties shows the figure when the selection is empty (FR-060a) |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | The panel that is open, after any change, including its own close button |
 | `popover-opened` | — | The canvas opened a popover; the shell closes its own (research R16) |
+| `settings-request` | — | The Settings shortcut inside the canvas; the shell opens the Settings window (FR-062) |
 | `persistence-save` | `key`, `value` | A preference to keep outside the source, among them Settings › Appearance (FR-062) |
 | `view-state` | `state`: figure, selection, tool, view (the scale and the figure point at the centre of the canvas, as Inkscape keeps a document's zoom and centre), Zoom to Fit, geometry interpretation, and the locked and hidden statements (each its span and text; data-model Layer) | The settled view of the loaded file; the workbench keeps it in `$XDG_STATE_HOME/visual-tikz-editor/view-state.json`, keyed by file path, and sends it in the next `load` of that file (FR-040, FR-063) |
 | `source-selection` | `source`, `from`, `to` | The selected source range, for the Code panel |

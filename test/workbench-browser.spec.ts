@@ -5779,8 +5779,10 @@ describe("standalone workbench host boundary", function () {
         await tap(settings.getByRole("list", { name: "Commands", exact: true }).getByRole("button"));
         await page.keyboard.press("q");
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
+        await expect(settings).toHaveCount(0);
         await page.keyboard.press("q");
-        await expect(settings).toBeVisible();
+        await expect(settings).toBeVisible({ timeout: 30_000 });
+        await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
         await search.fill("");
         await search.press("q");
         await expect(search).toHaveValue("q");

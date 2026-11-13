@@ -2286,7 +2286,7 @@ index 758bd611..1ab0df8c 100644
      selectedAddShape: state.selectedAddShape,
      selectedAddMatrixRows: state.selectedAddMatrixRows,
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..c7d893de 100644
+index 5818d92b..e126956c 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
 @@ -12,7 +12,8 @@ import { computeSnapshot, makeEmptySnapshot, setMathJaxFont, type ComputeRequest
@@ -2322,7 +2322,19 @@ index 5818d92b..c7d893de 100644
  import { TabStrip } from "./TabStrip";
  import type { UnsavedChangesDecision } from "./UnsavedChangesModal";
  import type { FileConflictDecision } from "./FileConflictModal";
-@@ -167,7 +169,7 @@ function isEditableShortcutTarget(target: EventTarget | null): target is HTMLEle
+@@ -63,11 +65,6 @@ const OpenFromArxivModal = lazy(async () => {
+   return { default: mod.OpenFromArxivModal };
+ });
+ 
+-const SettingsModal = lazy(async () => {
+-  const mod = await import("./SettingsModal");
+-  return { default: mod.SettingsModal };
+-});
+-
+ const SvgExportModal = lazy(async () => {
+   const mod = await import("./SvgExportModal");
+   return { default: mod.SvgExportModal };
+@@ -167,7 +164,7 @@ function isEditableShortcutTarget(target: EventTarget | null): target is HTMLEle
    if (!(target instanceof HTMLElement)) {
      return false;
    }
@@ -2331,7 +2343,7 @@ index 5818d92b..c7d893de 100644
  }
  
  function selectAllInEditableTarget(target: HTMLElement): boolean {
-@@ -256,10 +258,8 @@ export function App() {
+@@ -256,10 +253,8 @@ export function App() {
      activeSourceScrubSourceId: s.activeSourceScrubSourceId,
      dispatch: s.dispatch
    })));
@@ -2343,7 +2355,15 @@ index 5818d92b..c7d893de 100644
      mathJaxFont: s.settings.rendering.mathJaxFont
    })));
    const platform = getActiveEditorPlatform();
-@@ -298,7 +298,6 @@ export function App() {
+@@ -272,7 +267,6 @@ export function App() {
+     paper: null,
+     selectedCandidateId: null
+   });
+-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+   const [showSaveWorkspaceModal, setShowSaveWorkspaceModal] = useState(false);
+   const [showManageWorkspacesModal, setShowManageWorkspacesModal] = useState(false);
+   const [showAboutModal, setShowAboutModal] = useState(false);
+@@ -298,7 +292,6 @@ export function App() {
    } | null>(null);
    const [svgExportSvgResult, setSvgExportSvgResult] = useState<EmitSvgResult | null>(null);
    const [pngExportSvgResult, setPngExportSvgResult] = useState<EmitSvgResult | null>(null);
@@ -2351,7 +2371,18 @@ index 5818d92b..c7d893de 100644
    const [pendingClose, setPendingClose] = useState<{ intent: CloseIntent; dirtyDocumentIds: string[] } | null>(null);
    const [pendingFileConflict, setPendingFileConflict] = useState<PendingFileConflict | null>(null);
    const requestCloseIntentRef = useRef<(intent: CloseIntent) => void>(() => {});
-@@ -677,26 +676,7 @@ export function App() {
+@@ -602,8 +595,9 @@ export function App() {
+       activeFigureId
+     });
+   }, [activeFigureId, source]);
++  // The shell shows Settings over the whole window (FR-062); the Settings command asks it to.
+   const handleOpenSettingsCommand = useCallback(() => {
+-    setShowSettingsModal(true);
++    window.dispatchEvent(new Event("tikz-embed-settings-request"));
+   }, []);
+   const handleCheckForUpdatesCommand = useCallback(() => {
+     void handleManualUpdateCheck();
+@@ -677,26 +671,7 @@ export function App() {
    commandRuntimeRef.current = commandRuntime;
    toolModeRef.current = toolMode;
  
@@ -2379,7 +2410,7 @@ index 5818d92b..c7d893de 100644
  
    useEffect(() => {
      if (!platform.updates || startupUpdateCheckStarted) {
-@@ -1534,7 +1514,6 @@ export function App() {
+@@ -1534,7 +1509,6 @@ export function App() {
          };
        },
        setCanvasTransform: (transform) => {
@@ -2387,7 +2418,7 @@ index 5818d92b..c7d893de 100644
          requestAnimationFrame(() => {
            dispatch({ type: "SET_CANVAS_TRANSFORM", transform });
          });
-@@ -1596,17 +1575,6 @@ export function App() {
+@@ -1596,17 +1570,6 @@ export function App() {
      });
    }, [platform.id, snapshot.source, source]);
  
@@ -2405,7 +2436,7 @@ index 5818d92b..c7d893de 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1648,216 +1616,48 @@ export function App() {
+@@ -1648,216 +1611,48 @@ export function App() {
        }
  
        const runtime = commandRuntimeRef.current;
@@ -2653,7 +2684,7 @@ index 5818d92b..c7d893de 100644
      }
  
      window.addEventListener("keydown", onKeyDown);
-@@ -1872,7 +1672,6 @@ export function App() {
+@@ -1872,7 +1667,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -2661,7 +2692,7 @@ index 5818d92b..c7d893de 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1690,6 @@ export function App() {
+@@ -1891,7 +1685,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -2669,7 +2700,7 @@ index 5818d92b..c7d893de 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +1828,14 @@ export function App() {
+@@ -2030,13 +1823,14 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -2685,7 +2716,7 @@ index 5818d92b..c7d893de 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,22 +1848,23 @@ export function App() {
+@@ -2049,22 +1843,23 @@ export function App() {
              : null
          }
        />
@@ -2713,7 +2744,19 @@ index 5818d92b..c7d893de 100644
        </Suspense>
        {showOpenExampleModal ? (
          <Suspense fallback={null}>
-@@ -2150,12 +1950,11 @@ export function App() {
+@@ -2097,11 +1892,6 @@ export function App() {
+           />
+         </Suspense>
+       ) : null}
+-      {showSettingsModal ? (
+-        <Suspense fallback={null}>
+-          <SettingsModal onClose={() => { setShowSettingsModal(false); }} />
+-        </Suspense>
+-      ) : null}
+       {equationModalState ? (
+         <Suspense fallback={null}>
+           <EquationModal
+@@ -2150,12 +1940,11 @@ export function App() {
            <RepeatModal
              columns={repeatModalState.columns}
              rows={repeatModalState.rows}
@@ -2731,7 +2774,7 @@ index 5818d92b..c7d893de 100644
              onColumnsChange={(columns) => {
                setRepeatModalState((current) => current == null ? current : {
                  ...current,
-@@ -2168,17 +1967,11 @@ export function App() {
+@@ -2168,17 +1957,11 @@ export function App() {
                  rows: clampRepeatCount(rows)
                });
              }}
@@ -2753,7 +2796,7 @@ index 5818d92b..c7d893de 100644
              }}
              onClose={() => {
                setRepeatModalState(null);
-@@ -2345,13 +2138,6 @@ function clampRepeatCount(value: number): number {
+@@ -2345,13 +2128,6 @@ function clampRepeatCount(value: number): number {
    return Math.max(1, Math.floor(value));
  }
  

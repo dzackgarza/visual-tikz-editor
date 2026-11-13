@@ -49,7 +49,7 @@
         </div>
       </details>
     </header>
-    <SettingsWindow v-if="settingsUrl !== null" :url="settingsUrl" :host="host" :theme="theme" @close="settingsUrl = null" />
+    <SettingsWindow v-if="settingsUrl !== null" :url="settingsUrl" :host="host" :theme="theme" @close="closeSettings" />
     <div v-if="unsavedPrompt" class="dialog-backdrop">
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" @keydown.esc.stop.prevent="resolveUnsaved('cancel')">
         <h2 id="unsaved-title">Save changes?</h2>
@@ -74,7 +74,7 @@
       <div ref="paneHost" class="pane-host" :class="{ split: bothOpen }"
         :style="bothOpen ? { gridTemplateColumns: `${splitPercent}% 6px minmax(0, 1fr)` } : undefined">
         <div v-if="visited.has('code')" v-show="isVisible('code')" class="view-pane" :style="paneStyle('code')">
-          <SourceEditor class="tikz-standalone-source" :document="documentHistory" :theme="theme" :selection="sourceSelection" />
+          <SourceEditor ref="sourceEditor" class="tikz-standalone-source" :document="documentHistory" :theme="theme" :selection="sourceSelection" />
         </div>
         <div v-for="view in workbenchViews" :key="view" class="view-pane" :class="{ 'pane-hidden': !isVisible(view) }" :style="paneStyle(view)">
           <TikzWorkbench v-if="visited.has(view)" :ref="(handle) => setWorkbench(view, handle)" :key="`${documentKey}-${view}`"
@@ -82,7 +82,8 @@
             :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
             :initial-mode="modeForView(view)" :panel="view === 'canvas' ? canvasPanel : null"
             @panel="canvasPanel = $event" @status="onEditorStatus(view, $event)"
-            @undo-request="undoDocument" @redo-request="redoDocument" @popover-opened="closeShellMenus" />
+            @undo-request="undoDocument" @redo-request="redoDocument" @popover-opened="closeShellMenus"
+            @settings-request="openSettings" />
         </div>
         <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
           aria-orientation="vertical" :aria-valuenow="Math.round(splitPercent)" aria-valuemin="15" aria-valuemax="85"
@@ -157,8 +158,25 @@ function editorPageUrl(view: { view?: "settings" }): string {
   return url.href;
 }
 const settingsUrl = ref<string | null>(null);
+// When Settings closes, keyboard focus returns to the element that opened it; a menu item
+// that is gone by then gives it to the view on screen (WAI-ARIA APG, Dialog (Modal) pattern).
+let settingsOpener: Element | null = null;
+const sourceEditor = ref<InstanceType<typeof SourceEditor> | null>(null);
 function openSettings(): void {
+  settingsOpener = window.document.activeElement;
   settingsUrl.value = editorPageUrl({ view: "settings" });
+}
+async function closeSettings(): Promise<void> {
+  settingsUrl.value = null;
+  await nextTick();
+  const opener = settingsOpener;
+  if (opener instanceof HTMLElement && opener !== window.document.body) {
+    opener.focus();
+    if (window.document.activeElement === opener) return;
+  }
+  const view = active.right ?? active.left;
+  if (view === "code") sourceEditor.value?.focus();
+  else if (view !== null) workbenches.get(view)?.focus();
 }
 // The view at which the canvas shows the open file, kept outside its source (FR-040).
 // Writes go one at a time, and each sends the newest view.

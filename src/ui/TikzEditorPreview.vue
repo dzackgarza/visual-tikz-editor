@@ -74,6 +74,7 @@ const emit = defineEmits<{
   (e: "undoRequest"): void;
   (e: "redoRequest"): void;
   (e: "popoverOpened"): void;
+  (e: "settingsRequest"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
 }>();
@@ -173,7 +174,12 @@ function dismissPopover(): void {
   if (loaded.value) postToEditor({ action: "dismiss-popover" });
 }
 
-defineExpose({ snapshot, currentSource, zoom, dismissPopover });
+// Keyboard focus goes back to the canvas after a window over it closes (FR-062).
+function focus(): void {
+  frame.value?.focus();
+}
+
+defineExpose({ snapshot, currentSource, zoom, dismissPopover, focus });
 
 function sendFullLoad(): void {
   if (!hostReady.value) {
@@ -386,6 +392,9 @@ function onMessage(event: MessageEvent): void {
       break;
     case "popover-opened":
       emit("popoverOpened");
+      break;
+    case "settings-request":
+      emit("settingsRequest");
       break;
     case "source-selection": {
       if (message.revision !== session.value.revision || typeof message.source !== "string") break;

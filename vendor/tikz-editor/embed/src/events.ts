@@ -5,7 +5,7 @@ import { snapshotResultSchema } from './snapshot-protocol';
 
 // A change to any message of commands.ts or events.ts raises this version. The shell
 // refuses an editor that reports another one.
-export const FRAME_PROTOCOL_VERSION = '5';
+export const FRAME_PROTOCOL_VERSION = '6';
 
 export const commandFailureSchema = z.enum(['invalid-command', 'stale-target', 'cancelled', 'timeout', 'busy']);
 export type CommandFailure = z.infer<typeof commandFailureSchema>;
@@ -43,6 +43,8 @@ export const editorNotificationSchema = z.discriminatedUnion('event', [
   // The panel that is open after any change, including its own close button.
   z.object({ ...notificationIdentity, event: z.literal('panel'), panel: panelSchema }),
   z.object({ ...notificationIdentity, event: z.literal('popover-opened') }),
+  // The Settings command inside the canvas; the shell opens the Settings window (FR-062).
+  z.object({ ...notificationIdentity, event: z.literal('settings-request') }),
   z.object({ ...notificationIdentity, event: z.literal('status'), modified: z.boolean() }),
   z.object({ ...notificationIdentity, event: z.literal('persistence-save'), key: z.string(), value: z.string() }),
   // The view of the loaded file changed; the shell keeps it to reopen the file at it (FR-040).

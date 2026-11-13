@@ -485,11 +485,13 @@ function HostBridge() {
 		const undoRequested = () => postToHost({ event: 'undo-request' });
 		const redoRequested = () => postToHost({ event: 'redo-request' });
 		const popoverOpened = () => postToHost({ event: 'popover-opened' });
+		const settingsRequested = () => postToHost({ event: 'settings-request' });
 		const forkEvents: [string, () => void][] = [
 			['tikz-embed-panel-changed', panelChanged],
 			['tikz-embed-undo-request', undoRequested],
 			['tikz-embed-redo-request', redoRequested],
 			['tikz-embed-popover-opened', popoverOpened],
+			['tikz-embed-settings-request', settingsRequested],
 		];
 		for (const [name, listener] of forkEvents) window.addEventListener(name, listener);
 		window.addEventListener('message', handleMessage);

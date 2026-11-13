@@ -228,7 +228,11 @@ async function currentSource(signal: AbortSignal): Promise<string> {
   }
   return session.value.source.source;
 }
-defineExpose({ currentSource });
+// Keyboard focus goes back to Quiver after a window over it closes (FR-062).
+function focus(): void {
+  frame.value?.focus();
+}
+defineExpose({ currentSource, focus });
 
 function onMessage(event: MessageEvent<QuiverHostMessage>): void {
   if (event.source !== frame.value?.contentWindow || event.origin !== quiverOrigin) return;
