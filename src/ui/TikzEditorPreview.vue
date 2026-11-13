@@ -395,7 +395,7 @@ function onMessage(event: MessageEvent): void {
       ) {
         break;
       }
-      props.host.selectSource?.(active.sourceFrom + message.from, active.sourceFrom + message.to);
+      props.host.selectSource(active.sourceFrom + message.from, active.sourceFrom + message.to);
       break;
     }
   }

@@ -83,9 +83,6 @@ const emit = defineEmits<{
   (e: "busy", busy: boolean): void;
 }>();
 
-if (props.host.rendering === undefined) {
-  throw new Error("The host has no compiled TikZ renderer");
-}
 const rendering = props.host.rendering;
 
 interface FigureViewerHandle {
