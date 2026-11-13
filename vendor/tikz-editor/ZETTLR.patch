@@ -1,8 +1,26 @@
 diff --git a/apps/landing/scripts/generate-tool-svgs.mts b/apps/landing/scripts/generate-tool-svgs.mts
-index 4b04e6f0..5d645412 100644
+index 4b04e6f0..ba4064f3 100644
 --- a/apps/landing/scripts/generate-tool-svgs.mts
 +++ b/apps/landing/scripts/generate-tool-svgs.mts
-@@ -158,6 +158,18 @@ const previews: readonly ToolPreview[] = [
+@@ -93,6 +93,17 @@ const previews: readonly ToolPreview[] = [
+ \node[draw,circle] (b) at (0.58,0) {B};
+ \draw[->] (a) -- (b);`
+   },
++  {
++    mode: "lasso",
++    source: String.raw`\fill (-0.6,0.1) circle (1.5pt);
++\fill (0,-0.15) circle (1.5pt);
++\fill (0.55,0.2) circle (1.5pt);
++\draw (-0.6,0.1) -- (0,-0.15) -- (0.55,0.2);`
++  },
++  {
++    mode: "erase",
++    source: String.raw`\draw (-0.9,-0.1) .. controls (-0.4,0.4) and (0.1,-0.4) .. (0.9,0.15);`
++  },
+   {
+     mode: "magnify",
+     source: String.raw`\node[draw, circle, fill=blue!10] (s) at (-1.12,0.22) {$s$};
+@@ -158,6 +169,18 @@ const previews: readonly ToolPreview[] = [
      mode: "addCircle",
      source: String.raw`\draw (0,0) circle (0.47cm);`
    },
@@ -21,11 +39,42 @@ index 4b04e6f0..5d645412 100644
    {
      mode: "addBucket",
      source: String.raw`\draw[fill=green!18, draw=black] (-1,-0.25) rectangle (1,0.25);`
+@@ -255,7 +278,7 @@ function buildSelectionOverlaySvg({
+   const sourceBoundsSvg = collectSourceBounds(elements, viewBox);
+   const contentBounds = boundsForPreviewContent(sourceBoundsSvg);
+   const scopeOverlay = augmentScopeOverlayWithMatrices(
+-    buildScopeOverlayIndex(statements, sourceBoundsSvg),
++    buildScopeOverlayIndex(statements, sourceBoundsSvg, new Set()),
+     elements,
+     sourceBoundsSvg
+   );
+@@ -434,7 +457,7 @@ function resolvePreviewSelectedSourceIds(
+   elements: readonly SceneElement[],
+   editHandles: readonly EditHandle[]
+ ): Set<string> {
+-  if (preview.mode === "magnify") {
++  if (preview.mode === "magnify" || preview.mode === "erase") {
+     return new Set();
+   }
+   const matrixSourceIds = new Set(elements.map((element) => element.matrixCell?.matrixSourceId).filter((id): id is string => Boolean(id)));
 diff --git a/apps/landing/src/App.tsx b/apps/landing/src/App.tsx
-index ac3169df..111a2bfc 100644
+index ac3169df..741ce334 100644
 --- a/apps/landing/src/App.tsx
 +++ b/apps/landing/src/App.tsx
-@@ -177,6 +177,15 @@ const TOOL_COPY: Record<ToolPreviewMode, { name?: string; description: ReactNode
+@@ -137,6 +137,12 @@ const TOOL_COPY: Record<ToolPreviewMode, { name?: string; description: ReactNode
+   select: {
+     description: "Move, resize, and rotate objects, edit paths, and multi-select to edit multiple elements at once."
+   },
++  lasso: {
++    description: "Draw a loop around objects to select them."
++  },
++  erase: {
++    description: "Erase every stroke you sweep across."
++  },
+   magnify: {
+     description: <>A virtual magnifying glass to look at details in the figure, similar to <a href='https://www.texstudio.org/'>TeXstudio</a>.</>
+   },
+@@ -177,6 +183,15 @@ const TOOL_COPY: Record<ToolPreviewMode, { name?: string; description: ReactNode
    addCircle: {
      description: "Draw a circle path."
    },
@@ -41,7 +90,7 @@ index ac3169df..111a2bfc 100644
    addBucket: {
      description: "Apply a fill color to an existing closed region."
    }
-@@ -235,8 +244,8 @@ const FEATURE_GROUPS = [
+@@ -235,8 +250,8 @@ const FEATURE_GROUPS = [
      title: "Panels",
      icon: RiSideBarLine,
      items: [
@@ -53,10 +102,23 @@ index ac3169df..111a2bfc 100644
      ]
    },
 diff --git a/apps/landing/src/generated/tool-svgs.ts b/apps/landing/src/generated/tool-svgs.ts
-index 9dde7f6e..566e2d80 100644
+index 9dde7f6e..5599f4a6 100644
 --- a/apps/landing/src/generated/tool-svgs.ts
 +++ b/apps/landing/src/generated/tool-svgs.ts
-@@ -44,6 +44,15 @@ export const LANDING_TOOL_SVGS = {
+@@ -5,6 +5,12 @@ export const LANDING_TOOL_SVGS = {
+   "select": {
+     "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-41.0992 -13.5703 81.9338 27.1406\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><circle data-source-id=\"path:1\" cx=\"-16.5026\" cy=\"0\" r=\"9.8816\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><svg data-source-id=\"path:1\" data-text-renderer=\"mathjax\" data-paragraph-id=\"paragraph-2\" data-text-layout-kind=\"single-line\" data-scene-text-id=\"scene-text:path:1:node:1:3\" x=\"-20.2436\" y=\"-3.5666\" width=\"7.4819\" height=\"7.1333\" viewBox=\"0 -716 751 716\" color=\"#000000\" opacity=\"1\" overflow=\"visible\"><g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\" data-latex=\"\\parbox[t]{7.51pt}{A}\"><g data-mml-node=\"mpadded\" data-overflow=\"linebreak\" data-vertical-align=\"top\" data-latex=\"\\parbox[t]{7.51pt}{A}\" data-align=\"left\" data-paragraph-id=\"paragraph-2\"><g data-mml-node=\"mtext\"><path data-c=\"41\" d=\"M583 3L717 0L717 39L695 39C670 39 653 40 646 42C631 47 621 58 615 75L401 694C397 707 390 716 375 716C362 716 353 709 348 694L143 102C129 61 92 39 32 38L32 0L137 3L254 0L254 39C205 39 180 54 180 85C180 92 181 96 182 98L227 225L465 225L516 77C518 71 519 67 519 64C519 47 492 39 437 39L437 0C479 3 528 4 583 3M345 569L451 264L240 264Z\"></path></g></g></g></g></svg><circle data-source-id=\"path:2\" cx=\"16.5026\" cy=\"0\" r=\"9.6171\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><svg data-source-id=\"path:2\" data-text-renderer=\"mathjax\" data-paragraph-id=\"paragraph-4\" data-text-layout-kind=\"single-line\" data-scene-text-id=\"scene-text:path:2:node:2:3\" x=\"12.9708\" y=\"-3.4022\" width=\"7.0635\" height=\"6.8045\" viewBox=\"0 -683 709 683\" color=\"#000000\" opacity=\"1\" overflow=\"visible\"><g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\" data-latex=\"\\parbox[t]{7.09pt}{B}\"><g data-mml-node=\"mpadded\" data-overflow=\"linebreak\" data-vertical-align=\"top\" data-latex=\"\\parbox[t]{7.09pt}{B}\" data-align=\"left\" data-paragraph-id=\"paragraph-4\"><g data-mml-node=\"mtext\"><path data-c=\"42\" d=\"M478 358C548 376 624 432 624 512C624 565 599 607 549 640C506 669 456 683 401 683L36 683L36 644L64 644C99 644 120 641 127 636C134 631 138 620 138 602L138 81C138 63 134 51 127 46C120 41 99 39 64 39L36 39L36 0L427 0C484 0 535 16 579 48C627 83 651 129 651 185C651 278 563 342 478 358M521 512C521 428 451 370 367 370L228 370L228 609C228 645 233 644 272 644L394 644C468 644 521 586 521 512M544 186L544 160C542 137 529 111 504 84C478 54 442 39 395 39L272 39C233 39 228 38 228 74L228 340L409 340C490 340 544 270 544 186Z\"></path></g></g></g></g></svg><path data-source-id=\"path:3\" d=\"M -6.421 0 L 6.2855 0\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:3\" data-arrow-tip-kind=\"cm-rightarrow\" data-arrow-side=\"end\" data-arrow-index=\"0\" data-arrow-bend=\"false\" d=\"M 4.6055 -2.4 C 4.9855 -0.96 5.8323 -0.28 6.6855 0 C 5.8323 0.28 4.9855 0.96 4.6055 2.4\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactSelectionOverlay\"><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.3219\" points=\"-26.3842,-9.8816 -6.621,-9.8816 -6.621,9.8816 -26.3842,9.8816\" /><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.3219\" points=\"6.8855,-9.6171 26.1197,-9.6171 26.1197,9.6171 6.8855,9.6171\" /></g><g class=\"landingExactHandleOverlay\"><rect x=\"-17.4536\" y=\"-0.951\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"15.5516\" y=\"-0.951\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"-17.4536\" y=\"-10.8326\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"-7.572\" y=\"-0.951\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"-17.4536\" y=\"8.9306\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"-27.3352\" y=\"-0.951\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"-27.3352\" y=\"-10.8326\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"-7.572\" y=\"-10.8326\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"-7.572\" y=\"8.9306\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"-27.3352\" y=\"8.9306\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"15.5516\" y=\"-10.5681\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"25.1687\" y=\"-0.951\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"15.5516\" y=\"8.6661\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"5.9345\" y=\"-0.951\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"5.9345\" y=\"-10.5681\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"25.1687\" y=\"-10.5681\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"25.1687\" y=\"8.6661\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /><rect x=\"5.9345\" y=\"8.6661\" width=\"1.902\" height=\"1.902\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.3511\" /></g></svg>"
+   },
++  "lasso": {
++    "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-31.407 -10.8792 61.3913 20.3359\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M -17.0717 -2.8453 M -15.5717 -2.8453 A 1.5 1.5 0 0 0 -18.5717 -2.8453 A 1.5 1.5 0 0 0 -15.5717 -2.8453 Z\" stroke=\"none\" fill=\"black\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:2\" d=\"M 0 4.2679 M 1.5 4.2679 A 1.5 1.5 0 0 0 -1.5 4.2679 A 1.5 1.5 0 0 0 1.5 4.2679 Z\" stroke=\"none\" fill=\"black\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:3\" d=\"M 15.649 -5.6906 M 17.149 -5.6906 A 1.5 1.5 0 0 0 14.149 -5.6906 A 1.5 1.5 0 0 0 17.149 -5.6906 Z\" stroke=\"none\" fill=\"black\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:4\" d=\"M -17.0717 -2.8453 L 0 4.2679 L 15.649 -5.6906\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactSelectionOverlay\"><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.2412\" points=\"-18.5717,-4.3453 -15.5717,-4.3453 -15.5717,-1.3453 -18.5717,-1.3453\" /><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.2412\" points=\"-1.5,2.7679 1.5,2.7679 1.5,5.7679 -1.5,5.7679\" /><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.2412\" points=\"14.149,-7.1906 17.149,-7.1906 17.149,-4.1906 14.149,-4.1906\" /></g><g class=\"landingExactHandleOverlay\"><rect x=\"-17.7842\" y=\"-3.5579\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"-0.7126\" y=\"3.5553\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"14.9364\" y=\"-6.4031\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"-19.2842\" y=\"-5.0579\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"-16.2842\" y=\"-5.0579\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"-16.2842\" y=\"-2.0579\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"-19.2842\" y=\"-2.0579\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"-2.2126\" y=\"2.0553\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"0.7874\" y=\"2.0553\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"0.7874\" y=\"5.0553\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"-2.2126\" y=\"5.0553\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"13.4364\" y=\"-7.9031\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"16.4364\" y=\"-7.9031\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"16.4364\" y=\"-4.9031\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /><rect x=\"13.4364\" y=\"-4.9031\" width=\"1.4252\" height=\"1.4252\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2631\" /></g></svg>"
++  },
++  "erase": {
++    "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-29.2962 -10.4157 58.5924 19.4087\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M -25.6075 2.8453 C -11.3811 -11.3811 2.8453 11.3811 25.6075 -4.2679\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /></svg>"
++  },
+   "magnify": {
+     "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-62.345 -22.3934 130.9992 43.3935\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -49.7923 23.3313 L 49.7923 23.3313 L 49.7923 -23.3313 L -49.7923 -23.3313 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><circle data-source-id=\"path:1\" cx=\"-31.8671\" cy=\"-6.2596\" r=\"7.9649\" stroke=\"black\" fill=\"#e6e6ff\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><svg data-source-id=\"path:1\" data-text-renderer=\"mathjax\" data-paragraph-id=\"paragraph-6\" data-text-layout-kind=\"single-line\" data-scene-text-id=\"scene-text:path:1:node:1:3\" x=\"-34.2083\" y=\"-8.5161\" width=\"4.6824\" height=\"4.5131\" viewBox=\"0 -442 470 453\" color=\"#000000\" opacity=\"1\" overflow=\"visible\"><g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\" data-latex=\"\\parbox[t]{4.7pt}{$s$}\"><g data-mml-node=\"mpadded\" data-overflow=\"linebreak\" data-vertical-align=\"top\" data-latex=\"\\parbox[t]{4.7pt}{$s$}\" data-align=\"left\" data-paragraph-id=\"paragraph-6\"><g data-mml-node=\"TeXAtom\" data-mjx-texclass=\"ORD\"><g data-mml-node=\"mi\" data-latex=\"s\"><path data-c=\"1D460\" d=\"M420 354C420 411 362 442 300 442C237 442 192 423 165 385C142 352 130 322 130 295C130 242 165 208 234 193C263 188 285 181 302 173C323 164 333 147 333 123C333 105 325 85 308 62C287 33 250 18 197 18C143 18 108 33 92 62C124 61 151 87 151 119C151 144 138 157 111 157C75 157 52 124 52 88C52 22 124-11 196-11C271-11 325 11 357 56C384 93 397 126 397 156C397 199 376 231 335 252C304 263 280 270 265 273C230 282 194 285 194 328C194 381 244 413 300 413C342 413 369 400 382 375C360 371 337 352 337 327C337 306 348 295 371 295C402 295 420 323 420 354Z\"></path></g></g></g></g></g></svg><path data-source-id=\"path:2\" d=\"M -15.8468 -5.4192 L 5.6038 -5.4192 C 7.8129 -5.4192 9.6038 -7.21 9.6038 -9.4192 L 9.6038 -14.4812 C 9.6038 -16.6903 7.8129 -18.4812 5.6038 -18.4812 L -15.8468 -18.4812 C -18.0559 -18.4812 -19.8468 -16.6903 -19.8468 -14.4812 L -19.8468 -9.4192 C -19.8468 -7.21 -18.0559 -5.4192 -15.8468 -5.4192 Z\" stroke=\"black\" fill=\"#e0ffe0\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><svg data-source-id=\"path:2\" data-text-renderer=\"mathjax\" data-paragraph-id=\"paragraph-8\" data-text-layout-kind=\"single-line\" data-scene-text-id=\"scene-text:path:2:node:2:3\" x=\"-16.5138\" y=\"-15.1482\" width=\"22.7846\" height=\"6.396\" viewBox=\"0 -448 2287 642\" color=\"#000000\" opacity=\"1\" overflow=\"visible\"><g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\" data-latex=\"\\parbox[t]{22.87pt}{parse}\"><g data-mml-node=\"mpadded\" data-overflow=\"linebreak\" data-vertical-align=\"top\" data-latex=\"\\parbox[t]{22.87pt}{parse}\" data-align=\"left\" data-paragraph-id=\"paragraph-8\"><g data-mml-node=\"mtext\"><path data-c=\"70\" d=\"M298-13C360-13 413 9 456 54C499 99 521 152 521 215C521 276 501 328 462 372C421 419 371 442 311 442C260 442 216 422 178 383L178 442L28 431L28 393C65 393 87 391 94 386C101 381 105 368 105 347L105-115C105-134 101-146 94-150C87-154 65-155 28-155L28-194L142-191L257-194L257-155C220-155 199-154 192-150C185-146 181-134 181-115L181 44C203 13 246-13 298-13M304 409C345 409 377 386 402 340C421 301 431 260 431 215C431 168 420 125 398 86C372 39 337 16 294 16C252 16 219 36 194 75C185 88 181 101 181 114L181 333C210 384 251 409 304 409Z\"></path><path data-c=\"61\" d=\"M483 91L483 150L451 150L451 91C451 52 440 32 419 32C399 32 387 57 387 77L387 274C387 309 383 335 376 353C352 412 283 448 213 448C136 448 60 405 60 333C60 300 77 283 110 283C143 283 159 299 159 332C159 361 144 378 113 381C135 406 168 419 211 419C273 419 311 362 311 297L311 264C233 259 174 247 133 228C66 197 32 154 32 97C32 71 42 49 61 32C93 3 137-11 193-11C252-11 294 14 320 65C327 27 355-6 398-6C451-6 483 36 483 91M200 18C154 18 116 52 116 98C116 191 213 231 311 236L311 141C311 74 267 18 200 18Z\" transform=\"translate(556,0)\"></path><path data-c=\"72\" d=\"M364 378C364 417 327 442 288 442C237 442 198 412 172 351L172 442L28 431L28 393C63 393 84 390 92 384C100 378 104 365 104 342L104 79C104 60 101 48 94 44C87 40 65 38 28 38L28 0L143 3C185 4 228 3 271 0L271 38L247 38C214 38 193 41 186 46C179 51 176 63 176 81L176 232C176 275 184 314 199 347C219 390 248 412 287 413C277 403 272 391 272 377C272 346 287 331 318 331C345 331 364 352 364 378Z\" transform=\"translate(1056,0)\"></path><path data-c=\"73\" d=\"M360 130C360 206 308 254 205 274C158 283 128 294 112 305C96 316 88 332 88 351C88 398 123 421 193 421C261 421 298 383 303 306C304 298 309 294 319 294C330 294 336 303 336 321L336 420C336 439 331 448 321 448C310 448 295 430 285 422C260 439 229 448 193 448C104 448 33 408 33 323C33 289 47 260 76 237C111 208 144 202 207 191C272 178 305 149 305 104C305 47 270 18 199 18C130 18 86 64 67 155C64 168 59 175 50 175C39 175 33 165 33 146L33 17C33-2 38-11 48-11C51-11 56-8 64-1C82 15 74 12 92 30C121 3 157-11 199-11C294-11 360 38 360 130Z\" transform=\"translate(1448,0)\"></path><path data-c=\"65\" d=\"M415 251C415 366 348 448 236 448C176 448 126 425 85 378C47 334 28 281 28 220C28 157 49 104 91 58C133 12 185-11 247-11C304-11 348 9 378 48C403 81 415 105 415 121C415 131 409 136 398 136C390 136 385 131 382 120C360 54 317 21 253 21C208 21 173 42 146 85C127 116 118 163 117 227L387 227C409 227 415 229 415 251M326 349C337 316 342 284 342 255L118 255C121 321 138 366 168 389C193 409 215 419 236 419C281 419 311 396 326 349Z\" transform=\"translate(1842,0)\"></path></g></g></g></g></svg><path data-source-id=\"path:3\" d=\"M -11.0621 17.0878 L -1.4571 17.0878 C 0.752 17.0878 2.5429 15.297 2.5429 13.0878 L 2.5429 7.3982 C 2.5429 5.189 0.752 3.3982 -1.4571 3.3982 L -11.0621 3.3982 C -13.2712 3.3982 -15.0621 5.189 -15.0621 7.3982 L -15.0621 13.0878 C -15.0621 15.297 -13.2712 17.0878 -11.0621 17.0878 Z\" stroke=\"black\" fill=\"#ffffd1\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><svg data-source-id=\"path:3\" data-text-renderer=\"mathjax\" data-paragraph-id=\"paragraph-10\" data-text-layout-kind=\"single-line\" data-scene-text-id=\"scene-text:path:3:node:3:3\" x=\"-11.7291\" y=\"6.7312\" width=\"10.939\" height=\"7.0237\" viewBox=\"0 -683 1098 705\" color=\"#000000\" opacity=\"1\" overflow=\"visible\"><g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\" data-latex=\"\\parbox[t]{10.98pt}{IR}\"><g data-mml-node=\"mpadded\" data-overflow=\"linebreak\" data-vertical-align=\"top\" data-latex=\"\\parbox[t]{10.98pt}{IR}\" data-align=\"left\" data-paragraph-id=\"paragraph-10\"><g data-mml-node=\"mtext\"><path data-c=\"49\" d=\"M180 3C257 3 308 2 333 0L333 39L304 39C268 39 246 41 239 46C232 51 228 63 228 81L228 602C228 620 232 631 239 636C246 641 268 644 304 644L333 644L333 683C308 681 257 680 181 680C104 680 53 681 28 683L28 644L57 644C93 644 115 641 122 636C129 631 133 620 133 602L133 81C133 63 129 51 122 46C115 41 93 39 57 39L28 39L28 0C53 2 104 3 180 3Z\"></path><path data-c=\"52\" d=\"M611 501C611 558 580 604 519 639C468 668 411 683 349 683L35 683L35 644L63 644C98 644 119 641 126 636C133 631 137 620 137 602L137 81C137 63 133 51 126 46C119 41 98 38 63 38L35 38L35-1C62 2 111 3 183 3C256 3 305 2 332-1L332 38L304 38C269 38 248 41 241 46C234 51 230 63 230 81L230 327L340 327C404 327 451 289 462 235C464 224 465 200 465 165C465 138 466 118 467 106C473 22 546-22 634-22C672-22 699-6 714 25C726 48 732 70 732 91C732 104 726 111 715 111C706 111 700 105 699 92C694 36 673 8 638 8C603 8 591 41 585 70C579 104 575 130 572 147L559 226C544 278 507 316 448 339C524 361 611 415 611 501M470 600C491 581 502 548 502 501C502 463 492 431 473 404C450 373 405 357 336 357L230 357L230 609C230 630 236 641 248 642C255 643 274 644 306 644C385 644 426 641 470 600Z\" transform=\"translate(361,0)\"></path></g></g></g></g></svg><circle data-source-id=\"path:4\" cx=\"30.729\" cy=\"-0.8536\" r=\"15.4121\" stroke=\"black\" fill=\"#ffe6e6\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><svg data-source-id=\"path:4\" data-text-renderer=\"mathjax\" data-paragraph-id=\"paragraph-12\" data-text-layout-kind=\"single-line\" data-scene-text-id=\"scene-text:path:4:node:4:3\" x=\"20.3081\" y=\"-4.475\" width=\"20.8418\" height=\"7.2428\" viewBox=\"0 -705 2092 727\" color=\"#000000\" opacity=\"1\" overflow=\"visible\"><g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\" data-latex=\"\\parbox[t]{20.92pt}{SVG}\"><g data-mml-node=\"mpadded\" data-overflow=\"linebreak\" data-vertical-align=\"top\" data-latex=\"\\parbox[t]{20.92pt}{SVG}\" data-align=\"left\" data-paragraph-id=\"paragraph-12\"><g data-mml-node=\"mtext\"><path data-c=\"53\" d=\"M252 669C359 669 422 601 440 466C441 456 447 451 456 451C467 451 472 460 472 478L472 677C472 696 467 705 458 705C452 705 446 700 440 690L408 638C364 680 324 705 251 705C142 705 56 617 56 509C56 417 116 349 187 324L317 292C384 275 428 229 428 154C428 79 376 17 301 17C170 17 93 91 88 218C88 227 83 232 73 232C62 232 56 223 56 204L56 6C56-13 61-22 71-22C77-22 83-17 89-7L121 45C164 0 224-22 302-22C359-22 407-1 444 40C481 81 499 130 499 188C499 235 485 278 458 317C431 356 394 380 349 391L223 422C170 434 127 481 127 544C127 614 182 669 252 669Z\"></path><path data-c=\"56\" d=\"M622 581C638 622 674 643 730 644L730 683C687 680 654 679 630 680L513 683L513 645C562 644 586 628 586 599C586 595 584 589 581 581L404 114L218 603C215 613 213 619 213 620C213 636 240 644 294 644L294 683C252 680 204 679 149 680L19 683L19 644C56 644 80 642 91 639C102 636 110 626 116 609L346 2C352-14 361-22 374-22C387-22 396-15 401-1Z\" transform=\"translate(556,0)\"></path><path data-c=\"47\" d=\"M667 443L667 677C667 696 662 705 652 705C645 705 639 700 633 691L586 622C568 640 547 657 524 673C491 694 451 705 404 705C306 705 223 670 156 598C89 526 56 441 56 342C56 243 90 158 157 86C224 14 307-22 406-22C495-22 557 5 591 59C599 46 639 1 654 1C663 1 667 10 667 27L667 200C667 218 670 229 676 233C682 237 702 239 735 239L735 278L610 275C547 273 492 274 447 278L447 239L483 239C524 239 549 236 558 231C567 226 571 214 571 196L571 132C571 83 549 50 506 34C474 23 446 17 422 17C383 17 343 27 304 48C210 97 166 193 166 342C166 483 215 589 303 636C342 656 379 666 416 666C539 666 611 553 627 435C629 422 636 415 647 415C667 415 667 423 667 443Z\" transform=\"translate(1306,0)\"></path></g></g></g></g></svg><path data-source-id=\"path:5\" d=\"M -23.8809 -7.9588 L -20.438 -8.6913\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:5\" data-arrow-tip-kind=\"cm-rightarrow\" data-arrow-side=\"end\" data-arrow-index=\"0\" data-arrow-bend=\"false\" d=\"M -22.5807 -10.6892 C -21.9093 -9.3598 -20.9396 -8.8709 -20.0468 -8.7746 C -20.823 -8.3231 -21.5098 -7.4818 -21.5818 -5.9942\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:6\" d=\"M -25.0039 -1.8367 L -15.5983 4.2247\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:6\" data-arrow-tip-kind=\"cm-rightarrow\" data-arrow-side=\"end\" data-arrow-index=\"0\" data-arrow-bend=\"false\" d=\"M -15.7104 1.2973 C -16.171 2.7135 -15.8276 3.7439 -15.2621 4.4414 C -16.1309 4.2146 -17.2111 4.3274 -18.3106 5.332\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:7\" d=\"M 9.8038 -7.3304 L 15.4328 -5.5881\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:7\" data-arrow-tip-kind=\"cm-rightarrow\" data-arrow-side=\"end\" data-arrow-index=\"0\" data-arrow-bend=\"false\" d=\"M 14.5376 -8.3775 C 14.4748 -6.8896 15.0827 -5.9896 15.8149 -5.4698 C 14.9171 -5.4546 13.9071 -5.0554 13.1183 -3.7922\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:8\" d=\"M 2.7429 7.5422 L 15.3921 3.7475\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:8\" data-arrow-tip-kind=\"cm-rightarrow\" data-arrow-side=\"end\" data-arrow-index=\"0\" data-arrow-bend=\"false\" d=\"M 13.0933 1.9314 C 13.8711 3.2015 14.8776 3.6095 15.7753 3.6325 C 15.0385 4.1459 14.4228 5.0405 14.4726 6.529\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:9\" d=\"M -3.3098 -5.2192 C -2.4882 -2.1664 -2.3932 -0.0599 -3.4255 2.8231\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:9\" data-arrow-tip-kind=\"cm-rightarrow\" data-arrow-side=\"end\" data-arrow-index=\"0\" data-arrow-bend=\"false\" d=\"M -0.5836 2.1116 C -2.0643 1.9519 -3.002 2.4999 -3.5684 3.1967 C -3.525 2.2998 -3.8576 1.2659 -5.0667 0.3964\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-opacity=\"1\" fill-opacity=\"1\" /></svg>"
+   },
+@@ -44,6 +50,15 @@ export const LANDING_TOOL_SVGS = {
    "addCircle": {
      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-51.5064 -17.0615 103.0128 34.123\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><circle data-source-id=\"path:1\" cx=\"0\" cy=\"0\" r=\"13.3728\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactSelectionOverlay\"><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.4047\" points=\"-13.3728,-13.3728 13.3728,-13.3728 13.3728,13.3728 -13.3728,13.3728\" /></g><g class=\"landingExactHandleOverlay\"><rect x=\"-1.1957\" y=\"-14.5685\" width=\"2.3914\" height=\"2.3914\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.4415\" /><rect x=\"12.1771\" y=\"-1.1957\" width=\"2.3914\" height=\"2.3914\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.4415\" /><rect x=\"-1.1957\" y=\"12.1771\" width=\"2.3914\" height=\"2.3914\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.4415\" /><rect x=\"-14.5685\" y=\"-1.1957\" width=\"2.3914\" height=\"2.3914\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.4415\" /><rect x=\"-14.5685\" y=\"-14.5685\" width=\"2.3914\" height=\"2.3914\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.4415\" /><rect x=\"12.1771\" y=\"-14.5685\" width=\"2.3914\" height=\"2.3914\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.4415\" /><rect x=\"12.1771\" y=\"12.1771\" width=\"2.3914\" height=\"2.3914\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.4415\" /><rect x=\"-14.5685\" y=\"12.1771\" width=\"2.3914\" height=\"2.3914\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.4415\" /></g></svg>"
    },
@@ -67,7 +129,7 @@ index 9dde7f6e..566e2d80 100644
 +    "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-34.5663 -11.4501 69.1326 22.9002\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M -16.4787 7.7614 L 16.4787 7.7614 L 16.4787 -7.7614 L -16.4787 -7.7614 Z\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><svg data-source-id=\"path:1\" data-text-renderer=\"mathjax\" data-paragraph-id=\"paragraph-30\" data-text-layout-kind=\"single-line\" data-scene-text-id=\"scene-text:path:1:node:1:2\" x=\"-13.1457\" y=\"-4.4284\" width=\"26.2914\" height=\"8.8568\" viewBox=\"0 -683 2639 889\" color=\"#000000\" opacity=\"1\" overflow=\"visible\"><g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\" data-latex=\"\\parbox[t]{26.39pt}{Image}\"><g data-mml-node=\"mpadded\" data-overflow=\"linebreak\" data-vertical-align=\"top\" data-latex=\"\\parbox[t]{26.39pt}{Image}\" data-align=\"left\" data-paragraph-id=\"paragraph-30\"><g data-mml-node=\"mtext\"><path data-c=\"49\" d=\"M180 3C257 3 308 2 333 0L333 39L304 39C268 39 246 41 239 46C232 51 228 63 228 81L228 602C228 620 232 631 239 636C246 641 268 644 304 644L333 644L333 683C308 681 257 680 181 680C104 680 53 681 28 683L28 644L57 644C93 644 115 641 122 636C129 631 133 620 133 602L133 81C133 63 129 51 122 46C115 41 93 39 57 39L28 39L28 0C53 2 104 3 180 3Z\"></path><path data-c=\"6D\" d=\"M315 413C361 413 384 378 384 307L384 79C384 60 381 48 374 44C367 40 344 38 307 38L307 0L423 3L538 0L538 38C501 38 479 40 472 44C465 48 461 60 461 79L461 259C461 339 513 413 590 413C637 413 660 378 660 307L660 79C660 60 656 48 649 44C642 40 619 38 582 38L582 0L698 3L813 0L813 38C781 38 760 39 750 42C740 45 736 52 736 64L736 251C736 298 734 331 731 350C721 411 676 442 597 442C534 442 487 413 455 354C441 413 397 442 322 442C259 442 211 412 179 352L179 442L32 431L32 393C68 393 90 390 98 384C106 378 109 365 109 342L109 79C109 60 105 48 98 44C91 40 69 38 32 38L32 0L148 3L263 0L263 38C226 38 203 40 196 44C189 48 185 60 185 79L185 259C185 340 238 413 315 413Z\" transform=\"translate(361,0)\"></path><path data-c=\"61\" d=\"M483 91L483 150L451 150L451 91C451 52 440 32 419 32C399 32 387 57 387 77L387 274C387 309 383 335 376 353C352 412 283 448 213 448C136 448 60 405 60 333C60 300 77 283 110 283C143 283 159 299 159 332C159 361 144 378 113 381C135 406 168 419 211 419C273 419 311 362 311 297L311 264C233 259 174 247 133 228C66 197 32 154 32 97C32 71 42 49 61 32C93 3 137-11 193-11C252-11 294 14 320 65C327 27 355-6 398-6C451-6 483 36 483 91M200 18C154 18 116 52 116 98C116 191 213 231 311 236L311 141C311 74 267 18 200 18Z\" transform=\"translate(1194,0)\"></path><path data-c=\"67\" d=\"M431 453C393 453 358 438 326 408C296 431 262 442 223 442C137 442 59 378 59 294C59 252 74 218 104 192C85 168 75 141 75 110C75 72 88 43 113 24C71 10 28-26 28-77C28-120 56-154 111-178C153-197 199-206 249-206C300-206 347-197 389-178C444-154 471-120 471-75C471-22 449 17 405 42C359 67 308 70 234 70C190 70 166 70 161 71C133 75 113 102 113 133C113 148 117 162 126 174C154 155 186 145 223 145C309 145 386 209 386 293C386 332 373 364 347 389C372 412 399 423 428 423C423 418 420 410 420 400C420 378 431 367 453 367C474 367 485 378 485 401C485 432 461 453 431 453M223 411C277 411 304 372 304 294C304 215 277 175 223 175C168 175 141 214 141 293C141 372 168 411 223 411M164 4L222 4C274 4 316 1 348-6C391-15 412-39 412-77C412-109 392-134 352-153C321-168 287-175 250-175C214-175 180-168 148-153C107-134 87-109 87-77C87-35 123 4 164 4Z\" transform=\"translate(1694,0)\"></path><path data-c=\"65\" d=\"M415 251C415 366 348 448 236 448C176 448 126 425 85 378C47 334 28 281 28 220C28 157 49 104 91 58C133 12 185-11 247-11C304-11 348 9 378 48C403 81 415 105 415 121C415 131 409 136 398 136C390 136 385 131 382 120C360 54 317 21 253 21C208 21 173 42 146 85C127 116 118 163 117 227L387 227C409 227 415 229 415 251M326 349C337 316 342 284 342 255L118 255C121 321 138 366 168 389C193 409 215 419 236 419C281 419 311 396 326 349Z\" transform=\"translate(2194,0)\"></path></g></g></g></g></svg><g class=\"landingExactSelectionOverlay\"><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.2716\" points=\"-16.4787,-7.7614 16.4787,-7.7614 16.4787,7.7614 -16.4787,7.7614\" /></g><g class=\"landingExactHandleOverlay\"><rect x=\"-17.2811\" y=\"-8.5638\" width=\"1.6049\" height=\"1.6049\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2963\" /><rect x=\"15.6763\" y=\"-8.5638\" width=\"1.6049\" height=\"1.6049\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2963\" /><rect x=\"15.6763\" y=\"6.959\" width=\"1.6049\" height=\"1.6049\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2963\" /><rect x=\"-17.2811\" y=\"6.959\" width=\"1.6049\" height=\"1.6049\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2963\" /></g></svg>"
 +  },
 +  "addArc": {
-+    "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-64.9422 -27.0032 133.8845 44.3492\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M 13.6573 0 A 13.6573 13.6573 0 0 0 -9.6572 -9.6572\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactHandleOverlay\"><rect x=\"12.1033\" y=\"-1.554\" width=\"3.108\" height=\"3.108\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.5738\" /></g></svg>"
++    "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-29.7504 -17.346 63.501 21.0347\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M 13.6573 0 A 13.6573 13.6573 0 0 0 -9.6572 -9.6572\" stroke=\"black\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactHandleOverlay\"><rect x=\"12.9203\" y=\"-0.7371\" width=\"1.4741\" height=\"1.4741\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2721\" /></g></svg>"
 +  },
    "addBucket": {
      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-32.6095 -10.8019 65.2189 21.6038\" role=\"img\" aria-label=\"TikZ SVG preview\"><path data-source-id=\"path:0\" d=\"M -46.947 19.9169 L 46.947 19.9169 L 46.947 -19.9169 L -46.947 -19.9169 Z\" stroke=\"none\" fill=\"none\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><path data-source-id=\"path:1\" d=\"M -28.4528 7.1132 M -28.4528 7.1132 L 28.4528 7.1132 L 28.4528 -7.1132 L -28.4528 -7.1132 Z\" stroke=\"#000000\" fill=\"#d1ffd1\" stroke-width=\"0.4\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-opacity=\"1\" fill-opacity=\"1\" /><g class=\"landingExactSelectionOverlay\"><polygon fill=\"none\" stroke=\"rgba(13, 95, 182, 0.9)\" stroke-dasharray=\"5 3\" stroke-width=\"0.2562\" points=\"-28.4528,-7.1132 28.4528,-7.1132 28.4528,7.1132 -28.4528,7.1132\" /></g><g class=\"landingExactHandleOverlay\"><rect x=\"-29.2098\" y=\"-7.8702\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"27.6958\" y=\"-7.8702\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"27.6958\" y=\"6.3562\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /><rect x=\"-29.2098\" y=\"6.3562\" width=\"1.514\" height=\"1.514\" fill=\"#fff\" stroke=\"#1060b0\" stroke-width=\"0.2795\" /></g></svg>"
@@ -11187,7 +11249,7 @@ index 00000000..e60d3051
 +};
 diff --git a/packages/app/src/ui/canvas-panel/eraser-sweep.ts b/packages/app/src/ui/canvas-panel/eraser-sweep.ts
 new file mode 100644
-index 00000000..316de820
+index 00000000..0c687287
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/eraser-sweep.ts
 @@ -0,0 +1,113 @@
@@ -11236,7 +11298,7 @@ index 00000000..316de820
 +    const definition = id ? path.ownerSVGElement?.querySelector<SVGClipPathElement>(`#${CSS.escape(id)}`) : null;
 +    if (!definition || definition.getAttribute("clipPathUnits") === "objectBoundingBox") return null;
 +    const region: paper.PathItem[] = [];
-+    for (const geometry of definition.querySelectorAll<SVGGeometryElement>("path, circle, ellipse, rect, line, polyline, polygon")) {
++    for (const geometry of Array.from(definition.querySelectorAll<SVGGeometryElement>("path, circle, ellipse, rect, line, polyline, polygon"))) {
 +      const matrix = geometry.getScreenCTM();
 +      if (!matrix) return null;
 +      const clone = geometry.cloneNode(true) as SVGGeometryElement;
@@ -11281,7 +11343,7 @@ index 00000000..316de820
 +  const strokes: EraserStroke[] = [];
 +  const scope = new paper.PaperScope();
 +  scope.setup(new scope.Size(1, 1));
-+  for (const path of host.querySelectorAll<SVGGeometryElement>("path[data-source-id], circle[data-source-id], ellipse[data-source-id], rect[data-source-id], line[data-source-id], polyline[data-source-id], polygon[data-source-id]")) {
++  for (const path of Array.from(host.querySelectorAll<SVGGeometryElement>("path[data-source-id], circle[data-source-id], ellipse[data-source-id], rect[data-source-id], line[data-source-id], polyline[data-source-id], polygon[data-source-id]"))) {
 +    const sourceId = path.getAttribute("data-source-id");
 +    if (!sourceId || !eligibleIds.has(sourceId) || !visibleGeometry(path)) continue;
 +    const clips = clipRegions(path, scope);
@@ -18720,7 +18782,7 @@ index f7e5e9b6..7503251d 100644
    text-align: center;
    font-size: calc(var(--app-ui-scale, 1) * 10px);
 diff --git a/packages/app/src/ui/source-panel/SourcePanel.tsx b/packages/app/src/ui/source-panel/SourcePanel.tsx
-index 4e8f0b66..f93430fd 100644
+index 4e8f0b66..0875cf17 100644
 --- a/packages/app/src/ui/source-panel/SourcePanel.tsx
 +++ b/packages/app/src/ui/source-panel/SourcePanel.tsx
 @@ -59,7 +59,6 @@ import { collectSymbols, type DocumentSymbols } from "tikz-editor/completion/ind
@@ -18731,15 +18793,15 @@ index 4e8f0b66..f93430fd 100644
  import { applySourcePatches, patchesMatchSourceTransition } from "tikz-editor/edit/source-patches";
  import { tikz } from "@tikz-editor/lang-tikz";
  import { tikzCompletion } from "./tikz-autocomplete";
-@@ -190,15 +189,12 @@ const EMPTY_SYMBOLS: DocumentSymbols = {
+@@ -190,7 +189,6 @@ const EMPTY_SYMBOLS: DocumentSymbols = {
    coordinateNames: []
  };
  
 -const MAX_DIAGNOSTICS = 300;
  const MAX_DECORATED_SPAN = 160;
--const MAX_RECOVERY_NOISE_DISTANCE = 80;
+ const MAX_RECOVERY_NOISE_DISTANCE = 80;
  const DIAGNOSTIC_DEBOUNCE_MS = 120;
- const DOCS_TOOLTIP_HOVER_TIME_MS = 650;
+@@ -198,7 +196,6 @@ const DOCS_TOOLTIP_HOVER_TIME_MS = 650;
  const MIN_FORMATTER_MAX_LINE_LENGTH = 40;
  const MAX_FORMATTER_MAX_LINE_LENGTH = 240;
  
@@ -18747,86 +18809,9 @@ index 4e8f0b66..f93430fd 100644
  const ENABLE_TIKZ_AUTOCOMPLETE = true;
  
  type MathJaxBrowserRuntime = {
-@@ -584,55 +580,6 @@ const diagnosticTooltip = hoverTooltip((view, pos) => {
-   };
- });
- 
--export function prioritizeDiagnosticsForDisplay(diagnostics: readonly DiagnosticInput[]): DiagnosticInput[] {
--  const result: DiagnosticInput[] = [];
--  for (const diagnostic of diagnostics) {
--    if (isRecoveryNoiseDiagnostic(diagnostic, diagnostics)) {
--      continue;
--    }
--    if (result.some((accepted) => isNearbyDuplicateDiagnostic(accepted, diagnostic))) {
--      continue;
--    }
--    result.push(diagnostic);
--  }
--  return result;
--}
--
--function isRecoveryNoiseDiagnostic(
--  diagnostic: DiagnosticInput,
--  diagnostics: readonly DiagnosticInput[]
--): boolean {
--  if (diagnostic.code === "stray-token") {
--    return diagnostics.some((candidate) =>
--      candidate.source === diagnostic.source &&
--      candidate.code === "parse-error" &&
--      diagnostic.from >= candidate.from &&
--      diagnostic.from - candidate.from <= MAX_RECOVERY_NOISE_DISTANCE
--    );
--  }
--
--  if (diagnostic.code === "missing-semicolon") {
--    return diagnostics.some((candidate) =>
--      candidate.source === diagnostic.source &&
--      candidate.code === "parse-error" &&
--      (
--        Math.abs(diagnostic.to - candidate.from) <= 1 ||
--        (diagnostic.from >= candidate.from && diagnostic.from <= candidate.to)
--      )
--    );
--  }
--
--  return false;
--}
--
--function isNearbyDuplicateDiagnostic(left: DiagnosticInput, right: DiagnosticInput): boolean {
--  return (
--    left.source === right.source &&
--    left.message === right.message &&
--    Math.abs(left.from - right.from) <= MAX_RECOVERY_NOISE_DISTANCE
--  );
--}
--
- const docsTooltip = hoverTooltip(async (view, pos, side) => {
-   const diagnostics = view.state.field(diagnosticsField, false);
-   if (diagnostics && bestDiagnosticAt(diagnostics.list, pos)) {
-@@ -1245,7 +1192,7 @@ export function SourcePanel() {
-         return;
-       }
- 
--      const list = prioritizeDiagnosticsForDisplay([
-+      const list = [
-         ...parse.diagnostics.map((d) => ({ ...d, from: d.span.from, to: d.span.to, source: "parse" as const })),
-         ...(semantic?.diagnostics ?? []).map((d) => ({
-           ...d,
-@@ -1253,7 +1200,7 @@ export function SourcePanel() {
-           to: d.span.to,
-           source: "semantic" as const
-         }))
--      ]);
-+      ];
-       view.dispatch({ effects: setDiagnostics.of(list) });
-     }, DIAGNOSTIC_DEBOUNCE_MS);
- 
-@@ -1337,8 +1284,23 @@ export function SourcePanel() {
-         result.push({ ...d, from: d.span.from, to: d.span.to, source: "semantic" });
-       }
+@@ -1339,6 +1336,21 @@ export function SourcePanel() {
      }
--    return prioritizeDiagnosticsForDisplay(result);
-+    return result;
+     return prioritizeDiagnosticsForDisplay(result);
    }, [snapshot.parseResult, snapshot.semanticResult]);
 +  const [diagnosticsCopyError, setDiagnosticsCopyError] = useState<string | null>(null);
 +
@@ -18846,7 +18831,7 @@ index 4e8f0b66..f93430fd 100644
  
    return (
      <div className={css.panel}>
-@@ -1347,7 +1309,11 @@ export function SourcePanel() {
+@@ -1347,7 +1359,11 @@ export function SourcePanel() {
  
        {diagnostics.length > 0 && (
          <div className={css.diagnostics}>
@@ -18859,7 +18844,7 @@ index 4e8f0b66..f93430fd 100644
              const line = snapshot.parseResult
                ? snapshot.parseResult.source.slice(0, d.from).split("\n").length
                : null;
-@@ -1381,12 +1347,6 @@ export function SourcePanel() {
+@@ -1381,12 +1397,6 @@ export function SourcePanel() {
                </div>
              );
            })}
@@ -18872,7 +18857,7 @@ index 4e8f0b66..f93430fd 100644
          </div>
        )}
  
-@@ -1395,7 +1355,7 @@ export function SourcePanel() {
+@@ -1395,7 +1405,7 @@ export function SourcePanel() {
          <div className={css.inlineColorPickerPopover} ref={colorPickerRef} style={inlineColorPopoverStyle}>
            <ColorPicker
              ariaLabel="Source color"
@@ -18881,7 +18866,7 @@ index 4e8f0b66..f93430fd 100644
              namedColorSwatches={projectNamedColorSwatches}
              value={activeColorPicker.currentToken}
              syntaxValue={activeColorPicker.currentToken}
-@@ -1750,7 +1710,6 @@ function normalizeDiagnostics(inputs: DiagnosticInput[], docLength: number): Dia
+@@ -1750,7 +1760,6 @@ function normalizeDiagnostics(inputs: DiagnosticInput[], docLength: number): Dia
        if (sa !== sb) return sb - sa;
        return Math.abs(a.to - a.from) - Math.abs(b.to - b.from);
      })
@@ -18889,7 +18874,7 @@ index 4e8f0b66..f93430fd 100644
      .map((d) => {
        const { from, to: normalizedTo } = normalizeRange(d.from, d.to, docLength);
        let to = normalizedTo;
-@@ -1898,15 +1857,6 @@ function bestDiagnosticAt(diagnostics: Diagnostic[], pos: number): Diagnostic |
+@@ -1898,15 +1907,6 @@ function bestDiagnosticAt(diagnostics: Diagnostic[], pos: number): Diagnostic |
    return best;
  }
  
@@ -19274,7 +19259,7 @@ index 17f595d0..72fce7f6 100644
    "path_patterns",
    "path_shadows",
 diff --git a/packages/core/src/capabilities/matrix.ts b/packages/core/src/capabilities/matrix.ts
-index a0b09801..0c236010 100644
+index a0b09801..d144159f 100644
 --- a/packages/core/src/capabilities/matrix.ts
 +++ b/packages/core/src/capabilities/matrix.ts
 @@ -81,6 +81,9 @@ export const capabilityMatrix: CapabilityMatrix = {
@@ -19282,7 +19267,7 @@ index a0b09801..0c236010 100644
      fixtures: ["option_styles"]
    },
 +  transform_slant: {
-+    parser: "stable", semantic: "stable", svg: "stable", edit: "partial", fixtures: []
++    parser: "stable", semantic: "stable", svg: "stable", edit: "partial", fixtures: ["transform_slant"]
 +  },
    transform_cm: {
      parser: "stable",
@@ -20247,7 +20232,7 @@ index 00000000..55b9240b
 +  return currentFrame(createSemanticEvaluationRun(parsed.figure, source).context).transform;
 +}
 diff --git a/packages/core/src/edit/element-templates.ts b/packages/core/src/edit/element-templates.ts
-index 3f807ed2..5a582824 100644
+index 3f807ed2..104b1b16 100644
 --- a/packages/core/src/edit/element-templates.ts
 +++ b/packages/core/src/edit/element-templates.ts
 @@ -1,3 +1,4 @@
@@ -20272,13 +20257,15 @@ index 3f807ed2..5a582824 100644
  const SHAPE_TOOL_DEFAULT_MINIMUM_WIDTH_CM = 2.2;
  const SHAPE_TOOL_DEFAULT_MINIMUM_HEIGHT_CM = 1.4;
  const DEFAULT_LINE_LENGTH_PT = 2 * PT_PER_CM;
-@@ -128,7 +131,32 @@ export function generateElementSource(template: ElementTemplate, at: WorldPoint)
+@@ -128,7 +131,34 @@ export function generateElementSource(template: ElementTemplate, at: WorldPoint)
      case "circle": {
        const radiusPt = circleRadiusPt(at, template.edge);
        const circleOptions = buildDrawOptions(template.strokeColor, template.fillColor, false);
 -      return `\\draw${circleOptions} ${atCoord} circle (${formatNumber(radiusPt * CM_PER_PT)}cm);`;
-+      const radius = template.edge ? latticeRadiusExpression((template.edge.x - at.x) * CM_PER_PT, (template.edge.y - at.y) * CM_PER_PT) : null;
-+      return `\\draw${circleOptions} ${atCoord} circle ({${radius ?? `${formatNumber(radiusPt * CM_PER_PT, { fractionDigits: 12 })}cm`}});`;
++      const radius = (template.edge ? latticeRadiusExpression((template.edge.x - at.x) * CM_PER_PT, (template.edge.y - at.y) * CM_PER_PT) : null)
++        ?? `${formatNumber(radiusPt * CM_PER_PT, { fractionDigits: 12 })}cm`;
++      // TikZ reads `circle (...)` up to the first `)`, so only a radius expression such as sqrt(2)*1cm needs braces.
++      return `\\draw${circleOptions} ${atCoord} circle (${radius.includes("(") ? `{${radius}}` : radius});`;
 +    }
 +
 +    case "arc": {
@@ -20306,7 +20293,7 @@ index 3f807ed2..5a582824 100644
      }
  
      case "filledCircle": {
-@@ -145,6 +173,7 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+@@ -145,6 +175,7 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
    }
  
    const resolvedEnd = resolveTikzpictureEndToken(source, figureSpan);
@@ -20314,7 +20301,7 @@ index 3f807ed2..5a582824 100644
    const endToken = resolvedEnd?.token ?? "\\end{tikzpicture}";
    const endIndex = resolvedEnd?.from ?? source.lastIndexOf(endToken);
    if (endIndex < 0) {
-@@ -160,8 +189,11 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+@@ -160,8 +191,11 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
    const endIndent = source.slice(endLineStart, endIndex).match(/^[ \t]*/)?.[0] ?? "";
    const bodyIndent = `${endIndent}  `;
  
@@ -20328,7 +20315,7 @@ index 3f807ed2..5a582824 100644
    const needsLeadingNewline = before.length > 0 && !before.endsWith("\n");
    const prefix = needsLeadingNewline ? "\n" : "";
  
-@@ -324,8 +356,8 @@ export function generateComplexPathPrependSource(
+@@ -324,8 +358,8 @@ export function generateComplexPathPrependSource(
  }
  
  function formatPointCm(point: WorldPoint): string {
@@ -20339,7 +20326,7 @@ index 3f807ed2..5a582824 100644
    return `(${x},${y})`;
  }
  
-@@ -438,11 +470,11 @@ export function buildDrawOptions(
+@@ -438,11 +472,11 @@ export function buildDrawOptions(
    }
  
    if (strokeColor && strokeColor !== "black") {
@@ -20353,7 +20340,7 @@ index 3f807ed2..5a582824 100644
    }
  
    return parts.length > 0 ? `[${parts.join(", ")}]` : "";
-@@ -456,14 +488,30 @@ function buildNodeOptions(
+@@ -456,14 +490,30 @@ function buildNodeOptions(
    const parts: string[] = [];
  
    if (strokeColor) {
@@ -22956,6 +22943,91 @@ index 11af4026..20e7e86f 100644
              return textEngine?.validate(normalizeNodeTextForValidation(node.text)) ?? null;
            }
          : undefined)
+diff --git a/packages/core/src/semantic/evaluate.ts b/packages/core/src/semantic/evaluate.ts
+index f322a21d..70962270 100644
+--- a/packages/core/src/semantic/evaluate.ts
++++ b/packages/core/src/semantic/evaluate.ts
+@@ -40,7 +40,7 @@ import {
+   mapExpansionSpan,
+   remapDiagnostics
+ } from "./attribution.js";
+-import type { OptionEntry, OptionListAst } from "../options/types.js";
++import type { OptionListAst } from "../options/types.js";
+ import {
+   beginStatementEffectTracking,
+   readContextMacroBinding,
+@@ -263,9 +263,7 @@ export function createSemanticEvaluationRun(
+       parent.styleChain,
+       (raw) => resolveContextColorAliasValue(context, raw)
+     );
+-    if (containsCmOption(rootDelta.expandedOptionLists)) {
+-      markFeature(featureUsage, "transform_cm", "supported");
+-    }
++    markTransformOptionFeatures(featureUsage, rootDelta.expandedOptionLists);
+     const rootMeta = resolveFrameMeta(parent, rootDelta.expandedOptionLists, figureSourceRef);
+     if (collectBackgroundOptionEffects(context, rootDelta.expandedOptionLists, figureSourceRef)) {
+       markFeature(featureUsage, "backgrounds_library", "supported");
+@@ -911,9 +909,7 @@ function evaluateStatement(
+     );
+     if (optionLists.length > 0) {
+       markFeature(featureUsage, "options_structured", "supported");
+-      if (containsCmOption(expandedOptionLists)) {
+-        markFeature(featureUsage, "transform_cm", "supported");
+-      }
++      markTransformOptionFeatures(featureUsage, expandedOptionLists);
+     }
+     const scopedCustomStyles = cloneCustomStyleRegistry(parent.customStyles);
+     const scopedPicDefinitions = clonePicDefinitionRegistry(parent.picDefinitions);
+@@ -1090,9 +1086,7 @@ function evaluateStatement(
+     );
+     if (optionLists.length > 0) {
+       markFeature(featureUsage, "options_structured", "supported");
+-      if (containsCmOption(expandedOptionLists)) {
+-        markFeature(featureUsage, "transform_cm", "supported");
+-      }
++      markTransformOptionFeatures(featureUsage, expandedOptionLists);
+     }
+     const scopedCustomStyles = cloneCustomStyleRegistry(parent.customStyles);
+     const scopedPicDefinitions = clonePicDefinitionRegistry(parent.picDefinitions);
+@@ -1400,9 +1394,7 @@ function evaluatePicOperationInStatement(
+   }
+ 
+   pushStyleDiagnostics(diagnostics, resolvedPicStyle.diagnostics, "Pic option issue", item.optionsSpan ?? item.span);
+-  if (containsCmOption(resolvedPicStyle.expandedOptionLists)) {
+-    markFeature(featureUsage, "transform_cm", "supported");
+-  }
++  markTransformOptionFeatures(featureUsage, resolvedPicStyle.expandedOptionLists);
+ 
+   const parsed = parseStatementsFromBodyWithMapping(
+     resolvedCode.codeRaw,
+@@ -2665,20 +2657,14 @@ function angleOnArc(angle: number, start: number, end: number, sweep: boolean):
+   return aa <= s + epsilon && aa >= e - epsilon;
+ }
+ 
+-function containsCmOption(optionLists: OptionListAst[]): boolean {
+-  for (const list of optionLists) {
+-    for (const entry of list.entries) {
+-      if (!isCmOptionEntry(entry)) {
+-        continue;
+-      }
+-      return true;
+-    }
++function markTransformOptionFeatures(featureUsage: FeatureUsage, optionLists: OptionListAst[]): void {
++  const keys = optionLists.flatMap((list) => list.entries.flatMap((entry) => entry.kind === "kv" ? [entry.key] : []));
++  if (keys.some((key) => key === "cm" || key === "/tikz/cm")) {
++    markFeature(featureUsage, "transform_cm", "supported");
++  }
++  if (keys.some((key) => /^(\/tikz\/)?[xy]slant$/u.test(key))) {
++    markFeature(featureUsage, "transform_slant", "supported");
+   }
+-  return false;
+-}
+-
+-function isCmOptionEntry(entry: OptionEntry): boolean {
+-  return entry.kind === "kv" && (entry.key === "cm" || entry.key === "/tikz/cm");
+ }
+ 
+ export function initializeFeatureUsage(): FeatureUsage {
 diff --git a/packages/core/src/semantic/nodes/layout.ts b/packages/core/src/semantic/nodes/layout.ts
 index 1d9b4910..2475471c 100644
 --- a/packages/core/src/semantic/nodes/layout.ts
@@ -23233,22 +23305,46 @@ index 1be8c49a..cfe86d66 100644
        mode: "mathjax";
        cacheKey: string;
 diff --git a/test/app-menu.spec.ts b/test/app-menu.spec.ts
-index 44a6636c..fbe441c9 100644
+index 44a6636c..00fc325c 100644
 --- a/test/app-menu.spec.ts
 +++ b/test/app-menu.spec.ts
-@@ -32,8 +32,8 @@ describe("app menu definition", () => {
-     expect(APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS).toBe("view.toggle-infinite-canvas");
-     expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID).toBe("view.toggle-snap-grid");
-     expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES).toBe("view.toggle-snap-guides");
+@@ -1,5 +1,6 @@
+ import { describe, expect, it } from "vitest";
+ import { APP_MENU_COMMAND_IDS, APP_MENU_DEFINITION, filterAppMenuDefinitionForTarget } from "../packages/app/src/app-menu/index.js";
++import { shortcutsFor } from "../packages/app/src/settings/keybindings.js";
+ 
+ describe("app menu definition", () => {
+   it("defines file lifecycle command ids", () => {
+@@ -29,11 +30,11 @@ describe("app menu definition", () => {
+ 
+   it("defines snapping command ids", () => {
+     expect(APP_MENU_COMMAND_IDS.TOGGLE_TRANSPARENCY_GRID).toBe("view.toggle-transparency-grid");
+-    expect(APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS).toBe("view.toggle-infinite-canvas");
+-    expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID).toBe("view.toggle-snap-grid");
+-    expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES).toBe("view.toggle-snap-guides");
 -    expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_POINTS).toBe("view.toggle-snap-object-points");
 -    expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_GAPS).toBe("view.toggle-snap-object-gaps");
++    expect(APP_MENU_COMMAND_IDS.TOGGLE_OUTPUT_BOUNDS).toBe("view.toggle-output-bounds");
++    expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAPPING).toBe("view.toggle-snapping");
++    expect(APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK).toBe("view.toggle-lattice-lock");
 +    expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECTS).toBe("view.toggle-snap-objects");
 +    expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_ALIGNMENT).toBe("view.toggle-snap-alignment");
      expect(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_HAPTICS).toBe("view.toggle-snap-haptics");
    });
  
-@@ -326,10 +326,10 @@ describe("app menu definition", () => {
-       (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES
+@@ -319,21 +320,21 @@ describe("app menu definition", () => {
+       throw new Error("Expected Snapping submenu in View menu.");
+     }
+ 
+-    const snapGrid = snappingMenu.items.find(
+-      (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID
++    const enableSnapping = snappingMenu.items.find(
++      (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_SNAPPING
+     );
+-    const snapGuides = snappingMenu.items.find(
+-      (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES
++    const latticeLock = snappingMenu.items.find(
++      (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK
      );
      const snapPoints = snappingMenu.items.find(
 -      (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_POINTS
@@ -23259,7 +23355,64 @@ index 44a6636c..fbe441c9 100644
 +      (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_SNAP_ALIGNMENT
      );
  
-     expect(snapGrid).toBeDefined();
+-    expect(snapGrid).toBeDefined();
+-    expect(snapGuides).toBeDefined();
++    expect(enableSnapping).toBeDefined();
++    expect(latticeLock).toBeDefined();
+     expect(snapPoints).toBeDefined();
+     expect(snapGaps).toBeDefined();
+   });
+@@ -345,12 +346,12 @@ describe("app menu definition", () => {
+     const transparency = items.find(
+       (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_TRANSPARENCY_GRID
+     );
+-    const infiniteCanvas = items.find(
+-      (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS
++    const outputBounds = items.find(
++      (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.TOGGLE_OUTPUT_BOUNDS
+     );
+ 
+     expect(transparency).toBeDefined();
+-    expect(infiniteCanvas).toBeDefined();
++    expect(outputBounds).toBeDefined();
+   });
+ 
+   it("exposes Bezier in the Insert menu", () => {
+@@ -539,17 +540,14 @@ describe("app menu definition", () => {
+     expect("accelerator" in zoomOutItem ? zoomOutItem.accelerator : undefined).toBe("CmdOrCtrl+-");
+   });
+ 
+-  it("assigns CmdOrCtrl+0 accelerator to Fit to Content", () => {
++  it("offers Fit to Content in the View menu with CmdOrCtrl+0 as its default shortcut", () => {
+     const viewSection = APP_MENU_DEFINITION.find((section) => section.id === "view");
+     expect(viewSection).toBeDefined();
+     const fitItem = (viewSection?.items ?? []).find(
+       (item) => item.kind === "command" && item.commandId === APP_MENU_COMMAND_IDS.FIT_TO_CONTENT
+     );
+     expect(fitItem).toBeDefined();
+-    if (!fitItem || fitItem.kind !== "command") {
+-      throw new Error("Expected fit-to-content command item in View menu.");
+-    }
+-    expect("accelerator" in fitItem ? fitItem.accelerator : undefined).toBe("CmdOrCtrl+0");
++    expect(shortcutsFor(APP_MENU_COMMAND_IDS.FIT_TO_CONTENT, {})).toEqual(["CmdOrCtrl+0"]);
+   });
+ 
+   it("exposes Settings with CmdOrCtrl+, in the File menu", () => {
+diff --git a/test/capability-fixtures.ts b/test/capability-fixtures.ts
+index 3ed92122..b174c9c5 100644
+--- a/test/capability-fixtures.ts
++++ b/test/capability-fixtures.ts
+@@ -9,6 +9,10 @@ export const capabilityFixtures: Record<string, string> = {
+ \end{tikzpicture}`,
+   transform_cm: String.raw`\begin{tikzpicture}
+   \draw[cm={0,1,1,0,(1cm,1cm)}] (0,0) -- (1,1) -- (1,0);
++\end{tikzpicture}`,
++  transform_slant: String.raw`\begin{tikzpicture}
++  \draw[xslant=0.5] (0,0) rectangle (1,1);
++  \draw[yslant=-0.5] (2,0) rectangle (3,1);
+ \end{tikzpicture}`,
+   foreach_basic: String.raw`\begin{tikzpicture}
+   \foreach \x in {0,1} \draw (\x,0) -- ++(1,0);
 diff --git a/test/close-guard.spec.ts b/test/close-guard.spec.ts
 index 3a724b03..58bc095a 100644
 --- a/test/close-guard.spec.ts
@@ -23276,20 +23429,214 @@ index 3a724b03..58bc095a 100644
      fileRef: null,
      savedSource: "\\draw (0,0)--(1,1);",
 diff --git a/test/context-menu.spec.ts b/test/context-menu.spec.ts
-index f2337be3..4500d4d0 100644
+index f2337be3..61043535 100644
 --- a/test/context-menu.spec.ts
 +++ b/test/context-menu.spec.ts
-@@ -48,8 +48,8 @@ describe("canvas context menu definition", () => {
+@@ -46,10 +46,9 @@ describe("canvas context menu definition", () => {
+     expect(commandIds).toContain(APP_MENU_COMMAND_IDS.PASTE);
+     expect(commandIds).toContain(APP_MENU_COMMAND_IDS.FIT_TO_CONTENT);
      expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_GRID);
-     expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID);
-     expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES);
+-    expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID);
+-    expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES);
 -    expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_POINTS);
 -    expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_GAPS);
++    expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK);
 +    expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECTS);
 +    expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_ALIGNMENT);
      expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_RULERS);
      expect(commandIds).toContain(APP_MENU_COMMAND_IDS.TOGGLE_GUIDES);
    });
+diff --git a/test/edit-actions-move.spec.ts b/test/edit-actions-move.spec.ts
+index a4cacc0c..0cb6f6f3 100644
+--- a/test/edit-actions-move.spec.ts
++++ b/test/edit-actions-move.spec.ts
+@@ -648,8 +648,8 @@ describe("applyEditAction – moveElement", () => {
+     expect(result.kind).toBe("success");
+     if (result.kind !== "success") return;
+     expect(result.newSource).toContain("rotate=\\angle");
+-    expect(result.newSource).toContain("xshift=6pt");
+-    expect(result.newSource).toContain("yshift=-3pt");
++    expect(result.newSource).toContain("xshift=0.2109cm");
++    expect(result.newSource).toContain("yshift=-0.1054cm");
+     expectPatchesReconstructSource(source, result);
+   });
+ 
+@@ -669,8 +669,8 @@ describe("applyEditAction – moveElement", () => {
+     if (scale.kind !== "success") return;
+     expect(scale.newSource).toContain("scale=\\s");
+     expect(scale.newSource).not.toContain("shift={");
+-    expect(scale.newSource).toContain("xshift=2pt");
+-    expect(scale.newSource).toContain("yshift=-3pt");
++    expect(scale.newSource).toContain("xshift=0.0703cm");
++    expect(scale.newSource).toContain("yshift=-0.1054cm");
+     expectPatchesReconstructSource(scaleSource, scale);
+ 
+     const xscaleSource = String.raw`\begin{tikzpicture}
+@@ -688,8 +688,8 @@ describe("applyEditAction – moveElement", () => {
+     if (xscale.kind !== "success") return;
+     expect(xscale.newSource).toContain("xscale=\\sx");
+     expect(xscale.newSource).not.toContain("shift={");
+-    expect(xscale.newSource).toContain("xshift=2pt");
+-    expect(xscale.newSource).toContain("yshift=-3pt");
++    expect(xscale.newSource).toContain("xshift=0.0703cm");
++    expect(xscale.newSource).toContain("yshift=-0.1054cm");
+     expectPatchesReconstructSource(xscaleSource, xscale);
+ 
+     const yscaleSource = String.raw`\begin{tikzpicture}
+@@ -706,8 +706,8 @@ describe("applyEditAction – moveElement", () => {
+     expect(yscale.kind).toBe("success");
+     if (yscale.kind !== "success") return;
+     expect(yscale.newSource).toContain("yscale=\\sy");
+-    expect(yscale.newSource).toContain("xshift=6pt");
+-    expect(yscale.newSource).toContain("yshift=6pt");
++    expect(yscale.newSource).toContain("xshift=0.2109cm");
++    expect(yscale.newSource).toContain("yshift=0.2109cm");
+     expectPatchesReconstructSource(yscaleSource, yscale);
+   });
+ 
+@@ -850,8 +850,8 @@ describe("applyEditAction – moveElement", () => {
+     if (result.kind !== "success") return;
+     expect(result.newSource).toContain("scale=0");
+     expect(result.newSource).not.toContain("shift=(");
+-    expect(result.newSource).toContain("xshift=2pt");
+-    expect(result.newSource).toContain("yshift=9pt");
++    expect(result.newSource).toContain("xshift=0.0703cm");
++    expect(result.newSource).toContain("yshift=0.3163cm");
+     expectPatchesReconstructSource(source, result);
+   });
+ 
+@@ -870,8 +870,8 @@ describe("applyEditAction – moveElement", () => {
+ 
+     expect(result.kind).toBe("success");
+     if (result.kind !== "success") return;
+-    expect(result.newSource).toContain("xshift=6pt");
+-    expect(result.newSource).toContain("yshift=6pt");
++    expect(result.newSource).toContain("xshift=0.2109cm");
++    expect(result.newSource).toContain("yshift=0.2109cm");
+     expectPatchesReconstructSource(source, result);
+   });
+ 
+@@ -890,7 +890,7 @@ describe("applyEditAction – moveElement", () => {
+ 
+     expect(result.kind).toBe("success");
+     if (result.kind !== "success") return;
+-    expect(result.newSource).toContain("\\begin{scope}[xshift=4pt, yshift=-6pt]");
++    expect(result.newSource).toContain("\\begin{scope}[xshift=0.1406cm, yshift=-0.2109cm]");
+     expectPatchesReconstructSource(source, result);
+   });
+ 
+@@ -909,7 +909,7 @@ describe("applyEditAction – moveElement", () => {
+ 
+     expect(result.kind).toBe("success");
+     if (result.kind !== "success") return;
+-    expect(result.newSource).toContain("\\begin{scope}[draw, xshift=4pt, yshift=-6pt]");
++    expect(result.newSource).toContain("\\begin{scope}[draw, xshift=0.1406cm, yshift=-0.2109cm]");
+     expectPatchesReconstructSource(source, result);
+   });
+ 
+diff --git a/test/edit-inspector-nodes.spec.ts b/test/edit-inspector-nodes.spec.ts
+index 0429479d..92ef3047 100644
+--- a/test/edit-inspector-nodes.spec.ts
++++ b/test/edit-inspector-nodes.spec.ts
+@@ -291,7 +291,7 @@ describe("getInspectorDescriptor – nodes", () => {
+       source: String.raw`\begin{tikzpicture}
+   \node[draw] at (1,2) {node};
+ \end{tikzpicture}`,
+-      expectedValue: "black",
++      expectedValue: "rgba(0,0,0,1)",
+       expectedSyntaxValue: null
+     },
+     {
+@@ -299,7 +299,7 @@ describe("getInspectorDescriptor – nodes", () => {
+       source: String.raw`\begin{tikzpicture}[every node/.style={draw=red}]
+   \node at (1,2) {node};
+ \end{tikzpicture}`,
+-      expectedValue: "red",
++      expectedValue: "rgba(255,0,0,1)",
+       expectedSyntaxValue: "red"
+     },
+     {
+diff --git a/test/edit-inspector-path.spec.ts b/test/edit-inspector-path.spec.ts
+index ef0ce360..988a30c7 100644
+--- a/test/edit-inspector-path.spec.ts
++++ b/test/edit-inspector-path.spec.ts
+@@ -55,7 +55,7 @@ describe("getInspectorDescriptor – path controls", () => {
+     if (!strokeColor || strokeColor.kind !== "color") {
+       throw new Error("Expected stroke color property");
+     }
+-    expect(strokeColor.value).toBe("blue");
++    expect(strokeColor.value).toBe("rgba(0,0,255,1)");
+     expect(strokeColor.write.writable).toBe(true);
+ 
+     const lineWidth = strokeSection.properties.find((property) => property.kind === "lineWidth");
+@@ -279,9 +279,9 @@ describe("getInspectorDescriptor – path controls", () => {
+     expect(step.defaultValue).toBe(1);
+     expect(xstep.defaultValue).toBe(1);
+     expect(ystep.defaultValue).toBe(1);
+-    expect(step.unit).toBe("cm");
+-    expect(xstep.unit).toBe("cm");
+-    expect(ystep.unit).toBe("cm");
++    expect(step.unit).toBeUndefined();
++    expect(xstep.unit).toBeUndefined();
++    expect(ystep.unit).toBeUndefined();
+     expect(step.step).toBeCloseTo(0.1, 6);
+     expect(xstep.step).toBeCloseTo(0.1, 6);
+     expect(ystep.step).toBeCloseTo(0.1, 6);
+diff --git a/test/edit-inspector-transform-bounds.spec.ts b/test/edit-inspector-transform-bounds.spec.ts
+index b80a6f23..10dcb611 100644
+--- a/test/edit-inspector-transform-bounds.spec.ts
++++ b/test/edit-inspector-transform-bounds.spec.ts
+@@ -5,6 +5,7 @@ import { getInspectorDescriptor, TIKZPICTURE_GLOBAL_TARGET_ID } from "../package
+ import { resolveFigureBoundsState } from "../packages/core/src/edit/figure-bounds.js";
+ import { buildTransformSetPropertyMutations, resolveTransformInspectorMutationContext, resolveTransformInspectorValues } from "../packages/core/src/edit/property-write-builders.js";
+ import { resolvePropertyTarget } from "../packages/core/src/edit/property-target.js";
++import { PT_PER_CM } from "../packages/core/src/edit/format.js";
+ 
+ describe("getInspectorDescriptor – transform and bounds", () => {
+   it("replaces geometric transform fields with canonical TikZ transform controls", () => {
+@@ -29,7 +30,7 @@ describe("getInspectorDescriptor – transform and bounds", () => {
+     }
+ 
+     const transformIds = transformSection.properties.map((property) => property.id);
+-    expect(transformIds).toEqual(["xshift", "yshift", "xscale", "yscale", "rotate"]);
++    expect(transformIds).toEqual(["xshift", "yshift", "xscale", "yscale", "rotate", "xslant", "yslant"]);
+     expect(transformIds).not.toContain("x");
+     expect(transformIds).not.toContain("y");
+     expect(transformIds).not.toContain("width");
+@@ -69,8 +70,8 @@ describe("getInspectorDescriptor – transform and bounds", () => {
+ 
+     expect(values.get("xscale")).toBeCloseTo(2, 6);
+     expect(values.get("yscale")).toBeCloseTo(2, 6);
+-    expect(values.get("xshift")).toBeCloseTo(2, 6);
+-    expect(values.get("yshift")).toBeCloseTo(3, 6);
++    expect(values.get("xshift")).toBeCloseTo(2 / PT_PER_CM, 6);
++    expect(values.get("yshift")).toBeCloseTo(3 / PT_PER_CM, 6);
+     expect(values.get("rotate")).toBeCloseTo(15, 6);
+     expect(defaultValues.get("xshift")).toBe(0);
+     expect(defaultValues.get("yshift")).toBe(0);
+@@ -398,8 +399,8 @@ describe("getInspectorDescriptor – transform and bounds", () => {
+       updated = result.newSource;
+     }
+ 
+-    expect(updated).toContain("xshift=5pt");
+-    expect(updated).toContain("yshift=3pt");
++    expect(updated).toContain("xshift=0.1757cm");
++    expect(updated).toContain("yshift=0.1054cm");
+     expect(updated).not.toMatch(/\bshift\s*=/);
+   });
+ 
+@@ -441,9 +442,9 @@ describe("getInspectorDescriptor – transform and bounds", () => {
+       updated = result.newSource;
+     }
+ 
+-    expect(updated).toContain("\\begin{scope}[xshift=0.8pt]");
++    expect(updated).toContain("\\begin{scope}[xshift=0.0281cm]");
+     expect(updated).not.toContain("yshift=0pt");
+-    expect(updated).not.toContain("\\begin{scope[xshift=0.8pt]}");
++    expect(updated).not.toContain("\\begin{scope[xshift=0.0281cm]}");
+   });
+ 
+   it("clears default xscale while preserving a non-default yscale companion", () => {
 diff --git a/test/edit-snapping-interactions.spec.ts b/test/edit-snapping-interactions.spec.ts
 index 1af78419..102e6ecf 100644
 --- a/test/edit-snapping-interactions.spec.ts
@@ -23876,7 +24223,7 @@ index 130bf203..a60a3d94 100644
  
      // The far circle offers a smaller x offset (2.5 vs 3), but it sits ~300pt
 diff --git a/test/editor-reducer.spec.ts b/test/editor-reducer.spec.ts
-index f4e310bc..05ee95e8 100644
+index f4e310bc..03c721b4 100644
 --- a/test/editor-reducer.spec.ts
 +++ b/test/editor-reducer.spec.ts
 @@ -110,22 +110,19 @@ describe("editorReducer – CODE_EDITED", () => {
@@ -24080,10 +24427,16 @@ index f4e310bc..05ee95e8 100644
    });
  
    it("increments sourceRevision for successful edit actions, including transient previews", () => {
-@@ -868,28 +795,6 @@ describe("editorReducer – SET_TOOL_MODE", () => {
-   });
- });
+@@ -862,30 +789,8 @@ describe("editorReducer – SET_TOOL_MODE", () => {
  
+   it("is a no-op when mode is unchanged", () => {
+     const initial = makeInitialState();
+-    expect(initial.toolMode).toBe("select");
+-    const after = editorReducer(initial, { type: "SET_TOOL_MODE", mode: "select" });
+-    expect(after).toBe(initial);
+-  });
+-});
+-
 -describe("editorReducer – SET_FREEHAND_SMOOTHING", () => {
 -  it("updates freehand smoothing value", () => {
 -    const state = applyActions([{ type: "SET_FREEHAND_SMOOTHING", value: 20 }]);
@@ -24102,13 +24455,11 @@ index f4e310bc..05ee95e8 100644
 -    const initial = makeInitialState();
 -    expect(initial.freehandSmoothingPx).toBe(16);
 -    const after = editorReducer(initial, { type: "SET_FREEHAND_SMOOTHING", value: 16 });
--    expect(after).toBe(initial);
--  });
--});
--
- describe("editorReducer – SET_ADD_SHAPE_PRESET", () => {
-   it("updates the selected add-shape preset", () => {
-     const state = applyActions([{ type: "SET_ADD_SHAPE_PRESET", value: "diamond" }]);
++    expect(initial.toolMode).toBe("addFreehand");
++    const after = editorReducer(initial, { type: "SET_TOOL_MODE", mode: "addFreehand" });
+     expect(after).toBe(initial);
+   });
+ });
 @@ -1014,7 +919,6 @@ describe("editorReducer – layout", () => {
      const initial = makeInitialState();
      expect(initial.showGrid).toBe(true);
@@ -24125,7 +24476,7 @@ index f4e310bc..05ee95e8 100644
  
      const afterTransparencyGrid = editorReducer(afterGuides, { type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" });
      expect(afterTransparencyGrid.showTransparencyGrid).toBe(true);
-@@ -1050,29 +953,6 @@ describe("editorReducer – layout", () => {
+@@ -1050,37 +953,14 @@ describe("editorReducer – layout", () => {
      expect(afterDocumentBounds.showDocumentBounds).toBe(false);
    });
  
@@ -24155,6 +24506,16 @@ index f4e310bc..05ee95e8 100644
    it("REQUEST_FIT_TO_CONTENT increments request token", () => {
      const initial = makeInitialState();
      expect(initial.fitToContentRequestToken).toBe(0);
+-    expect(initial.fitToContentModeActive).toBe(true);
++    expect(initial.fitToContentModeActive).toBe(false);
+ 
+     const next = editorReducer(initial, { type: "REQUEST_FIT_TO_CONTENT" });
+     expect(next.fitToContentRequestToken).toBe(1);
+-    expect(next.fitToContentModeActive).toBe(true);
++    expect(next.fitToContentModeActive).toBe(false);
+ 
+     const next2 = editorReducer(next, { type: "REQUEST_FIT_TO_CONTENT" });
+     expect(next2.fitToContentRequestToken).toBe(2);
 @@ -1255,7 +1135,7 @@ describe("editorReducer – branch edge cases", () => {
            }]
          }
@@ -24179,6 +24540,93 @@ index f4e310bc..05ee95e8 100644
    });
  
    it("blocks direct user edits while the assistant lock is active", () => {
+diff --git a/test/element-templates.spec.ts b/test/element-templates.spec.ts
+index 36c1dfd9..f3303c3a 100644
+--- a/test/element-templates.spec.ts
++++ b/test/element-templates.spec.ts
+@@ -210,10 +210,10 @@ describe("element templates", () => {
+ 
+   it("generates default cubic bezier controls for partial and zero-length drags", () => {
+     expect(generateElementSource({ kind: "bezier" }, wp(cm(0), cm(0)))).toBe(
+-      "\\draw (0,0) .. controls (0.67,0) and (1.33,0) .. (2,0);"
++      "\\draw (0,0) .. controls (0.666666666667,0) and (1.333333333333,0) .. (2,0);"
+     );
+     expect(generateElementSource({ kind: "bezier", to: wp(cm(0), cm(0)) }, wp(cm(0), cm(0)))).toBe(
+-      "\\draw (0,0) .. controls (0.67,0) and (1.33,0) .. (0,0);"
++      "\\draw (0,0) .. controls (0.666666666667,0) and (1.333333333333,0) .. (0,0);"
+     );
+     expect(generateElementSource(
+       { kind: "bezier", to: wp(cm(3), cm(0)), control1: wp(cm(1), cm(1)) },
+diff --git a/test/path-edit-actions.spec.ts b/test/path-edit-actions.spec.ts
+index 2a480a89..bf9814b6 100644
+--- a/test/path-edit-actions.spec.ts
++++ b/test/path-edit-actions.spec.ts
+@@ -26,6 +26,16 @@ function handleIdFor(source: string, rendered: ReturnType<typeof renderTikzToSvg
+   return handle.id;
+ }
+ 
++/** The midpoint of the one cubic `(0,0) .. controls A and B .. (6,0)` in the rewritten source. */
++function mergedCubicMidpoint(newSource: string): { x: number; y: number } {
++  const merged = /\\draw \(0,0\) \.\. controls \(([^,]+),([^)]+)\) and \(([^,]+),([^)]+)\) \.\. \(6,0\)/u.exec(newSource);
++  if (!merged) {
++    throw new Error(`Expected one cubic from (0,0) to (6,0) in ${newSource}`);
++  }
++  const [c1x, c1y, c2x, c2y] = merged.slice(1).map(Number);
++  return { x: (3 * c1x + 3 * c2x + 6) / 8, y: (3 * c1y + 3 * c2y) / 8 };
++}
++
+ describe("path edit actions", () => {
+   it("rejects malformed explicit paths with precise analysis reasons", () => {
+     const cases = [
+@@ -620,7 +630,11 @@ describe("path edit actions", () => {
+ 
+     expect(result.kind).toBe("success");
+     if (result.kind !== "success") return;
+-    expect(result.newSource).toContain("\\draw (0,0) .. controls (1,0) and (5,0) .. (6,0);");
++    // Inkscape refits one cubic to the two joined curves, so the hump through (3,1) survives.
++    const midpoint = mergedCubicMidpoint(result.newSource);
++    expect(midpoint.x).toBeCloseTo(3, 1);
++    expect(Math.abs(midpoint.y - 1)).toBeLessThan(0.25);
++    expect(result.newSource).toContain(".. (6,0);");
+   });
+ 
+   it("deletes a point from a closed polygon while preserving the cycle", () => {
+@@ -671,9 +685,10 @@ describe("path edit actions", () => {
+ 
+     expect(result.kind).toBe("success");
+     if (result.kind !== "success") return;
+-    expect(result.newSource).toContain(
+-      "\\draw (0,0) .. controls (1,0) and (5,0) .. (6,0) .. controls (5,-1) and (1,-1) .. cycle;"
+-    );
++    const midpoint = mergedCubicMidpoint(result.newSource);
++    expect(midpoint.x).toBeCloseTo(3, 1);
++    expect(Math.abs(midpoint.y - 1)).toBeLessThan(0.25);
++    expect(result.newSource).toContain(".. (6,0) .. controls (5,-1) and (1,-1) .. cycle;");
+   });
+ 
+   it("rejects deleting endpoints, tiny closed paths, and mixed line-cubic anchors", () => {
+diff --git a/test/property-write-builders.spec.ts b/test/property-write-builders.spec.ts
+index 48ae614a..20531f36 100644
+--- a/test/property-write-builders.spec.ts
++++ b/test/property-write-builders.spec.ts
+@@ -172,14 +172,14 @@ describe("property write builders", () => {
+       values: { xshift: 1, yshift: 2, xscale: 1, yscale: 1, rotate: 0 },
+       presence: { shift: true, scale: false, xshift: false, yshift: false, xscale: false, yscale: false, rotate: false }
+     }, "xshift", 3)).toEqual([
+-      expect.objectContaining({ key: "xshift", value: "3pt" }),
+-      expect.objectContaining({ key: "yshift", value: "2pt" })
++      expect.objectContaining({ key: "xshift", value: "0.1054cm" }),
++      expect.objectContaining({ key: "yshift", value: "0.0703cm" })
+     ]);
+     expect(buildTransformSetPropertyMutations({
+       values: { xshift: 0, yshift: 0, xscale: 1, yscale: 1, rotate: 0 },
+       presence: { shift: false, scale: false, xshift: false, yshift: true, xscale: false, yscale: false, rotate: false }
+     }, "xshift", 2)).toEqual([
+-      expect.objectContaining({ key: "xshift", value: "2pt" }),
++      expect.objectContaining({ key: "xshift", value: "0.0703cm" }),
+       expect.objectContaining({ key: "yshift", value: "" })
+     ]);
+     expect(buildTransformSetPropertyMutations({
 diff --git a/test/tablet-logic.spec.ts b/test/tablet-logic.spec.ts
 new file mode 100644
 index 00000000..d25a781f
@@ -24609,8 +25057,26 @@ index 00000000..d25a781f
 +    expect(sweep(figure('\\draw plot coordinates {(0,0) (2,1) (4,0)};'), [2, 0], [2, 2], 0.2)).toBeNull();
 +  });
 +});
+diff --git a/test/web/canvas-context-menu.spec.ts b/test/web/canvas-context-menu.spec.ts
+index 76001ad4..188d2cca 100644
+--- a/test/web/canvas-context-menu.spec.ts
++++ b/test/web/canvas-context-menu.spec.ts
+@@ -16,6 +16,13 @@ describe("CanvasContextMenu", () => {
+ 
+   beforeEach(() => {
+     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++    if (typeof window.ResizeObserver !== "function") {
++      window.ResizeObserver = class {
++        observe(): void {}
++        unobserve(): void {}
++        disconnect(): void {}
++      };
++    }
+     host = document.createElement("div");
+     Object.defineProperty(host, "clientWidth", { configurable: true, value: 800 });
+     Object.defineProperty(host, "clientHeight", { configurable: true, value: 600 });
 diff --git a/test/web/editor-command-runtime.spec.ts b/test/web/editor-command-runtime.spec.ts
-index a83c892f..77fb0c1f 100644
+index a83c892f..643170f5 100644
 --- a/test/web/editor-command-runtime.spec.ts
 +++ b/test/web/editor-command-runtime.spec.ts
 @@ -62,8 +62,6 @@ describe("editor-command-runtime", () => {
@@ -24622,18 +25088,24 @@ index a83c892f..77fb0c1f 100644
          showGrid: true,
          showTransparencyGrid: false,
          showDocumentBounds: true
-@@ -81,8 +79,8 @@ describe("editor-command-runtime", () => {
-     expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS].checked).toBe(false);
-     expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID].checked).toBe(true);
-     expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES].checked).toBe(true);
+@@ -78,11 +76,11 @@ describe("editor-command-runtime", () => {
+     expect(runtime.bindings[APP_MENU_COMMAND_IDS.PATH_REVERSE].enabled).toBe(true);
+     expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_GRID].checked).toBe(true);
+     expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_TRANSPARENCY_GRID].checked).toBe(false);
+-    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS].checked).toBe(false);
+-    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GRID].checked).toBe(true);
+-    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES].checked).toBe(true);
 -    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_POINTS].checked).toBe(true);
 -    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECT_GAPS].checked).toBe(true);
++    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_OUTPUT_BOUNDS].checked).toBe(true);
++    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAPPING].checked).toBe(true);
++    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_LATTICE_LOCK].checked).toBe(true);
 +    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAP_OBJECTS].checked).toBe(true);
 +    expect(runtime.bindings[APP_MENU_COMMAND_IDS.TOGGLE_SNAP_ALIGNMENT].checked).toBe(true);
    });
  
    it("enables Check for Updates when platform updater support is available", () => {
-@@ -157,32 +155,32 @@ describe("editor-command-runtime", () => {
+@@ -157,60 +155,50 @@ describe("editor-command-runtime", () => {
      expect(onRequestQuitApp).toHaveBeenCalledTimes(1);
    });
  
@@ -24670,14 +25142,57 @@ index a83c892f..77fb0c1f 100644
 +    expect(updateCanvasSettings).toHaveBeenCalledWith({ snapAlignment: false });
      expect(runtime.runCommand(APP_MENU_COMMAND_IDS.TOGGLE_TRANSPARENCY_GRID, "menu")).toBe(true);
      expect(dispatch).toHaveBeenCalledWith({ type: "TOGGLE_CANVAS_AID", aid: "transparencyGrid" });
-     expect(runtime.runCommand(APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS, "menu")).toBe(true);
+-    expect(runtime.runCommand(APP_MENU_COMMAND_IDS.TOGGLE_INFINITE_CANVAS, "menu")).toBe(true);
++    expect(runtime.runCommand(APP_MENU_COMMAND_IDS.TOGGLE_OUTPUT_BOUNDS, "menu")).toBe(true);
      expect(dispatch).toHaveBeenCalledWith({ type: "TOGGLE_CANVAS_AID", aid: "documentBounds" });
 -    expect(runtime.runCommand(APP_MENU_COMMAND_IDS.TOGGLE_SNAP_GUIDES, "menu")).toBe(true);
 -    expect(dispatch).toHaveBeenCalledWith({ type: "TOGGLE_SNAP_MODE", mode: "guides" });
    });
  
-   it("treats fit to content as a checked toggle", () => {
-@@ -226,8 +224,6 @@ describe("editor-command-runtime", () => {
+-  it("treats fit to content as a checked toggle", () => {
++  it("requests a fit each time Fit to Content runs", () => {
+     const dispatch = vi.fn<(action: EditorAction) => void>();
+     const rendered = renderTikzToSvg(SOURCE);
+-    const inactiveRuntime = createEditorCommandRuntime(
+-      makeInput({
+-        dispatch,
+-        snapshot: makeSnapshot(rendered),
+-        selectedElementIds: new Set(),
+-        fitToContentModeActive: false
+-      })
+-    );
+-    expect(inactiveRuntime.bindings[APP_MENU_COMMAND_IDS.FIT_TO_CONTENT].checked).toBe(false);
+-    expect(inactiveRuntime.runCommand(APP_MENU_COMMAND_IDS.FIT_TO_CONTENT, "menu")).toBe(true);
+-    expect(dispatch).toHaveBeenLastCalledWith({ type: "REQUEST_FIT_TO_CONTENT" });
+-
+-    const activeRuntime = createEditorCommandRuntime(
+-      makeInput({
+-        dispatch,
+-        snapshot: makeSnapshot(rendered),
+-        selectedElementIds: new Set(),
+-        fitToContentModeActive: true
+-      })
+-    );
+-    expect(activeRuntime.bindings[APP_MENU_COMMAND_IDS.FIT_TO_CONTENT].checked).toBe(true);
+-    expect(activeRuntime.runCommand(APP_MENU_COMMAND_IDS.FIT_TO_CONTENT, "menu")).toBe(true);
+-    expect(dispatch).toHaveBeenLastCalledWith({ type: "SET_FIT_TO_CONTENT_MODE", active: false });
++    for (const fitToContentModeActive of [false, true]) {
++      const runtime = createEditorCommandRuntime(
++        makeInput({
++          dispatch,
++          snapshot: makeSnapshot(rendered),
++          selectedElementIds: new Set(),
++          fitToContentModeActive
++        })
++      );
++      expect(runtime.bindings[APP_MENU_COMMAND_IDS.FIT_TO_CONTENT].checked).toBeUndefined();
++      expect(runtime.runCommand(APP_MENU_COMMAND_IDS.FIT_TO_CONTENT, "menu")).toBe(true);
++      expect(dispatch).toHaveBeenLastCalledWith({ type: "REQUEST_FIT_TO_CONTENT" });
++    }
+   });
+ 
+   it("routes rotate-left through grouped transform edits", () => {
+@@ -226,8 +214,6 @@ describe("editor-command-runtime", () => {
          source,
          snapshot: makeSnapshot(rendered, source),
          selectedElementIds: new Set(["path:0"]),
@@ -24686,7 +25201,7 @@ index a83c892f..77fb0c1f 100644
        })
      );
  
-@@ -319,19 +315,22 @@ describe("editor-command-runtime", () => {
+@@ -319,19 +305,22 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(["path:0"]),
@@ -24714,7 +25229,7 @@ index a83c892f..77fb0c1f 100644
    });
  
    it("disables commands when prerequisites are missing", () => {
-@@ -342,15 +341,12 @@ describe("editor-command-runtime", () => {
+@@ -342,15 +331,12 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24731,7 +25246,7 @@ index a83c892f..77fb0c1f 100644
      expect(dispatch).not.toHaveBeenCalled();
    });
  
-@@ -872,8 +868,6 @@ describe("editor-command-runtime", () => {
+@@ -872,8 +858,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24740,7 +25255,7 @@ index a83c892f..77fb0c1f 100644
        })
      );
  
-@@ -891,8 +885,6 @@ describe("editor-command-runtime", () => {
+@@ -891,8 +875,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24749,7 +25264,7 @@ index a83c892f..77fb0c1f 100644
        })
      );
  
-@@ -954,8 +946,6 @@ describe("editor-command-runtime", () => {
+@@ -954,8 +936,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24758,7 +25273,7 @@ index a83c892f..77fb0c1f 100644
        })
      );
  
-@@ -1065,8 +1055,6 @@ describe("editor-command-runtime", () => {
+@@ -1065,8 +1045,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24767,7 +25282,7 @@ index a83c892f..77fb0c1f 100644
          onOpenExample
        })
      );
-@@ -1088,8 +1076,6 @@ describe("editor-command-runtime", () => {
+@@ -1088,8 +1066,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24776,7 +25291,7 @@ index a83c892f..77fb0c1f 100644
          onOpenSvgExport,
          onOpenPngExport
        })
-@@ -1111,8 +1097,6 @@ describe("editor-command-runtime", () => {
+@@ -1111,8 +1087,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24785,7 +25300,7 @@ index a83c892f..77fb0c1f 100644
          onOpenSvgExport
        })
      );
-@@ -1139,8 +1123,6 @@ describe("editor-command-runtime", () => {
+@@ -1139,8 +1113,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24794,7 +25309,7 @@ index a83c892f..77fb0c1f 100644
        })
      );
  
-@@ -1176,8 +1158,6 @@ describe("editor-command-runtime", () => {
+@@ -1176,8 +1148,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24803,7 +25318,7 @@ index a83c892f..77fb0c1f 100644
        })
      );
  
-@@ -1230,8 +1210,6 @@ describe("editor-command-runtime", () => {
+@@ -1230,8 +1200,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24812,7 +25327,7 @@ index a83c892f..77fb0c1f 100644
        })
      );
  
-@@ -1278,8 +1256,6 @@ describe("editor-command-runtime", () => {
+@@ -1278,8 +1246,6 @@ describe("editor-command-runtime", () => {
          dispatch,
          snapshot: makeSnapshot(rendered),
          selectedElementIds: new Set(),
@@ -24821,7 +25336,7 @@ index a83c892f..77fb0c1f 100644
        })
      );
  
-@@ -1325,12 +1301,11 @@ function makeInput({
+@@ -1325,12 +1291,14 @@ function makeInput({
    snapshot,
    selectedElementIds,
    activeHandleId = null,
@@ -24831,12 +25346,15 @@ index a83c892f..77fb0c1f 100644
    showGrid = false,
    showTransparencyGrid = false,
 -  snapModes = { grid: true, guides: true, points: true, gaps: true },
++  snapping = true,
++  latticeLock = true,
++  constrainGeometry = false,
 +  snapObjects = true,
 +  snapAlignment = true,
    showRulers = true,
    showGuides = true,
    showDocumentBounds = true,
-@@ -1361,17 +1336,11 @@ function makeInput({
+@@ -1361,17 +1329,14 @@ function makeInput({
    snapshot: ReturnType<typeof makeSnapshot>;
    selectedElementIds: ReadonlySet<string>;
    activeHandleId?: string | null;
@@ -24851,12 +25369,15 @@ index a83c892f..77fb0c1f 100644
 -    points: boolean;
 -    gaps: boolean;
 -  };
++  snapping?: boolean;
++  latticeLock?: boolean;
++  constrainGeometry?: boolean;
 +  snapObjects?: boolean;
 +  snapAlignment?: boolean;
    showRulers?: boolean;
    showGuides?: boolean;
    showDocumentBounds?: boolean;
-@@ -1383,7 +1352,7 @@ function makeInput({
+@@ -1383,7 +1348,7 @@ function makeInput({
    showAssistantPanel?: boolean;
    showDevPanel?: boolean;
    snapHapticsEnabled?: boolean;
@@ -24865,7 +25386,7 @@ index a83c892f..77fb0c1f 100644
    onOpenExample?: () => void;
    onOpenSvgExport?: (svgResult: ReturnType<typeof renderTikzToSvg>["svg"]) => void;
    onOpenPngExport?: (svgResult: ReturnType<typeof renderTikzToSvg>["svg"]) => void;
-@@ -1407,8 +1376,6 @@ function makeInput({
+@@ -1407,8 +1372,6 @@ function makeInput({
      toolMode: "select" as const,
      selectedElementIds,
      activeHandleId,
@@ -24874,16 +25395,306 @@ index a83c892f..77fb0c1f 100644
      activeDocumentId: "doc-1",
      tabCount: 1,
      dirty: false,
-@@ -1418,7 +1385,8 @@ function makeInput({
+@@ -1418,7 +1381,11 @@ function makeInput({
      assistantAvailable: true,
      showGrid,
      showTransparencyGrid,
 -    snapModes,
++    snapping,
++    latticeLock,
++    constrainGeometry,
 +    snapObjects,
 +    snapAlignment,
      snapHapticsEnabled,
      showRulers,
      showGuides,
+diff --git a/test/web/freehand-tool.spec.ts b/test/web/freehand-tool.spec.ts
+index 26135190..6199ea44 100644
+--- a/test/web/freehand-tool.spec.ts
++++ b/test/web/freehand-tool.spec.ts
+@@ -5,6 +5,7 @@ import {
+   catmullRomToBezierSegments,
+   createFreehandToolDraft,
+   generateFreehandToolSource,
++  interpretFreehandToolSource,
+   resolveFreehandPreviewSegments,
+   simplifyFreehandPoints
+ } from "../../packages/app/src/ui/canvas-panel/freehand-tool.js";
+@@ -53,10 +54,10 @@ describe("freehand-tool", () => {
+   it("returns null for degenerate drafts and a TikZ draw statement for valid drafts", () => {
+     const degenerate = createFreehandToolDraft(wp(cm(0), cm(0)), 1);
+     const withTwoPoints = appendFreehandToolPoint(degenerate, wp(cm(0.8), cm(0)));
+-    expect(generateFreehandToolSource(withTwoPoints, 1, 16)).toBeNull();
++    expect(generateFreehandToolSource(withTwoPoints)).toBeNull();
+ 
+     const withThreePoints = appendFreehandToolPoint(withTwoPoints, wp(cm(2), cm(1.2)));
+-    const source = generateFreehandToolSource(withThreePoints, 1, 16);
++    const source = generateFreehandToolSource(withThreePoints);
+     expect(source).not.toBeNull();
+     expect(source).toContain("\\draw");
+     expect(source).toContain(".. controls");
+@@ -71,34 +72,29 @@ describe("freehand-tool", () => {
+       return index === 0 ? currentDraft : appendFreehandToolPoint(currentDraft, point);
+     }, createFreehandToolDraft(wp(cm(0), cm(0)), 1));
+ 
+-    const source = generateFreehandToolSource(draft, 1, 16, { strokeColor: "red" });
++    const source = generateFreehandToolSource(draft, { strokeColor: "red" });
+     expect(source).not.toBeNull();
+     expect(source).toContain("\\draw[draw=red]");
+   });
+ 
+-  it("uses smoothing tolerance when generating source output", () => {
+-    const points = [
+-      wp(cm(0), cm(0)),
+-      wp(cm(0.45), cm(0.02)),
+-      wp(cm(0.9), cm(0.04)),
+-      wp(cm(1.35), cm(0.03)),
+-      wp(cm(1.8), cm(0.01))
+-    ];
++  it("fits fewer curve segments to a stroke at a larger tolerance", () => {
++    const points = Array.from({ length: 41 }, (_, index) =>
++      wp(cm(index * 0.1), cm(0.3 * Math.sin(index * 0.6))));
+     let draft = createFreehandToolDraft(points[0], 1);
+     for (let i = 1; i < points.length; i += 1) {
+       draft = appendFreehandToolPoint(draft, points[i]);
+     }
+ 
+-    const lowSmoothing = generateFreehandToolSource(draft, 1, 4);
+-    const highSmoothing = generateFreehandToolSource(draft, 1, 32);
+-    expect(lowSmoothing).not.toBeNull();
+-    expect(highSmoothing).not.toBeNull();
+-    const lowControls = (lowSmoothing?.match(/\.\. controls/g) ?? []).length;
+-    const highControls = (highSmoothing?.match(/\.\. controls/g) ?? []).length;
+-    expect(lowControls).toBeGreaterThan(highControls);
++    const tight = interpretFreehandToolSource(draft, 1, { preserveCurve: true, toleranceWorld: cm(0.02) });
++    const loose = interpretFreehandToolSource(draft, 1, { preserveCurve: true, toleranceWorld: cm(0.5) });
++    expect(tight?.kind).toBe("curve");
++    expect(loose?.kind).toBe("curve");
++    const tightControls = (tight?.source.match(/\.\. controls/g) ?? []).length;
++    const looseControls = (loose?.source.match(/\.\. controls/g) ?? []).length;
++    expect(tightControls).toBeGreaterThan(looseControls);
+   });
+ 
+-  it("uses smoothing tolerance for preview segment simplification", () => {
++  it("previews one curve segment between each two sampled points", () => {
+     const points = [
+       wp(cm(0), cm(0)),
+       wp(cm(0.45), cm(0.02)),
+@@ -111,8 +107,7 @@ describe("freehand-tool", () => {
+       draft = appendFreehandToolPoint(draft, points[i]);
+     }
+ 
+-    const lowSmoothing = resolveFreehandPreviewSegments(draft, 4, 1);
+-    const highSmoothing = resolveFreehandPreviewSegments(draft, 32, 1);
+-    expect(lowSmoothing.length).toBeGreaterThan(highSmoothing.length);
++    const segments = resolveFreehandPreviewSegments(draft);
++    expect(segments.map((segment) => segment.to)).toEqual(points.slice(1));
+   });
+ });
+diff --git a/test/web/interaction-helpers.spec.ts b/test/web/interaction-helpers.spec.ts
+index 31df4be8..94a7ccd9 100644
+--- a/test/web/interaction-helpers.spec.ts
++++ b/test/web/interaction-helpers.spec.ts
+@@ -75,7 +75,7 @@ describe("interaction-helpers bezier math", () => {
+     const end = wp(cm(3), cm(0));
+     const bend = wp(cm(1.5), cm(0));
+ 
+-    const result = resolveBezierControlsFromBend(start, end, bend);
++    const result = resolveBezierControlsFromBend(start, end, bend, null);
+     expect(result.control1.x).toBeCloseTo(cm(1), 6);
+     expect(result.control1.y).toBeCloseTo(cm(0), 6);
+     expect(result.control2.x).toBeCloseTo(cm(2), 6);
+@@ -88,8 +88,8 @@ describe("interaction-helpers bezier math", () => {
+     const bendUp = wp(cm(1.5), cm(1));
+     const bendDown = wp(cm(1.5), cm(-1));
+ 
+-    const up = resolveBezierControlsFromBend(start, end, bendUp);
+-    const down = resolveBezierControlsFromBend(start, end, bendDown);
++    const up = resolveBezierControlsFromBend(start, end, bendUp, null);
++    const down = resolveBezierControlsFromBend(start, end, bendDown, null);
+ 
+     expect(up.control1.x).toBeCloseTo(down.control1.x, 6);
+     expect(up.control2.x).toBeCloseTo(down.control2.x, 6);
+@@ -102,7 +102,7 @@ describe("interaction-helpers bezier math", () => {
+     const end = wp(cm(4), cm(0));
+     const bend = wp(cm(2), cm(1.25));
+ 
+-    const result = resolveBezierControlsFromBend(start, end, bend);
++    const result = resolveBezierControlsFromBend(start, end, bend, null);
+     const midpoint = cubicMidpoint(start, result.control1, result.control2, result.endWorld);
+ 
+     expect(midpoint.x).toBeCloseTo(bend.x, 6);
+@@ -113,7 +113,8 @@ describe("interaction-helpers bezier math", () => {
+     const template = createBezierTemplateFromBend(
+       wp(cm(0), cm(0)),
+       wp(cm(3), cm(0)),
+-      wp(cm(1.5), cm(1))
++      wp(cm(1.5), cm(1)),
++      { lattice: null }
+     );
+ 
+     expect(template.kind).toBe("bezier");
+@@ -130,7 +131,7 @@ describe("interaction-helpers bezier math", () => {
+       wp(cm(0), cm(0)),
+       wp(cm(3), cm(0)),
+       wp(cm(1.5), cm(1)),
+-      { strokeColor: "red" }
++      { strokeColor: "red", lattice: null }
+     );
+ 
+     expect(template.strokeColor).toBe("red");
+diff --git a/test/web/matrix-cell-selection-handles.spec.ts b/test/web/matrix-cell-selection-handles.spec.ts
+index 419eaca9..3f6ad45f 100644
+--- a/test/web/matrix-cell-selection-handles.spec.ts
++++ b/test/web/matrix-cell-selection-handles.spec.ts
+@@ -27,11 +27,11 @@ function Harness(props: {
+       semanticResult: rendered.semantic
+     },
+     selectedElementIds: props.selectedElementIds,
+-    collapsedDensePathSourceIds: new Set<string>(),
+     svgResult: rendered.svg,
+     canvasTransform: { translateX: 0, translateY: 0, scale: 1 },
+     marqueeDraft: null,
+     toolMode: "select",
++    frameMode: "scale",
+     viewportSize: { width: 1024, height: 768 },
+     ROTATE_HANDLE_OFFSET_PX: 24
+   });
+diff --git a/test/web/scope-overlay-selection.spec.ts b/test/web/scope-overlay-selection.spec.ts
+index f6a8143e..735e693e 100644
+--- a/test/web/scope-overlay-selection.spec.ts
++++ b/test/web/scope-overlay-selection.spec.ts
+@@ -28,7 +28,7 @@ describe("scope overlay selection resolver", () => {
+     ["path:0", sb(0, 0, 1, 0)],
+     ["path:2", sb(0, 1, 1, 1)],
+     ["path:4", sb(0, 2, 1, 2)]
+-  ]));
++  ]), new Set());
+ 
+   it("selects the outermost enclosing scope on first pointer-down", () => {
+     const resolved = resolveScopeAwarePointerDownTarget({
+@@ -133,7 +133,7 @@ describe("scope overlay selection resolver", () => {
+ 
+ describe("scope overlay matrix augmentation", () => {
+   it("registers virtual matrix scopes and supports matrix drill-down from scope to cell", () => {
+-    const base = buildScopeOverlayIndex([], new Map());
++    const base = buildScopeOverlayIndex([], new Map(), new Set());
+     const sceneElements = [
+       {
+         kind: "Text",
+@@ -187,7 +187,7 @@ describe("scope overlay matrix augmentation", () => {
+   });
+ 
+   it("keeps additive matrix-cell targeting stable even when focused on the matrix scope", () => {
+-    const base = buildScopeOverlayIndex([], new Map());
++    const base = buildScopeOverlayIndex([], new Map(), new Set());
+     const sceneElements = [
+       {
+         kind: "Text",
+diff --git a/test/web/status-bar.spec.ts b/test/web/status-bar.spec.ts
+index 9a9db488..22ae71ed 100644
+--- a/test/web/status-bar.spec.ts
++++ b/test/web/status-bar.spec.ts
+@@ -19,8 +19,11 @@ type MockStatusBarState = {
+   activeDocumentId: string;
+   documents: Record<string, { dirty: boolean }>;
+   canvasTransform: { translateX: number; translateY: number; scale: number };
+-  fitToContentModeActive: boolean;
++  canvasFitToContentScale: number | null;
+   showGrid: boolean;
++  showRulers: boolean;
++  showGuides: boolean;
++  showDocumentBounds: boolean;
+   selectedElementIds: Set<string>;
+   pendingRequestId: string | null;
+   toolMode: ToolMode;
+@@ -44,8 +47,11 @@ const mocks = vi.hoisted(() => {
+     activeDocumentId: "doc-1",
+     documents: { "doc-1": { dirty: false } },
+     canvasTransform: { translateX: 0, translateY: 0, scale: 1 },
+-    fitToContentModeActive: false,
++    canvasFitToContentScale: null,
+     showGrid: true,
++    showRulers: false,
++    showGuides: false,
++    showDocumentBounds: false,
+     selectedElementIds: new Set(),
+     pendingRequestId: null,
+     toolMode: "select",
+@@ -83,7 +89,6 @@ describe("StatusBar", () => {
+   beforeEach(() => {
+     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+     mocks.dispatch.mockReset();
+-    mocks.storeState.fitToContentModeActive = false;
+     mocks.storeState.showGrid = true;
+     mocks.storeState.canvasTransform = { translateX: 0, translateY: 0, scale: 1 };
+     mocks.storeState.toolMode = "select";
+@@ -103,49 +108,39 @@ describe("StatusBar", () => {
+     container.remove();
+   });
+ 
+-  it("requests fit to content when the fit toggle is off", async () => {
++  async function openZoomAndDisplay(): Promise<void> {
+     await act(async () => {
+       root.render(React.createElement(StatusBar));
+     });
+-
+-    const fitButton = container.querySelector<HTMLButtonElement>('button[aria-label="Fit to content"]');
+-    expect(fitButton).not.toBeNull();
+-    expect(fitButton?.getAttribute("aria-pressed")).toBe("false");
+-
++    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Zoom and display"]');
++    expect(trigger).not.toBeNull();
+     await act(async () => {
+-      fitButton?.click();
++      trigger?.click();
+     });
++  }
+ 
+-    expect(mocks.dispatch).toHaveBeenCalledTimes(1);
+-    expect(mocks.dispatch).toHaveBeenCalledWith({ type: "REQUEST_FIT_TO_CONTENT" });
+-  });
+-
+-  it("turns fit tracking off without requesting a fit when the fit toggle is on", async () => {
+-    mocks.storeState.fitToContentModeActive = true;
++  function popupButton(label: string): HTMLButtonElement | undefined {
++    return Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === label);
++  }
+ 
+-    await act(async () => {
+-      root.render(React.createElement(StatusBar));
+-    });
++  it("requests a fit from the zoom readout's Fit diagram button", async () => {
++    await openZoomAndDisplay();
+ 
+-    const fitButton = container.querySelector<HTMLButtonElement>('button[aria-label="Fit to content"]');
+-    expect(fitButton).not.toBeNull();
+-    expect(fitButton?.getAttribute("aria-pressed")).toBe("true");
++    const fitButton = popupButton("Fit diagram");
++    expect(fitButton).toBeDefined();
+ 
+     await act(async () => {
+       fitButton?.click();
+     });
+ 
+     expect(mocks.dispatch).toHaveBeenCalledTimes(1);
+-    expect(mocks.dispatch).toHaveBeenCalledWith({ type: "SET_FIT_TO_CONTENT_MODE", active: false });
++    expect(mocks.dispatch).toHaveBeenCalledWith({ type: "REQUEST_FIT_TO_CONTENT" });
+   });
+ 
+-  it("dispatches the existing grid toggle from the grid button", async () => {
+-    await act(async () => {
+-      root.render(React.createElement(StatusBar));
+-    });
++  it("toggles the grid from the zoom readout's Grid button", async () => {
++    await openZoomAndDisplay();
+ 
+-    const gridButton = container.querySelector<HTMLButtonElement>('button[aria-label="Hide grid"]');
+-    expect(gridButton).not.toBeNull();
++    const gridButton = popupButton("Grid");
+     expect(gridButton?.getAttribute("aria-pressed")).toBe("true");
+ 
+     await act(async () => {
 diff --git a/test/web/styles-panel-test-helpers.ts b/test/web/styles-panel-test-helpers.ts
 index 3c8e0e4e..d3503319 100644
 --- a/test/web/styles-panel-test-helpers.ts
@@ -24899,17 +25710,85 @@ index 3c8e0e4e..d3503319 100644
          lastEditPatches: null,
          lastEditPatchBaseRevision: null,
          lastEditChangedSourceIds: null,
-diff --git a/vitest.config.ts b/vitest.config.ts
-index dcdc0876..87fed8f0 100644
---- a/vitest.config.ts
-+++ b/vitest.config.ts
-@@ -7,7 +7,8 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
- export default defineConfig({
-   cacheDir: process.env.VITE_CACHE_DIR ?? ".vite-temp",
-   test: {
--    include: ["test/**/*.spec.ts"],
-+    // Workbench logic plus the snapping engine specs; the other upstream suites target menu and reducer surfaces the patch removed.
-+    include: ["test/tablet-logic.spec.ts", "test/edit-snapping.spec.ts", "test/edit-snapping-interactions.spec.ts"],
-     environment: "node",
-     coverage: {
-       provider: "v8",
+diff --git a/test/web/tool-config.spec.ts b/test/web/tool-config.spec.ts
+index 9fbd6731..8ec29a45 100644
+--- a/test/web/tool-config.spec.ts
++++ b/test/web/tool-config.spec.ts
+@@ -1,66 +1,19 @@
+ import { describe, expect, it } from "vitest";
+ import {
+   isToolCreateMode,
+-  resolveToolbarToolMode,
+   toolModeAutoOpensPopup,
+-  toolModeFromShortcut,
+   toolModeHasPopup,
+   toolModePopupKind
+ } from "../../packages/app/src/ui/tool-config.js";
+ 
+-describe("resolveToolbarToolMode", () => {
+-  it("deactivates non-select tool when reclicked", () => {
+-    expect(resolveToolbarToolMode("addRect", "addRect")).toBe("select");
+-    expect(resolveToolbarToolMode("addNode", "addNode")).toBe("select");
+-    expect(resolveToolbarToolMode("addFreehand", "addFreehand")).toBe("select");
+-  });
+-
+-  it("keeps popup-enabled tool active when reclicked", () => {
+-    expect(resolveToolbarToolMode("addShape", "addShape")).toBe("addShape");
+-    expect(resolveToolbarToolMode("addMatrix", "addMatrix")).toBe("addMatrix");
+-  });
+-
+-  it("keeps select active when reclicking select", () => {
+-    expect(resolveToolbarToolMode("select", "select")).toBe("select");
+-  });
+-
+-  it("switches to clicked mode for normal tool changes", () => {
+-    expect(resolveToolbarToolMode("select", "addLine")).toBe("addLine");
+-    expect(resolveToolbarToolMode("addArrow", "addEllipse")).toBe("addEllipse");
+-  });
+-
+-  it("maps keyboard shortcut B to addBezier", () => {
+-    expect(toolModeFromShortcut("b")).toBe("addBezier");
+-    expect(toolModeFromShortcut("B")).toBe("addBezier");
+-  });
+-
+-  it("maps keyboard shortcut P to addPath", () => {
+-    expect(toolModeFromShortcut("p")).toBe("addPath");
+-    expect(toolModeFromShortcut("P")).toBe("addPath");
+-  });
+-
+-  it("maps keyboard shortcut F to addFreehand", () => {
+-    expect(toolModeFromShortcut("f")).toBe("addFreehand");
+-    expect(toolModeFromShortcut("F")).toBe("addFreehand");
+-  });
+-
+-  it("maps keyboard shortcut S to addShape", () => {
+-    expect(toolModeFromShortcut("s")).toBe("addShape");
+-    expect(toolModeFromShortcut("S")).toBe("addShape");
+-  });
+-
+-  it("treats addBezier as a tool-create mode", () => {
++describe("tool-config", () => {
++  it("treats drawing tools as tool-create modes", () => {
+     expect(isToolCreateMode("addBezier")).toBe(true);
+     expect(isToolCreateMode("addPath")).toBe(true);
+     expect(isToolCreateMode("addShape")).toBe(true);
+     expect(isToolCreateMode("addFreehand")).toBe(true);
+-    expect(isToolCreateMode("select")).toBe(false);
+-  });
+-
+-  it("treats addGrid as a create mode without a keyboard shortcut", () => {
+     expect(isToolCreateMode("addGrid")).toBe(true);
+-    expect(toolModeFromShortcut("g")).toBeNull();
+-    expect(toolModeFromShortcut("G")).toBeNull();
++    expect(isToolCreateMode("select")).toBe(false);
+   });
+ 
+   it("exposes popup metadata for shape/matrix pickers but not freehand or rectangle", () => {
+@@ -70,7 +23,6 @@ describe("resolveToolbarToolMode", () => {
+     expect(toolModePopupKind("addShape")).toBe("shape-picker");
+     expect(toolModeHasPopup("addMatrix")).toBe(true);
+     expect(toolModePopupKind("addMatrix")).toBe("matrix-picker");
+-    // Shape tool no longer auto-opens; it opens on click but only activates when a shape is selected
+     expect(toolModeAutoOpensPopup("addShape")).toBe(false);
+     expect(toolModeHasPopup("addRect")).toBe(false);
+     expect(toolModePopupKind("addRect")).toBeNull();

@@ -3,6 +3,7 @@
  * The fast edit loop for the tikz-editor fork, in one persistent checkout under .cache/tikz-editor:
  *   checkout  materialize the pinned commit with ZETTLR.patch applied (once)
  *   watch     rebuild the embed into vendor/tikz-editor/src on every save
+ *   test      typecheck the checkout, then run all its test suites
  *   patch     typecheck, then write the checkout's changes to ZETTLR.patch
  * `just update-tikz-editor-vendor` still rebuilds from scratch to prove the patch reproduces the assets.
  */
@@ -15,11 +16,15 @@ import { forkPatch, materialize, patchFile, root, run, syncEmbed, vendor } from 
 const checkout = path.join(root, '.cache', 'tikz-editor')
 const command = process.argv[2]
 
+// The fork's own tsconfig covers its packages, apps, and tests, so a patch that breaks an upstream type or test fails here.
+const typecheckFork = () => run('bunx', [ 'tsc', '--noEmit', '-p', 'tsconfig.json' ], checkout)
+
 if (command === 'checkout') {
   if (existsSync(checkout)) throw new Error(`${checkout} already exists; it holds fork edits, so it is never replaced`)
   await materialize(checkout)
 } else if (command === 'test') {
   if (!existsSync(checkout)) await materialize(checkout)
+  typecheckFork()
   run('bunx', [ 'vitest', 'run' ], checkout)
 } else if (command === 'watch') {
   if (!existsSync(checkout)) throw new Error(`No fork checkout at ${checkout}; run \`just tikz-editor-checkout\``)
@@ -29,6 +34,7 @@ if (command === 'checkout') {
 } else if (command === 'patch') {
   if (!existsSync(checkout)) throw new Error(`No fork checkout at ${checkout}; run \`just tikz-editor-checkout\``)
   const embedApp = await syncEmbed(checkout)
+  typecheckFork()
   run('bunx', [ '--package', 'typescript@5.9.3', 'tsc', '--noEmit', '-p', path.join(embedApp, 'tsconfig.json') ], checkout)
   await writeFile(patchFile, await forkPatch(checkout))
 } else {

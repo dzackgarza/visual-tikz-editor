@@ -101,7 +101,7 @@ tikz-editor-checkout:
 tikz-editor-watch:
     bun run scripts/tikz-editor-dev.mjs watch
 
-# Typecheck the fork checkout and write its changes to ZETTLR.patch.
+# Typecheck the fork checkout and its embed, then write its changes to ZETTLR.patch.
 tikz-editor-patch:
     bun run scripts/tikz-editor-dev.mjs patch
 
