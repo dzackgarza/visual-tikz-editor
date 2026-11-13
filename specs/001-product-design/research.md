@@ -14,34 +14,30 @@ fork owns the inside of the Quiver view.
 **Rationale**: The document bar acts on the document and on every view (Code, Render, the
 editor), so it cannot live inside one view. The shell owns the file, the save state, and the
 views; each fork owns the interaction inside it (constitution, Architecture and Boundaries). The
-shell reaches the fork's panels and commands through the typed host protocol.
+shell reaches the fork's panels and commands through the typed frame protocol.
 
 **Alternatives considered**: All surfaces in the fork. Rejected: the fork does not see Code,
 Render, or Quiver, and the document bar would exist once per editor.
 
-## R2. The document bar in a host
+## R2. A standalone application
 
-**Proposal**: The document bar is part of the workbench component, so every host gets the same
-bar. Its centre (Undo, Redo) and trailing (View, Layers, Properties, Share and Export, More) groups
-are always present. The leading group (title, save state, title menu) is a slot that the document
-owner fills: the standalone app with the file and its commands, a hosted page with the host's file
-name and sync state. A host that shows the document name itself leaves the slot empty.
+**Decided by the user, 2026-11-13**: the editor is a standalone application, and no other
+application embeds it. It keeps its files in the XDG base directories (FR-063). The document bar
+has one form: the file's title, save state, and title menu; Undo and Redo; View, Layers,
+Properties, Share and Export, and More.
 
-**Rationale**: draw.io's embed mode keeps the editor's own menus and toolbar inside the host and
-lets the host set the title and the Save and Exit buttons
-([draw.io embed mode](https://www.drawio.com/doc/faq/embed-mode)). The host owns the document and
-its name; the editor owns its commands.
-
-**Alternatives considered**: A More button at the end of the drawing toolbar in a host. Rejected:
-it puts document-scope controls on the drawing toolbar (FR-011, Principle V).
+**Rationale**: The XDG Base Directory Specification puts configuration in `$XDG_CONFIG_HOME`,
+non-essential cached data in `$XDG_CACHE_HOME`, and "current state of the application that can be
+reused on a restart (view, layout, open files, undo history, …)" in `$XDG_STATE_HOME`
+([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/)).
 
 ## R3. Undo and Redo in every view
 
 **Proposal**: The document bar's Undo and Redo act on the history of the view that last took
 input: the canvas, the Code view, or Quiver. Each editor keeps its own history and reports whether
 Undo and Redo are available, so the bar dims them. In the Quiver view, Quiver's own toolbar does
-not show Undo and Redo, as Quiver in host mode does not show its Save, autosave, theme, and About
-actions.
+not show Undo and Redo, as Quiver inside the shell does not show its Save, autosave, theme, and
+About actions.
 
 **Rationale**: FR-012 puts Undo and Redo only in the document bar; GoodNotes keeps them in its
 navigation bar
@@ -53,19 +49,17 @@ view. Rejected: the bar would change by view, and Undo would sit on two surfaces
 
 ## R4. Selection with the Lasso
 
-**Proposal**: The Lasso is the selection tool, and there is no separate Select tool. A tap with
-the Lasso selects the object under the tap. A drag from empty canvas draws the selection loop
-(Freehand, the default) or frame (Rectangle), chosen in the Lasso's Active Tool Menu. A drag that
-starts on the selection moves it.
+**Decided by the user, 2026-11-13**: one selection tool, the Lasso, with the selection shape as
+its option. A tap with the Lasso selects the object under the tap. A drag from empty canvas draws
+the selection shape that the Active Tool Menu sets: Freehand (the default), Rectangle, or Oval. A
+drag that starts on the selection moves it (FR-012a).
 
-**Rationale**: GoodNotes has no Select tool; its Lasso selects all content, uses freehand
+**Rationale**: Notebook apps have one selection tool, a lasso with shape options. GoodNotes: its Lasso selects all content, uses freehand
 selection by default, and offers a rectangular lasso as a Lasso Type
 ([Select, Move, and Edit Content With the Lasso Tool](https://support.goodnotes.com/hc/en-us/articles/7353695644175)).
 Inkscape's Selector selects an object by a click and draws a selection box by a drag from empty
 canvas ([Inkscape manual, Selector tool](https://inkscape-manuals.readthedocs.io/en/latest/selector-tool.html)).
 FR-007 starts the toolbar with the Lasso.
-
-**Alternatives considered**: A Select tool beside the Lasso. Rejected: two tools with one scope.
 
 ## R5. Tool options
 
@@ -241,8 +235,7 @@ another ([Popovers](https://developer.apple.com/design/human-interface-guideline
 ## R17. Appearance
 
 **Decided by the user, 2026-11-13**: the appearance follows the iPad notebook apps, GoodNotes and
-Notability. Neither puts an appearance control in the document view. An embedded editor takes its
-host's appearance.
+Notability. Neither puts an appearance control in the document view.
 
 **Design**: Settings › Appearance holds Match System Appearance, on by default. When it is off, the
 author chooses Light or Dark.

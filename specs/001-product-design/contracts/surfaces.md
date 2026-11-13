@@ -19,8 +19,6 @@ least 44 × 44 pt (Principle II).
 | Trailing | Share and Export | "Share and Export" | `RiShareBoxLine` | Opens PDF…, SVG…, PNG… |
 | Trailing | More | "More" | `RiMoreLine` | Opens Settings…, Copy TikZ |
 
-In a host, the leading group is the host's slot (research R2).
-
 ## Drawing toolbar
 
 Order: Lasso, Pen, Eraser, Shapes, Text, Fill, a separator, the active tool's presets, the + slot.

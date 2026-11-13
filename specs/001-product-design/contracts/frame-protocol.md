@@ -1,4 +1,4 @@
-# Contract: host protocol
+# Contract: frame protocol
 
 The workbench reaches each editor frame only through messages (constitution, Architecture and
 Boundaries). This contract states the messages that the [surfaces](surfaces.md) need. The
@@ -15,7 +15,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | Command | Fields | Purpose |
 | --- | --- | --- |
 | `load` | `source`, `fileName`, `settings`, `state`, `imageBaseUrl`, `nativeClipboard` | Opens the document with its view state (FR-040) |
-| `settings` | `general.colorScheme`: `system` \| `light` \| `dark` | Sets the appearance (FR-005); a host sends its own appearance |
+| `settings` | `general.colorScheme`: `system` \| `light` \| `dark` | Sets the appearance from Settings › Appearance (FR-005) |
 | `display` | `fullscreen` | Fills the window |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | Opens one panel or closes the open one (research R13) |
 | `document-properties` | — | Opens Document Properties from the title menu |
@@ -61,4 +61,4 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | from Quiver | `zettlr-quiver:input` | Quiver took input; it becomes the input view |
 | from Quiver | `zettlr-quiver:save`, `zettlr-quiver:close-request`, `zettlr-quiver:error` | Save, close, and failure |
 
-In host mode Quiver's toolbar shows no Undo, Redo, Save, autosave, theme, or About (research R3).
+Inside the shell, Quiver's toolbar shows no Undo, Redo, Save, autosave, theme, or About (research R3).

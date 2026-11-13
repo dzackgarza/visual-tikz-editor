@@ -37,6 +37,8 @@ A failed story keeps its Playwright trace in `test-results/workbench/`
 | Layers, then Properties | One panel open at a time; Properties dimmed with nothing selected | User Story 6, research R13 |
 | Settings › Appearance | Match System Appearance on follows the system; off with Light shows a light surface under a dark system | FR-005 |
 | Every edit | Leaves untouched constructs as authored; session state never enters the source | Principle I |
+| Change a preference, then reopen a figure | The preference is in `$XDG_CONFIG_HOME/visual-tikz-editor/`, the figure's view state in `$XDG_STATE_HOME/visual-tikz-editor/`; nothing is written beside the figure but the figure | FR-063 |
+| Lasso with Oval | A drag from empty canvas selects the objects inside the oval | FR-012a |
 
 Data shapes: [data model](data-model.md). Messages between the workbench and the editors:
-[host protocol](contracts/host-protocol.md).
+[frame protocol](contracts/frame-protocol.md).

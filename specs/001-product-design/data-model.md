@@ -38,7 +38,7 @@ Switching views keeps selection, viewport, tool, and history (FR-015).
 
 | Tool | Options |
 | --- | --- |
-| Lasso | Freehand or Rectangle |
+| Lasso | the selection shape: Freehand, Rectangle, or Oval (FR-012a) |
 | Pen | width, line style, smoothing, opacity |
 | Eraser | Partial or Whole stroke, size |
 | Shapes and constructions | the shape or construction variant; numeric entry of a circle or arc |

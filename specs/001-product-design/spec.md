@@ -4,13 +4,13 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft. The user has decided FR-041 and FR-005 (2026-11-13). Every other requirement is the
+**Status**: Draft. The user has decided FR-005, FR-012a, FR-041, FR-063, and that the editor is standalone (2026-11-13). Every other requirement is the
 maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
 about the app's design and to write a design specification. The audit is
 [audit.md](audit.md). This specification states the editor's users, workflows, and information
-architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 2.0.0.
+architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 2.1.0.
 
 ## Users and purpose
 
@@ -19,8 +19,7 @@ pen and fingers, and sometimes at a desktop with a mouse and keyboard. A diagram
 `tikzpicture` or one `tikzcd` figure in a `.tikz` or `.tikzcd` file that a LaTeX document
 includes. The user knows iPad notebook applications (GoodNotes, Notability, Noteful, Apple Notes) and
 figure editors (Ipe, Inkscape, Quiver), and expects the editor to behave like them. The editor
-runs alone (desktop window or local page) or inside a host (Zettlr, Math Notes) through the
-typed host interface.
+is a standalone application: a desktop window or a local page. No other application embeds it.
 
 ## Information architecture
 
@@ -35,6 +34,13 @@ The editor has these surfaces. Each control appears on exactly one of them.
 | Canvas controls (canvas corners) | Zoom readout with zoom in and out; Snap with its rules | 2026-10-16 mockups; Inkscape status-bar zoom field; Ipe Snap toolbar |
 | Panels (side panel in landscape, sheet in portrait) | Layers; Properties; one at a time | GoodNotes Layers panel; HIG sheets and popovers |
 | More (⋯) menu | Settings (appearance, canvas, colour collections, keyboard shortcuts), Copy TikZ | GoodNotes More menu (Document Editing, toolbar customization) |
+
+## Clarifications
+
+### Session 2026-11-13
+
+- Q: Is the Lasso the only selection tool? → A: There is one selection tool. Its Active Tool Menu offers the selection shapes Freehand, Rectangle, and Oval. A tap selects one object, a drag from empty canvas draws the shape, and a drag on the selection moves it.
+- Q: Does the editor show the same document bar inside Zettlr or Math Notes? → A: No application embeds the editor. It is standalone and XDG-compliant.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -167,6 +173,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 - **FR-010**: The toolbar MUST move only by its grip and MUST dock to any screen edge.
 - **FR-011**: Layers, Properties, and Settings MUST NOT appear on the drawing toolbar.
 - **FR-012**: Undo and Redo MUST appear only in the document bar and as keyboard shortcuts.
+- **FR-012a**: The Lasso MUST be the one selection tool. A tap MUST select the object under it; a drag from empty canvas MUST draw the selection shape that the Active Tool Menu sets: Freehand (the default), Rectangle, or Oval; a drag on the selection MUST move it (user decision, 2026-11-13).
 
 **Views and document kinds** (prior art: Quiver fork boundary; HIG split views)
 
@@ -212,6 +219,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 - **FR-060**: Layers and Properties MUST be separate panels, each opened by its own document-level control.
 - **FR-061**: A panel MUST open at the side in landscape and as a sheet in portrait, and MUST leave the selected object visible.
 - **FR-062**: Settings MUST open from More and MUST hold appearance, canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset.
+- **FR-063**: The editor MUST keep its files in the XDG base directories: preferences in `$XDG_CONFIG_HOME`, recovery drafts and per-file view state in `$XDG_STATE_HOME`, and the render cache in `$XDG_CACHE_HOME`, each under `visual-tikz-editor/` ([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/); user decision, 2026-11-13).
 
 **Text in the interface** (prior art: HIG offering help)
 
@@ -225,7 +233,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 - **Tool**: the active drawing tool with its options and colour presets.
 - **Selection**: the selected objects, with a lock state; session state.
 - **Layer**: a named top-level TikZ `scope`; saved in the source.
-- **Preference**: a lasting setting in the user's configuration, outside the document.
+- **Preference**: a lasting setting in `$XDG_CONFIG_HOME`, outside the document.
 
 ## Success Criteria *(mandatory)*
 
@@ -242,8 +250,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 
 - A `tikzcd` document keeps Quiver's own controls inside the Quiver view; the drawing toolbar
   applies to the canvas only (Quiver fork boundary, `vendor/quiver/README-ZETTLR.md`).
-- The standalone app has no document library, so the document bar has no Back control; a host
-  that has a library supplies its own.
+- The editor has no document library, so the document bar has no Back control.
 - The per-surface specifications under [docs/prior-art](../../docs/prior-art/) and the
   interaction model remain the detailed rules where they agree with this specification and the
   constitution; where they disagree, they are corrected.
