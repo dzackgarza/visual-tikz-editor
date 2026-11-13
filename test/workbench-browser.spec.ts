@@ -5571,6 +5571,7 @@ describe("standalone workbench host boundary", function () {
 
         await choose("Arc");
         assert.deepEqual(await fields(), ["Centre X", "Centre Y", "Radius", "Start angle (°)", "End angle (°)"]);
+        await storyScreenshot(page, `shapes-numeric-arc-${tablet.name}`);
         await enter({ "Centre X": "0", "Centre Y": "0", Radius: "2", "Start angle (°)": "0", "End angle (°)": "90" }, "Insert arc");
         await expect
           .poll(source, { message: "The arc entered by centre, radius, and angles is not in the source" })
