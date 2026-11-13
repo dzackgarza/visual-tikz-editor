@@ -13,7 +13,8 @@ least 44 × 44 pt (Principle II).
 | Leading | Save state | "Saved", "Not saved", "Saving", "Changed on disk" | text, beside the title | None |
 | Centre | Undo | "Undo" | `RiArrowGoBackLine` | Undoes the last edit of the document, in every view (FR-012b); dimmed when nothing to undo |
 | Centre | Redo | "Redo" | `RiArrowGoForwardLine` | Redoes the last undone edit, in every view; dimmed when nothing to redo |
-| Trailing | View | "View" | `RiLayoutColumnLine` | Opens View: the document's editor, Code, Render; then Grid, Rulers, Guides, Output Bounds |
+| Trailing | View | "View" | `RiLayoutColumnLine` | Opens View: the document's editor, Render; then Grid, Rulers, Guides, Output Bounds |
+| Trailing | Code | "Code" | `RiCodeLine` | Opens or closes the Code panel (FR-015) |
 | Trailing | Layers | "Layers" | `RiStackLine` | Opens or closes the Layers panel |
 | Trailing | Properties | "Properties" | `RiEqualizerLine` | Opens or closes Properties; dimmed with nothing selected (research R13) |
 | Trailing | Share and Export | "Share and Export" | `RiShareBoxLine` | Opens PDF…, SVG…, PNG… |
@@ -75,7 +76,7 @@ control and no other text.
 
 ## Panels
 
-Layers and Properties: one open at a time; a side pane in landscape, a sheet with medium and large
+Code, Layers, and Properties: one open at a time (FR-060); a side pane in landscape, a sheet with medium and large
 detents in portrait; each has its title and a close button.
 
 ## Text

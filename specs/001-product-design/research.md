@@ -178,26 +178,27 @@ shortcut, such as "Eraser (E)".
 components or patterns work"
 ([Offering help](https://developer.apple.com/design/human-interface-guidelines/offering-help)).
 
-## R12. Views by document kind
+## R12. Views by document kind, and the Code panel
 
-**Proposal**: View in the document bar lists the document's editor (Canvas for a `tikzpicture`,
-Quiver for a `tikzcd`), Code, and Render. In a regular-width window two views can be shown side by
-side; in a compact window, one. No view explains why another is unavailable.
+**Decision** (the user, 2026-11-13): View in the document bar lists the document's editor (Canvas
+for a `tikzpicture`, Quiver for a `tikzcd`) and Render; one of them fills the window. Code is a
+panel beside the editor, opened by Code in the document bar, like Layers and Properties (FR-015,
+FR-060). An edit in the canvas or Quiver shows at once in the Code panel, and an edit in the panel
+shows at once in the editor. No view explains why another is unavailable.
 
-**Rationale**: HIG Split views: "Prefer using a split view in a regular — not a compact —
-environment"; "In iPadOS, a split view can include either two vertical panes, like Mail, or three
-vertical panes"
-([Split views](https://developer.apple.com/design/human-interface-guidelines/split-views)). The
-specification ties the editor to the document kind (FR-013–FR-016).
-
-**Alternatives considered**: List all four views and dim the unsupported ones, as a menu-bar menu
-does. Rejected: FR-014 forbids the other kind's editor.
+**Rationale**: Inkscape's XML Editor, the source of the document, is a dialog of the same kind as
+Layers and Objects and Object Properties (`src/ui/dialog/dialog-data.cpp:30,33,61`), and a dialog
+opens docked beside the canvas by default (`DialogContainer::new_dialog`,
+`src/ui/dialog/dialog-container.cpp:168-177`, at
+[`70feba2`](https://gitlab.com/inkscape/inkscape/-/tree/70feba21364ccbe2d2d2fab397228bc2e0d41b5a)).
+The specification ties the editor to the document kind (FR-013–FR-016).
 
 ## R13. Panels
 
-**Proposal**: Layers and Properties are separate panels, each with its own button in the document
-bar. In landscape an open panel is a pane at the trailing edge; in portrait it is a nonmodal sheet
-with medium and large detents. One panel is open at a time: opening the other replaces it.
+**Proposal**: Code (R12), Layers, and Properties are separate panels, each with its own button in
+the document bar. In landscape an open panel is a pane at the trailing edge; in portrait it is a
+nonmodal sheet with medium and large detents. One panel is open at a time: opening another
+replaces it.
 Properties is the inspector of the selection; with nothing selected its button is dimmed, because
 the next object's attributes are the active tool's options (R5) and the figure's attributes are in
 Document Properties.

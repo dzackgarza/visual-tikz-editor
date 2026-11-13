@@ -21,10 +21,10 @@ the user chooses a version.
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `id` | `editor` \| `code` \| `render` | `editor` is Canvas for a `tikzpicture` and Quiver for a `tikzcd` (FR-014) |
-| `shown` | one or two views | Two only in a regular-width window (FR-015) |
+| `id` | `editor` \| `render` | `editor` is Canvas for a `tikzpicture` and Quiver for a `tikzcd` (FR-014); one fills the window |
 
-Switching views keeps selection, viewport, and tool (FR-015).
+Code is a panel beside the editor (Panel), not a view of the window (FR-015). Switching between
+the editor and Render keeps selection, viewport, and tool.
 
 ## History
 
@@ -100,7 +100,7 @@ neither the source nor the selection (FR-043).
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `open` | none, `layers`, or `properties` | One at a time (User Story 6) |
+| `open` | none, `code`, `layers`, or `properties` | One at a time (FR-060) |
 | `placement` | `side` \| `sheet` | `side` in landscape, `sheet` in portrait (FR-061) |
 
 ## Popover

@@ -17,7 +17,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `load` | `source`, `fileName`, `settings`, `state`, `imageBaseUrl`, `nativeClipboard` | Opens the document with its view state (FR-040) |
 | `settings` | `general.colorScheme`: `system` \| `light` \| `dark` | Sets the appearance from Settings › Appearance (FR-005) |
 | `display` | `fullscreen` | Fills the window |
-| `panel` | `panel`: `layers` \| `properties` \| `null` | Opens one panel or closes the open one (research R13) |
+| `panel` | `panel`: `layers` \| `properties` \| `null` | Opens one panel or closes the open one; `null` also when the shell opens the Code panel (FR-060, research R13) |
 | `document-properties` | — | Opens Document Properties from the title menu |
 | `replace-source` | `source` | Shows the source that Undo or Redo restored; keeps the viewport and the tool (research R3) |
 | `dismiss-popover` | — | Closes the canvas popover, because the shell opened one (research R16) |
@@ -41,7 +41,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `panel` | `panel`: `layers` \| `properties` \| `null` | The panel that is open, after any change, including its own close button |
 | `popover-opened` | — | The canvas opened a popover; the shell closes its own (research R16) |
 | `persistence-save` | `key`, `value` | A preference or per-file view state to keep outside the source |
-| `source-selection` | `source`, `from`, `to` | The selected source range, for the Code view |
+| `source-selection` | `source`, `from`, `to` | The selected source range, for the Code panel |
 | `clipboard-read`, `clipboard-write` | `requestId`, `text` | Native clipboard in a desktop window |
 | `export` | `format`, `source`, `svg`, `data` | The result of an export |
 | `message`, `error` | `title`, `message` | A failure that the workbench reports |

@@ -32,8 +32,9 @@ A failed story keeps its Playwright trace in `test-results/workbench/`
 | Popovers | A second tap on a button closes its popover; a tap on another button closes it and opens its own, across the document bar and the canvas | FR-003, FR-004 |
 | Open a figure with content | All content visible, fitted with the margin (SC-005); reopen restores the last view | FR-040 |
 | Open an empty figure | 100 % is printed size; the origin is centred | FR-041 |
-| A `tikzpicture` | View offers Canvas, Code, Render, and no Quiver | FR-014 |
-| A `tikzcd` | View offers Quiver, Code, Render | FR-014 |
+| A `tikzpicture` | View offers Canvas and Render, and no Quiver | FR-014 |
+| A `tikzcd` | View offers Quiver and Render | FR-014 |
+| Tap Code, then edit on the canvas, then type in the panel | The Code panel opens beside the canvas; each edit shows at once in the other; opening Layers closes Code | FR-015, FR-060 |
 | Edit in Code, then on the canvas (or in Quiver), then Undo twice | The first Undo removes the canvas edit and the second the Code edit; after each, every view shows the same source | FR-012b |
 | Layers, then Properties | One panel open at a time; Properties dimmed with nothing selected | User Story 6, research R13 |
 | Settings › Appearance | Match System Appearance on follows the system; off with Light shows a light surface under a dark system | FR-005 |

@@ -7,16 +7,16 @@
 ## Summary
 
 The standalone editor gets one information architecture: a
-document bar that the shell owns (title and save state, Undo and Redo, View, Layers, Properties, Share
+document bar that the shell owns (title and save state, Undo and Redo, View, Code, Layers, Properties, Share
 and Export, More), a drawing toolbar inside the canvas with the Lasso first and per-tool colour
 presets, an Active Tool Menu, an object menu above the selection, canvas controls for zoom and
-snapping, a status line with the pointer position, and separate Layers and Properties panels. The shell owns the document bar and the
+snapping, a status line with the pointer position, and separate Code, Layers, and Properties panels. The shell owns the document bar and the
 views; the TikZ Editor fork owns every surface inside the canvas; the Quiver fork owns its view
 ([research](research.md) R1). The shell and the editors meet only through the
 [frame protocol](contracts/frame-protocol.md). The surfaces and their controls are fixed by
 [surfaces](contracts/surfaces.md); the state they show is in the [data model](data-model.md).
 
-The user has decided FR-005, FR-012a, FR-012b, FR-041, FR-044, FR-063, and that the editor is standalone. The other requirements and the research entries are the
+The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-063, and that the editor is standalone. The other requirements and the research entries are the
 maintainer's proposals; the user reviews them and sets the story priorities before
 `/speckit-tasks` orders the work.
 

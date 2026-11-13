@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft. The user has decided FR-005, FR-012a, FR-012b, FR-041, FR-044, FR-063, and that the editor is standalone (2026-11-13). Every other requirement is the
+**Status**: Draft. The user has decided FR-005, FR-012a, FR-012b, FR-015, FR-041, FR-044, FR-063, and that the editor is standalone (2026-11-13). Every other requirement is the
 maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
@@ -27,13 +27,13 @@ The editor has these surfaces. Each control appears on exactly one of them.
 
 | Surface | Holds | Prior art |
 | --- | --- | --- |
-| Document bar (top) | Leading: document title with its save state; a tap on the title opens the document commands (New, Open, Save, Save As, Document Properties). Centre: Undo, Redo. Trailing: View, Layers, Properties, Share and Export, More (⋯) | GoodNotes navigation bar (left, middle, right sections; Share and Export and More at the right; Undo and Redo in the bar); HIG The menu bar (File menu contents, recorded in docs/prior-art/shell.md); the 2026-10-16 mockups |
+| Document bar (top) | Leading: document title with its save state; a tap on the title opens the document commands (New, Open, Save, Save As, Document Properties). Centre: Undo, Redo. Trailing: View, Code, Layers, Properties, Share and Export, More (⋯) | GoodNotes navigation bar (left, middle, right sections; Share and Export and More at the right; Undo and Redo in the bar); HIG The menu bar (File menu contents, recorded in docs/prior-art/shell.md); the 2026-10-16 mockups |
 | Drawing toolbar (movable, docks to a screen edge) | Lasso first, then Pen, Eraser, Shapes and constructions, Text and Equation, Fill; then the active tool's colour presets and a + slot | GoodNotes toolbar (Lasso first and fixed; tools; floating menus dock to any edge); GoodNotes colour presets per tool |
 | Active tool menu (beside the toolbar) | The options of the active tool: width, style, smoothing, the construction variant | GoodNotes Active Tool Menu |
 | Object menu (above the selection) | Only the commands that apply to the selection | GoodNotes Universal Object Menu; HIG context menus |
 | Canvas controls (canvas corners) | Zoom readout with zoom in and out; Snap with its rules | 2026-10-16 mockups; Inkscape status-bar zoom field; Ipe Snap toolbar |
 | Status line (under the canvas) | The pointer position in figure coordinates | Inkscape status bar (cursor coordinates); Ipe mouse coordinates at the bottom right |
-| Panels (side panel in landscape, sheet in portrait) | Layers; Properties; one at a time | GoodNotes Layers panel; HIG sheets and popovers |
+| Panels (side panel in landscape, sheet in portrait) | Code; Layers; Properties; one at a time | GoodNotes Layers panel; Inkscape XML Editor, a docked dialog beside the canvas; HIG sheets and popovers |
 | More (⋯) menu | Settings (appearance, canvas, colour collections, keyboard shortcuts), Copy TikZ | GoodNotes More menu (Document Editing, toolbar customization) |
 
 ## Clarifications
@@ -44,6 +44,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 - Q: Does the editor show the same document bar inside Zettlr or Math Notes? → A: No application embeds the editor. It is standalone and XDG-compliant.
 - Q: Which history does Undo act on? → A: All views show the same document, so there is one document history; a history per view is incoherent.
 - Q: Does the editor have a status line, and what does it show? → A: A status line shows the pointer position in figure coordinates only.
+- Q: In a wide window, are two views shown side by side? → A: No. Code is a panel beside the canvas or Quiver, like Layers and Properties; Render stays a full view.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -117,16 +118,17 @@ and checks the emitted TikZ; at no stage does a sentence appear.
 
 ### User Story 5 - See the source and the compiled figure (Priority: set by the user)
 
-The user opens the Code view or the TeX render beside or instead of the editor that the document
-kind uses.
+The user opens the Code panel beside the editor that the document kind uses, or the TeX render
+instead of it.
 
 **Independent Test**: A story opens Code beside the canvas, selects an object, and checks that
 its source is highlighted without taking focus.
 
 **Acceptance Scenarios**:
 
-1. **Given** a `tikzpicture`, **When** the user opens View, **Then** it offers Canvas, Code, and Render, and not Quiver.
-2. **Given** a `tikzcd`, **When** the user opens View, **Then** it offers Quiver, Code, and Render.
+1. **Given** a `tikzpicture`, **When** the user opens View, **Then** it offers Canvas and Render, and not Quiver.
+2. **Given** a `tikzcd`, **When** the user opens View, **Then** it offers Quiver and Render.
+3. **Given** the canvas or Quiver, **When** the user taps Code, **Then** the Code panel opens beside it and an edit in either shows at once in the other; a second tap closes it.
 
 ---
 
@@ -161,7 +163,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 
 **Document bar** (prior art: GoodNotes navigation bar; HIG popovers, toolbars, dark mode)
 
-- **FR-001**: The document bar MUST hold, in this order, the title with save state and title menu; Undo and Redo; View, Layers, Properties, Share and Export, and More, as symbols. HIG Toolbars puts "buttons that open nearby inspectors" at the trailing edge.
+- **FR-001**: The document bar MUST hold, in this order, the title with save state and title menu; Undo and Redo; View, Code, Layers, Properties, Share and Export, and More, as symbols. HIG Toolbars puts "buttons that open nearby inspectors" at the trailing edge.
 - **FR-002**: Every menu or popover MUST open anchored to the button that opened it.
 - **FR-003**: A second tap on the button of an open menu, popover, or panel MUST close it; a tap on another button MUST close the open one and open its own.
 - **FR-004**: At most one popover MUST be open at a time.
@@ -179,11 +181,11 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 - **FR-012b**: Undo and Redo MUST act on the one history of the document, whichever view made the edit and whichever view has the focus; after Undo, every view MUST show the restored source (user decision, 2026-11-13; Emacs buffer undo, Inkscape document undo).
 - **FR-012a**: The Lasso MUST be the one selection tool. A tap MUST select the object under it; a drag from empty canvas MUST draw the selection shape that the Active Tool Menu sets: Freehand (the default), Rectangle, or Oval; a drag on the selection MUST move it (user decision, 2026-11-13).
 
-**Views and document kinds** (prior art: Quiver fork boundary; HIG split views)
+**Views and document kinds** (prior art: Quiver fork boundary; Inkscape XML Editor)
 
 - **FR-013**: The document kind MUST decide the editor: a `tikzpicture` opens in the canvas, a `tikzcd` in Quiver.
-- **FR-014**: View MUST offer the document's editor, Code, and Render, and MUST NOT offer the other kind's editor.
-- **FR-015**: In a wide window View MUST allow two views side by side; in a narrow window one view at a time, keeping selection, viewport, and tool.
+- **FR-014**: View MUST offer the document's editor and Render, and MUST NOT offer the other kind's editor.
+- **FR-015**: The Code view MUST be a panel, opened by Code in the document bar, beside the canvas or Quiver; an edit in either MUST show at once in the other. Render MUST replace the editor in the window. Switching between the editor and Render MUST keep selection, viewport, and tool (user decision, 2026-11-13; Inkscape XML Editor).
 - **FR-016**: No view MUST show an explanation of why another view is unavailable.
 
 **Colour, snapping, and tool options** (prior art: GoodNotes colour presets; Ipe snapping; HIG colour wells)
@@ -221,7 +223,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 
 **Panels and settings** (prior art: GoodNotes Layers panel and More menu; HIG sheets, settings)
 
-- **FR-060**: Layers and Properties MUST be separate panels, each opened by its own document-level control.
+- **FR-060**: Code, Layers, and Properties MUST be separate panels, one open at a time, each opened by its own document-level control.
 - **FR-061**: A panel MUST open at the side in landscape and as a sheet in portrait, and MUST leave the selected object visible.
 - **FR-062**: Settings MUST open from More and MUST hold appearance, canvas settings, colour collections, and keyboard shortcuts; a changed setting shows its own reset.
 - **FR-063**: The editor MUST keep its files in the XDG base directories: preferences in `$XDG_CONFIG_HOME`, recovery drafts and per-file view state in `$XDG_STATE_HOME`, and the render cache in `$XDG_CACHE_HOME`, each under `visual-tikz-editor/` ([XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/); user decision, 2026-11-13).
@@ -234,7 +236,7 @@ The user exports PDF, SVG, or PNG, or copies the TikZ into a paper.
 
 - **Document**: one TikZ file; its kind is `tikzpicture` or `tikzcd`; its source is the only document state.
 - **Figure**: the drawing that the source describes; its coordinates are TikZ coordinates.
-- **View**: a presentation of the document (editor, Code, Render); not document state.
+- **View**: a presentation of the document (the editor or Render, and the Code panel); not document state.
 - **Tool**: the active drawing tool with its options and colour presets.
 - **Selection**: the selected objects, with a lock state; session state.
 - **Layer**: a named top-level TikZ `scope`; saved in the source.
