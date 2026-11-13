@@ -34,10 +34,10 @@ and `just update-quiver-vendor`. Nothing under `vendor/*/src/` is edited in plac
 
 ---
 
-## Phase 2: Foundational (blocks every story)
+## Phase 2: Foundational
 
 **Purpose**: the standalone shell with one document history and the new frame protocol. Every
-story phase depends on this phase.
+story that uses Undo or the document bar depends on this phase; the open view of US8 does not.
 
 ### The editor is standalone (FR-064, research R2)
 
@@ -49,10 +49,10 @@ story phase depends on this phase.
 
 ### Frame protocol (contracts/frame-protocol.md)
 
-- [ ] T009 In `vendor/tikz-editor/embed/src/commands.ts` add `replace-source` (`source`), rename `inspector` to `panel` with `panel: 'layers' | 'properties' | null`, add `dismiss-popover` and `zoom` (`direction: 'in' | 'out' | 'fit' | 'selection' | 'normal'` or `scale`), and delete `document-properties`, `undo`, `redo`, `history`, `input`, `import-ink`, `interpret-ink`, and `restore-ink` (only an embedding host sent the ink commands; the canvas restores an original stroke itself through `src/original-ink.ts`); raise the protocol version that `init` reports
-- [ ] T010 In `vendor/tikz-editor/embed/src/events.ts` add `undo-request`, `redo-request`, `selection` (`empty`), `panel` (`panel: 'layers' | 'properties' | null`), and `popover-opened`; delete `document-properties-closed` and the `document-properties` action
-- [ ] T011 Wire the new commands and events in `vendor/tikz-editor/embed/src/main.tsx`: `replace-source` loads the source and keeps viewport and tool; the canvas Undo and Redo shortcuts post `undo-request` and `redo-request` instead of acting on the fork's history; delete the `tikz-embed-document-properties` events (lines 481-526)
-- [ ] T012 In the fork, delete the past and future stacks of the store (`UNDO` and its pair in `.cache/tikz-editor/packages/app/src/store/reducer.ts:958` and `store/types.ts`) so the canvas keeps no history of its own, and keep the points where the reducer records a step: at each one the embed posts one `change`, so a gesture is one step and not one debounce flush (`vendor/tikz-editor/embed/src/main.tsx:302-312`); route the Undo and Redo commands of `ui/editor-command-runtime.ts`, `app-menu/default-menu.ts:148`, `context-menu/canvas-context-menu.ts:287,505`, and the shortcut of `ui/canvas-panel/useCanvasKeyboardClipboard.ts:248-249` to `undo-request` and `redo-request`. Keep `undoTransientCanvasStep`, which removes the last placed point of a construction, as it stands: the spec does not yet say what Undo does during a construction, and that rule needs its prior art first
+- [ ] T009 In `vendor/tikz-editor/embed/src/commands.ts` add `replace-source` (`source`), rename `inspector` to `panel` with `panel: 'layers' | 'properties' | null`, add `dismiss-popover` and `zoom` (`direction: 'in' | 'out' | 'fit' | 'selection' | 'normal'` or `scale`), and delete `undo`, `redo`, `history`, `input`, `import-ink`, `interpret-ink`, and `restore-ink` (only an embedding host sent the ink commands; the canvas restores an original stroke itself through `src/original-ink.ts`); raise the protocol version that `init` reports
+- [ ] T010 In `vendor/tikz-editor/embed/src/events.ts` add `undo-request`, `redo-request`, `selection` (`empty`), `panel` (`panel: 'layers' | 'properties' | null`), and `popover-opened`
+- [ ] T011 Wire the new commands and events in `vendor/tikz-editor/embed/src/main.tsx`: `replace-source` loads the source and keeps viewport and tool; the canvas Undo and Redo shortcuts post `undo-request` and `redo-request` instead of acting on the fork's history
+- [ ] T012 In the fork, delete the past and future stacks of the store (`UNDO` and its pair in `.cache/tikz-editor/packages/app/src/store/reducer.ts:958` and `store/types.ts`) so the canvas keeps no history of its own, and keep the points where the reducer records a step: at each one the embed posts one `change`, so a gesture is one step and not one debounce flush (`vendor/tikz-editor/embed/src/main.tsx:302-312`); route the Undo and Redo commands of `ui/editor-command-runtime.ts`, `app-menu/default-menu.ts:148`, `context-menu/canvas-context-menu.ts:287,505`, and the shortcut of `ui/canvas-panel/useCanvasKeyboardClipboard.ts:248-249` to `undo-request` and `redo-request`. Keep `undoTransientCanvasStep`, which removes the last placed point of a construction (FR-034)
 - [ ] T013 In `vendor/quiver/ZETTLR.patch` post `zettlr-quiver:undo-request` and `zettlr-quiver:redo-request` from Quiver's Undo and Redo shortcuts, accept `zettlr-quiver:source` after Undo or Redo, delete the `undo`, `redo`, `history`, and `input` messages, and hide Undo, Redo, Save, autosave, theme, and About in Quiver's toolbar; rebuild with `just update-quiver-vendor`
 - [ ] T014 Update `src/host.ts` exports and `src/editor-bridge.ts` to the new command and event schemas, and refuse an editor whose `init` version differs
 
@@ -172,6 +172,7 @@ reference, and holds the pen over a lattice point and reads the status line.
 - [ ] T057 [US8] Add the canvas controls of contracts/surfaces.md: Zoom out, the readout "Zoom: *n* %", Zoom in at the lower trailing corner; Snap and Snapping rules at the lower leading corner; wire the `zoom` command of the frame protocol, in `.cache/tikz-editor/packages/app/src/ui/CanvasPanel.tsx`; delete SnapControl and ZoomDisplayControl from `Toolbar.tsx`
 - [ ] T058 [US8] Add the status line under the canvas with the accessible name "Pointer position", reading the pointer's *x* and *y* in figure coordinates as the source writes them, in `.cache/tikz-editor/packages/app/src/ui/CanvasPanel.tsx` (research R10)
 - [ ] T059 [US8] Reproduce the small startup window of COMPLAINTS.md:57 in the desktop window, whose size is `inner_size(1280.0, 800.0)` in `src-tauri/src/main.rs:34`; when it reproduces, file the defect with the prior art for the startup window size, and build the size that the prior art gives (Principle III)
+- [ ] T097 [US8] Reproduce #18 (zooming makes the renderer fail) as a red story in `test/workbench-browser.spec.ts`, starting from the paths the issue has not tried: the Render view (Viewer.js), the zoom presets, a large figure, and zoom during a re-render; then repair it
 - [ ] T060 [US8] Rebuild the fork and run the US8 stories green
 
 ---
@@ -240,7 +241,7 @@ without a selection.
 
 - [ ] T079 [US6] Add Layers (`RiStackLine`) and Properties (`RiEqualizerLine`) to the document bar of `src/ui/TikzWorkbench.vue`, sending `panel` and following the `panel` event, with Code in the same one-panel state (data-model Panel `open`: none, `code`, `layers`, or `properties`)
 - [ ] T080 [US6] Split the shared panel of `.cache/tikz-editor/packages/app/src/ui/DockLayout.tsx:702-724` into a Layers panel and a Properties panel, each with its title and close button
-- [ ] T081 [US6] Show `<InspectorPanel figure />` in Properties when the selection is empty and post `selection` (`empty`); delete `DocumentPropertiesDialog.tsx` and its references in `App.tsx` and `editor-command-runtime.ts` under `.cache/tikz-editor/packages/app/src/`
+- [ ] T081 [US6] Show `<InspectorPanel figure />` in Properties when the selection is empty and post `selection` (`empty`); delete `DocumentPropertiesDialog.tsx` and its references in `App.tsx` and `editor-command-runtime.ts` under `.cache/tikz-editor/packages/app/src/`; delete the `document-properties` command, the `document-properties-closed` event and action of `vendor/tikz-editor/embed/src/`, the `tikz-embed-document-properties` listeners of `main.tsx`, and Document Properties… with its handlers in `standalone/StandaloneApp.vue`, `src/ui/TikzWorkbench.vue`, and `src/ui/TikzEditorPreview.vue`
 - [ ] T082 [US6] Keep layer visibility and lock as per-file view state through `persistence-save`, never in the source, in the fork store `.cache/tikz-editor/packages/app/src/store/`
 - [ ] T083 [US6] Rebuild the fork and run the US6 stories green
 
@@ -308,9 +309,16 @@ stories and the green run.
 
 ## Implementation strategy
 
-1. Setup and Foundational: the standalone shell, the protocol, and one document history.
-2. US1 (MVP): the drawing toolbar, the Lasso, the Active Tool Menu, and single popovers. Stop and
+The order weighs each user report by how much of the work it stops, then by dependency:
+
+1. Setup and Foundational: the standalone shell, the protocol, and one document history. T009–T012
+   leave the canvas without a history of its own, so Undo works again only after T018.
+2. From US8, the open view and the renderer: T050, T051, T054, T055, and T097. Every figure opens
+   as a speck at 5–15 % (#64), 100 % is 3.76 times printed size (#63), and zooming can make the
+   renderer fail (#18). Upstream `be197d85` already opens fitted (`computeFitToContentScale`).
+   T097 needs no fork change and runs beside step 1.
+3. US1 (MVP): the drawing toolbar, the Lasso, the Active Tool Menu, and single popovers. Stop and
    run the US1 stories in portrait and landscape.
-3. US3, US4, US8 in that order (or in parallel), each accepted by its stories.
-4. US2, US5, US6, US7, each accepted by its stories.
-5. Polish, then `/speckit-converge` and `/speckit-implement` until converge appends no task.
+4. US3, US4, and the rest of US8, in that order (or in parallel), each accepted by its stories.
+5. US2, US5, US6, US7, each accepted by its stories.
+6. Polish, then `/speckit-converge` and `/speckit-implement` until converge appends no task.
