@@ -6976,21 +6976,12 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `closes each panel and popover on a second press of its dock button, and keeps one popover open, in ${tablet.name}`,
+      `closes each popover on a second press of its button, and keeps one popover open, in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
         const rail = frame.locator("[data-diagram-tools]");
-        const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
-        for (const name of ["Properties", "Layers"]) {
-          const button = rail.getByRole("button", { name, exact: true });
-          await tap(button);
-          await expect(panel.getByRole("tab", { name, exact: true })).toHaveAttribute("aria-selected", "true");
-          await tap(button);
-          await expect(panel).toBeHidden();
-        }
-
         const options = frame.getByRole("dialog", { name: "Tool options" });
         const snap = rail.getByRole("button", { name: "Snapping rules", exact: true });
         const color = rail.getByRole("button", { name: /^Color: / });

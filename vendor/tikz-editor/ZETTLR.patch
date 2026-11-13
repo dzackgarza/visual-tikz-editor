@@ -4576,10 +4576,10 @@ index 4d4cfa95..6d6ab39f 100644
    const replacer = (_key: string, current: unknown): unknown => {
      if (current instanceof Map) {
 diff --git a/packages/app/src/ui/DockLayout.css b/packages/app/src/ui/DockLayout.css
-index 67578882..51b779d9 100644
+index 67578882..96a8ac95 100644
 --- a/packages/app/src/ui/DockLayout.css
 +++ b/packages/app/src/ui/DockLayout.css
-@@ -1,6 +1,96 @@
+@@ -1,6 +1,91 @@
  /* ── FlexLayout theme overrides ─────────────────────────────────────────────── */
  /* Built on top of flexlayout-react/style/gray.css imported in DockLayout.tsx  */
  
@@ -4626,17 +4626,23 @@ index 67578882..51b779d9 100644
 +  height: calc(100% - var(--rail-inset-top) - var(--rail-inset-bottom) - 24px);
 +}
 +
-+.embed-inspector-tabs {
++.embed-inspector-header {
 +  display: flex;
-+  flex-wrap: wrap;
 +  align-items: center;
 +  gap: 4px;
-+  padding: 6px;
++  padding: 6px 6px 6px 12px;
 +  border-bottom: 1px solid var(--border);
 +  background: var(--bg-header);
 +}
 +
-+.embed-inspector-tabs button {
++.embed-inspector-header h2 {
++  flex: 1;
++  margin: 0;
++  color: var(--text);
++  font: 600 15px var(--font-ui);
++}
++
++.embed-inspector-header button {
 +  min-width: 44px;
 +  min-height: 44px;
 +  padding: 0 9px;
@@ -4648,23 +4654,12 @@ index 67578882..51b779d9 100644
 +  cursor: pointer;
 +}
 +
-+.embed-inspector-tabs button[aria-selected="true"] {
-+  background: var(--accent-btn-bg);
-+  color: var(--accent-dark);
-+}
-+
-+.embed-inspector-tabs .embed-inspector-expand {
-+  margin-left: auto;
++.embed-inspector-header .embed-inspector-expand {
 +  font-size: 20px;
 +}
 +
-+.embed-inspector-tabs .embed-inspector-close {
-+  margin-left: auto;
++.embed-inspector-header .embed-inspector-close {
 +  font-size: 24px;
-+}
-+
-+.embed-inspector-tabs .embed-inspector-expand + .embed-inspector-close {
-+  margin-left: 0;
 +}
 +
 +.embed-inspector-content {
@@ -4677,7 +4672,7 @@ index 67578882..51b779d9 100644
    /* Map to app design tokens */
    --color-text: var(--text);
 diff --git a/packages/app/src/ui/DockLayout.tsx b/packages/app/src/ui/DockLayout.tsx
-index ba28ddb9..9e308b40 100644
+index ba28ddb9..0e7c2c4e 100644
 --- a/packages/app/src/ui/DockLayout.tsx
 +++ b/packages/app/src/ui/DockLayout.tsx
 @@ -1,4 +1,5 @@
@@ -4821,6 +4816,7 @@ index ba28ddb9..9e308b40 100644
 +// The frame protocol's names for the two panels that the embedded layout shows.
 +const EMBED_PANELS = { [PANEL_IDS.inspector]: "properties", [PANEL_IDS.objects]: "layers" } as const;
 +type EmbedPanel = (typeof EMBED_PANELS)[keyof typeof EMBED_PANELS];
++const EMBED_PANEL_TITLES: Record<EmbedPanel, string> = { properties: "Properties", layers: "Layers" };
 +
 +function readEmbedPanel(): EmbedPanel | null {
 +  const panel = document.documentElement.dataset.embedPanel;
@@ -4835,7 +4831,6 @@ index ba28ddb9..9e308b40 100644
 +  const [embedPanel, setEmbedPanelState] = useState(readEmbedPanel);
 +  const canvasCommandHandle = useRef<CanvasCommandHandle | null>(null);
 +  const inspectorOpen = embedPanel !== null;
-+  const inspectorTab = embedPanel === EMBED_PANELS.objects ? "objects" : "inspector";
 +  // Properties is a side panel in landscape and a bottom sheet in portrait, as in iPadOS apps.
 +  const portrait = useSyncExternalStore(subscribePortrait, isPortrait);
 +  const [sheetExpanded, setSheetExpanded] = useState(false);
@@ -4962,7 +4957,7 @@ index ba28ddb9..9e308b40 100644
  
    useEffect(() => {
      activeDockHandle = handle;
-@@ -590,11 +698,38 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
+@@ -590,11 +698,28 @@ export function DockLayout({ repeatPreviewModel, onSubmitPrompt, onInterruptTurn
    }, [figureCount]);
  
    return (
@@ -4979,28 +4974,18 @@ index ba28ddb9..9e308b40 100644
 +        onModelChange={onModelChange}
 +        realtimeResize
 +      />
-+      {embedded && inspectorOpen && (
-+        <aside ref={inspectorRef} className="embed-inspector" aria-label="Properties"
++      {embedded && embedPanel !== null && (
++        // Layers and Properties are separate panels, each with its title and close button (FR-060).
++        <aside key={embedPanel} ref={inspectorRef} className="embed-inspector" aria-labelledby="embed-panel-title"
 +          data-placement={portrait ? "sheet" : "side"} data-expanded={portrait && sheetExpanded}>
-+          <div className="embed-inspector-tabs" role="tablist" aria-label="Properties view">
-+            {(["inspector", "objects"] as const).map((tab) => (
-+              <button
-+                key={tab}
-+                type="button"
-+                role="tab"
-+                aria-selected={inspectorTab === tab}
-+                onClick={() => setEmbedPanel(EMBED_PANELS[tab])}
-+              >
-+                {tab === "inspector" ? "Properties" : "Layers"}
-+              </button>
-+            ))}
-+            {portrait ? <button type="button" className="embed-inspector-expand" aria-label="Expand properties" aria-expanded={sheetExpanded}
++          <div className="embed-inspector-header">
++            <h2 id="embed-panel-title">{EMBED_PANEL_TITLES[embedPanel]}</h2>
++            {portrait ? <button type="button" className="embed-inspector-expand" aria-label={`Expand ${embedPanel}`} aria-expanded={sheetExpanded}
 +              onClick={() => setSheetExpanded(!sheetExpanded)}>{sheetExpanded ? "⌄" : "⌃"}</button> : null}
-+            <button type="button" className="embed-inspector-close" aria-label="Close properties" onClick={closeInspector}>×</button>
++            <button type="button" className="embed-inspector-close" aria-label={`Close ${embedPanel}`} onClick={closeInspector}>×</button>
 +          </div>
-+          <div className="embed-inspector-content" role="tabpanel">
-+            {inspectorTab === "inspector" && <MemoInspectorPanel />}
-+            {inspectorTab === "objects" && <MemoObjectsPanel />}
++          <div className="embed-inspector-content">
++            {embedPanel === "properties" ? <MemoInspectorPanel /> : <MemoObjectsPanel />}
 +          </div>
 +        </aside>
 +      )}
@@ -18723,7 +18708,7 @@ index 3e120bf3..c4a7c206 100644
 +
 +.row > .objectActions { display: flex; flex: 1 0 100%; justify-content: flex-end; gap: 3px; }
 diff --git a/packages/app/src/ui/objects-panel/ObjectsPanel.tsx b/packages/app/src/ui/objects-panel/ObjectsPanel.tsx
-index 0118d46c..7e70ccb7 100644
+index 0118d46c..30e72e6a 100644
 --- a/packages/app/src/ui/objects-panel/ObjectsPanel.tsx
 +++ b/packages/app/src/ui/objects-panel/ObjectsPanel.tsx
 @@ -1,9 +1,15 @@
@@ -18796,30 +18781,28 @@ index 0118d46c..7e70ccb7 100644
    const handleDrop = (targetNode: ObjectsPanelNode, placement: DropPlacement) => {
      const movePlan = resolveMovePlan(siblingOrder, draggedIds, targetNode, placement);
      if (!movePlan) {
-@@ -261,8 +287,9 @@ export function ObjectsPanel() {
+@@ -261,8 +287,8 @@ export function ObjectsPanel() {
    if (rows.length === 0) {
      return (
        <SidePanel className={css.panel}>
 -        <SidePanel.Header>Objects</SidePanel.Header>
-+        <SidePanel.Header>Layers</SidePanel.Header>
          <SidePanel.Content className={css.content}>
 +          <div className={css.toolbar}><button type="button" className={css.newLayer} onClick={createLayer}>New layer</button></div>
            <div className={css.empty}>No scene objects in the current figure.</div>
          </SidePanel.Content>
        </SidePanel>
-@@ -271,9 +298,10 @@ export function ObjectsPanel() {
+@@ -271,9 +297,9 @@ export function ObjectsPanel() {
  
    return (
      <SidePanel className={css.panel} data-testid="objects-panel">
 -      <SidePanel.Header>Objects</SidePanel.Header>
-+      <SidePanel.Header>Layers</SidePanel.Header>
        <SidePanel.Content className={css.content}>
          <div className={css.toolbar}>
 +          <button type="button" className={css.newLayer} onClick={createLayer}>New layer</button>
            <div className={css.multiArrangeGroup} role="group" aria-label="Group selection actions">
              {groupActions.map((action) => renderActionButton(action))}
            </div>
-@@ -294,6 +322,8 @@ export function ObjectsPanel() {
+@@ -294,6 +320,8 @@ export function ObjectsPanel() {
                <div
                  key={node.id}
                  className={rowClasses}
@@ -18828,7 +18811,7 @@ index 0118d46c..7e70ccb7 100644
                  draggable={node.canDragReorder}
                  onClick={(event) => {
                    if (event.shiftKey) {
-@@ -342,21 +372,19 @@ export function ObjectsPanel() {
+@@ -342,21 +370,19 @@ export function ObjectsPanel() {
                  onDrop={(event) => {
                    event.preventDefault();
                    const placement = dropTarget?.id === node.id ? dropTarget.placement : resolvePlacement(event);
@@ -18854,7 +18837,7 @@ index 0118d46c..7e70ccb7 100644
                          setCollapsedIds((current) => {
                            const next = new Set(current);
                            if (next.has(node.id)) {
-@@ -369,30 +397,15 @@ export function ObjectsPanel() {
+@@ -369,30 +395,15 @@ export function ObjectsPanel() {
                        }}
                        aria-label={collapsedIds.has(node.id) ? `Expand ${node.title}` : `Collapse ${node.title}`}
                      >
@@ -18889,7 +18872,7 @@ index 0118d46c..7e70ccb7 100644
                        className={css.titleInput}
                        value={editingValue}
                        onChange={(event) => { setEditingValue(event.target.value); }}
-@@ -415,11 +428,51 @@ export function ObjectsPanel() {
+@@ -415,11 +426,51 @@ export function ObjectsPanel() {
                          startRename(node);
                        }}
                      >
@@ -18942,7 +18925,7 @@ index 0118d46c..7e70ccb7 100644
                </div>
              );
            })}
-@@ -468,13 +521,14 @@ function ObjectsUngroupIcon() {
+@@ -468,13 +519,14 @@ function ObjectsUngroupIcon() {
    );
  }
  

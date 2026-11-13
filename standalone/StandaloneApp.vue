@@ -25,6 +25,16 @@
           <button v-if="nativeWindow" type="button" @click="requestExit">Exit</button>
         </div>
       </details>
+      <div class="panel-controls">
+        <button type="button" aria-label="Layers" title="Layers" :disabled="target?.language !== 'tikz'"
+          :aria-pressed="canvasPanel === 'layers'" @click="toggleCanvasPanel('layers')">
+          <RiStackLine aria-hidden="true" size="22" />
+        </button>
+        <button type="button" aria-label="Properties" title="Properties" :disabled="target?.language !== 'tikz'"
+          :aria-pressed="canvasPanel === 'properties'" @click="toggleCanvasPanel('properties')">
+          <RiEqualizerLine aria-hidden="true" size="22" />
+        </button>
+      </div>
       <details class="file-menu export-menu" aria-label="Export" @click="closeFileMenu" @toggle="onShellMenuToggle">
         <summary>Export</summary>
         <div class="file-menu-items">
@@ -65,7 +75,8 @@
           <TikzWorkbench v-if="visited.has(view)" :ref="(handle) => setWorkbench(view, handle)" :key="`${documentKey}-${view}`"
             class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
             :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
-            :initial-mode="modeForView(view)" @status="onEditorStatus(view, $event)"
+            :initial-mode="modeForView(view)" :panel="view === 'canvas' ? canvasPanel : null"
+            @panel="canvasPanel = $event" @status="onEditorStatus(view, $event)"
             @undo-request="undoDocument" @redo-request="redoDocument"
             @document-properties-closed="documentPropertiesClosed" @popover-opened="closeShellMenus" />
         </div>
@@ -97,7 +108,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { RiArrowGoBackLine, RiArrowGoForwardLine } from "@remixicon/vue";
+import { RiArrowGoBackLine, RiArrowGoForwardLine, RiEqualizerLine, RiStackLine } from "@remixicon/vue";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { DocumentHistory } from "../src/document-history";
 import { editorStateSchema, type EditorState, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../src/host";
@@ -106,6 +117,7 @@ import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
 import type { TikzPreviewModeId } from "../src/preview-modes";
+import type { Panel } from "../vendor/tikz-editor/embed/src/commands";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
 import SourceEditor from "./SourceEditor.vue";
 
@@ -217,6 +229,28 @@ function toggleView(side: Side, view: ViewId): void {
   active[side] = active[side] === view ? null : view;
   visited.add(view);
 }
+
+// Code, Layers, and Properties: one panel open at a time (FR-060, data-model Panel). Layers and
+// Properties live in the canvas frame, which reports its own close through the `panel` event.
+const canvasPanel = ref<Panel>(null);
+async function toggleCanvasPanel(panel: Exclude<Panel, null>): Promise<void> {
+  if (canvasPanel.value === panel) {
+    canvasPanel.value = null;
+    return;
+  }
+  for (const side of ["left", "right"] as const) {
+    if (active[side] === "code") active[side] = null;
+  }
+  if (!isVisible("canvas")) {
+    active[placements.left.includes("canvas") ? "left" : "right"] = "canvas";
+    visited.add("canvas");
+    await nextTick();
+  }
+  canvasPanel.value = panel;
+}
+watch(() => isVisible("code"), (codeOpen) => {
+  if (codeOpen) canvasPanel.value = null;
+});
 
 function startDrag(event: DragEvent, view: ViewId): void {
   event.dataTransfer?.setData("application/x-visual-tikz-view", view);
@@ -788,6 +822,19 @@ body,
 
 .file-menu-items button {
   justify-content: flex-start;
+}
+
+.panel-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.panel-controls button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
 }
 
 .history-controls {

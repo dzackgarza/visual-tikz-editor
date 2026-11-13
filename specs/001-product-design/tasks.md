@@ -93,7 +93,7 @@ the other two, moves them, and undoes the move.
 - [X] T029 [US1] Keep one popover open in the window: the fork posts `popover-opened` when it opens one and closes its own on `dismiss-popover` (`vendor/tikz-editor/embed/src/main.tsx`); the shell closes its menus on `popover-opened` and sends `dismiss-popover` when it opens one (`src/ui/TikzWorkbench.vue`) (research R16)
 - [X] T030 [US1] Move the toolbar only by its grip and dock it to any screen edge in `.cache/tikz-editor/packages/app/src/ui/DockLayout.tsx` (FR-010) (the grip lives in `Toolbar.tsx`)
 - [X] T031 [US1] Make the Eraser sweep remove the crossed parts of every crossed stroke as one change event, so it is one step of the document history, in the fork's eraser tool under `.cache/tikz-editor/packages/app/src/` (the present code meets it: the T020 story passes with the document bar's Undo and Redo)
-- [ ] T032 [US1] Rewrite the replaced stories near lines 5012, 5067, 1445, and 1803 of `test/workbench-browser.spec.ts` to the toolbar and Lasso rules; run `just tikz-editor-patch && just update-tikz-editor-vendor` and the US1 stories green
+- [ ] T032 [US1] Rewrite the replaced stories near lines 5012, 5067, 1445, and 1803 of `test/workbench-browser.spec.ts` to the toolbar and Lasso rules, and every other story that reaches a removed rail control (Select, Geometry, Freehand, Label, Bucket, `Color: New strokes`, rail Undo, Redo, Layers, Properties, Settings, `setSnapRule`) or the shared panel's tabs and `tabpanel`, to the new toolbar, the canvas corners, the document bar, and the separate Layers and Properties panels; run `just tikz-editor-patch && just update-tikz-editor-vendor` and the US1 stories green
 
 **Checkpoint**: User Story 1 passes by itself.
 
@@ -233,14 +233,14 @@ without a selection.
 
 ### Stories (red first)
 
-- [ ] T076 [P] [US6] Story "Layers then Properties: one panel at a time; a second tap closes each" (scenarios 1–2, FR-060) in `test/workbench-browser.spec.ts`
+- [X] T076 [P] [US6] Story "Layers then Properties: one panel at a time; a second tap closes each" (scenarios 1–2, FR-060) in `test/workbench-browser.spec.ts`
 - [ ] T077 [P] [US6] Story "Properties shows the figure with nothing selected and the object after a selection; no other surface holds the figure's attributes" (scenario 3, FR-060a) in `test/workbench-browser.spec.ts`
 - [ ] T078 [P] [US6] Story "a hidden, locked layer reopens hidden and locked, and the source holds only its `scope` with `name=`" (data-model Layer, Principle I) in `test/workbench-files.spec.ts`; commit T076–T078 red
 
 ### Implementation
 
-- [ ] T079 [US6] Add Layers (`RiStackLine`) and Properties (`RiEqualizerLine`) to the document bar of `standalone/StandaloneApp.vue`, sending `panel` and following the `panel` event, with Code in the same one-panel state (data-model Panel `open`: none, `code`, `layers`, or `properties`)
-- [ ] T080 [US6] Split the shared panel of `.cache/tikz-editor/packages/app/src/ui/DockLayout.tsx:702-724` into a Layers panel and a Properties panel, each with its title and close button
+- [X] T079 [US6] Add Layers (`RiStackLine`) and Properties (`RiEqualizerLine`) to the document bar of `standalone/StandaloneApp.vue`, sending `panel` and following the `panel` event, with Code in the same one-panel state (data-model Panel `open`: none, `code`, `layers`, or `properties`)
+- [X] T080 [US6] Split the shared panel of `.cache/tikz-editor/packages/app/src/ui/DockLayout.tsx:702-724` into a Layers panel and a Properties panel, each with its title and close button
 - [ ] T081 [US6] Show `<InspectorPanel figure />` in Properties when the selection is empty and post `selection` (`empty`); delete `DocumentPropertiesDialog.tsx` and its references in `App.tsx` and `editor-command-runtime.ts` under `.cache/tikz-editor/packages/app/src/`; delete the `document-properties` command, the `document-properties-closed` event and action of `vendor/tikz-editor/embed/src/`, the `tikz-embed-document-properties` listeners of `main.tsx`, and Document Properties… with its handlers in `standalone/StandaloneApp.vue`, `src/ui/TikzWorkbench.vue`, and `src/ui/TikzEditorPreview.vue`
 - [ ] T082 [US6] Keep layer visibility and lock as per-file view state through `persistence-save`, never in the source, in the fork store `.cache/tikz-editor/packages/app/src/store/`
 - [ ] T083 [US6] Rebuild the fork and run the US6 stories green
