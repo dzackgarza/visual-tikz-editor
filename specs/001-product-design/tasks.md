@@ -28,7 +28,7 @@ and `just update-quiver-vendor`. Nothing under `vendor/*/src/` is edited in plac
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add `@remixicon/vue` to the shell with `bun add @remixicon/vue` in `package.json` (research R7)
+- [X] T001 [P] Add `@remixicon/vue` to the shell with `bun add @remixicon/vue` in `package.json` (research R7)
 - [ ] T002 [P] Add `lucide-react@1.64`, `@uiw/react-color-alpha`, and `@uiw/react-color-editable-input` to the fork with `bun add` in `.cache/tikz-editor/packages/app/package.json` (research R6, R7)
 - [ ] T003 [P] Replace the `node scripts/…` refresh note with the `just update-tikz-editor-vendor` recipe in `vendor/tikz-editor/PROVENANCE.toml`
 
