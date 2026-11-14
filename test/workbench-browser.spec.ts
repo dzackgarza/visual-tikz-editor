@@ -5098,6 +5098,37 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `a pen tap with Text places plain text in edit, and the keys typed next become that text, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const source = async () => (await editorDebug(page)).source;
+        const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
+        const at = (x: number, y: number) => ({ x: canvas.x + canvas.width * x, y: canvas.y + canvas.height * y });
+        await chooseTool(frame, input, "Text");
+        await input.penStroke([at(0.3, 0.3)]);
+        await expect.poll(source, { message: "The tap placed no text" }).toMatch(/\\node/);
+        await page.keyboard.type("x+y");
+        await expect
+          .poll(source, { message: "The keys typed after the tap did not become the text" })
+          .toMatch(/\{x\+y\};/);
+        expect(await source(), "The text has a border or another option").toMatch(/\\node at \([^)]*\) \{x\+y\};/);
+        // The tool's colour is the colour of the next text; a tap elsewhere ends the first text and starts the next.
+        await input.touch([await stableCenter(toolbarItem(frame, "Colour 2: blue"))]);
+        await input.penStroke([at(0.6, 0.6)]);
+        await page.keyboard.type("z");
+        await expect
+          .poll(source, { message: "The second tap did not start a second text in the tool's colour" })
+          .toMatch(/\\node\[text=blue\] at \([^)]*\) \{z\};/);
+        expect(await source(), "The second tap changed the first text").toMatch(/\{x\+y\};/);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `the Lasso selects by tap, by Freehand, Rectangle, and Oval drag, and moves by a drag on the selection, in ${tablet.name}`,
       async function () {
         await author(String.raw`\begin{tikzpicture}
