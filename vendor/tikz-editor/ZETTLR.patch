@@ -20444,7 +20444,7 @@ index 00000000..bf6c9c1f
 +  return entry.kind === "kv" ? !NON_STYLE_OPTION_KEYS.has(key) : !NON_STYLE_OPTION_FLAGS.has(key);
 +}
 diff --git a/packages/core/src/edit/actions/path-editing-actions.ts b/packages/core/src/edit/actions/path-editing-actions.ts
-index 23a8fe28..fdb60df9 100644
+index 23a8fe28..daf414e1 100644
 --- a/packages/core/src/edit/actions/path-editing-actions.ts
 +++ b/packages/core/src/edit/actions/path-editing-actions.ts
 @@ -3,11 +3,12 @@ import { worldPoint, worldVector } from "../../coords/points.js";
@@ -20487,7 +20487,7 @@ index 23a8fe28..fdb60df9 100644
      nextSegment.closesPath || (analysis.closed && anchorIndex === 0) ? "cycle" : undefined
    );
    if (!replacementSegment) {
-@@ -569,6 +574,7 @@ function buildDeletedWorldPointReplacement(
+@@ -569,26 +574,133 @@ function buildDeletedWorldPointReplacement(
    analysis: ExplicitPathAnalysis,
    previousSegment: ExplicitPathAnalysis["segments"][number],
    nextSegment: ExplicitPathAnalysis["segments"][number],
@@ -20495,41 +20495,47 @@ index 23a8fe28..fdb60df9 100644
    targetRawOverride?: string
  ): string | null {
    const targetRaw = targetRawOverride ?? analysis.anchors[nextSegment.endAnchorIndex].raw;
-@@ -576,21 +582,119 @@ function buildDeletedWorldPointReplacement(
+   if (previousSegment.kind === "line" && nextSegment.kind === "line") {
      return `-- ${targetRaw}`;
    }
-   if (previousSegment.kind === "cubic" && nextSegment.kind === "cubic") {
+-  if (previousSegment.kind === "cubic" && nextSegment.kind === "cubic") {
 -    const control1 = analysis.statement.items[previousSegment.control1Index];
 -    const control2 = analysis.statement.items[nextSegment.control2Index];
 -    if (!control1 || !control2 || control1.kind !== "Coordinate" || control2.kind !== "Coordinate") {
 -      return null;
--    }
++  const sourceId = analysis.statement.id;
++  const anchors = [previousSegment.startAnchorIndex, previousSegment.endAnchorIndex, nextSegment.endAnchorIndex]
++    .map((index) => resolveAnchorWorld(editHandles, sourceId, analysis.anchors[index], source));
++  if (anchors.some((point) => point === null)) return null;
++  const [start, middle, end] = anchors as WorldPoint[];
++  // A straight segment is the cubic whose controls lie at one third and two thirds of it (degree elevation),
++  // so a joint between a curve and a straight segment merges as one between two curves.
++  const asCubic = (segment: ExplicitPathAnalysis["segments"][number], from: WorldPoint, to: WorldPoint): [WorldPoint, WorldPoint, WorldPoint, WorldPoint] | null => {
++    if (segment.kind === "line") {
++      return [from, wp(from.x + (to.x - from.x) / 3, from.y + (to.y - from.y) / 3),
++        wp(from.x + 2 * (to.x - from.x) / 3, from.y + 2 * (to.y - from.y) / 3), to];
+     }
 -    const control1Raw = sourceSliceForItem(source, analysis, previousSegment.control1Index);
 -    const control2Raw = sourceSliceForItem(source, analysis, nextSegment.control2Index);
 -    if (!control1Raw || !control2Raw) {
 -      return null;
--    }
--    return `.. controls ${control1Raw} and ${control2Raw} .. ${targetRaw}`;
-+    const sourceId = analysis.statement.id;
-+    const anchors = [previousSegment.startAnchorIndex, previousSegment.endAnchorIndex, nextSegment.endAnchorIndex]
-+      .map((index) => resolveAnchorWorld(editHandles, sourceId, analysis.anchors[index], source));
-+    const controls = [previousSegment.control1Index, previousSegment.control2Index, nextSegment.control1Index, nextSegment.control2Index]
-+      .map((index) => {
-+        const item = analysis.statement.items[index];
-+        return item?.kind === "Coordinate" ? resolveControlWorld(editHandles, sourceId, item, source) : null;
-+      });
-+    if (anchors.some((point) => point === null) || controls.some((point) => point === null)) return null;
-+    const [start, middle, end] = anchors as WorldPoint[];
-+    const [first1, first2, second1, second2] = controls as WorldPoint[];
-+    const fitted = fitJoinedCubics([start, first1, first2, middle], [middle, second1, second2, end]);
-+    if (!fitted) return null;
-+    const coordinate = (point: WorldPoint): string =>
-+      `(${formatNumber(point.x * CM_PER_PT)},${formatNumber(point.y * CM_PER_PT)})`;
-+    return `.. controls ${coordinate(fitted[0])} and ${coordinate(fitted[1])} .. ${targetRaw}`;
-   }
-   return null;
- }
- 
++    const controls = [segment.control1Index, segment.control2Index].map((index) => {
++      const item = analysis.statement.items[index];
++      return item?.kind === "Coordinate" ? resolveControlWorld(editHandles, sourceId, item, source) : null;
++    });
++    if (!controls[0] || !controls[1]) return null;
++    return [from, controls[0], controls[1], to];
++  };
++  const first = asCubic(previousSegment, start, middle);
++  const second = asCubic(nextSegment, middle, end);
++  if (!first || !second) return null;
++  const fitted = fitJoinedCubics(first, second);
++  if (!fitted) return null;
++  const coordinate = (point: WorldPoint): string =>
++    `(${formatNumber(point.x * CM_PER_PT)},${formatNumber(point.y * CM_PER_PT)})`;
++  return `.. controls ${coordinate(fitted[0])} and ${coordinate(fitted[1])} .. ${targetRaw}`;
++}
++
 +// Inkscape's node deletion samples the neighboring curves and fits one cubic
 +// from the two surviving endpoint positions and slopes:
 +// https://gitlab.com/inkscape/inkscape/-/blob/master/src/ui/tool/path-manipulator.cpp
@@ -20613,20 +20619,20 @@ index 23a8fe28..fdb60df9 100644
 +        return Math.max(largest, Math.hypot(point.x - x, point.y - y));
 +      }, 0);
 +      if (maxError <= Math.max(2, chordLength * 0.03)) return controls;
-+    }
-+  }
+     }
+-    return `.. controls ${control1Raw} and ${control2Raw} .. ${targetRaw}`;
+   }
+-  return null;
 +  const freeDeterminant = ua * uc - ub * ub;
 +  if (Math.abs(freeDeterminant) < 1e-12) return null;
 +  return [
 +    wp((ux * uc - vx * ub) / freeDeterminant, (uy * uc - vy * ub) / freeDeterminant),
 +    wp((vx * ua - ux * ub) / freeDeterminant, (vy * ua - uy * ub) / freeDeterminant)
 +  ];
-+}
-+
+ }
+ 
  function buildOpenPathBodyAfterDeletedPoint(
-   analysis: ExplicitPathAnalysis,
-   previousSegment: ExplicitPathAnalysis["segments"][number],
-@@ -733,26 +837,6 @@ function explicitSegmentText(source: string, analysis: ExplicitPathAnalysis, seg
+@@ -733,26 +845,6 @@ function explicitSegmentText(source: string, analysis: ExplicitPathAnalysis, seg
    return raw.replace(/\bcycle\b/u, targetRaw);
  }
  
@@ -20653,7 +20659,7 @@ index 23a8fe28..fdb60df9 100644
  function smoothControlPositions(anchor: WorldPoint, previousControl: WorldPoint, nextControl: WorldPoint): { prev: WorldPoint; next: WorldPoint } {
    const prevLength = Math.hypot(anchor.x - previousControl.x, anchor.y - previousControl.y);
    const nextLength = Math.hypot(nextControl.x - anchor.x, nextControl.y - anchor.y);
-@@ -920,21 +1004,65 @@ export function applyInsertPathPointAction(
+@@ -920,21 +1012,65 @@ export function applyInsertPathPointAction(
  function resolveControlWorld(
    editHandles: readonly EditHandle[],
    sourceId: string,
@@ -25223,7 +25229,7 @@ index 5e2d6e99..c55a9748 100644
    });
  
 diff --git a/test/path-edit-actions.spec.ts b/test/path-edit-actions.spec.ts
-index 2a480a89..bf9814b6 100644
+index 2a480a89..726ce6bb 100644
 --- a/test/path-edit-actions.spec.ts
 +++ b/test/path-edit-actions.spec.ts
 @@ -26,6 +26,16 @@ function handleIdFor(source: string, rendered: ReturnType<typeof renderTikzToSvg
@@ -25243,7 +25249,7 @@ index 2a480a89..bf9814b6 100644
  describe("path edit actions", () => {
    it("rejects malformed explicit paths with precise analysis reasons", () => {
      const cases = [
-@@ -620,7 +630,11 @@ describe("path edit actions", () => {
+@@ -620,7 +630,46 @@ describe("path edit actions", () => {
  
      expect(result.kind).toBe("success");
      if (result.kind !== "success") return;
@@ -25253,10 +25259,45 @@ index 2a480a89..bf9814b6 100644
 +    expect(midpoint.x).toBeCloseTo(3, 1);
 +    expect(Math.abs(midpoint.y - 1)).toBeLessThan(0.25);
 +    expect(result.newSource).toContain(".. (6,0);");
++  });
++
++  it("deletes an interior point between a cubic and a straight segment", () => {
++    const source = String.raw`\begin{tikzpicture}
++  \draw (1,6) .. controls (2,8) and (4,8) .. (5,6) -- (7,7);
++\end{tikzpicture}`;
++    const rendered = renderTikzToSvg(source);
++
++    const result = applyEditAction(source, rendered.semantic.editHandles, {
++      kind: "deletePathPoint",
++      elementId: "path:0",
++      handleId: handleIdFor(source, rendered, "(5,6)")
++    });
++
++    expect(result.kind === "success" ? "success" : result).toBe("success");
++    if (result.kind !== "success") return;
++    // The two segments become one cubic from (1,6) to (7,7), as Inkscape joins a curve and a line.
++    expect(result.newSource).toMatch(/\\draw \(1,6\) \.\. controls \([^)]+\) and \([^)]+\) \.\. \(7,7\);/u);
++  });
++
++  it("deletes an interior point between a straight and a cubic segment", () => {
++    const source = String.raw`\begin{tikzpicture}
++  \draw (0,0) -- (1,0) .. controls (1,1) and (2,1) .. (2,0);
++\end{tikzpicture}`;
++    const rendered = renderTikzToSvg(source);
++
++    const result = applyEditAction(source, rendered.semantic.editHandles, {
++      kind: "deletePathPoint",
++      elementId: "path:0",
++      handleId: handleIdFor(source, rendered, "(1,0)")
++    });
++
++    expect(result.kind === "success" ? "success" : result).toBe("success");
++    if (result.kind !== "success") return;
++    expect(result.newSource).toMatch(/\\draw \(0,0\) \.\. controls \([^)]+\) and \([^)]+\) \.\. \(2,0\);/u);
    });
  
    it("deletes a point from a closed polygon while preserving the cycle", () => {
-@@ -671,9 +685,10 @@ describe("path edit actions", () => {
+@@ -671,12 +720,13 @@ describe("path edit actions", () => {
  
      expect(result.kind).toBe("success");
      if (result.kind !== "success") return;
@@ -25269,7 +25310,32 @@ index 2a480a89..bf9814b6 100644
 +    expect(result.newSource).toContain(".. (6,0) .. controls (5,-1) and (1,-1) .. cycle;");
    });
  
-   it("rejects deleting endpoints, tiny closed paths, and mixed line-cubic anchors", () => {
+-  it("rejects deleting endpoints, tiny closed paths, and mixed line-cubic anchors", () => {
++  it("rejects deleting endpoints and points of tiny closed paths", () => {
+     const open = String.raw`\begin{tikzpicture}
+   \draw (0,0) -- (1,0) -- (2,0);
+ \end{tikzpicture}`;
+@@ -705,20 +755,6 @@ describe("path edit actions", () => {
+       expect(tooFew.reason).toContain("too few");
+     }
+ 
+-    const mixed = String.raw`\begin{tikzpicture}
+-  \draw (0,0) -- (1,0) .. controls (1,1) and (2,1) .. (2,0);
+-\end{tikzpicture}`;
+-    const mixedRendered = renderTikzToSvg(mixed);
+-    const unsupportedConversion = applyEditAction(mixed, mixedRendered.semantic.editHandles, {
+-      kind: "deletePathPoint",
+-      elementId: "path:0",
+-      handleId: handleIdFor(mixed, mixedRendered, "(1,0)")
+-    });
+-    expect(unsupportedConversion.kind).toBe("unsupported");
+-    if (unsupportedConversion.kind === "unsupported") {
+-      expect(unsupportedConversion.reason).toContain("unsupported segment conversion");
+-    }
+-
+     const missingHandle = applyEditAction(open, openRendered.semantic.editHandles, {
+       kind: "deletePathPoint",
+       elementId: "path:0",
 diff --git a/test/property-write-builders.spec.ts b/test/property-write-builders.spec.ts
 index 48ae614a..20531f36 100644
 --- a/test/property-write-builders.spec.ts

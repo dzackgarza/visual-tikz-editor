@@ -5288,6 +5288,7 @@ describe("standalone workbench host boundary", function () {
 \draw (0,0) -- (0,10);
 \draw (1,6) .. controls (2,8) and (4,8) .. (5,6) -- (7,7);
 \draw (2,2) rectangle (5,4);
+\draw (6.5,3) circle (0.5);
 \path[use as bounding box] (-2,-2) rectangle (12,12);
 \end{tikzpicture}`);
         const frame = editorFrame(page);
@@ -5299,8 +5300,9 @@ describe("standalone workbench host boundary", function () {
         const at = await figureAxes(frame);
         await chooseTool(frame, input, "Lasso");
         const selection = async () => [...(await editorDebug(page)).selection].sort();
+        // (10,-1) is empty canvas below every object, where no object menu reaches.
         const clear = async () => {
-          await input.penStroke([at(10, 10)]);
+          await input.penStroke([at(10, -1)]);
           await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
         };
         const menu = frame.getByRole("toolbar", { name: "Selection", exact: true });
@@ -5343,6 +5345,7 @@ describe("standalone workbench host boundary", function () {
         for (const entry of buttons("Split", "Delete", "Done")) {
           assert.ok(pointCommands.includes(entry), `The object menu of an interior point lacks ${entry}`);
         }
+        await storyScreenshot(page, `object-menu-point-${tablet.name}`);
         await input.touch([await stableCenter(menu.getByRole("button", { name: "Done", exact: true }))]);
         await clear();
 
@@ -5365,9 +5368,10 @@ describe("standalone workbench host boundary", function () {
         await page.keyboard.press("Escape");
         await clear();
 
-        // Several objects: Align, Distribute, Lock, Duplicate, More.
+        // Several objects: Align, Distribute, Lock, Duplicate, More. Distribute spaces three or more objects,
+        // so the lasso takes the curve, the rectangle, and the circle.
         await input.penStroke([at(0.5, 1.5), at(8, 1.5), at(8, 8.5), at(0.5, 8.5), at(0.5, 1.6)]);
-        await expect.poll(selection).toEqual(["path:2", "path:3"]);
+        await expect.poll(selection).toEqual(["path:2", "path:3", "path:4"]);
         assert.deepEqual(
           await commands(),
           buttons("Align", "Distribute", "Lock", "Duplicate", "More"),
