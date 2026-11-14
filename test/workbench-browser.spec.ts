@@ -5195,6 +5195,73 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `the press that closes a Properties dropdown or the colour picker keeps the selection, by pen, finger, and mouse, in ${tablet.name}`,
+      async function () {
+        await author(axesFigure);
+        const frame = editorFrame(page);
+        const line = frame.locator('svg [data-source-id="path:4"]').first();
+        await expect(line).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const lasso = toolbarItem(frame, "Lasso");
+        const toolMenu = activeToolMenu(frame);
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        const contacts: [string, (point: Point) => Promise<void>][] = [
+          ["pen", (point) => input.penStroke([point])],
+          ["finger", (point) => input.touch([point])],
+          ["mouse", (point) => page.mouse.click(point.x, point.y)],
+        ];
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([await strokePoint(page, line, 0.5)]);
+        await expect.poll(selection, { message: "A tap did not select the line" }).toEqual(["path:4"]);
+        await input.touch([await stableCenter(documentPanelButton("Properties"))]);
+        const properties = sidePanel(frame, "Properties");
+        await expect(properties).toBeVisible();
+        // Empty points of the figure that Properties does not cover.
+        const panel = await layoutBox(properties);
+        const empty = [at(-1, -1), at(10, -1), at(-1, 9), at(11, 2)].filter(
+          (point) =>
+            point.x < panel.x || point.x > panel.x + panel.width || point.y < panel.y || point.y > panel.y + panel.height,
+        );
+        const popups: [string, Locator, Locator][] = [
+          [
+            "the Path morphing dropdown",
+            properties.locator('[aria-haspopup="listbox"][aria-label="Path morphing"]'),
+            frame.getByRole("listbox", { name: "Path morphing" }),
+          ],
+          [
+            "the colour picker",
+            properties.locator('[aria-haspopup="dialog"][aria-label="Color"]'),
+            frame.getByRole("group", { name: "Color", exact: true }),
+          ],
+        ];
+        for (const [name, trigger, popup] of popups) {
+          for (const [contact, press] of contacts) {
+            await input.touch([await stableCenter(trigger)]);
+            await expect(popup, `A tap on its field did not open ${name}`).toBeVisible();
+            await press(await pointOutside(popup, empty));
+            await expect(popup, `A ${contact} press on the canvas did not close ${name}`).toHaveCount(0);
+            // The press's own effect is complete before the next tap opens the Lasso's menu.
+            await input.touch([await stableCenter(lasso)]);
+            await expect(toolMenu).toBeVisible();
+            expect(await selection(), `The ${contact} press that closed ${name} also changed the selection`).toEqual([
+              "path:4",
+            ]);
+            await input.touch([await stableCenter(lasso)]);
+            await expect(toolMenu).toHaveCount(0);
+          }
+        }
+        // With no popup open the same tap clears the selection.
+        await input.penStroke([empty[0]]);
+        await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `a pen tap with Text places plain text in edit, and the keys typed next become that text, in ${tablet.name}`,
       async function () {
         await editorReady(page);
