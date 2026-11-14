@@ -469,6 +469,38 @@ describe("standalone native file workflow", function () {
     await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
   });
 
+  it("exports a tikzcd that Quiver exported, with its link comment and its display-math brackets, as a one-page PDF", async function () {
+    const directory = await mkdtemp(join(tmpdir(), "workbench-export-"));
+    // The text that q.uiver.app gives for one arrow from A to B with its default export settings.
+    const authored = [
+      "% https://q.uiver.app/#q=WzAsMixbMCwwLCJBIl0sWzEsMCwiQiJdLFswLDFdXQ==",
+      String.raw`\[\begin{tikzcd}`,
+      "\tA & B",
+      "\t" + String.raw`\arrow[from=1-1, to=1-2]`,
+      String.raw`\end{tikzcd}\]`,
+    ].join("\n");
+    await page.request.post(`${url}api/new`, { data: "tikzcd" });
+    await page.goto(url);
+    await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+    await pasteCode(page, authored);
+    await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
+    diagramPath = join(directory, "diagram.pdf");
+    // The host answers an export request after the person chose a file. An answer before that is a refusal.
+    const answer = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/export");
+    await page.getByRole("group", { name: "Export" }).locator("summary").click();
+    await page.getByRole("button", { name: "PDF", exact: true }).click();
+    const first = await Promise.race([
+      answer.then((response) => response.status()),
+      new Promise<"file chooser">((resolve) => setTimeout(() => resolve("file chooser"), 3000)),
+    ]);
+    assert.equal(first, "file chooser", "The host refused the export before it opened the file chooser");
+    await chooseFile("export-quiver-pdf");
+    assert.equal((await answer).status(), 200);
+    const { stdout } = await execute("pdfinfo", [diagramPath]);
+    assert.match(stdout, /^Pages:\s+1$/m);
+    assert.equal(await page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n")), authored);
+  });
+
   it("carries one authored file through drawing, undo, redo, a view switch, copy, export, a restart, and further editing", async function () {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const directory = await mkdtemp(join(tmpdir(), "workbench-session-"));
