@@ -72,7 +72,7 @@ To edit an existing file, pass its path: `visual-tikz-editor figure.tikz` or `ju
 
 The editor serves its page on `127.0.0.1` only, on a free port. It makes no requests to other hosts. Selection locks last only for the open session.
 
-If the editor cannot read its recovery draft, view state, or preferences file at a start, the window shows the path of the file and the reason, and the editor changes no file. Correct the file or move it to a different folder, then start the editor again.
+If the editor cannot read its recovery draft, view state, or preferences file at a start, the window shows the path of the file and the reason, and the editor changes no file. Correct the file or move it to a different folder, then start the editor again. If the desktop application stops for a different cause before it opens the workbench, for example a command line that names a file that does not exist, the window shows the message of that cause, the exit status, and the path of the log of that start. The application then ends with exit code 1 when you close the window.
 
 ## More documentation
 
