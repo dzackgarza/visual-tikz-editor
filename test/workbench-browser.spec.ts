@@ -5138,6 +5138,53 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  const textFigure = String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\node at (2,7) {plain};
+\node[draw] at (6,7) {boxed};
+\draw (2,4) -- (6,4);
+\path[use as bounding box] (-2,-2) rectangle (12,12);
+\end{tikzpicture}`;
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a colour tap colours the text of selected text and the lines of a selected shape, and draws no border around plain text, in ${tablet.name}`,
+      async function () {
+        await author(textFigure);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const source = async () => (await editorDebug(page)).source;
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        const colour = async (subject: Point, id: string, preset: string) => {
+          await input.penStroke([at(10, -1)]);
+          await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
+          await input.penStroke([subject]);
+          await expect.poll(selection, { message: `A tap did not select ${id}` }).toEqual([id]);
+          await input.touch([await stableCenter(toolbarItem(frame, preset))]);
+        };
+        await chooseTool(frame, input, "Lasso");
+        await colour(at(2, 7), "path:2", "Colour 2: blue");
+        await expect
+          .poll(source, { message: "The plain text did not take the colour as its text colour, with no border" })
+          .toContain(String.raw`\node[text=blue] at (2,7) {plain};`);
+        await colour(at(6, 7), "path:3", "Colour 3: red");
+        await expect
+          .poll(source, { message: "The boxed text did not take the colour on its border and on its text" })
+          .toMatch(/\\node\[(?=[^\]]*draw=red)(?=[^\]]*text=red)[^\]]*\] at \(6,7\) \{boxed\};/);
+        await colour(at(4, 4), "path:4", "Colour 2: blue");
+        await expect
+          .poll(source, { message: "The line did not take the colour" })
+          .toMatch(/\\draw\[[^\]]*blue[^\]]*\] \(2,4\) -- \(6,4\);/);
+        expect(await source(), "The line, which shows no text, has a text colour").not.toMatch(/\\draw\[[^\]]*text=/);
+      },
+    );
+  }
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
