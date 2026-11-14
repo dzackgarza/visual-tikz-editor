@@ -5566,6 +5566,56 @@ describe("standalone workbench host boundary", function () {
 
     story(
       { viewport: tablet },
+      `a text whose edit ends with every character deleted leaves the diagram, and no step of the history changes nothing, in ${tablet.name}`,
+      async function () {
+        await author(axesFigure);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const source = async () => (await editorDebug(page)).source;
+        const textBox = frame.getByTestId("canvas-text-edit-textarea");
+        await chooseTool(frame, input, "Text");
+        // A first text is one step of the history: a later step that changes nothing shows at Undo.
+        await input.penStroke([at(9, 9)]);
+        await expect(textBox, "The first text is not in edit").toBeFocused();
+        await page.keyboard.type("a");
+        await expect.poll(source, { message: "The typed key did not become the first text" }).toMatch(/\{a\};/);
+        await page.keyboard.press("Escape");
+        const withFirst = await source();
+        // A new text: typed, emptied, ended.
+        await input.penStroke([at(9, 6)]);
+        await expect(textBox, "The new text is not in edit").toBeFocused();
+        await page.keyboard.type("z");
+        await expect.poll(source, { message: "The typed key did not become the new text" }).toMatch(/\{z\};/);
+        await page.keyboard.press("Backspace");
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(source, { message: "The new text whose characters were all deleted stayed in the diagram" })
+          .toBe(withFirst);
+        // A text of the diagram: opened by a double tap, emptied, ended.
+        await chooseTool(frame, input, "Lasso");
+        await input.doubleTap(at(9, 9));
+        await expect(textBox, "The double tap did not put the first text in edit").toBeFocused();
+        await page.keyboard.press("Control+A");
+        await page.keyboard.press("Backspace");
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(source, { message: "The text whose characters were all deleted stayed in the diagram" })
+          .toBe(axesFigure);
+        // The removal of the first text is one step. Before it, the history holds the first text only.
+        await input.touch([await stableCenter(documentHistory("Undo"))]);
+        await expect.poll(source, { message: "One Undo did not bring back the emptied text" }).toBe(withFirst);
+        await input.touch([await stableCenter(documentHistory("Undo"))]);
+        await expect
+          .poll(source, { message: "The new text that was typed and emptied left a step in the history" })
+          .toBe(axesFigure);
+      },
+    );
+
+    story(
+      { viewport: tablet },
       `while a text is in edit, the canvas shows no coordinate tooltip and no snap label, by pen and mouse, in ${tablet.name}`,
       async function () {
         await author(axesFigure);
