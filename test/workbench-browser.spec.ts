@@ -539,7 +539,6 @@ describe("standalone workbench host boundary", function () {
       // For a tikzcd document, Settings opens over Quiver and its appearance reaches Quiver.
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
-      await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
       const quiverFrame = page.locator('iframe[title="Quiver diagram editor"]');
       const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]').locator("body");
       await expect(quiverFrame).toBeVisible();
@@ -654,7 +653,6 @@ describe("standalone workbench host boundary", function () {
       // Quiver: an authored tikzcd, a label edited in Quiver, then a comment typed.
       const diagram = String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`;
       await code.fill(diagram);
-      await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
       const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
       await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
       await quiver.locator(".vertex").nth(1).click();
@@ -681,7 +679,6 @@ describe("standalone workbench host boundary", function () {
       const code = page.locator(".cm-content");
       const diagram = String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`;
       await code.fill(diagram);
-      await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
       const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
       await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
       await expect(quiver.locator('.toolbar .action[data-name="undo"]')).toHaveCount(0);
@@ -768,7 +765,6 @@ describe("standalone workbench host boundary", function () {
   story({}, "the first vertex that presses add in the Quiver view reaches the source", async function () {
     const code = page.locator(".cm-content");
     await code.fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
-    await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
     const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
     const box = await layoutBox(page.locator('iframe[title="Quiver diagram editor"]'));
@@ -783,7 +779,6 @@ describe("standalone workbench host boundary", function () {
     const bar = page.locator(".document-bar");
     const code = page.locator(".cm-content");
     await code.fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
-    await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
     const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
     await quiver.locator(".vertex").nth(1).click();
@@ -9888,7 +9883,6 @@ describe("standalone workbench host boundary", function () {
   it("copies the completed Quiver edit immediately after switching to rendered view", async function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
-    await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
     const frame = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await frame.locator(".vertex").nth(1).click();
     await frame.locator(".label-input").evaluate((input: HTMLInputElement) => {
@@ -11599,7 +11593,6 @@ describe("standalone workbench host boundary", function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
         await pasteCode(page, authored);
-        await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
         await expect(
           page.getByRole("button", { name: "Quiver: right sidebar", exact: true }),
         ).toHaveAttribute("aria-pressed", "true");
@@ -11638,7 +11631,6 @@ describe("standalone workbench host boundary", function () {
         const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await pasteCode(page, authored);
-        await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
         await expect(page.getByRole("button", { name: "Quiver: right sidebar", exact: true })).toHaveAttribute("aria-pressed", "true");
         const code = () => page.locator(".cm-content").innerText();
         const frame = page.frameLocator('iframe[title="Quiver diagram editor"]');

@@ -7,18 +7,18 @@
  * License:         GNU GPL v3
  *
  * Description:     Declares the preview/editor modes which may host one active
- *                  TikZ source block. Availability is source-semantic rather
- *                  than a view concern: tikzcd may use Quiver, while the
- *                  vendored tikz-editor needs source that contains a
- *                  tikzpicture environment. The renderer shell
- *                  consumes these descriptors instead of hard-coding mode
- *                  branches.
+ *                  TikZ source block. The kind of the source decides its
+ *                  editor: Quiver edits a tikzcd, and the vendored tikz-editor
+ *                  edits every other TikZ source. A mode can also fail on a
+ *                  source of its kind, and it then gives its own reason. The
+ *                  renderer shell consumes these descriptors instead of
+ *                  hard-coding mode branches.
  *
  * END HEADER
  */
 
 import type { TikzLivePreviewTarget } from "./live-preview";
-import { quiverCanEditBlock, quiverSourceError } from "./quiver-bridge";
+import { quiverSourceError } from "./quiver-bridge";
 import { tikzBlockHasContiguousSource } from "./source-block";
 
 export type TikzPreviewModeId = "tikz" | "quiver" | "visual";
@@ -27,20 +27,19 @@ export interface TikzPreviewModeDescriptor {
   id: TikzPreviewModeId;
   label: string;
   refreshable: boolean;
+  /** Whether the mode shows a source of this kind. */
   supports: (target: TikzLivePreviewTarget) => boolean;
-  unavailableTitle: (target: TikzLivePreviewTarget) => string;
+  /** Why the mode cannot show `target`, a source of its kind, or null when it can. */
+  sourceError: (target: TikzLivePreviewTarget) => string | null;
 }
 
 // tikz-editor edits a whole TikZ file: setup before the environment and
 // comments after it are part of the source it round-trips.
 const TIKZPICTURE_RE = /\\begin\{tikzpicture\}[\s\S]*\\end\{tikzpicture\}/u;
 
-function supportsVisualEditor(target: TikzLivePreviewTarget): boolean {
-  return (
-    target.language === "tikz" &&
-    TIKZPICTURE_RE.test(target.source) &&
-    tikzBlockHasContiguousSource(target)
-  );
+/** The mode that edits the diagram of `target`. */
+export function tikzEditorMode(target: TikzLivePreviewTarget): "quiver" | "visual" {
+  return target.language === "tikzcd" ? "quiver" : "visual";
 }
 
 export const TIKZ_PREVIEW_MODES: readonly TikzPreviewModeDescriptor[] = [
@@ -49,32 +48,26 @@ export const TIKZ_PREVIEW_MODES: readonly TikzPreviewModeDescriptor[] = [
     label: "TeX render",
     refreshable: true,
     supports: () => true,
-    unavailableTitle: () => "",
+    sourceError: () => null,
   },
   {
     id: "quiver",
     label: "Quiver canvas",
     refreshable: false,
-    supports: quiverCanEditBlock,
-    unavailableTitle: (target) => {
-      const error = quiverSourceError(target);
-      if (error === null) {
-        throw new Error("Quiver can edit this block, so it has no unavailable title");
-      }
-      return error;
-    },
+    supports: (target) => tikzEditorMode(target) === "quiver",
+    sourceError: quiverSourceError,
   },
   {
     id: "visual",
     label: "Drawing canvas",
     refreshable: false,
-    supports: supportsVisualEditor,
-    unavailableTitle: (target) =>
-      target.language === "tikzcd"
-        ? "The visual editor is for tikzpicture diagrams; tikzcd uses Quiver"
-        : !tikzBlockHasContiguousSource(target)
-          ? "Move this diagram out of the surrounding Markdown block to use the visual editor"
-          : "The visual editor requires a \\begin{tikzpicture} ... \\end{tikzpicture} environment",
+    supports: (target) => tikzEditorMode(target) === "visual",
+    sourceError: (target) =>
+      !tikzBlockHasContiguousSource(target)
+        ? "Move this diagram out of the surrounding Markdown block to use the visual editor"
+        : !TIKZPICTURE_RE.test(target.source)
+          ? "The visual editor requires a \\begin{tikzpicture} ... \\end{tikzpicture} environment"
+          : null,
   },
 ];
 

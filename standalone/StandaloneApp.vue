@@ -77,10 +77,10 @@
           <SourceEditor ref="sourceEditor" class="tikz-standalone-source" :document="documentHistory" :theme="theme" :selection="sourceSelection" />
         </div>
         <div v-for="view in workbenchViews" :key="view" class="view-pane" :class="{ 'pane-hidden': !isVisible(view) }" :style="paneStyle(view)">
-          <TikzWorkbench v-if="visited.has(view)" :ref="(handle) => setWorkbench(view, handle)" :key="`${documentKey}-${view}`"
+          <TikzWorkbench v-if="visited.has(view)" :ref="(handle) => setWorkbench(view, handle)" :key="`${documentKey}-${modeForView(view)}`"
             class="tikz-standalone-workbench" :target="target" :host="host" :theme="theme"
             :show-mode-switcher="false" :show-status="false" :show-fullscreen="false"
-            :initial-mode="modeForView(view)" :panel="view === 'canvas' ? canvasPanel : null"
+            :initial-mode="modeForView(view)" :panel="view === 'editor' ? canvasPanel : null"
             @panel="canvasPanel = $event" @status="onEditorStatus(view, $event)"
             @undo-request="undoDocument" @redo-request="redoDocument" @popover-opened="closeShellMenus"
             @host-popover-dismissed="closeShellMenus"
@@ -125,7 +125,7 @@ import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
-import type { TikzPreviewModeId } from "../src/preview-modes";
+import { tikzEditorMode, type TikzPreviewModeId } from "../src/preview-modes";
 import { keepFocusAtButtonPress } from "../vendor/tikz-editor/embed/src/button-focus";
 import type { Panel } from "../vendor/tikz-editor/embed/src/commands";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
@@ -206,13 +206,20 @@ function saveViewState(state: EditorState): Promise<void> {
   viewWrite = write.catch(() => undefined);
   return write;
 }
-type ViewId = "code" | "preview" | "canvas" | "quiver";
+// The editor view is the editor of the document's kind: the canvas for a tikzpicture, Quiver for a tikzcd (FR-013).
+// The shell has no view for the editor of the other kind (FR-014).
+type ViewId = "code" | "preview" | "editor";
 type Side = "left" | "right";
-const viewLabels: Record<ViewId, string> = { code: "Code", preview: "Preview", canvas: "Canvas", quiver: "Quiver" };
-const viewIcons: Record<ViewId, string> = { code: "</>", preview: "◉", canvas: "◇", quiver: "⤧" };
-const workbenchViews: readonly Exclude<ViewId, "code">[] = ["preview", "canvas", "quiver"];
-const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["preview", "canvas", "quiver"] });
-const active = reactive<Record<Side, ViewId | null>>({ left: null, right: "canvas" });
+const editorMode = computed(() => (target.value === null ? "visual" : tikzEditorMode(target.value)));
+const viewLabels = computed<Record<ViewId, string>>(() => ({
+  code: "Code", preview: "Preview", editor: editorMode.value === "quiver" ? "Quiver" : "Canvas",
+}));
+const viewIcons = computed<Record<ViewId, string>>(() => ({
+  code: "</>", preview: "◉", editor: editorMode.value === "quiver" ? "⤧" : "◇",
+}));
+const workbenchViews: readonly Exclude<ViewId, "code">[] = ["preview", "editor"];
+const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["preview", "editor"] });
+const active = reactive<Record<Side, ViewId | null>>({ left: null, right: "editor" });
 const visited = reactive(new Set<ViewId>());
 function closeFileMenu(event: MouseEvent): void {
   if (event.target instanceof Element && event.target.closest("button") &&
@@ -254,10 +261,10 @@ const unsavedPrompt = ref<"closing" | "continuing" | null>(null);
 let resolvePrompt: ((choice: "save" | "discard" | "cancel") => void) | null = null;
 let allowUnload = false;
 let unlistenClose: (() => void) | null = null;
-const editorStatuses = reactive<Record<Exclude<ViewId, "code">, string>>({ preview: "", canvas: "", quiver: "" });
+const editorStatuses = reactive<Record<Exclude<ViewId, "code">, string>>({ preview: "", editor: "" });
 const editorStatus = computed(() => {
   const visible = active.right ?? active.left;
-  return visible === "preview" || visible === "canvas" || visible === "quiver" ? editorStatuses[visible] : "";
+  return visible === null || visible === "code" ? "" : editorStatuses[visible];
 });
 
 function onEditorStatus(view: Exclude<ViewId, "code">, value: string): void {
@@ -269,7 +276,7 @@ const splitPercent = ref(50);
 const bothOpen = computed(() => active.left !== null && active.right !== null);
 
 function modeForView(view: Exclude<ViewId, "code">): TikzPreviewModeId {
-  return view === "preview" ? "tikz" : view === "canvas" ? "visual" : "quiver";
+  return view === "preview" ? "tikz" : editorMode.value;
 }
 
 function isVisible(view: ViewId): boolean {
@@ -297,9 +304,9 @@ async function toggleCanvasPanel(panel: Exclude<Panel, null>): Promise<void> {
   for (const side of ["left", "right"] as const) {
     if (active[side] === "code") active[side] = null;
   }
-  if (!isVisible("canvas")) {
-    active[placements.left.includes("canvas") ? "left" : "right"] = "canvas";
-    visited.add("canvas");
+  if (!isVisible("editor")) {
+    active[placements.left.includes("editor") ? "left" : "right"] = "editor";
+    visited.add("editor");
     await nextTick();
   }
   canvasPanel.value = panel;
@@ -316,7 +323,7 @@ function startDrag(event: DragEvent, view: ViewId): void {
 function dropView(event: DragEvent, destination: Side): void {
   dropSide.value = null;
   const view = event.dataTransfer?.getData("application/x-visual-tikz-view");
-  if (view !== "code" && view !== "preview" && view !== "canvas" && view !== "quiver") return;
+  if (view !== "code" && view !== "preview" && view !== "editor") return;
   const source: Side = placements.left.includes(view) ? "left" : "right";
   if (source === destination) return;
   placements[source].splice(placements[source].indexOf(view), 1);
@@ -380,8 +387,7 @@ function setWorkbench(view: Exclude<ViewId, "code">, handle: unknown): void {
   else workbenches.set(view, handle as InstanceType<typeof TikzWorkbench>);
 }
 async function currentSource(): Promise<string> {
-  const view = target.value?.language === "tikzcd" ? "quiver" : "canvas";
-  const editor = workbenches.get(view);
+  const editor = workbenches.get("editor");
   return editor ? await editor.currentSource(new AbortController().signal) : source.value;
 }
 const savedSource = ref("");
@@ -451,6 +457,11 @@ const target = computed<TikzLivePreviewTarget | null>(() => {
     docPath: document.value.path,
     authoredSource: text,
   };
+});
+// A source that changes its kind gets the editor of the new kind, which has no status yet and no panel.
+watch(editorMode, () => {
+  editorStatuses.editor = "";
+  canvasPanel.value = null;
 });
 
 async function responseText(response: Response): Promise<string> {
@@ -554,14 +565,12 @@ async function applyDocument(response: Response): Promise<void> {
   recoveredSource.value = recoverySaved.value ? text : "";
   sourceSelection.value = null;
   documentKey.value++;
-  const preferred: ViewId = rawTikzEnvironment(text) === "tikzcd" || document.value.path.endsWith(".tikzcd") ? "quiver" : "canvas";
   visited.clear();
-  visited.add(preferred);
+  visited.add("editor");
   active.left = null;
-  active.right = preferred;
+  active.right = "editor";
   editorStatuses.preview = "";
-  editorStatuses.canvas = "";
-  editorStatuses.quiver = "";
+  editorStatuses.editor = "";
   hostError.value = document.value.recovery === "conflict" ? "The file changed on disk; recovery draft saved" : "";
   applyingDocument = false;
 }
@@ -697,9 +706,9 @@ function onKeydown(event: KeyboardEvent): void {
   }
   if ((event.ctrlKey || event.metaKey) && !event.altKey &&
       (event.key === "-" || event.key === "=" || event.key === "+" || event.key === "0")) {
-    if (isVisible("canvas")) {
+    if (isVisible("editor") && editorMode.value === "visual") {
       event.preventDefault();
-      workbenches.get("canvas")?.zoom(event.key === "0" ? "normal" : event.key === "-" ? "out" : "in");
+      workbenches.get("editor")?.zoom(event.key === "0" ? "normal" : event.key === "-" ? "out" : "in");
     }
     return;
   }

@@ -22,8 +22,6 @@
           type="button"
           :class="{ active: displayMode === provider.id }"
           :aria-pressed="displayMode === provider.id"
-          :disabled="!provider.supports(target) && displayMode !== provider.id"
-          :title="provider.supports(target) ? '' : provider.unavailableTitle(target)"
           @click="selectProvider(provider.id)"
         >
           {{ provider.label }}
@@ -236,11 +234,8 @@ const activeProvider = computed(() => {
   }
   return provider;
 });
-const unavailableMessage = computed(() =>
-  activeProvider.value.supports(props.target)
-    ? ""
-    : activeProvider.value.unavailableTitle(props.target),
-);
+// The shell shows a mode only for a source of its kind, so this is the mode's own failure on that source.
+const unavailableMessage = computed(() => activeProvider.value.sourceError(props.target) ?? "");
 
 watch(
   [unavailableMessage, () => props.target.docPath, () => props.target.sourceFrom],

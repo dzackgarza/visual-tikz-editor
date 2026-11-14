@@ -192,7 +192,6 @@ describe("standalone native file workflow", function () {
     await expect(page.locator(".tikz-standalone-status")).toContainText("Saved");
     assert.equal(await readFile(diagramPath, "utf8"), edited);
     await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`);
-    await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
     const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await quiver.locator(".vertex").nth(1).click();
     await quiver.locator(".label-input").fill("C");

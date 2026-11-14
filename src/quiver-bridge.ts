@@ -86,15 +86,10 @@ function lineMappingForBlock(block: QuiverEditableBlock): QuiverLineMapping {
   return { ok: true, lineJoiner: joiner };
 }
 
+/** Why Quiver cannot edit a tikzcd block, or null when it can. */
 export function quiverSourceError(block: QuiverEditableBlock): string | null {
-  if (block.language !== "tikzcd")
-    return `Quiver edits tikzcd diagrams; this block is ${block.language}.`;
   const mapping = lineMappingForBlock(block);
   return mapping.ok ? null : mapping.reason;
-}
-
-export function quiverCanEditBlock(block: QuiverEditableBlock): boolean {
-  return quiverSourceError(block) === null;
 }
 
 export function quiverSessionForBlock(block: QuiverEditableBlock): TikzQuiverSourceSession {

@@ -19,7 +19,7 @@ Each accepted edit to a saved file writes the file. An untitled diagram keeps a 
 
 ## Views
 
-Four views show the same source: Code, the drawing canvas, Quiver, and TeX render. Their icons sit on two sidebars. Click an icon to open its view, and click the active icon to close it. Drag an icon to the other sidebar to move the view. One open view fills the window; two open views share it with a movable divider. A view switch keeps the canvas selection, viewport, tool, and undo history.
+Three views show the same source: Code, the editor of the diagram, and TeX render. The editor is the drawing canvas for a `tikzpicture` and Quiver for a `tikzcd`. When the source changes from one kind to the other, the editor changes with it. The icons of the views sit on two sidebars. Click an icon to open its view, and click the active icon to close it. Drag an icon to the other sidebar to move the view. One open view fills the window; two open views share it with a movable divider. A view switch keeps the canvas selection, viewport, tool, and undo history.
 
 **TeX render** compiles the source with the local TeX tools that the [README](../README.md#tex-render-and-export) lists.
 
