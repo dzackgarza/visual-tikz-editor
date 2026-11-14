@@ -9,6 +9,9 @@
  * editor on a copy of that diagram. `--macros` names the MathJax macro file of
  * the document (a JSON `tex.macros` map) for Quiver. `--resources` names the
  * directory of the document: relative image and TeX input paths resolve there.
+ *
+ * A parent process that sets TIKZ_WORKBENCH_STOP_AT_STDIN_END=1 and holds the write end of
+ * this process's standard input stops the host when it ends: the desktop shell does so.
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -56,6 +59,14 @@ let untitledExtension: ".tikz" | ".tikzcd" = ".tikz";
 let documentId: string = randomUUID();
 let conflictSource: string | null = null;
 let conflictRevision: string | null = null;
+// The kernel closes the parent's end of the pipe when the parent ends for any cause, a signal
+// included, so the host cannot stay without its window. esbuild's watch mode ends the same way
+// ("watch mode will be terminated when esbuild's stdin is closed", https://esbuild.github.io/api/#watch),
+// and so does the external program of an Erlang port (https://www.erlang.org/doc/system/c_port.html).
+if (process.env.TIKZ_WORKBENCH_STOP_AT_STDIN_END === "1") {
+  process.stdin.on("end", () => process.exit(0));
+  process.stdin.resume();
+}
 const packageRoot = process.env.TIKZ_WORKBENCH_ASSETS ?? path.resolve(import.meta.dir, "..");
 const pageRoot = path.join(packageRoot, "standalone", "dist");
 /**

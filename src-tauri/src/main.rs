@@ -61,6 +61,9 @@ fn main() {
                 .shell()
                 .sidecar("workbench-host")?
                 .env("TIKZ_WORKBENCH_ASSETS", assets)
+                // The shell holds the write end of the host's standard input (CommandChild). The kernel
+                // closes it when the shell ends for any cause, and the host stops at that end of input.
+                .env("TIKZ_WORKBENCH_STOP_AT_STDIN_END", "1")
                 .args(std::env::args().skip(1))
                 .spawn()?;
             app.manage(Host(Mutex::new(Some(child))));

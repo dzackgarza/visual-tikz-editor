@@ -25,7 +25,7 @@ CARGO_BUILD_JOBS=2 just package # the Debian package in src-tauri/target/release
 just install-desktop            # package, then install it for this user
 ```
 
-`just package` runs `just build-desktop-assets` first, which compiles `standalone/server.ts` into the sidecar binary that the desktop shell starts. `CARGO_BUILD_JOBS=2` keeps the Rust build within the memory of a small machine.
+`just package` runs `just build-desktop-assets` first, which compiles `standalone/server.ts` into the sidecar binary that the desktop shell starts. The shell holds the write end of the sidecar's standard input and sets `TIKZ_WORKBENCH_STOP_AT_STDIN_END=1`, so the sidecar stops when the shell stops for any cause, a signal included. `CARGO_BUILD_JOBS=2` keeps the Rust build within the memory of a small machine.
 
 ## Tests
 
