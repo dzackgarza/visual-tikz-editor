@@ -10855,6 +10855,42 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    { viewport: { width: 1024, height: 768 } },
+    "Delete removes a pen stroke with its record and keeps the canvas, and Undo returns both",
+    async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await chooseTool(frame, input, "Pen");
+      const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const wave = (left: number, top: number): Point[] =>
+        Array.from({ length: 20 }, (_, i) => ({
+          x: box.x + left + i * 12,
+          y: box.y + top + 30 * Math.sin(i / 3),
+        }));
+      const strokes = frame.locator('[data-canvas-viewport="true"] path[data-source-id]');
+      await input.penStroke(wave(150, 200));
+      await expect(strokes).toHaveCount(1);
+      await input.penStroke(wave(500, 450));
+      await expect(strokes).toHaveCount(2);
+      const drawn = (await editorDebug(page)).source;
+      const count = (source: string, text: string) => source.split(text).length - 1;
+      await chooseTool(frame, input, "Lasso");
+      await input.touch([await strokePoint(page, strokes.first(), 0.5)]);
+      await page.keyboard.press("Delete");
+      await expect.poll(async () => count((await editorDebug(page)).source, "\\draw")).toBe(1);
+      const deleted = (await editorDebug(page)).source;
+      for (const part of ["% workbench-ink:", "% workbench-ink-end:", "\\begin{scope}", "\\end{scope}"]) {
+        assert.equal(count(deleted, part), 1, `occurrences of ${part} after Delete`);
+      }
+      // The canvas paints the stroke that remains.
+      await expect(strokes).toHaveCount(1);
+      await page.locator(".document-bar").getByRole("button", { name: "Undo", exact: true }).click();
+      await expect.poll(async () => (await editorDebug(page)).source).toBe(drawn);
+      await expect(strokes).toHaveCount(2);
+    },
+  );
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
