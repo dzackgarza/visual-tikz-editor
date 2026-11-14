@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -12,6 +12,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+import { z } from "zod";
 import type { EditorSnapshot, EditorSnapshotResult, HostCommand } from "../src/host";
 import { snapshotResultSchema } from "../vendor/tikz-editor/embed/src/snapshot-protocol";
 import { geometryTraces } from "./geometry-traces";
@@ -11667,6 +11668,62 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(authored);
         await expect(page.frameLocator('iframe[title="TikZ visual editor"]').locator("path[data-source-id]")).toHaveCount(1);
         await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
+      },
+    );
+
+    story(
+      { viewport: tablet },
+      `a start on a view-state file of an older build shows the file and the reason, and keeps the draft, in ${tablet.name}`,
+      async function () {
+        const authored = String.raw`\begin{tikzpicture}
+% a draft that an unreadable state file must not cost
+\draw (1,2) -- (4,5);
+\end{tikzpicture}`;
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await pasteCode(page, authored);
+        await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
+        const home = workbench.configHome;
+        const stateDirectory = join(home, "visual-tikz-editor");
+        const viewStateFile = join(stateDirectory, "view-state.json");
+        // A pan makes the page report its view, and the host then writes the view of this draft.
+        const input = await TabletInput.attach(page);
+        await input.touch(await emptyCanvasGesture(editorFrame(page)));
+        await expect.poll(() => readdir(stateDirectory)).toContain("view-state.json");
+        await page.goto("about:blank");
+        await workbench.stop();
+        // An entry of an older build has no `locked` and no `hidden` (issue #80).
+        const written = z.record(z.string(), z.record(z.string(), z.json())).parse(JSON.parse(await readFile(viewStateFile, "utf8")));
+        const older = JSON.stringify(
+          Object.fromEntries(
+            Object.entries(written).map(([key, view]) => [
+              key,
+              Object.fromEntries(Object.entries(view).filter(([field]) => field !== "locked" && field !== "hidden")),
+            ]),
+          ),
+        );
+        await writeFile(viewStateFile, older);
+        const recovery = await readFile(join(stateDirectory, "recovery.json"), "utf8");
+
+        workbench = await startWorkbench(process.env, home);
+        url = workbench.url;
+        await page.goto(url);
+        const failure = page.getByRole("alert");
+        await expect(failure, "the window does not name the file that cannot be read").toContainText(viewStateFile);
+        await expect(failure, "the window does not name the field that the file lacks").toContainText("locked");
+        await expect(page.locator('iframe[title="TikZ visual editor"]')).toHaveCount(0);
+        assert.equal(await readFile(viewStateFile, "utf8"), older, "the start changed the file that it cannot read");
+        assert.equal(await readFile(join(stateDirectory, "recovery.json"), "utf8"), recovery, "the start changed the draft");
+
+        // The person moves the file away, as the window says; the next start opens the draft.
+        await page.goto("about:blank");
+        await workbench.stop();
+        await rename(viewStateFile, `${viewStateFile}.moved`);
+        workbench = await startWorkbench(process.env, home);
+        url = workbench.url;
+        await page.goto(url);
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await expect.poll(() => page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n"))).toBe(authored);
       },
     );
   }
