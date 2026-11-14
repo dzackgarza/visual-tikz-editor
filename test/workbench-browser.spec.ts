@@ -5098,6 +5098,103 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `the press that closes the context menu keeps the selection, by pen, finger, and mouse, in ${tablet.name}`,
+      async function () {
+        await author(axesFigure);
+        const frame = editorFrame(page);
+        const line = frame.locator('svg [data-source-id="path:4"]').first();
+        await expect(line).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const lasso = toolbarItem(frame, "Lasso");
+        const toolMenu = activeToolMenu(frame);
+        const menu = frame.getByRole("menu").first();
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        // The selection strip sits above the line; these points are below it.
+        const empty = [at(10, -1), at(-1, -1), at(11, 2)];
+        const contacts: [string, (point: Point) => Promise<void>][] = [
+          ["pen", (point) => input.penStroke([point])],
+          ["finger", (point) => input.touch([point])],
+          ["mouse", (point) => page.mouse.click(point.x, point.y)],
+        ];
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([await strokePoint(page, line, 0.5)]);
+        await expect.poll(selection, { message: "A tap did not select the line" }).toEqual(["path:4"]);
+        for (const [contact, press] of contacts) {
+          await input.longPress(await strokePoint(page, line, 0.5));
+          await expect(menu, "A long press on the selected line opened no context menu").toBeVisible();
+          await press(await pointOutside(menu, empty));
+          await expect(menu, `A ${contact} press on the canvas did not close the context menu`).toHaveCount(0);
+          // The press's own effect is complete before the next tap opens the Lasso's menu.
+          await input.touch([await stableCenter(lasso)]);
+          await expect(toolMenu).toBeVisible();
+          expect(await selection(), `The ${contact} press that closed the context menu also changed the selection`).toEqual([
+            "path:4",
+          ]);
+          await input.touch([await stableCenter(lasso)]);
+          await expect(toolMenu).toHaveCount(0);
+        }
+        // With no menu open the same tap clears the selection.
+        await input.penStroke([empty[0]]);
+        await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a press on the canvas closes File, Export, and More and places nothing, and Escape closes them, in ${tablet.name}`,
+      async function () {
+        await author(axesFigure);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const empty = [at(10, 10), at(-1, -1), at(10, -1)];
+        const shapes = toolbarItem(frame, "Shapes");
+        const toolMenu = activeToolMenu(frame);
+        const paths = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        const contacts: [string, (point: Point) => Promise<void>][] = [
+          ["pen", (point) => input.penStroke([point])],
+          ["finger", (point) => input.touch([point])],
+          ["mouse", (point) => page.mouse.click(point.x, point.y)],
+        ];
+        await chooseTool(frame, input, "Shapes");
+        for (const name of ["File", "Export", "More"]) {
+          const shellMenu = page.locator(`details.file-menu[aria-label="${name}"]`);
+          const open = async () => {
+            await input.touch([await stableCenter(shellMenu.locator("summary"))]);
+            await expect(shellMenu).toHaveAttribute("open", "");
+          };
+          for (const [contact, press] of contacts) {
+            await open();
+            await press(await pointOutside(shellMenu.locator(".file-menu-items"), empty));
+            await expect(shellMenu, `A ${contact} press on the canvas did not close ${name}`).not.toHaveAttribute("open");
+            // The press's own effect is complete before the next tap opens the Shapes menu.
+            await input.touch([await stableCenter(shapes)]);
+            await expect(toolMenu).toBeVisible();
+            expect(await paths(), `The ${contact} press that closed ${name} also placed an object`).toBe(5);
+            await input.touch([await stableCenter(shapes)]);
+            await expect(toolMenu).toHaveCount(0);
+          }
+          await open();
+          await page.keyboard.press("Escape");
+          await expect(shellMenu, `Escape did not close ${name}`).not.toHaveAttribute("open");
+        }
+        // With no menu open the same press draws.
+        const from = at(8, 9);
+        await input.penStroke(Array.from({ length: 8 }, (_, i) => ({ x: from.x + i * 12, y: from.y })));
+        await expect.poll(paths, { message: "A drag with Shapes drew nothing" }).toBe(6);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `a pen tap with Text places plain text in edit, and the keys typed next become that text, in ${tablet.name}`,
       async function () {
         await editorReady(page);
