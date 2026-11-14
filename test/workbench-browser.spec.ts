@@ -10809,6 +10809,52 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  story(
+    { viewport: { width: 1024, height: 768 } },
+    "keeps an earlier pen stroke in view when a second stroke is drawn at the smallest zoom",
+    async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await chooseTool(frame, input, "Pen");
+      const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const stage = frame.locator("[data-canvas-scale]");
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.keyboard.down("Control");
+      let scale = await stage.getAttribute("data-canvas-scale");
+      for (;;) {
+        await page.mouse.wheel(0, 240);
+        await editorReady(page);
+        const next = await stage.getAttribute("data-canvas-scale");
+        if (next === scale) break;
+        scale = next;
+      }
+      await page.keyboard.up("Control");
+      const wave = (left: number, top: number): Point[] =>
+        Array.from({ length: 20 }, (_, i) => ({
+          x: box.x + left + i * 12,
+          y: box.y + top + 30 * Math.sin(i / 3),
+        }));
+      const strokes = frame.locator('[data-canvas-viewport="true"] path[data-source-id]');
+      await input.penStroke(wave(150, 200));
+      await expect(strokes).toHaveCount(1);
+      await input.penStroke(wave(500, 450));
+      await expect(strokes).toHaveCount(2);
+      assert.equal((await editorDebug(page)).source.match(/% workbench-ink-end:/g)?.length, 2);
+      // The first stroke is no longer selected, so only its own paint shows it. A line is painted
+      // at least one device pixel wide at every zoom, as pdf.js paints the lines of a PDF
+      // (`getScaleForStroking`, src/display/canvas.js) and as Inkscape's Visible Hairlines mode does.
+      const paintedWidths = await strokes.evaluateAll((paths) =>
+        paths.map((path) => {
+          const matrix = (path as SVGGraphicsElement).getScreenCTM()!;
+          return parseFloat(getComputedStyle(path).strokeWidth) * Math.hypot(matrix.a, matrix.b);
+        }),
+      );
+      for (const width of paintedWidths) {
+        assert.ok(width >= 0.99, `a stroke is painted ${width} px wide`);
+      }
+    },
+  );
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
