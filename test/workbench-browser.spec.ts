@@ -4986,6 +4986,115 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  /** A figure with two axes from the origin to 10, three objects, and empty canvas round them. */
+  const axesFigure = String.raw`\begin{tikzpicture}
+\draw (0,0) -- (10,0);
+\draw (0,0) -- (0,10);
+\draw (2,4) circle (1);
+\draw (6,4) circle (1);
+\draw (2,7) -- (6,7);
+\path[use as bounding box] (-2,-2) rectangle (12,12);
+\end{tikzpicture}`;
+
+  /** The first of `points` that is at least 80 px outside the open `menu`. */
+  async function pointOutside(menu: Locator, points: Point[]): Promise<Point> {
+    const box = await layoutBox(menu);
+    const clear = 80;
+    const free = points.find(
+      (point) =>
+        point.x < box.x - clear ||
+        point.x > box.x + box.width + clear ||
+        point.y < box.y - clear ||
+        point.y > box.y + box.height + clear,
+    );
+    assert.ok(free, "The menu covers every empty point of the figure");
+    return free;
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `the pen tap that closes the Shapes Active Tool Menu places nothing, and a pen stroke that closes the Pen's menu is drawn, in ${tablet.name}`,
+      async function () {
+        await author(axesFigure);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const empty = [at(10, 10), at(-1, -1), at(10, -1)];
+        const menu = activeToolMenu(frame);
+        const paths = async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
+        await chooseTool(frame, input, "Shapes");
+        await input.touch([await stableCenter(toolbarItem(frame, "Shapes"))]);
+        await expect(menu).toBeVisible();
+        await input.penStroke([await pointOutside(menu, empty)]);
+        await expect(menu, "A tap on the canvas did not close the menu").toHaveCount(0);
+        // The tap's own effect is complete before the next tap opens the menu again.
+        await input.touch([await stableCenter(toolbarItem(frame, "Shapes"))]);
+        await expect(menu).toBeVisible();
+        expect(await paths(), "The tap that closed the menu also placed an object").toBe(5);
+        await input.touch([await stableCenter(toolbarItem(frame, "Shapes"))]);
+        await expect(menu).toHaveCount(0);
+        // With no menu open the same press draws.
+        const from = at(8, 9);
+        await input.penStroke(Array.from({ length: 8 }, (_, i) => ({ x: from.x + i * 12, y: from.y })));
+        await expect.poll(paths, { message: "A drag with Shapes drew nothing" }).toBe(6);
+        // Ink marks on contact: the stroke that closes the Pen's menu is drawn.
+        await chooseTool(frame, input, "Pen");
+        await input.touch([await stableCenter(toolbarItem(frame, "Pen"))]);
+        await expect(menu).toBeVisible();
+        const start = await pointOutside(menu, empty);
+        await input.penStroke(Array.from({ length: 8 }, (_, i) => ({ x: start.x + i * 5, y: start.y + (i % 2) * 6 })));
+        await expect(menu, "A pen stroke on the canvas did not close the Pen's menu").toHaveCount(0);
+        await expect.poll(paths, { message: "The stroke that closed the Pen's menu was not drawn" }).toBe(7);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `the pen tap that closes the Lasso's Active Tool Menu keeps the selection, in ${tablet.name}`,
+      async function () {
+        await author(axesFigure);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const lasso = toolbarItem(frame, "Lasso");
+        const menu = activeToolMenu(frame);
+        const selection = async () => [...(await editorDebug(page)).selection].sort();
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([
+          await strokePoint(page, frame.locator('svg [data-source-id="path:4"]').first(), 0.5),
+        ]);
+        await expect.poll(selection, { message: "A tap did not select the line" }).toEqual(["path:4"]);
+        await input.touch([await stableCenter(lasso)]);
+        await expect(menu).toBeVisible();
+        // The selection strip sits above the line; these points are below it.
+        const empty = [at(10, -1), at(-1, -1), at(11, 2)];
+        await input.penStroke([await pointOutside(menu, empty)]);
+        await expect(menu, "A tap on the canvas did not close the menu").toHaveCount(0);
+        // The tap's own effect is complete before the next tap opens the menu again.
+        await input.touch([await stableCenter(lasso)]);
+        await expect(menu).toBeVisible();
+        expect(await selection(), "The tap that closed the menu also cleared the selection").toEqual(["path:4"]);
+        // A press on the selection strip is a press outside the menu.
+        const more = frame.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "More", exact: true });
+        await input.touch([await stableCenter(more)]);
+        await expect(menu, "A press on the selection strip did not close the menu").toHaveCount(0);
+        await expect(more).toHaveAttribute("aria-expanded", "true");
+        await input.touch([await stableCenter(more)]);
+        await expect(more).toHaveAttribute("aria-expanded", "false");
+        // With no menu open the same tap clears the selection.
+        await input.penStroke([empty[0]]);
+        await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
+      },
+    );
+  }
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
