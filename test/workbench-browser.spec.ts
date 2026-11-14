@@ -5566,7 +5566,7 @@ describe("standalone workbench host boundary", function () {
 
     story(
       { viewport: tablet },
-      `a text whose edit ends with every character deleted leaves the diagram, and no step of the history changes nothing, in ${tablet.name}`,
+      `a text whose edit ends with no character to show leaves the diagram, and no step of the history changes nothing, in ${tablet.name}`,
       async function () {
         await author(axesFigure);
         const frame = editorFrame(page);
@@ -5584,16 +5584,33 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(source, { message: "The typed key did not become the first text" }).toMatch(/\{a\};/);
         await page.keyboard.press("Escape");
         const withFirst = await source();
-        // A new text: typed, emptied, ended.
+        // A new text: typed, emptied, ended. A space alone shows nothing.
         await input.penStroke([at(9, 6)]);
         await expect(textBox, "The new text is not in edit").toBeFocused();
         await page.keyboard.type("z");
         await expect.poll(source, { message: "The typed key did not become the new text" }).toMatch(/\{z\};/);
         await page.keyboard.press("Backspace");
+        await page.keyboard.type(" ");
         await page.keyboard.press("Escape");
         await expect
           .poll(source, { message: "The new text whose characters were all deleted stayed in the diagram" })
           .toBe(withFirst);
+        // A new text that is emptied, and whose edit a tap elsewhere ends: the tap places the next text.
+        await input.penStroke([at(9, 3)]);
+        await expect(textBox, "The text to empty is not in edit").toBeFocused();
+        await page.keyboard.type("y");
+        await expect.poll(source, { message: "The typed key did not become the text to empty" }).toMatch(/\{y\};/);
+        await page.keyboard.press("Backspace");
+        await input.penStroke([at(5, 3)]);
+        await expect(textBox, "The tap that ended the edit of the emptied text placed no text").toBeFocused();
+        await page.keyboard.type("w");
+        await expect.poll(source, { message: "The typed key did not become the next text" }).toMatch(/\{w\};/);
+        await page.keyboard.press("Escape");
+        const withSecond = await source();
+        expect(
+          withSecond.replace(/^.*\{w\};\n/mu, ""),
+          "The emptied text stayed in the diagram when a tap ended its edit",
+        ).toBe(withFirst);
         // A text of the diagram: opened by a double tap, emptied, ended.
         await chooseTool(frame, input, "Lasso");
         await input.doubleTap(at(9, 9));
@@ -5603,13 +5620,17 @@ describe("standalone workbench host boundary", function () {
         await page.keyboard.press("Escape");
         await expect
           .poll(source, { message: "The text whose characters were all deleted stayed in the diagram" })
-          .toBe(axesFigure);
-        // The removal of the first text is one step. Before it, the history holds the first text only.
+          .toBe(withSecond.replace(/^.*\{a\};\n/mu, ""));
+        // The removal of the first text is one step. Before it, the history holds the two texts that stay, one step each.
         await input.touch([await stableCenter(documentHistory("Undo"))]);
-        await expect.poll(source, { message: "One Undo did not bring back the emptied text" }).toBe(withFirst);
+        await expect.poll(source, { message: "One Undo did not bring back the emptied text" }).toBe(withSecond);
         await input.touch([await stableCenter(documentHistory("Undo"))]);
         await expect
-          .poll(source, { message: "The new text that was typed and emptied left a step in the history" })
+          .poll(source, { message: "A text that was typed and emptied left a step in the history" })
+          .toBe(withFirst);
+        await input.touch([await stableCenter(documentHistory("Undo"))]);
+        await expect
+          .poll(source, { message: "A text that was typed and emptied left a step in the history" })
           .toBe(axesFigure);
       },
     );

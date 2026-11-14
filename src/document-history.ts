@@ -31,10 +31,13 @@ export class DocumentHistory {
   // The step of the last edit, and the time it began; the edits of one step join into one Undo step.
   private lastStep: string | null = null;
   private lastStepTime = 0;
+  // The state before the first edit of the last step.
+  private stepStart: EditorState;
   private readonly listeners = new Set<(change: DocumentChange) => void>();
 
   constructor(source: string) {
     this.state = this.create(source);
+    this.stepStart = this.state;
   }
 
   private create(source: string): EditorState {
@@ -72,11 +75,16 @@ export class DocumentHistory {
   /**
    * One edit of the source. Consecutive edits of one `editStep` are one Undo step: a canvas
    * gesture names its frame step, and the source editor names `CODE_STEP` with the CodeMirror
-   * `userEvent` of its transaction.
+   * `userEvent` of its transaction. A step of a view other than the source editor that brings
+   * the source back to the source at its start is no step: the history is the history from
+   * before that step, as tldraw adds no entry for changes that cancel
+   * (`flushPendingDiff` in https://github.com/tldraw/tldraw/blob/main/packages/editor/src/lib/editor/managers/HistoryManager/HistoryManager.ts).
+   * A character typed and deleted in the source editor is a step, as in CodeMirror.
    */
   edit(changes: ChangeSpec, editStep: string, userEvent?: string): void {
     const continues = editStep === this.lastStep && editStep !== CODE_STEP;
     const time = continues ? this.lastStepTime : Date.now();
+    if (!continues) this.stepStart = this.state;
     const tr = this.state.update({
       changes,
       annotations: [
@@ -90,6 +98,13 @@ export class DocumentHistory {
     void tr.state;
     if (editStep !== this.lastStep) this.lastStepTime = time;
     this.lastStep = editStep;
+    if (continues && tr.state.doc.eq(this.stepStart.doc)) {
+      // The next edit of this step starts a new step: the history holds no event to join.
+      this.lastStep = null;
+      this.state = this.stepStart;
+      if (!tr.changes.empty) this.notify(tr.changes, false);
+      return;
+    }
     this.apply(tr, false);
   }
 

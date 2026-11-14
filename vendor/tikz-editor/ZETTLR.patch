@@ -1392,7 +1392,7 @@ index 00000000..ee36045d
 +    lastEditWarningToken: next.lastEditWarningToken + (released ? 1 : 0) };
 +}
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6e..b27305ca 100644
+index e0845d6e..b020a3c4 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
 @@ -1,3 +1,5 @@
@@ -1709,7 +1709,7 @@ index e0845d6e..b27305ca 100644
            lastEditWarningMessage: actionWarning,
            lastEditWarningToken:
              actionWarning != null || doc.lastEditWarningMessage != null
-@@ -849,27 +805,24 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -849,27 +805,21 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
          action.action.kind === "positionNodeRelativeTo" || action.action.kind === "convertNodePositionToAbsolute" ? "set-property" :
          action.action.kind === "alignElements" ? "align" :
          action.action.kind === "distributeElements" ? "distribute" :
@@ -1730,18 +1730,20 @@ index e0845d6e..b27305ca 100644
 -      const lastEntry = truncated.at(lastIndex);
 +      const lastEntry = activeDoc.lastStep;
  
-       if (
-         mergeKey &&
-         lastEntry?.mergeKey === mergeKey &&
-         lastEntry.kind === historyKind
-       ) {
+-      if (
+-        mergeKey &&
+-        lastEntry?.mergeKey === mergeKey &&
+-        lastEntry.kind === historyKind
+-      ) {
 -        const nextHistory = [...truncated];
 -        nextHistory[lastIndex] = {
++      // One merge key is one step, whatever its actions are: the removal of a text that an edit emptied joins that edit.
++      if (mergeKey && lastEntry?.mergeKey === mergeKey) {
 +        const mergedStep: HistoryEntry = {
            ...lastEntry,
            label: actionLabel(historyKind),
            forward: result.patches,
-@@ -883,7 +836,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -883,7 +833,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
            lastEditChangedSourceIds: incrementalChangedSourceIds,
            lastEditChangeToken: doc.lastEditChangeToken + 1,
            lastEditPatches: incrementalPatches,
@@ -1750,7 +1752,7 @@ index e0845d6e..b27305ca 100644
            lastEditWarningMessage: actionWarning,
            lastEditWarningToken:
              actionWarning != null || doc.lastEditWarningMessage != null
-@@ -892,8 +845,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -892,8 +842,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
            selectedElementIds: nextSelection,
            focusedScopeId: nextFocusedScopeId,
            activeHandleId: null,
@@ -1760,7 +1762,7 @@ index e0845d6e..b27305ca 100644
            dirty: result.newSource !== doc.savedSource
          }));
          break;
-@@ -918,7 +870,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -918,7 +867,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
          lastEditChangedSourceIds: incrementalChangedSourceIds,
          lastEditChangeToken: doc.lastEditChangeToken + 1,
          lastEditPatches: incrementalPatches,
@@ -1769,7 +1771,7 @@ index e0845d6e..b27305ca 100644
          lastEditWarningMessage: actionWarning,
          lastEditWarningToken:
            actionWarning != null || doc.lastEditWarningMessage != null
-@@ -927,13 +879,53 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -927,13 +876,53 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
          selectedElementIds: nextSelection,
          focusedScopeId: nextFocusedScopeId,
          activeHandleId: null,
@@ -1825,7 +1827,7 @@ index e0845d6e..b27305ca 100644
      case "SET_SOURCE_TRANSIENT": {
        const documentId = activeDocumentIdFromAction(state, action.documentId);
        workspace = updateDocument(workspace, documentId, (doc) => {
-@@ -963,67 +955,26 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -963,67 +952,26 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
  
@@ -1910,7 +1912,7 @@ index e0845d6e..b27305ca 100644
        break;
      }
  
-@@ -1094,10 +1045,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1094,10 +1042,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, toolMode: action.mode };
        break;
  
@@ -1929,7 +1931,7 @@ index e0845d6e..b27305ca 100644
      case "SET_HOVERED_ELEMENT":
        if (ui.hoveredElementId === action.id) return state;
        ui = { ...ui, hoveredElementId: action.id };
-@@ -1108,16 +1067,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1108,16 +1064,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, activeCanvasDragKind: action.kind };
        break;
  
@@ -1946,7 +1948,7 @@ index e0845d6e..b27305ca 100644
      case "SET_BUCKET_FILL_COLOR": {
        const nextValue = action.value.trim().toLowerCase();
        if (nextValue.length === 0 || ui.bucketFillColor === nextValue) return state;
-@@ -1182,16 +1131,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1182,16 +1128,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        }
        break;
  
@@ -1963,7 +1965,7 @@ index e0845d6e..b27305ca 100644
      case "REQUEST_FIT_TO_CONTENT":
        ui = { ...ui, fitToContentRequestToken: ui.fitToContentRequestToken + 1 };
        break;
-@@ -1227,11 +1166,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1227,11 +1163,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        };
        break;
  
@@ -8410,7 +8412,7 @@ index cf4cf2cf..e35aad8e 100644
 +}
 +.cornerButtonActive { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..cd2b58e5 100644
+index 4e22ccfa..9b5711de 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,19 @@
@@ -8961,7 +8963,31 @@ index 4e22ccfa..cd2b58e5 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1318,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1002,10 +1274,23 @@ export const CanvasPanel = memo(function CanvasPanel({
+     canvasTextEditStateRef.current = canvasTextEditState;
+   }, [canvasTextEditState]);
+ 
++  // The text whose edit ended with no character, and the step of the history that the edit made. The text leaves the
++  // diagram when the scene shows the source that the edit left.
++  const emptiedTextRef = useRef<{
++    sourceId: string;
++    step: NonNullable<ReturnType<typeof useEditorStore.getState>["lastStep"]>;
++  } | null>(null);
++
+   const dispatchCanvasTextEditAction = useCallback((action: CanvasTextEditAction) => {
++    const ended = canvasTextEditStateRef.current.session;
+     const reduced = reduceCanvasTextEdit(canvasTextEditStateRef.current, action);
+     canvasTextEditStateRef.current = reduced.state;
+     setCanvasTextEditState(reduced.state);
++    if (ended !== null && ended.sourceId !== reduced.state.session?.sourceId && ended.text.trimEnd() === "") {
++      const step = useEditorStore.getState().lastStep;
++      // An edit that changed nothing made no step: the text was empty before it, and it stays.
++      if (step?.mergeKey === ended.historyMergeKey) emptiedTextRef.current = { sourceId: ended.sourceId, step };
++    }
+     for (const effect of reduced.effects) {
+       if (effect.type !== "apply_source_patch") {
+         continue;
+@@ -1046,22 +1331,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -8984,7 +9010,7 @@ index 4e22ccfa..cd2b58e5 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1099,7 +1355,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1099,7 +1368,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        type: "APPLY_EDIT_ACTION",
        action: result.action
      });
@@ -8993,7 +9019,7 @@ index 4e22ccfa..cd2b58e5 100644
    }, [contextMenuContextRef, dispatch]);
    const handlePositionNodeRelativeToCommand = useCallback(() => {
      const state = canvasCommandStateRef.current;
-@@ -1132,9 +1388,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,9 +1401,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
@@ -9006,7 +9032,7 @@ index 4e22ccfa..cd2b58e5 100644
  
    const dispatchCanvasTransform = useCallback(
      (transform: CanvasTransform) => {
-@@ -1156,16 +1415,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1156,16 +1428,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const interactionSvgRef = useRef<SVGSVGElement | null>(null);
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
@@ -9037,7 +9063,7 @@ index 4e22ccfa..cd2b58e5 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1235,6 +1506,24 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1235,6 +1519,24 @@ export const CanvasPanel = memo(function CanvasPanel({
        return { element, transform };
      });
    }, [pathAttachedNodePreview, snapshot.source]);
@@ -9062,7 +9088,7 @@ index 4e22ccfa..cd2b58e5 100644
    const pendingTouchViewportRef = useRef<PendingTouchViewport | null>(null);
  
    // Cache viewport boundary once on drag-start, clear on drag-end (avoids getBoundingClientRect per frame)
-@@ -1265,10 +1554,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1265,10 +1567,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      [setActiveCanvasDragKind]
    );
  
@@ -9073,7 +9099,7 @@ index 4e22ccfa..cd2b58e5 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1298,9 +1583,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1298,9 +1596,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      setPendingBezier(null);
      setMarqueeDraft(null);
      setMagnifierState(null);
@@ -9084,7 +9110,7 @@ index 4e22ccfa..cd2b58e5 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1605,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1618,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -9095,7 +9121,7 @@ index 4e22ccfa..cd2b58e5 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,55 +1789,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,55 +1802,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -9151,7 +9177,7 @@ index 4e22ccfa..cd2b58e5 100644
    const pendingNodePositionTargetAnchors = useMemo(
      () =>
        collectRelativePositionTargetAnchors({
-@@ -1751,21 +1982,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1751,21 +1995,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    ]);
  
@@ -9174,7 +9200,7 @@ index 4e22ccfa..cd2b58e5 100644
        if (event.key !== "Escape" && !isUndo) {
          return;
        }
-@@ -1777,16 +1999,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1777,16 +2012,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      return () => { window.removeEventListener("keydown", handleKeyDown, true); };
    }, [clearPendingNodePositionTargetPick, pendingNodePositionTargetPick]);
  
@@ -9191,7 +9217,7 @@ index 4e22ccfa..cd2b58e5 100644
    const {
      nodeAnchorTargets,
      matrixCellAnchorHints,
-@@ -1810,19 +2022,42 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +2035,42 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -9236,7 +9262,7 @@ index 4e22ccfa..cd2b58e5 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,16 +2073,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,16 +2086,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -9260,7 +9286,7 @@ index 4e22ccfa..cd2b58e5 100644
      svgResultRef,
      canvasTransformRef,
      guideDragRef,
-@@ -1857,44 +2098,51 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2111,51 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -9322,7 +9348,7 @@ index 4e22ccfa..cd2b58e5 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1921,15 +2169,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1921,15 +2182,19 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const applyActionWithFeedback = useCallback(
@@ -9351,7 +9377,7 @@ index 4e22ccfa..cd2b58e5 100644
          evaluateOptions: { sourceFingerprint, textEngine: textEngineRef.current },
          parseOptions: { ...editParseOptions, propertyWriteMode: "drag-frame", sourceFingerprint }
        });
-@@ -1940,13 +2192,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1940,13 +2205,15 @@ export const CanvasPanel = memo(function CanvasPanel({
            setWarning(`${result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
          }
  
@@ -9368,7 +9394,7 @@ index 4e22ccfa..cd2b58e5 100644
              precomputedResult: result
            });
          }
-@@ -1975,19 +2229,312 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,19 +2242,341 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -9680,10 +9706,39 @@ index 4e22ccfa..cd2b58e5 100644
 +    if (toolMode !== "addNode") discardUntypedText();
 +  }, [discardUntypedText, toolMode]);
 +
++  // A text whose edit ended with no character leaves the diagram, as tldraw deletes a text shape whose text is empty
++  // after `trimEnd` when its edit ends (`onEditEnd` in
++  // https://github.com/tldraw/tldraw/blob/main/packages/tldraw/src/lib/shapes/text/TextShapeUtil.tsx). Such a node draws
++  // nothing, and a person cannot find it again. A node that has a name is a coordinate that paths can use, and a node
++  // that draws a border or a fill still shows: those stay. The removal joins the step of the edit, so one Undo brings
++  // the text back. The result is true while the source is about to change.
++  const removeEmptiedText = useCallback((): boolean => {
++    const emptied = emptiedTextRef.current;
++    if (!emptied) return false;
++    const current = useEditorStore.getState();
++    if (current.lastStep !== emptied.step || current.source !== emptied.step.sourceAfter) {
++      // A later edit, or Undo, changed the document.
++      emptiedTextRef.current = null;
++      return false;
++    }
++    if (snapshot.source !== current.source) return true;
++    emptiedTextRef.current = null;
++    const named = snapshot.semanticResult?.nodeAnchorTargets.some((target) => target.nodeSourceId === emptied.sourceId);
++    const drawn = snapshot.scene?.elements.some(
++      (part) => part.sourceRef.sourceId === emptied.sourceId && part.kind !== "Text"
++    );
++    if (named || drawn) return false;
++    return applyActionWithFeedback({ kind: "deleteElement", elementId: emptied.sourceId }, emptied.step.mergeKey).sourceChanged;
++  }, [applyActionWithFeedback, snapshot.scene, snapshot.semanticResult, snapshot.source]);
++
++  useEffect(() => {
++    removeEmptiedText();
++  }, [removeEmptiedText, textEditingSession]);
++
    const commitPathToolSegment = useCallback((segment: PathToolGestureSegment) => {
      setPathDraft((previousDraft) => {
        if (!previousDraft) {
-@@ -2055,69 +2602,254 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,69 +2644,254 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -9974,7 +10029,7 @@ index 4e22ccfa..cd2b58e5 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2864,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2906,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -9982,7 +10037,7 @@ index 4e22ccfa..cd2b58e5 100644
          return;
        }
  
-@@ -2141,7 +2872,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2914,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -9990,7 +10045,7 @@ index 4e22ccfa..cd2b58e5 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2888,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2930,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -9998,7 +10053,7 @@ index 4e22ccfa..cd2b58e5 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2902,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2944,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -10028,7 +10083,7 @@ index 4e22ccfa..cd2b58e5 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -2717,9 +3463,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2717,9 +3505,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      return () => { textarea.removeEventListener("beforeinput", handleBeforeInput); };
    }, [dispatchTextEditBeforeInputIntent, textEditingSession]);
  
@@ -10040,7 +10095,7 @@ index 4e22ccfa..cd2b58e5 100644
        return;
      }
      if (document.activeElement !== textarea) {
-@@ -2730,16 +3477,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2730,16 +3519,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      if (textarea.selectionStart !== start || textarea.selectionEnd !== end) {
        textarea.setSelectionRange(start, end);
      }
@@ -10057,7 +10112,7 @@ index 4e22ccfa..cd2b58e5 100644
    }, [textEditingSession, textEditPopupHeight]);
  
    useEffect(() => {
-@@ -3010,7 +3747,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3010,7 +3789,9 @@ export const CanvasPanel = memo(function CanvasPanel({
      [handleNodePositionTargetPick, suppressNextBackgroundClickRef]
    );
  
@@ -10068,7 +10123,7 @@ index 4e22ccfa..cd2b58e5 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3049,12 +3788,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3049,12 +3830,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          setWarning(`${resolution.result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
        }
  
@@ -10085,7 +10140,7 @@ index 4e22ccfa..cd2b58e5 100644
      },
      setSnapLines,
      logSnapDebug,
-@@ -3064,9 +3806,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3848,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -10095,7 +10150,7 @@ index 4e22ccfa..cd2b58e5 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3816,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3858,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -10103,7 +10158,7 @@ index 4e22ccfa..cd2b58e5 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3887,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3929,10 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -10115,7 +10170,7 @@ index 4e22ccfa..cd2b58e5 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3914,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3956,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -10125,7 +10180,7 @@ index 4e22ccfa..cd2b58e5 100644
      ]
    );
  
-@@ -3192,6 +3936,64 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3978,64 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -10190,12 +10245,13 @@ index 4e22ccfa..cd2b58e5 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3218,14 +4020,23 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3218,14 +4062,24 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportRef,
      toolMode,
      closeTextEditingSession,
 +    placeTextInEdit,
 +    discardUntypedText,
++    removeEmptiedText,
 +    textInEdit: textEditingSession !== null || pendingTextEditTargetId !== null,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -10214,7 +10270,7 @@ index 4e22ccfa..cd2b58e5 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +4059,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4102,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -10225,7 +10281,7 @@ index 4e22ccfa..cd2b58e5 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,17 +4082,371 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,17 +4125,371 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -10599,7 +10655,7 @@ index 4e22ccfa..cd2b58e5 100644
  
    const {
      onViewportKeyDown,
-@@ -3306,6 +4475,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4518,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -10607,7 +10663,7 @@ index 4e22ccfa..cd2b58e5 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4500,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4543,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -10632,7 +10688,7 @@ index 4e22ccfa..cd2b58e5 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4618,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4661,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -10667,7 +10723,7 @@ index 4e22ccfa..cd2b58e5 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4639,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4682,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -10675,7 +10731,7 @@ index 4e22ccfa..cd2b58e5 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4653,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4696,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -10683,7 +10739,7 @@ index 4e22ccfa..cd2b58e5 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3528,12 +4675,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3528,12 +4718,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      resolveEditableTextTargetById,
      resolveRenderedMathTextElement,
      viewportRef,
@@ -10698,7 +10754,7 @@ index 4e22ccfa..cd2b58e5 100644
      canvasTransform,
      svgResult
    });
-@@ -3543,7 +4690,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3543,7 +4733,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      if (!pending) {
        return;
      }
@@ -10708,7 +10764,7 @@ index 4e22ccfa..cd2b58e5 100644
        return;
      }
  
-@@ -3577,12 +4725,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3577,12 +4768,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          );
  
      dispatch({ type: "SELECT", id: selectedId, additive: false });
@@ -10725,7 +10781,7 @@ index 4e22ccfa..cd2b58e5 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4778,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4821,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -10734,7 +10790,7 @@ index 4e22ccfa..cd2b58e5 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4857,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4900,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -10758,7 +10814,7 @@ index 4e22ccfa..cd2b58e5 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4970,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +5013,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -10766,7 +10822,7 @@ index 4e22ccfa..cd2b58e5 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4983,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +5026,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -10774,7 +10830,7 @@ index 4e22ccfa..cd2b58e5 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4994,295 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +5037,295 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -11070,7 +11126,7 @@ index 4e22ccfa..cd2b58e5 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5302,27 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5345,27 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -11099,7 +11155,7 @@ index 4e22ccfa..cd2b58e5 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5339,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5382,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -11115,7 +11171,7 @@ index 4e22ccfa..cd2b58e5 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3903,16 +5364,33 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3903,16 +5407,33 @@ export const CanvasPanel = memo(function CanvasPanel({
          handleStrokeWidth={handleStrokeWidth}
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
@@ -11152,7 +11208,7 @@ index 4e22ccfa..cd2b58e5 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5398,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5441,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -11162,7 +11218,7 @@ index 4e22ccfa..cd2b58e5 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5411,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5454,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -11197,7 +11253,7 @@ index 4e22ccfa..cd2b58e5 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3947,7 +5446,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3947,7 +5489,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          }}
          dragTooltip={dragTooltip}
          dragTooltipBoundary={dragTooltipBoundaryRef.current}
@@ -11206,7 +11262,7 @@ index 4e22ccfa..cd2b58e5 100644
          copyWarningToClipboard={copyWarningToClipboard}
          onWarningBarKeyDown={onWarningBarKeyDown}
          textEditingSession={textEditingSession}
-@@ -3965,7 +5464,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3965,7 +5507,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaPaste={handleTextEditTextareaPaste}
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
@@ -11214,7 +11270,7 @@ index 4e22ccfa..cd2b58e5 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5472,26 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5515,26 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -17600,7 +17656,7 @@ index 371637b1..48ccc6a5 100644
      source,
      startTextEditingSession
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..3617da50 100644
+index 709cc1b9..53996360 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 @@ -1,18 +1,29 @@
@@ -17656,7 +17712,7 @@ index 709cc1b9..3617da50 100644
    snapshot: CanvasSnapshot;
    source: string;
    setWarning: StateSetter<string | null>;
-@@ -65,16 +82,28 @@ export type UseCanvasToolInteractionsArgs = {
+@@ -65,16 +82,30 @@ export type UseCanvasToolInteractionsArgs = {
    setFreehandDraft: StateSetter<FreehandToolDraft | null>;
    setMagnifierState: StateSetter<MagnifierState | null>;
    setDragCursorLock: StateSetter<string | null>;
@@ -17675,6 +17731,8 @@ index 709cc1b9..3617da50 100644
 +  placeTextInEdit: (action: EditAction, at: WorldPoint) => ApplyActionFeedback;
 +  /** Removes the text that the Text tool placed and that got no key; false when there is none. */
 +  discardUntypedText: () => boolean;
++  /** Removes the text whose edit ended with no character; true while that removal is about to change the source. */
++  removeEmptiedText: () => boolean;
 +  /** A text of the canvas is in edit, or its edit is about to start. */
 +  textInEdit: boolean;
    pendingAddedSelectionRef: MutableRefObject<PendingAddedSelection | null>;
@@ -17686,7 +17744,7 @@ index 709cc1b9..3617da50 100644
    pathDraft: PathToolDraft | null;
    pathSegmentDraft: Extract<DragState, { kind: "tool-path-segment" }> | null;
    dragRef: MutableRefObject<DragState | null>;
-@@ -84,6 +113,11 @@ export type UseCanvasToolInteractionsArgs = {
+@@ -84,6 +115,11 @@ export type UseCanvasToolInteractionsArgs = {
    parseOptions: CanvasEditParseOptions;
  };
  
@@ -17698,7 +17756,7 @@ index 709cc1b9..3617da50 100644
  export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
    const {
      viewportRef,
-@@ -91,12 +125,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -91,12 +127,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -17716,7 +17774,7 @@ index 709cc1b9..3617da50 100644
      snapshot,
      source,
      setWarning,
-@@ -119,6 +158,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -119,6 +160,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -17727,7 +17785,7 @@ index 709cc1b9..3617da50 100644
      magnifierState,
      pathDraftRef,
      finalizePathDraft,
-@@ -129,26 +172,40 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -129,26 +174,41 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      selectedAddMatrixRows,
      selectedAddMatrixColumns,
      creationStrokeColor,
@@ -17742,6 +17800,7 @@ index 709cc1b9..3617da50 100644
 +    parseOptions,
 +    placeTextInEdit,
 +    discardUntypedText,
++    removeEmptiedText,
 +    textInEdit
    } = args;
 +  // A press with Text that waits for the scene of the current source.
@@ -17771,7 +17830,7 @@ index 709cc1b9..3617da50 100644
    );
  
    useEffect(() => {
-@@ -200,6 +257,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -200,6 +260,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          !pendingBezier &&
          !freehandDraft &&
          (toolMode === "addNode" ||
@@ -17780,7 +17839,7 @@ index 709cc1b9..3617da50 100644
            toolMode === "addMatrix" ||
            (isToolCreateMode(toolMode) && toolMode !== "addFreehand"));
  
-@@ -211,10 +270,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -211,10 +273,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        setDragTooltip({
          kind: "tool-create",
          anchor: makeClientPoint(px(event.clientX), px(event.clientY)),
@@ -17793,7 +17852,7 @@ index 709cc1b9..3617da50 100644
    );
  
    const onBackgroundClick = useCallback(
-@@ -223,7 +282,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -223,7 +285,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          suppressNextBackgroundClickRef.current = false;
          return;
        }
@@ -17802,7 +17861,7 @@ index 709cc1b9..3617da50 100644
          return;
        }
        if (event.shiftKey || event.ctrlKey || event.metaKey) {
-@@ -234,6 +293,137 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -234,6 +296,137 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      [dispatch, suppressNextBackgroundClickRef, toolMode]
    );
  
@@ -17922,10 +17981,10 @@ index 709cc1b9..3617da50 100644
 +  );
 +
 +  useEffect(() => {
-+    if (!deferredTextPress || snapshot.source !== source) return;
++    if (!deferredTextPress || snapshot.source !== source || removeEmptiedText()) return;
 +    setDeferredTextPress(null);
 +    if (toolMode === "addNode") placeTapObject(deferredTextPress.world, deferredTextPress, toolSnapContextNow(), null);
-+  }, [deferredTextPress, placeTapObject, snapshot.source, source, toolMode, toolSnapContextNow]);
++  }, [deferredTextPress, placeTapObject, removeEmptiedText, snapshot.source, source, toolMode, toolSnapContextNow]);
 +
 +  // While a text is in edit, the Text tool shows no placement mark: the pointer rests where the text was placed.
 +  const textToolQuiet = toolMode === "addNode" && textInEdit;
@@ -17940,7 +17999,7 @@ index 709cc1b9..3617da50 100644
    const onInteractionPointerDown = useCallback(
      (event: ReactPointerEvent<SVGSVGElement>) => {
        viewportRef.current?.focus({ preventScroll: true });
-@@ -267,7 +457,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -267,7 +460,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -17950,7 +18009,7 @@ index 709cc1b9..3617da50 100644
        if (canPan) {
          const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
          setDragState({
-@@ -280,7 +471,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -280,7 +474,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -17959,7 +18018,7 @@ index 709cc1b9..3617da50 100644
          const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
          const world = clientToWorldPoint(clientPoint, interactionSvgRef.current, svgResult.viewBox);
          if (!world) {
-@@ -295,6 +486,16 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -295,6 +489,16 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            event.preventDefault();
            return;
          }
@@ -17976,14 +18035,15 @@ index 709cc1b9..3617da50 100644
          const drawDragKind: DragState["kind"] =
            toolMode === "addPath"
              ? "tool-path-segment"
-@@ -303,7 +504,16 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -303,7 +507,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              : toolMode === "addBezier" && pendingBezier
                ? "tool-bezier-bend"
                : "tool-create";
 -        if (snapshot.source !== source) {
-+        // A tap with Text waits for the scene. A press elsewhere moves a text that got no key: that text goes, and this
-+        // press places the next one. A tap soon after a change, such as the Escape that removed a text, is not lost.
-+        if (toolMode === "addNode" && (discardUntypedText() || snapshot.source !== source)) {
++        // A tap with Text waits for the scene. A press elsewhere moves a text that got no key, and ends the edit of a text
++        // whose characters were all deleted: that text goes, and this press places the next one. A tap soon after a
++        // change, such as the Escape that removed a text, is not lost.
++        if (toolMode === "addNode" && (discardUntypedText() || removeEmptiedText() || snapshot.source !== source)) {
 +          setDeferredTextPress({ world, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
 +          event.preventDefault();
 +          return;
@@ -17994,7 +18054,7 @@ index 709cc1b9..3617da50 100644
            setWarning("Wait for recompute to finish before starting a draw gesture.");
            setSnapLines([]);
            logSnapDebug({
-@@ -316,28 +526,20 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -316,28 +530,20 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            });
            return;
          }
@@ -18029,7 +18089,7 @@ index 709cc1b9..3617da50 100644
              ? resolveEndpointAnchorSnap({
                  pointerWorld: world,
                  zoom: toolSnapContext?.zoom ?? canvasTransform.scale,
-@@ -346,19 +548,84 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -346,19 +552,84 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                })
              : null;
          const startEndpointAnchor = lineToolStartAnchorSnap?.snappedAnchor ?? null;
@@ -18116,7 +18176,7 @@ index 709cc1b9..3617da50 100644
            setNodeAnchorOverlay(null);
            setFreehandDraft(nextFreehandDraft);
            setDragTooltip(null);
-@@ -366,16 +633,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -366,16 +637,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              kind: "tool-freehand",
              pointerId: event.pointerId,
              points: nextFreehandDraft.points,
@@ -18136,7 +18196,7 @@ index 709cc1b9..3617da50 100644
            });
            return;
          }
-@@ -384,7 +652,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -384,7 +656,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            const activeDraft = pathDraftRef.current;
            if (!activeDraft) {
              // Check if click is near an endpoint of an existing open path
@@ -18145,7 +18205,7 @@ index 709cc1b9..3617da50 100644
                ? resolvePathEndpointSnap({
                    pointerWorld: resolvedStart,
                    zoom: canvasTransform.scale,
-@@ -515,62 +783,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -515,62 +787,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            return;
          }
  
@@ -18211,7 +18271,7 @@ index 709cc1b9..3617da50 100644
            return;
          }
  
-@@ -609,7 +826,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -609,7 +830,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -18220,11 +18280,12 @@ index 709cc1b9..3617da50 100644
          if (event.pointerType === "touch") {
            const pending = pendingTouchViewportRef.current;
            if (!event.isPrimary || (pending && pending.pointerId !== event.pointerId)) {
-@@ -649,18 +866,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -649,18 +870,25 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        }
      },
      [
 +      discardUntypedText,
++      removeEmptiedText,
 +      placeTapObject,
 +      toolSnapContextNow,
 +      pointTargetAt,
@@ -18249,7 +18310,7 @@ index 709cc1b9..3617da50 100644
        snapshot.source,
        snapshot.editHandles,
        source,
-@@ -669,11 +892,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -669,11 +897,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        nodeAnchorTargets,
        matrixCellAnchorHints,
        pendingBezier,
@@ -18263,7 +18324,7 @@ index 709cc1b9..3617da50 100644
        interactionSvgRef,
        dragRef,
        pathDraftRef,
-@@ -704,7 +927,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -704,7 +932,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        if (event.button !== 0 || event.target !== event.currentTarget) {
          return;
        }
@@ -18272,7 +18333,7 @@ index 709cc1b9..3617da50 100644
          if (toolMode !== "magnify") {
            onInteractionPointerDown(event as unknown as ReactPointerEvent<SVGSVGElement>);
          }
-@@ -727,6 +950,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -727,6 +955,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          setDragTooltip(null);
          return;
        }
@@ -18280,7 +18341,7 @@ index 709cc1b9..3617da50 100644
        if (toolMode === "magnify") {
          const magnifier = magnifierState;
          if (magnifier?.pointerId !== event.pointerId) {
-@@ -812,6 +1036,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -812,6 +1041,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchors =
@@ -18288,7 +18349,7 @@ index 709cc1b9..3617da50 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -826,7 +1051,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -826,7 +1056,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpoint =
@@ -18297,7 +18358,7 @@ index 709cc1b9..3617da50 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -851,11 +1076,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -851,11 +1081,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -18324,7 +18385,7 @@ index 709cc1b9..3617da50 100644
        }
        logSnapDebug({
          phase: "tool-hover-move",
-@@ -865,10 +1103,13 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -865,10 +1108,13 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          rawPoint: world,
          snappedPoint: snapped.snappedPoint ?? world,
          offset: snapped.offset,
@@ -18339,7 +18400,7 @@ index 709cc1b9..3617da50 100644
        canvasTransform.scale,
        logSnapDebug,
        nodeAnchorTargets,
-@@ -883,6 +1124,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -883,6 +1129,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
@@ -18347,7 +18408,7 @@ index 709cc1b9..3617da50 100644
        toolMode,
        snapGuideInput,
        snapSettingsPatch,
-@@ -925,6 +1167,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -925,6 +1172,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          setDragTooltip(null);
          return;
        }
@@ -18355,7 +18416,7 @@ index 709cc1b9..3617da50 100644
        if (toolMode === "magnify") {
          if (magnifierState?.pointerId !== event.pointerId) {
            setNodeAnchorOverlay(null);
-@@ -996,6 +1239,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -996,6 +1244,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchorsEnter =
@@ -18363,7 +18424,7 @@ index 709cc1b9..3617da50 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -1010,7 +1254,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1010,7 +1259,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpointEnter =
@@ -18372,7 +18433,7 @@ index 709cc1b9..3617da50 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -1035,11 +1279,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1035,11 +1284,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -18399,7 +18460,7 @@ index 709cc1b9..3617da50 100644
        }
        logSnapDebug({
          phase: "tool-hover-enter",
-@@ -1049,10 +1306,13 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1049,10 +1311,13 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          rawPoint: world,
          snappedPoint: snapped.snappedPoint ?? world,
          offset: snapped.offset,
@@ -18414,7 +18475,7 @@ index 709cc1b9..3617da50 100644
        canvasTransform.scale,
        logSnapDebug,
        nodeAnchorTargets,
-@@ -1067,6 +1327,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1067,6 +1332,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,

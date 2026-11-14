@@ -32,7 +32,7 @@ One per document, kept by the shell (FR-012b, research R3).
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `past` | source revisions | A step is one edit of the source in any view; typing in the Code panel groups changes no more than 500 ms apart |
+| `past` | source revisions | A step is one edit of the source in any view; typing in the Code panel groups changes no more than 500 ms apart; an edit of the canvas or of Quiver that ends at the source it started from is no step |
 | `future` | source revisions | Undo moves the current source here; a new edit empties it |
 
 Undo and Redo replace the source in every view. The canvas and Quiver keep no history of their own.
