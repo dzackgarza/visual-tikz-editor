@@ -5147,6 +5147,67 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  /** A stroke record with a field this build does not define, as an older build wrote it. */
+  const unreadableInkRecord = encodeURIComponent(
+    JSON.stringify({
+      key: "k1",
+      color: "black",
+      intent: "geometry",
+      samples: [
+        { x: 2, y: 2, time: 0 },
+        { x: 4, y: 4, time: 16 },
+        { x: 6, y: 3, time: 32 },
+      ],
+    }),
+  );
+  const unreadableInkFigure = [
+    String.raw`\begin{tikzpicture}`,
+    String.raw`\draw (0,0) -- (10,0);`,
+    String.raw`\draw (0,0) -- (0,10);`,
+    `% workbench-ink:${unreadableInkRecord}`,
+    String.raw`\begin{scope}`,
+    String.raw`\draw (2,2) -- (4,4) -- (6,3);`,
+    String.raw`\end{scope}`,
+    "% workbench-ink-end:k1",
+    String.raw`\path[use as bounding box] (-2,-2) rectangle (12,12);`,
+    String.raw`\end{tikzpicture}`,
+  ].join("\n");
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a stroke record the editor cannot read leaves its drawing on the canvas, is reported, and stays in the source, in ${tablet.name}`,
+      async function () {
+        await author(unreadableInkFigure);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const source = async () => (await editorDebug(page)).source;
+        // The figure is drawn: the axes and the drawing inside the unreadable record's scope.
+        await expect(
+          frame.locator("svg path[data-source-id]:visible"),
+          "The canvas does not show the three paths of the figure",
+        ).toHaveCount(3);
+        await expect(frame.getByTestId("canvas-warning-message"), "The unreadable record is not reported").toContainText(
+          "1 stroke record cannot be read",
+        );
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        // The drawing is an ordinary path: a Lasso tap selects it, and a new stroke is recorded beside it.
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([at(3, 3)]);
+        await expect
+          .poll(async () => (await editorDebug(page)).selection.length, { message: "A tap did not select the drawing" })
+          .toBe(1);
+        await chooseTool(frame, input, "Pen");
+        await input.penStroke(Array.from({ length: 12 }, (_, i) => at(2 + i * 0.4, 7 + Math.sin(i) * 0.3)));
+        await expect
+          .poll(async () => ((await source()).match(/% workbench-ink:/g) ?? []).length, { message: "The new stroke was not recorded" })
+          .toBe(2);
+        expect(await source(), "The unreadable record left the source").toContain(`% workbench-ink:${unreadableInkRecord}`);
+      },
+    );
+  }
+
   const textFigure = String.raw`\begin{tikzpicture}
 \draw (0,0) -- (10,0);
 \draw (0,0) -- (0,10);
