@@ -780,6 +780,44 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  for (const [object, statement] of [
+    ["shape", String.raw`\\draw[^;\n]+;`],
+    ["text", String.raw`\\node at \([^)]*\) \{first\};`],
+  ] as const) {
+    story(
+      { initialPage: "blank", document: "" },
+      `a ${object} on the canvas of an empty file makes its tikzpicture`,
+      async function () {
+        await page.goto(url);
+        const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
+        const viewport = frame.locator('[data-canvas-viewport="true"]');
+        await expect(viewport, "The canvas did not open on the empty file").toBeVisible({ timeout: 30_000 });
+        await editorReady(page);
+        const box = await layoutBox(viewport);
+        const at = { x: box.x + box.width * 0.45, y: box.y + box.height * 0.4 };
+        if (object === "shape") {
+          await chooseTool(frame, "mouse", "Shapes");
+          await page.mouse.move(at.x, at.y);
+          await page.mouse.down();
+          await page.mouse.move(at.x + 120, at.y + 80, { steps: 10 });
+          await page.mouse.up();
+        } else {
+          await chooseTool(frame, "mouse", "Text");
+          await page.mouse.click(at.x, at.y);
+          await expect(frame.getByTestId("canvas-text-edit-textarea"), "The new text is not in edit").toBeFocused();
+          await page.keyboard.type("first");
+          await page.keyboard.press("Escape");
+        }
+        await expect
+          .poll(() => readFile(documentPath!, "utf8"), {
+            message: `The file is not one tikzpicture that holds the ${object}`,
+          })
+          .toMatch(new RegExp(String.raw`^\\begin\{tikzpicture\}\n\s*${statement}\n\\end\{tikzpicture\}\n?$`, "u"));
+        await storyScreenshot(page, `empty-file-${object}`);
+      },
+    );
+  }
+
   story(
     {},
     "a tikzcd that Quiver exported, with its link comment and its display-math brackets, opens in Quiver and renders",
