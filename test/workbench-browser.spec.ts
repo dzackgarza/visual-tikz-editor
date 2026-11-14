@@ -5307,6 +5307,33 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  story(
+    { initialPage: "blank" },
+    "a press in the Quiver view closes File and places nothing",
+    async function () {
+      await page.goto(url);
+      await editorReady(page);
+      const file = page.locator('details.file-menu[aria-label="File"]');
+      await file.locator("summary").click();
+      await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
+      const quiver = page.locator('iframe[title="Quiver diagram editor"]');
+      await expect(quiver).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+      const code = page.locator(".cm-content");
+      await expect(code).toContainText("tikzcd");
+      const before = await code.innerText();
+      await file.locator("summary").click();
+      await expect(file).toHaveAttribute("open", "");
+      const box = await layoutBox(quiver);
+      await page.mouse.click(box.x + box.width * 0.75, box.y + box.height * 0.75);
+      await expect(file, "File stayed open after a press in the Quiver view").not.toHaveAttribute("open");
+      // The press's own effect is complete before the next click opens File again.
+      await file.locator("summary").click();
+      await expect(file).toHaveAttribute("open", "");
+      assert.equal(await code.innerText(), before, "The press that closed File also changed the diagram");
+    },
+  );
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
