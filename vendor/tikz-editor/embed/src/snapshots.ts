@@ -14,7 +14,6 @@ export function editorState(state: ReturnType<typeof useEditorStore.getState>, a
     selection: [...state.selectedElementIds], tool: state.toolMode,
     viewport: { ...state.canvasView },
     fitToContent: state.fitToContentModeActive,
-    interpretGeometry: state.freehandInterpretGeometry,
     locked: document.lockedStatements.map(mark => ({ ...mark })),
     hidden: document.hiddenStatements.map(mark => ({ ...mark })),
   };

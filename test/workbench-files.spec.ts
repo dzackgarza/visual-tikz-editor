@@ -497,16 +497,7 @@ describe("standalone native file workflow", function () {
         steps: 12,
       });
       await page.mouse.up();
-      // Accepting the offered fit makes it a history step after the recorded stroke.
-      const result = frame.getByRole("dialog", { name: "Freehand result" });
-      await result.getByRole("button", { name: "Accept", exact: true }).click();
-      await expect(result).toHaveCount(0);
     };
-    // A fit replaces the recorded samples, one point each, by a segment or a Bézier curve: at most four points.
-    const fitted = (source: string) =>
-      [...source.matchAll(/\\begin\{scope\}\n(\\draw[^\n]*)\n\\end\{scope\}/g)].some(
-        ([, draw]) => (draw.match(/\(-?[\d.]+(?:pt)?,-?[\d.]+(?:pt)?\)/g) ?? []).length <= 4,
-      );
     const undo = () => page.locator(".document-bar").getByRole("button", { name: "Undo", exact: true }).click();
     const redo = () => page.locator(".document-bar").getByRole("button", { name: "Redo", exact: true }).click();
     const exportSvg = async (name: string) => {
@@ -536,7 +527,7 @@ describe("standalone native file workflow", function () {
 
     // A drawn stroke is added to the file; every authored line stays as written.
     await draw(0.3, 0.7);
-    await expect.poll(async () => fitted(await onDisk()), { message: "the fitted stroke is autosaved" }).toBe(true);
+    await expect.poll(async () => strokes(await onDisk()), { message: "the stroke is autosaved" }).toBe(1);
     const drawn = await onDisk();
     assert.equal(strokes(drawn), 1);
     for (const line of authored.split("\n")) {
@@ -546,15 +537,9 @@ describe("standalone native file workflow", function () {
     const drawnElements = authoredElements + 1;
     await expect(frame.locator("[data-source-id]")).toHaveCount(drawnElements);
 
-    // Undo steps back through the fit and the stroke to the authored bytes; Redo returns both.
-    await undo();
-    await expect
-      .poll(async () => [strokes(await onDisk()), fitted(await onDisk())], { message: "Undo restores the recorded stroke" })
-      .toEqual([1, false]);
+    // The stroke is one step: one Undo restores the authored bytes, one Redo the drawn file.
     await undo();
     await expect.poll(onDisk, { message: "Undo restores the authored file" }).toBe(authored);
-    await redo();
-    await expect.poll(async () => strokes(await onDisk()), { message: "Redo restores the stroke" }).toBe(1);
     await redo();
     await expect.poll(onDisk, { message: "Redo restores the drawn file" }).toBe(drawn);
 
@@ -586,8 +571,6 @@ describe("standalone native file workflow", function () {
     await expect.poll(async () => strokes(await onDisk()), { message: "the second stroke is autosaved" }).toBe(2);
     const continued = await onDisk();
     assert.ok(continued.includes(drawn.slice(0, drawn.lastIndexOf("\\end{tikzpicture}"))), `The first stroke changed:\n${continued}`);
-    await undo();
-    await expect.poll(async () => strokes(await onDisk())).toBe(2);
     await undo();
     await expect.poll(onDisk, { message: "Undo in the new session restores the reopened file" }).toBe(drawn);
     await expect(page.locator(".tikz-standalone-status")).toHaveText("Saved");

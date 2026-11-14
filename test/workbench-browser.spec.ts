@@ -156,6 +156,42 @@ describe("standalone workbench host boundary", function () {
     await expect(menu).toHaveCount(0);
   }
 
+  /** The curve refinement that Simplify opens on the selected curve (FR-027). */
+  const curveRefinement = (frame: FrameLocator) => frame.getByRole("dialog", { name: "Curve refinement" });
+
+  /**
+   * Selects a stroke with the Lasso and opens Simplify from its object menu. A tap that lands on one of the
+   * stroke's points selects that point; Done leaves the point and keeps the curve selected.
+   */
+  async function openSimplify(frame: FrameLocator, input: TabletInput, stroke: Locator): Promise<void> {
+    await chooseTool(frame, input, "Lasso");
+    await input.touch([await strokePoint(page, stroke, 0.3)]);
+    await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+    const done = frame.getByRole("button", { name: "Done", exact: true });
+    if (await done.isVisible()) await input.touch([await stableCenter(done)]);
+    await input.touch([await stableCenter(frame.getByRole("button", { name: "Simplify", exact: true }))]);
+    await expect(curveRefinement(frame)).toBeVisible();
+  }
+
+  /** Simplifies a stroke and accepts the first simpler pass. */
+  async function simplifyStroke(frame: FrameLocator, input: TabletInput, stroke: Locator): Promise<void> {
+    await openSimplify(frame, input, stroke);
+    await input.touch([
+      await stableCenter(curveRefinement(frame).getByRole("button", { name: "Accept", exact: true })),
+    ]);
+    await expect(curveRefinement(frame)).toHaveCount(0);
+  }
+
+  /** The last path the canvas draws: a new stroke's drawing, inside the scope that keeps its original. */
+  const lastPath = (frame: FrameLocator) => frame.locator('svg [data-source-id^="path:"]').last();
+
+  /** A draw command's coordinates in centimetres; a pen stroke writes its ends in points (TeX's 72.27 pt to 2.54 cm). */
+  const drawCoordinates = (draw: string): Point[] =>
+    [...draw.matchAll(/\((-?[\d.]+)(pt)?,\s*(-?[\d.]+)(pt)?\)/g)].map((match) => ({
+      x: Number(match[1]) / (match[2] ? 72.27 / 2.54 : 1),
+      y: Number(match[3]) / (match[4] ? 72.27 / 2.54 : 1),
+    }));
+
   /** The frame that shows Settings over the whole window (FR-005). */
   const settingsFrame = () => page.frameLocator('iframe[title="Settings"]');
   /** The Settings dialog in its frame. */
@@ -2687,61 +2723,6 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `keeps the original stroke after an automatic fit in ${tablet.name}`,
-      async function () {
-        await editorReady(page);
-        const frame = editorFrame(page);
-        const input = await TabletInput.attach(page);
-        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        // The first stroke turns automatic fitting on for the strokes after it.
-        await input.penStroke(waveAcross(viewport, 0.45, 0.3, 120));
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Defaults", exact: true })),
-        ]);
-        await input.touch([
-          await stableCenter(
-            result.getByRole("checkbox", { name: "Refine new strokes automatically", exact: true }),
-          ),
-        ]);
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
-        const drawsBefore = ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length;
-        await input.penStroke(waveAcross(viewport, 0.45, 0.65, 120));
-        await expect(result).toBeVisible();
-        await expect
-          .poll(async () => ((await editorDebug(page)).source.match(/\\draw/g) ?? []).length)
-          .toBe(drawsBefore + 1);
-        const lastDraw = async () => {
-          const draws = (await editorDebug(page)).source
-            .split("\n")
-            .filter((line) => line.trim().startsWith("\\draw"));
-          return draws[draws.length - 1];
-        };
-        assert.match(await lastDraw(), /\.\. controls/, "The automatic fit did not apply");
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
-        // Cancel brings back the recorded stroke: a polyline of its samples, not the fit.
-        await expect
-          .poll(
-            async () => {
-              const draw = await lastDraw();
-              return !/\.\. controls/.test(draw) && (draw.match(/--/g) ?? []).length > 5;
-            },
-            { message: "Cancel left the automatic fit in place" },
-          )
-          .toBe(true);
-      },
-    );
-  }
-
-  for (const tablet of TABLET_VIEWPORTS) {
-    story(
-      { viewport: tablet },
       `keeps every stroke drawn and erased in quick succession in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
@@ -2779,7 +2760,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet, initialPage: "blank" },
-      `carries one offline pen session through a fitted stroke, a constructed line, a deletion, an erasure, and the whole history in ${tablet.name}`,
+      `carries one offline pen session through a pen stroke, a constructed line, a deletion, an erasure, and the whole history in ${tablet.name}`,
       async function () {
         const external: string[] = [];
         await context.route("**/*", (route) => {
@@ -2822,15 +2803,13 @@ describe("standalone workbench host boundary", function () {
           await expect.poll(source, { message }).toBe(expected);
         };
 
-        // A pen stroke shows its fit as a preview; accepting it makes the fit a history step after the stroke.
+        // A pen stroke stays as drawn, with its recorded original, as one history step; nothing opens after it.
         await chooseTool(frame, input, "Pen");
         await input.penStroke(waveAcross(viewport, 0.15, 0.12, 140));
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        await expect(result).toBeVisible();
-        await tap(result.getByRole("button", { name: "Accept", exact: true }));
-        await expect(result).toHaveCount(0);
-        await step("The accepted fit is not in the source");
-        assert.match(last(), /\.\. controls/);
+        await step("The pen stroke is not in the source");
+        assert.equal(strokeRecords(last()), 1);
+        assert.ok(!fitShown(last()), `The pen stroke was fitted:\n${last()}`);
+        await expect(frame.getByRole("dialog")).toHaveCount(0);
 
         // A line placed with the Line tool.
         await chooseShape(frame, input, "Line");
@@ -2841,7 +2820,9 @@ describe("standalone workbench host boundary", function () {
           { x: lineFrom + 160, y: lineY },
         ]);
         await step("The constructed line is not in the source");
-        const lines = (text: string) => (text.match(/\\draw[^;]*--[^;]*;/g) ?? []).length;
+        // A straight line has one segment; the pen stroke's polyline has many.
+        const lines = (text: string) =>
+          (text.match(/\\draw[^;]*;/g) ?? []).filter((draw) => (draw.match(/--/g) ?? []).length === 1).length;
         assert.equal(lines(last()), 2);
 
         // The authored red line, picked with the pen and deleted from the selection strip's menu.
@@ -2876,16 +2857,9 @@ describe("standalone workbench host boundary", function () {
         for (const earlier of steps.slice(1, -1).reverse()) {
           await press("Undo", "Undo did not restore the step before", earlier);
         }
-        // Under the fit lies the stroke as drawn, then the authored source.
+        // The document's own Undo is the same history: it takes the stroke away.
         await tap(documentHistory("Undo"));
-        await expect
-          .poll(async () => [strokeRecords(await source()), fitShown(await source())], {
-            message: "Undo did not restore the stroke as drawn",
-          })
-          .toEqual([1, false]);
-        const asDrawn = await source();
-        await press("Undo", "Undo did not restore the authored source", authored);
-        await press("Redo", "Redo did not restore the stroke as drawn", asDrawn);
+        await expect.poll(source, { message: "Undo did not restore the authored source" }).toBe(authored);
         for (const later of steps.slice(1)) {
           await press("Redo", "Redo did not restore the step after", later);
         }
@@ -3243,12 +3217,11 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `fits a stroke with anchors a pen can pick apart, also at its slow and hooked ends, in ${tablet.name}`,
+      `simplifies a stroke to anchors a pen can pick apart, also at its slow and hooked ends, in ${tablet.name}`,
       async function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
         const x0 = viewport.x + viewport.width * 0.2,
           y0 = viewport.y + viewport.height * 0.4,
           width = viewport.width * 0.5;
@@ -3260,16 +3233,11 @@ describe("standalone workbench host boundary", function () {
         const last = points.at(-1)!;
         points.push({ x: last.x + 2, y: last.y + 3 }, { x: last.x + 1, y: last.y + 5 });
         await input.penStroke(points);
-        await expect(result).toBeVisible();
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
+        await simplifyStroke(frame, input, lastPath(frame));
         const draw = (await editorDebug(page)).source.match(/\\draw[^;]*;/g)!.at(-1)!;
-        assert.match(draw, /\.\. controls/, "Accept did not apply a fit");
-        const anchors = [...draw.matchAll(/\((-?[\d.]+),\s*(-?[\d.]+)\)/g)]
-          .filter((_, i) => i % 3 === 0)
-          .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
+        assert.match(draw, /\.\. controls/, "Accept did not apply the simplified curve");
+        const anchors = drawCoordinates(draw).filter((_, i) => i % 3 === 0);
         // The figure has no transform: a centimetre is 28.4528 pt of the rendered picture.
         const pxPerCm =
           28.4528 *
@@ -3294,7 +3262,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `keeps a fitted stroke's ends where the pen drew them when no point is within reach, in ${tablet.name}`,
+      `keeps a simplified stroke's ends where the pen drew them when no point is within reach, in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await pasteCode(page, String.raw`\begin{tikzpicture}
@@ -3319,17 +3287,11 @@ describe("standalone workbench host boundary", function () {
           return { x: origin.x + x * pxPerCm, y: origin.y - y * pxPerCm };
         });
         await input.penStroke(points);
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        await expect(result).toBeVisible();
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
+        await expect.poll(async () => (await editorDebug(page)).source.match(/\\draw/g)?.length).toBe(3);
+        await simplifyStroke(frame, input, lastPath(frame));
         const draw = (await editorDebug(page)).source.match(/\\draw[^;]*;/g)!.at(-1)!;
-        const ends = [...draw.matchAll(/\((-?[\d.]+),\s*(-?[\d.]+)\)/g)].map((match) => ({
-          x: Number(match[1]),
-          y: Number(match[2]),
-        }));
+        assert.match(draw, /\.\. controls/, "Accept did not apply the simplified curve");
+        const ends = drawCoordinates(draw);
         for (const [name, drawn, fitted] of [
           ["start", start, ends[0]],
           ["end", end, ends.at(-1)!],
@@ -3383,59 +3345,6 @@ describe("standalone workbench host boundary", function () {
         await page.waitForTimeout(1000);
         await expect(second, "The canvas stopped drawing the new stroke").toBeVisible();
         assert.equal((await draws()).length, 2, "The new stroke left the source");
-      },
-    );
-  }
-
-  for (const tablet of TABLET_VIEWPORTS) {
-    story(
-      { viewport: tablet },
-      `keeps automatic fits when drawing continues and the tool changes, and one Undo restores the last original, in ${tablet.name}`,
-      async function () {
-        const frame = editorFrame(page);
-        const input = await TabletInput.attach(page);
-        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        const fittedDraws = async () =>
-          (await editorDebug(page)).source
-            .split("\n")
-            .filter((line) => line.trim().startsWith("\\draw") && /\.\. controls/.test(line))
-            .length;
-        await input.penStroke(waveAcross(viewport, 0.45, 0.2, 120));
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Defaults", exact: true })),
-        ]);
-        await input.touch([
-          await stableCenter(
-            result.getByRole("checkbox", { name: "Refine new strokes automatically", exact: true }),
-          ),
-        ]);
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
-        await input.penStroke(waveAcross(viewport, 0.45, 0.45, 120));
-        await expect.poll(fittedDraws, { message: "The automatic fit did not apply" }).toBe(1);
-        // Drawing the next stroke on empty canvas continues the session: the earlier fit stays.
-        const wave = waveAcross({ x: 0, y: 0, width: 0, height: 0 }, 0, 0, 120);
-        await input.penStroke(await emptyCanvasGesture(frame, wave));
-        await expect
-          .poll(fittedDraws, { message: "Drawing again reverted the earlier automatic fit" })
-          .toBe(2);
-        const fitted = (await editorDebug(page)).source;
-        await chooseTool(frame, input, "Lasso");
-        await expect.poll(async () => (await editorDebug(page)).tool).toBe("select");
-        await expect(result).toHaveCount(0);
-        assert.equal(
-          (await editorDebug(page)).source,
-          fitted,
-          "Changing the tool changed the fitted source",
-        );
-        // The fit is its own history step after the recorded stroke.
-        await page.keyboard.press("Control+z");
-        await expect
-          .poll(fittedDraws, { message: "One Undo did not restore the last original" })
-          .toBe(1);
       },
     );
   }
@@ -3748,109 +3657,6 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `refines one stroke from one surface, with new-stroke scope behind Defaults, in ${tablet.name}`,
-      async function () {
-        const frame = editorFrame(page);
-        const input = await TabletInput.attach(page);
-        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        const simplification = result.getByRole("slider", { name: "Simplification", exact: true });
-        const exact = result.getByRole("spinbutton", { name: "Simplification value", exact: true });
-        const defaults = result.getByRole("button", { name: "Defaults", exact: true });
-        const saved = async () => (await editorDebug(page)).settings.canvas;
-        const lastDraw = async () => {
-          const draws = (await editorDebug(page)).source
-            .split("\n")
-            .filter((line) => line.trim().startsWith("\\draw"));
-          return draws[draws.length - 1];
-        };
-        const fitted = async () => /\.\. controls/.test(await lastDraw());
-        const initial = await saved();
-        // The adjustment is primary: sliders with exact values, Accept and Cancel. Scope sits behind Defaults.
-        await input.penStroke(waveAcross(viewport, 0.45, 0.2, 140));
-        await expect(result.getByRole("slider", { name: "Smoothing", exact: true })).toBeVisible();
-        await expect(
-          result.getByRole("spinbutton", { name: "Smoothing value", exact: true }),
-        ).toBeVisible();
-        await expect(defaults).toHaveAttribute("aria-expanded", "false");
-        await expect(
-          result.getByRole("button", { name: "Use for new strokes", exact: true }),
-        ).toHaveCount(0);
-        // A fresh stroke has nothing to restore beyond what Cancel restores.
-        await expect(
-          result.getByRole("button", { name: "Restore original", exact: true }),
-        ).toHaveCount(0);
-        await exact.fill("1.2");
-        await exact.press("Enter");
-        await expect(simplification).toHaveValue("1.2");
-        assert.deepEqual(await saved(), initial, "Adjusting one stroke changed a saved default");
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
-        assert.equal(await fitted(), false, "Cancel kept the previewed fit");
-        // Use for new strokes holds for this session; it saves nothing.
-        await input.penStroke(waveAcross(viewport, 0.45, 0.35, 140));
-        await expect(simplification).toHaveValue(String(initial.freehandSimplificationUnits));
-        await exact.fill("1.2");
-        await exact.press("Enter");
-        await input.touch([await stableCenter(defaults)]);
-        await expect(defaults).toHaveAttribute("aria-expanded", "true");
-        await input.touch([
-          await stableCenter(
-            result.getByRole("button", { name: "Use for new strokes", exact: true }),
-          ),
-        ]);
-        await input.touch([
-          await stableCenter(
-            result.getByRole("checkbox", { name: "Refine new strokes automatically", exact: true }),
-          ),
-        ]);
-        assert.deepEqual(await saved(), initial, "Use for new strokes saved a default");
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
-        await expect.poll(fitted, { message: "Accept did not apply the fit" }).toBe(true);
-        // The next stroke takes the session values and is refined automatically; Cancel reverts that fit.
-        await input.penStroke(waveAcross(viewport, 0.45, 0.5, 140));
-        await expect(simplification).toHaveValue("1.2");
-        await expect
-          .poll(fitted, { message: "The session did not refine the new stroke automatically" })
-          .toBe(true);
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
-        await expect.poll(fitted, { message: "Cancel kept the automatic fit" }).toBe(false);
-        // Escape closes and keeps what is on the canvas: the automatic fit stays.
-        await input.penStroke(waveAcross(viewport, 0.45, 0.65, 140));
-        await expect.poll(fitted).toBe(true);
-        await page.keyboard.press("Escape");
-        await expect(result).toHaveCount(0);
-        assert.equal(await fitted(), true, "Escape reverted the automatic fit");
-        // Save as default makes the session values lasting.
-        await input.penStroke(waveAcross(viewport, 0.45, 0.8, 140));
-        await input.touch([await stableCenter(defaults)]);
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Save as default", exact: true })),
-        ]);
-        await expect
-          .poll(
-            async () => {
-              const canvas = await saved();
-              return [canvas.freehandSimplificationUnits, canvas.freehandAutoApply];
-            },
-            { message: "Save as default did not save the session values" },
-          )
-          .toEqual([1.2, true]);
-      },
-    );
-  }
-
-  for (const tablet of TABLET_VIEWPORTS) {
-    story(
-      { viewport: tablet },
       `shows what is stored, without editor sync state, after a stroke in ${tablet.name}`,
       async function () {
         const status = page.locator(".tikz-standalone-status");
@@ -3870,14 +3676,14 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `places the freehand result clear of the stroke wherever it is drawn, and Escape keeps the stroke, in ${tablet.name}`,
+      `places the curve refinement clear of its stroke wherever it is drawn, and Escape leaves the stroke as it was, in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const railBox = (await frame.locator("[data-diagram-tools]").boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
+        const result = curveRefinement(frame);
         const clear = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
           Math.min(a.x + a.width, b.x + b.width) <= Math.max(a.x, b.x) ||
           Math.min(a.y + a.height, b.y + b.height) <= Math.max(a.y, b.y);
@@ -3896,12 +3702,8 @@ describe("standalone workbench host boundary", function () {
           [0.72, bottom],
         ] as const;
         for (const [index, [fx, fy]] of corners.entries()) {
-          const before = (await editorDebug(page)).source;
+          await chooseTool(frame, input, "Pen");
           await input.penStroke(waveAcross(viewport, fx, fy, 110));
-          await expect(
-            result,
-            `No freehand result for a stroke at (${fx.toFixed(2)}, ${fy.toFixed(2)})`,
-          ).toBeVisible();
           // Each kept stroke stays drawn, so this one is the element numbered by its index once it renders.
           const idsNow = () =>
             frame
@@ -3911,26 +3713,23 @@ describe("standalone workbench host boundary", function () {
               ]);
           await expect.poll(async () => (await idsNow()).length).toBe(index + 1);
           const ids = await idsNow();
-          const stroke = (await frame
-            .locator(`svg [data-source-id="${ids[ids.length - 1]}"]`)
-            .first()
-            .boundingBox())!;
+          const drawing = frame.locator(`svg [data-source-id="${ids[ids.length - 1]}"]`).first();
+          const before = (await editorDebug(page)).source;
+          await openSimplify(frame, input, drawing);
+          const stroke = (await drawing.boundingBox())!;
           const popup = (await result.boundingBox())!;
           assert.ok(
             clear(popup, stroke),
-            `The freehand result covers a stroke drawn at (${fx.toFixed(2)}, ${fy.toFixed(2)})`,
+            `The curve refinement covers a stroke drawn at (${fx.toFixed(2)}, ${fy.toFixed(2)})`,
           );
           assert.ok(
             clear(popup, (await frame.locator("[data-diagram-tools]").boundingBox())!),
-            "The freehand result covers the rail",
+            "The curve refinement covers the rail",
           );
+          // Escape closes the refinement and takes no further action: the stroke stays as drawn.
           await page.keyboard.press("Escape");
           await expect(result).toHaveCount(0);
-          // Escape closes the result without fitting: the recorded stroke stays as drawn.
-          const source = (await editorDebug(page)).source;
-          assert.notEqual(source, before, "Escape removed the stroke");
-          const draws = source.split("\n").filter((line) => line.trim().startsWith("\\draw"));
-          assert.doesNotMatch(draws[draws.length - 1], /\.\. controls/, "Escape applied the fit");
+          await expect.poll(async () => (await editorDebug(page)).source, "Escape changed the source").toBe(before);
         }
       },
     );
@@ -3939,7 +3738,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `keeps the freehand result clear of its stroke, the rail, and Properties in every dock in ${tablet.name}`,
+      `keeps the curve refinement clear of its stroke, the rail, and Properties in every dock in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
@@ -3947,7 +3746,7 @@ describe("standalone workbench host boundary", function () {
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const rail = drawingToolbar(frame);
         const panel = frame.getByRole("complementary", { name: "Properties", exact: true });
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
+        const result = curveRefinement(frame);
         type Box = { x: number; y: number; width: number; height: number };
         const clear = (a: Box, b: Box) =>
           Math.min(a.x + a.width, b.x + b.width) <= Math.max(a.x, b.x) ||
@@ -4015,19 +3814,22 @@ describe("standalone workbench host boundary", function () {
               [0.5, 0.7],
             ] as const) {
               const label = `${dock} dock${withPanel ? " with Properties" : ""}, stroke at (${fx}, ${fy})`;
+              // The drawn paths; a preview the canvas draws during a refinement has no path: id.
               const ids = () =>
                 frame
-                  .locator("svg [data-source-id]")
+                  .locator('svg [data-source-id^="path:"]')
                   .evaluateAll((nodes) => [
                     ...new Set(nodes.map((node) => node.getAttribute("data-source-id")!)),
                   ]);
-              const before = (await ids()).length;
+              const before = await ids();
               const points = waveAcross(free, fx, fy, Math.min(110, free.width * 0.4));
+              await chooseTool(frame, input, "Pen");
               await input.penStroke(points);
-              await expect(result, `${label}: no freehand result`).toBeVisible();
               await expect
                 .poll(async () => (await ids()).length, `${label}: the stroke did not render`)
-                .toBe(before + 1);
+                .toBe(before.length + 1);
+              const added = (await ids()).find((id) => !before.includes(id))!;
+              await openSimplify(frame, input, frame.locator(`svg [data-source-id="${added}"]`).first());
               // Where the pen went, in page coordinates like every box here.
               const xs = points.map((point) => point.x),
                 ys = points.map((point) => point.y);
@@ -4038,15 +3840,15 @@ describe("standalone workbench host boundary", function () {
                 height: Math.max(...ys) - Math.min(...ys),
               };
               const popup = (await result.boundingBox())!;
-              assert.ok(clear(popup, stroke), `${label}: the freehand result covers its stroke`);
+              assert.ok(clear(popup, stroke), `${label}: the curve refinement covers its stroke`);
               assert.ok(
                 clear(popup, (await rail.boundingBox())!),
-                `${label}: the freehand result covers the rail`,
+                `${label}: the curve refinement covers the rail`,
               );
               if (withPanel) {
                 assert.ok(
                   clear(popup, (await panel.boundingBox())!),
-                  `${label}: the freehand result covers Properties`,
+                  `${label}: the curve refinement covers Properties`,
                 );
               }
               await page.keyboard.press("Escape");
@@ -4069,18 +3871,19 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `shows every recorded sample and every fitted anchor of the freehand result on the canvas in ${tablet.name}`,
+      `shows every recorded sample and every fitted anchor of the curve refinement on the canvas in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
+        const result = curveRefinement(frame);
         const segments = async () =>
           ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length;
         const before = await segments();
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 160));
-        await expect(result).toBeVisible();
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
+        await openSimplify(frame, input, lastPath(frame));
         const drawn = async () => ({
           samples: await frame.getByTestId("freehand-raw-samples").locator("circle").count(),
           anchors: await frame.getByTestId("freehand-fitted-anchors").locator("circle").count(),
@@ -4164,21 +3967,17 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `selects a fitted stroke itself, not the envelope that keeps its original, in ${tablet.name}`,
+      `selects a simplified stroke itself, not the envelope that keeps its original, in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 160));
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
-        await chooseTool(frame, input, "Lasso");
-        // Start from an empty selection, then tap the fitted path.
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
+        await simplifyStroke(frame, input, lastPath(frame));
+        // Start from an empty selection, then tap the simplified path.
         await input.touch([(await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0]]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         const ids = await frame
@@ -4192,7 +3991,7 @@ describe("standalone workbench host boundary", function () {
         ]);
         await expect
           .poll(async () => (await editorDebug(page)).selection, {
-            message: "Tapping the fitted stroke selected its recovery envelope",
+            message: "Tapping the simplified stroke selected its recovery envelope",
           })
           .toEqual([fitted]);
         await expect(frame.getByRole("button", { name: "Lock", exact: true })).toBeVisible();
@@ -4209,19 +4008,15 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
         // A long wavy stroke, so a fit has many anchors to shed.
         const wave = Array.from({ length: 60 }, (_, i) => ({
           x: viewport.x + viewport.width * 0.35 + i * 6,
           y: viewport.y + viewport.height * 0.45 + Math.sin(i / 4) * 30,
         }));
         await input.penStroke(wave);
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
         await chooseTool(frame, input, "Lasso");
-        // The fit is the path inside the stroke's envelope scope.
+        // The drawing is the path inside the stroke's envelope scope.
         const ids = await frame
           .locator('svg [data-source-id^="path:"]')
           .evaluateAll((nodes) => [
@@ -4235,8 +4030,9 @@ describe("standalone workbench host boundary", function () {
         if (await whole.isVisible()) {
           await input.touch([await stableCenter(whole)]);
         }
+        // A drawn stroke is a polyline and a simplified one a Bézier curve; either has one anchor more than segments.
         const anchors = async () =>
-          ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length + 1;
+          ((await editorDebug(page)).source.match(/\.\.\s+controls\b|--/g) ?? []).length + 1;
         const accepted = (await editorDebug(page)).source;
         const counts = [await anchors()];
         const refinement = frame.getByRole("dialog", { name: "Curve refinement" });
@@ -4305,8 +4101,14 @@ describe("standalone workbench host boundary", function () {
             message: "One Undo did not reverse the accepted simplification",
           })
           .toBe(accepted);
-        // The stroke kept its recorded original, so the refinement offers it.
+        // The stroke kept its recorded original, so the refinement of a simplified curve offers it.
         await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+        await openRefinement();
+        await input.touch([
+          await stableCenter(refinement.getByRole("button", { name: "Accept", exact: true })),
+        ]);
+        await expect(refinement).toHaveCount(0);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\.\. controls/);
         await openRefinement();
         await input.touch([
           await stableCenter(
@@ -6081,20 +5883,20 @@ describe("standalone workbench host boundary", function () {
         assert.deepEqual(await texts(row), ["Insert: Line", "Ctrl+Alt+L"]);
         await storyScreenshot(page, `option-surface-text-${tablet.name}`);
         await tap(settings.getByRole("button", { name: "Close settings", exact: true }));
-        // The Freehand result names its sliders and its buttons (item 8); its values are figure coordinates, with no unit word.
+        // The curve refinement names its sliders and its buttons (item 8); its values are figure coordinates, with no unit word.
         await chooseTool(frame, input, "Pen");
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 160));
-        await expect(result).toBeVisible();
-        assert.deepEqual(await texts(result), [
-          "Freehand result",
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
+        await openSimplify(frame, input, lastPath(frame));
+        assert.deepEqual(await texts(curveRefinement(frame)), [
+          "Curve refinement",
           "Smoothing",
           "Simplification",
           "Simplify again",
           "Accept",
           "Cancel",
-          "Defaults",
+          "Restore original",
         ]);
       },
     );
@@ -6439,9 +6241,7 @@ describe("standalone workbench host boundary", function () {
             y: viewport.y + viewport.height * 0.45 + Math.sin(i / 4) * 30,
           })),
         );
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        await tap(result.getByRole("button", { name: "Accept", exact: true }));
-        await expect(result).toHaveCount(0);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
         await chooseTool(frame, input, "Lasso");
         const ids = await frame
           .locator('svg [data-source-id^="path:"]')
@@ -6459,8 +6259,9 @@ describe("standalone workbench host boundary", function () {
         };
         await selectCurve();
         const before = (await editorDebug(page)).source;
+        // A drawn stroke is a polyline and a simplified one a Bézier curve.
         const anchors = async () =>
-          ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length;
+          ((await editorDebug(page)).source.match(/\.\.\s+controls\b|--/g) ?? []).length;
         const count = await anchors();
         await tap(frame.getByRole("button", { name: "Simplify", exact: true }));
         await expect.poll(anchors, { timeout: 30_000 }).toBeLessThan(count);
@@ -7433,7 +7234,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `keeps panels and the freehand result clear of the drawing rail in ${tablet.name}`,
+      `keeps panels and the curve refinement clear of the drawing rail in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
@@ -7447,10 +7248,12 @@ describe("standalone workbench host boundary", function () {
           );
         };
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await chooseTool(frame, input, "Pen");
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 120));
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        await expect(result).toBeVisible();
-        assert.equal(await overlap(result), 0, "The freehand result covers the rail");
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
+        await openSimplify(frame, input, lastPath(frame));
+        const result = curveRefinement(frame);
+        assert.equal(await overlap(result), 0, "The curve refinement covers the rail");
         await input.touch([
           await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
         ]);
@@ -9049,11 +8852,7 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 120));
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        await input.touch([
-          await stableCenter(result.getByRole("button", { name: "Cancel", exact: true })),
-        ]);
-        await expect(result).toHaveCount(0);
+        await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
         const drawn = await frame
           .locator("svg [data-source-id]")
           .evaluateAll((nodes) => [
@@ -9279,13 +9078,12 @@ describe("standalone workbench host boundary", function () {
 
   story(
     {},
-    "preserves representative trace geometry through fitting and original restoration",
+    "keeps each representative trace as drawn, and simplifies and restores it within its error",
     async function () {
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
       const cdp = await context.newCDPSession(page);
       const viewport = frame.locator('[data-canvas-viewport="true"]');
-      const result = frame.getByRole("dialog", { name: "Freehand result" });
       const restore = frame.getByRole("button", { name: "Restore Original Stroke", exact: true });
       const currentSource = async () => (await editorDebug(page)).source;
       // The whole width goes to the canvas.
@@ -9335,12 +9133,6 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await chooseTool(frame, input, "Pen");
         await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
-        // The drawing tool's properties hold its choice of interpretation.
-        await documentPanelButton("Properties").click();
-        await frame
-          .getByRole("checkbox", { name: "Interpret geometry", exact: true })
-          .setChecked(trace.intent !== "ink");
-        await frame.getByRole("button", { name: "Close properties", exact: true }).click();
         // Screen pixels per point of the figure, from the canvas's own drawing surface.
         const pixelsPerPoint = await viewport.evaluate(
           (element) => element.querySelector<SVGSVGElement>("svg[viewBox]")!.getScreenCTM()!.a,
@@ -9392,34 +9184,11 @@ describe("standalone workbench host boundary", function () {
           pointerType: "pen",
         });
         await expect.poll(currentSource).toMatch(/workbench-ink-end:/);
-        // The source as drawn: the recorded original, or the fit the result previews over it.
+        // A stroke stays as drawn (FR-025): its drawing is the recorded samples joined by straight segments.
         const drawn = await currentSource();
-        let original = drawn;
-        if (trace.intent === "ink") {
-          await expect(result).toHaveCount(0);
-        } else {
-          await input.touch([
-            await stableCenter(result.getByRole("button", { name: "Accept", exact: true })),
-          ]);
-          await expect(result).toHaveCount(0);
-          if (trace.unchanged !== true) {
-            // The recorded original is the history step before the accepted fit.
-            await input.touch([
-              await stableCenter(documentHistory("Undo")),
-            ]);
-            await expect.poll(currentSource).not.toBe(drawn);
-            original = await currentSource();
-            await input.touch([
-              await stableCenter(documentHistory("Redo")),
-            ]);
-            await expect.poll(currentSource).toBe(drawn);
-          }
-        }
-        const accepted = await canvasSnapshot();
-        assert.ok(accepted.source.includes(trace.primitive), trace.name);
-        assert.equal(accepted.originalInk.length, 1, trace.name);
-        const stroke = accepted.originalInk[0].stroke;
-        assert.equal(stroke.intent, trace.intent ?? "geometry", trace.name);
+        const ink = (await canvasSnapshot()).originalInk;
+        assert.equal(ink.length, 1, trace.name);
+        const stroke = ink[0].stroke;
         // Every pen event's channels, in order, are in the record.
         assert.deepEqual(
           stroke.samples.map(({ time, pressure, tiltX, tiltY }) => ({ time, pressure, tiltX, tiltY })),
@@ -9436,20 +9205,21 @@ describe("standalone workbench host boundary", function () {
             `${trace.name}: sample ${index} at (${sample.x}, ${sample.y}) is off the trace`,
           );
         }
-        if (trace.unchanged === true) {
-          // No fit: the drawing is the recorded samples joined by straight segments.
-          const drawing = recordedDrawing(drawn);
-          assert.deepEqual(
-            [...drawing.matchAll(/\(([-\d.e]+)pt,([-\d.e]+)pt\)/g)].map(([, x, y]) => [
-              Number(x),
-              Number(y),
-            ]),
-            stroke.samples.map(({ x, y }) => [x, y]),
-            `${trace.name} is drawn as ${drawing}`,
-          );
-          assert.doesNotMatch(drawing, / controls /, trace.name);
-          assert.equal(accepted.source, original, trace.name);
-        }
+        const drawing = recordedDrawing(drawn);
+        assert.deepEqual(
+          [...drawing.matchAll(/\(([-\d.e]+)pt,([-\d.e]+)pt\)/g)].map(([, x, y]) => [
+            Number(x),
+            Number(y),
+          ]),
+          stroke.samples.map(({ x, y }) => [x, y]),
+          `${trace.name} is drawn as ${drawing}`,
+        );
+        assert.doesNotMatch(drawing, / controls /, trace.name);
+        // Simplify refits the stroke (FR-027); the accepted curve stays within the trace's error of the samples.
+        const curve = frame.locator(`svg [data-source-id="${ink[0].sourceIds[0]}"]`).first();
+        await simplifyStroke(frame, input, curve);
+        const accepted = await canvasSnapshot();
+        assert.equal(accepted.originalInk.length, 1, trace.name);
         const error = await page.evaluate(
           ({ svg, points, viewBox }) => {
             const holder = document.createElement("div");
@@ -9503,20 +9273,21 @@ describe("standalone workbench host boundary", function () {
         );
         assert.ok(
           error <= trace.error + 0.3,
-          `${trace.name}: bidirectional geometric error ${error} exceeds ${trace.error} for samples ${JSON.stringify(stroke.samples.map(({ x, y }) => [x, y]))} drawn as ${recordedDrawing(accepted.source)}`,
+          `${trace.name}: bidirectional geometric error ${error} exceeds ${trace.error} for samples ${JSON.stringify(stroke.samples.map(({ x, y }) => [x, y]))} simplified to ${recordedDrawing(accepted.source)}`,
         );
+        // Restore Original Stroke returns the source as drawn.
         await chooseTool(frame, input, "Lasso");
-        const drawing = frame
+        const simplified = frame
           .locator(`svg [data-source-id="${accepted.originalInk[0].sourceIds[0]}"]`)
           .first();
-        await input.touch([await strokePoint(page, drawing, 0.3)]);
+        await input.touch([await strokePoint(page, simplified, 0.3)]);
         // A tap that lands on an anchor of a short stroke selects that point; Done returns to the stroke.
         const whole = frame.getByRole("button", { name: "Done", exact: true });
         if (await whole.isVisible()) {
           await input.touch([await stableCenter(whole)]);
         }
         await input.touch([await stableCenter(restore)]);
-        await expect.poll(currentSource, { message: trace.name }).toBe(original);
+        await expect.poll(currentSource, { message: trace.name }).toBe(drawn);
       }
     },
   );
@@ -9909,12 +9680,9 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
-  it("lets the author keep handwritten ink outside geometric interpretation", async function () {
+  it("keeps a handwritten loop as drawn ink, with every pen sample", async function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const frame = editorFrame(page);
-    await documentPanelButton("Properties").click();
-    await frame.getByRole("checkbox", { name: "Interpret geometry", exact: true }).uncheck();
-    await frame.getByRole("button", { name: "Close properties", exact: true }).click();
     const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
     const x = box.x + box.width * 0.4,
       y = box.y + box.height * 0.55;
@@ -9977,7 +9745,6 @@ describe("standalone workbench host boundary", function () {
     const record = /% workbench-ink:([^\r\n]+)/.exec(source);
     assert.ok(record);
     const original = JSON.parse(decodeURIComponent(record[1]));
-    assert.equal(original.intent, "ink");
     assert.ok(original.samples.length >= 42);
     const received = await frame
       .locator("body")
@@ -9998,7 +9765,6 @@ describe("standalone workbench host boundary", function () {
       0,
       "The handwritten loop must not become a circle",
     );
-    await expect(frame.getByRole("dialog", { name: "Freehand result" })).toHaveCount(0);
   });
 
   story(
@@ -10079,11 +9845,6 @@ describe("standalone workbench host boundary", function () {
         }
         await input.palm({ x: x + 180, y: y + 70 }, "touchEnd");
         await input.penUp({ x: x + 100, y });
-        await frame
-          .getByRole("dialog", { name: "Freehand result" })
-          .getByRole("button", { name: "Accept", exact: true })
-          .click();
-        await expect(frame.getByRole("dialog", { name: "Freehand result" })).toHaveCount(0);
         await page.getByRole("button", { name: "Copy source", exact: true }).click();
         await expect
           .poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -10540,7 +10301,7 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`;
       const frame = editorFrame(page);
       const strokes = (source: string) => (source.match(/^[ \t]*% workbench-ink:/gm) ?? []).length;
-      // A bowed stroke, so its fit is a curve and not a straight line.
+      // A bowed stroke; it stays as drawn, one history step.
       const draw = async (across: number, down: number) => {
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const x = bounds.x + bounds.width * across;
@@ -10554,10 +10315,6 @@ describe("standalone workbench host boundary", function () {
           );
         }
         await page.mouse.up();
-        // Accepting the offered fit makes it a history step after the recorded stroke.
-        const result = frame.getByRole("dialog", { name: "Freehand result" });
-        await result.getByRole("button", { name: "Accept", exact: true }).click();
-        await expect(result).toHaveCount(0);
       };
       const undo = () => documentHistory("Undo").click();
       const redo = () => documentHistory("Redo").click();
@@ -10572,7 +10329,7 @@ describe("standalone workbench host boundary", function () {
       // A drawn stroke reaches the source pane; every authored line stays as written.
       await chooseTool(frame, "mouse", "Pen");
       await draw(0.2, 0.25);
-      await expect.poll(storedSource).toMatch(/\.\. controls/);
+      await expect.poll(storedSource).toMatch(/workbench-ink-end:/);
       const drawn = await storedSource();
       assert.equal(strokes(drawn), 1);
       for (const line of authored.split("\n")) {
@@ -10597,14 +10354,10 @@ describe("standalone workbench host boundary", function () {
       assert.equal(retained.source, drawn);
       assert.equal(retained.svg, accepted.svg);
 
-      // Undo steps back through the fit and the stroke to the authored bytes; Redo returns both.
-      await undo();
-      await expect.poll(storedSource).not.toMatch(/\.\. controls/);
-      assert.equal(strokes(await storedSource()), 1);
+      // One Undo returns the authored bytes; one Redo returns the stroke.
       await undo();
       await expect.poll(storedSource).toBe(authored);
       assert.equal((await canvasSnapshot()).svg, loaded.svg);
-      await redo();
       await redo();
       await expect.poll(storedSource).toBe(drawn);
       await page.getByRole("button", { name: "Copy source", exact: true }).click();
@@ -10652,7 +10405,6 @@ describe("standalone workbench host boundary", function () {
       await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
       await draw(0.2, 0.45);
       await expect.poll(async () => strokes(await storedSource())).toBe(2);
-      await expect.poll(storedSource).toMatch(/\.\. controls[\s\S]*\.\. controls/);
       const continued = await canvasSnapshot();
       assert.equal(continued.source, await storedSource());
       assert.ok(
@@ -10660,7 +10412,6 @@ describe("standalone workbench host boundary", function () {
         `The first stroke changed:\n${continued.source}`,
       );
       assert.notEqual(continued.svg, saved.svg, "The snapshot does not show the second stroke");
-      await undo();
       await undo();
       await expect.poll(storedSource).toBe(drawn);
     },
@@ -10704,11 +10455,10 @@ describe("standalone workbench host boundary", function () {
 
   story(
     {},
-    "interprets the newly drawn stroke instead of identical drawing text in a later figure",
+    "simplifies the newly drawn stroke instead of identical drawing text in a later figure",
     async function () {
       const frame = editorFrame(page);
       const input = await TabletInput.attach(page);
-      const result = frame.getByRole("dialog", { name: "Freehand result" });
       const restore = frame.getByRole("button", { name: "Restore Original Stroke", exact: true });
       const currentSource = async () => (await editorDebug(page)).source;
       const tap = async (target: Locator) => input.touch([await stableCenter(target)]);
@@ -10718,7 +10468,7 @@ describe("standalone workbench host boundary", function () {
       const second = String.raw`\begin{tikzpicture}
 \draw[red] (0,0) rectangle (3,2);
 \end{tikzpicture}`;
-      // One gesture in the same view of the first figure, so both drawings record the same samples.
+      // One gesture in the same view of the first figure, so both drawings record the same samples; Simplify refits it.
       const draw = async () => {
         await fitDiagram(frame, input);
         await chooseTool(frame, input, "Pen");
@@ -10730,10 +10480,9 @@ describe("standalone workbench host boundary", function () {
             y: start.y + (25 * i) / 15,
           })),
         );
-        await tap(result.getByRole("button", { name: "Accept", exact: true }));
-        await expect(result).toHaveCount(0);
-        // The stroke stays selected; its restore control belongs to the Select tool.
-        await chooseTool(frame, input, "Lasso");
+        await expect.poll(currentSource).toMatch(/workbench-ink-end:/);
+        await simplifyStroke(frame, input, lastPath(frame));
+        // The stroke stays selected, so its object menu offers its original.
         await expect(restore).toBeVisible();
       };
       await author(`${first}\n${second}`);
@@ -11034,7 +10783,6 @@ describe("standalone workbench host boundary", function () {
       await page.mouse.up();
       await expect(page.locator(".cm-content")).toContainText("workbench-ink:");
       await viewport.press("Control+z");
-      await viewport.press("Control+z");
       await expect.poll(() => page.locator(".cm-content").innerText()).toBe(renderSwitchAuthored);
     },
   );
@@ -11051,17 +10799,11 @@ describe("standalone workbench host boundary", function () {
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         const before = (await editorDebug(page)).historyIndex;
         await input.penStroke(waveAcross(bounds, 0.45, 0.5, 100));
-        await frame
-          .getByRole("dialog", { name: "Freehand result" })
-          .getByRole("button", { name: "Accept", exact: true })
-          .click();
         await expect(page.locator(".cm-content")).toContainText("workbench-ink:");
         await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
-        const strokeEdits = (await editorDebug(page)).historyIndex - before;
-        assert.ok(strokeEdits > 0, "The stroke is an undoable edit");
-        for (let i = 0; i < strokeEdits; i++) {
-          await documentHistory("Undo").click();
-        }
+        // The stroke is one undoable edit.
+        assert.equal((await editorDebug(page)).historyIndex - before, 1);
+        await documentHistory("Undo").click();
         await expect.poll(() => page.locator(".cm-content").innerText()).toBe(renderSwitchAuthored);
       },
     );

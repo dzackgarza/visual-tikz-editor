@@ -82,7 +82,7 @@ Coordinate fields, figure bounds, Repeat, and the readout while you draw show fi
 
 ## Freehand strokes
 
-After a pen stroke, the editor offers a fitted curve; the canvas shows the recorded samples and the fitted points. Keep the original stroke to restore it later, including after reopening the file. **Simplify again** is available until no simpler fit remains. Clear **Interpret geometry** in the Freehand properties to keep handwriting as ink.
+A pen stroke stays as you drew it, and the source keeps its recorded samples. To refit a stroke, select it and choose **Simplify**: the canvas shows the recorded samples and the fitted points, and **Simplify again** is available until no simpler fit remains. **Accept** keeps the refit, and **Cancel** or Escape leaves the stroke as it was. **Restore Original Stroke** brings back the stroke as drawn, also after the file is reopened.
 
 ## Layers
 

@@ -17,7 +17,6 @@ export const editorStateSchema = z.object({
   /** The scale and the figure point, in TikZ points, at the centre of the canvas. */
   viewport: z.object({ scale: z.number().positive(), centerX: z.number(), centerY: z.number() }),
   fitToContent: z.boolean(),
-  interpretGeometry: z.boolean(),
   /** Layer lock and visibility: view state beside the source, never in it, so a hidden layer still prints (data-model Layer). */
   locked: z.array(statementMarkSchema),
   hidden: z.array(statementMarkSchema),

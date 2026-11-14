@@ -412,7 +412,6 @@ function HostBridge() {
 						if (restoredState) {
 							state.dispatch({ type: 'SET_ACTIVE_FIGURE', figureId: restoredState.activeFigureId });
 							state.dispatch({ type: 'SET_TOOL_MODE', mode: restoredState.tool });
-							state.dispatch({ type: 'SET_FREEHAND_INTERPRETATION', enabled: restoredState.interpretGeometry });
 							state.dispatch({ type: 'SELECT_RANGE', ids: restoredState.selection });
 						}
 						postToHost({ event: 'loaded', revision: command.revision });

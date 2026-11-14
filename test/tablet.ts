@@ -236,7 +236,6 @@ export type EditorDebug = {
       snapAlignment: boolean;
       constrainGeometry: boolean;
       freehandSimplificationUnits: number;
-      freehandAutoApply: boolean;
     };
   };
 };

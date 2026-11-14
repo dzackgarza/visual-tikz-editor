@@ -3,7 +3,6 @@ import { z } from 'zod';
 const coordinate = z.number();
 export const originalStrokeSchema = z.object({
   key: z.string().regex(/^[A-Za-z0-9_-]+$/),
-  intent: z.enum(['geometry', 'ink']),
   /** The Pen preset as the toolbar holds it: an xcolor expression such as `red!50!blue`, or a picker colour (data-model Colour). */
   color: z.string().regex(/\S/u, 'Expected a colour'),
   /** The Pen's opacity, present only when below 1; it multiplies any opacity the colour states. */
