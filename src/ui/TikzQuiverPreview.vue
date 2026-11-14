@@ -82,6 +82,7 @@ const emit = defineEmits<{
   (e: "status", text: string): void;
   (e: "undoRequest"): void;
   (e: "redoRequest"): void;
+  (e: "hostPopoverDismissed"): void;
 }>();
 
 const quiver = props.host.quiver;
@@ -232,7 +233,11 @@ async function currentSource(signal: AbortSignal): Promise<string> {
 function focus(): void {
   frame.value?.focus();
 }
-defineExpose({ currentSource, focus });
+// A menu of the shell opened or closed: while one is open, the next press in Quiver closes it.
+function hostPopover(open: boolean): void {
+  if (hostReady.value) postToQuiver({ type: "zettlr-quiver:host-popover", open });
+}
+defineExpose({ currentSource, focus, hostPopover });
 
 function onMessage(event: MessageEvent<QuiverHostMessage>): void {
   if (event.source !== frame.value?.contentWindow || event.origin !== quiverOrigin) return;
@@ -274,6 +279,9 @@ function onMessage(event: MessageEvent<QuiverHostMessage>): void {
       break;
     case "zettlr-quiver:close-request":
       if (props.fullscreen) emit("exitFullscreen");
+      break;
+    case "zettlr-quiver:host-popover-dismissed":
+      emit("hostPopoverDismissed");
       break;
   }
 }

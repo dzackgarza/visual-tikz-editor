@@ -5324,19 +5324,45 @@ describe("standalone workbench host boundary", function () {
       await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
       const quiver = page.locator('iframe[title="Quiver diagram editor"]');
       await expect(quiver).toBeVisible({ timeout: 30_000 });
-      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-      const code = page.locator(".cm-content");
-      await expect(code).toContainText("tikzcd");
-      const before = await code.innerText();
+      // A press on an empty cell of Quiver shows the focus point there; a second press on it makes a vertex.
+      const focusPoint = page.frameLocator('iframe[title="Quiver diagram editor"]').locator(".focus-point");
+      await expect(focusPoint).not.toHaveClass(/revealed/);
       await file.locator("summary").click();
       await expect(file).toHaveAttribute("open", "");
       const box = await layoutBox(quiver);
-      await page.mouse.click(box.x + box.width * 0.75, box.y + box.height * 0.75);
+      const cell = { x: box.x + box.width * 0.75, y: box.y + box.height * 0.75 };
+      await page.mouse.click(cell.x, cell.y);
       await expect(file, "File stayed open after a press in the Quiver view").not.toHaveAttribute("open");
-      // The press's own effect is complete before the next click opens File again.
+      await expect(focusPoint, "The press that closed File also showed Quiver's focus point").not.toHaveClass(
+        /revealed/,
+      );
+      // With no menu open, the same press shows the focus point: the press above was on an empty cell.
+      await page.mouse.click(cell.x, cell.y);
+      await expect(focusPoint, "A press on an empty cell did not show Quiver's focus point").toHaveClass(/revealed/);
+    },
+  );
+
+  story(
+    { initialPage: "blank" },
+    "a press on a control of Quiver closes File, and the control acts",
+    async function () {
+      await page.goto(url);
+      await editorReady(page);
+      const file = page.locator('details.file-menu[aria-label="File"]');
+      await file.locator("summary").click();
+      await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
+      await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible({ timeout: 30_000 });
+      const grid = page
+        .frameLocator('iframe[title="Quiver diagram editor"]')
+        .locator('button.action[data-name="hide-grid"]');
+      await expect(grid.locator(".name")).toHaveText("Hide grid");
       await file.locator("summary").click();
       await expect(file).toHaveAttribute("open", "");
-      assert.equal(await code.innerText(), before, "The press that closed File also changed the diagram");
+      await grid.click();
+      await expect(file, "File stayed open after a press on a control of Quiver").not.toHaveAttribute("open");
+      await expect(grid.locator(".name"), "The control that took the closing press did not act").toHaveText(
+        "Show grid",
+      );
     },
   );
 

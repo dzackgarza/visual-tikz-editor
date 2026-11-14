@@ -34,6 +34,11 @@ let source_dirty = false;
 let suppress_change = false;
 let emit_timer = null;
 let fullscreen = false;
+// A menu of the host is open. The next press here closes it.
+let host_popover_open = false;
+// The stage of a press on the diagram that closed a menu of the host: "down" until its release,
+// "released" until its click, and null when no such press is in progress.
+let closing_press = null;
 
 function post(message) {
     window.parent.postMessage({ sessionId: session_id, revision, ...message }, host_origin);
@@ -209,8 +214,60 @@ window.addEventListener("message", (event) => {
     } else if (message.type === "zettlr-quiver:display") {
         fullscreen = message.fullscreen === true;
         document.body.classList.toggle("zettlr-fullscreen", fullscreen);
+    } else if (message.type === "zettlr-quiver:host-popover") {
+        host_popover_open = message.open === true;
     }
 });
+
+// A press on the diagram that closes a menu of the host does nothing else, as a touch outside
+// a UIKit popover only dismisses it
+// (https://developer.apple.com/documentation/uikit/uipopoverpresentationcontroller/passthroughviews).
+// Quiver gets no event of that press, from its pointerdown to its click. A press on a control
+// of Quiver closes the menu, and the control acts. These listeners are on the window in the
+// capture phase, so they run before each listener of Quiver.
+function withhold_from_quiver(event) {
+    event.stopImmediatePropagation();
+    // The browser ignores preventDefault in a touch listener on the window, which is passive.
+    if (!event.type.startsWith("touch")) event.preventDefault();
+}
+
+window.addEventListener("pointerdown", (event) => {
+    // A new press ends a closing press whose click did not come.
+    closing_press = null;
+    if (!host_popover_open) return;
+    host_popover_open = false;
+    post({ type: "zettlr-quiver:host-popover-dismissed" });
+    // `.container` holds the grid and its cells; the toolbar and the panels are outside it.
+    if (event.target.closest(".container") === null) return;
+    closing_press = "down";
+    withhold_from_quiver(event);
+}, true);
+
+for (const type of ["pointermove", "touchstart", "touchmove"]) {
+    window.addEventListener(type, (event) => {
+        if (closing_press === "down") withhold_from_quiver(event);
+    }, true);
+}
+
+for (const type of ["pointerup", "pointercancel"]) {
+    window.addEventListener(type, (event) => {
+        if (closing_press !== "down") return;
+        // A click follows only the release of the primary button.
+        closing_press = type === "pointerup" && event.button === 0 ? "released" : null;
+        withhold_from_quiver(event);
+    }, true);
+}
+
+// A touch sends its touchend after its pointerup.
+window.addEventListener("touchend", (event) => {
+    if (closing_press !== null) withhold_from_quiver(event);
+}, true);
+
+window.addEventListener("click", (event) => {
+    if (closing_press === null) return;
+    closing_press = null;
+    withhold_from_quiver(event);
+}, true);
 
 window.addEventListener("zettlr-quiver-undo-request", () => post({ type: "zettlr-quiver:undo-request" }));
 window.addEventListener("zettlr-quiver-redo-request", () => post({ type: "zettlr-quiver:redo-request" }));

@@ -17,6 +17,11 @@ The fork boundary is intentionally narrow:
   `zettlr-quiver:redo-request`, and its toolbar has no Undo or Redo.
 - `zettlr-host.{html,css,mjs}` is a local iframe host. It exposes a small
   postMessage bridge for source, theme, macros, change events and Escape.
+- While a menu of the host is open (`zettlr-quiver:host-popover`), the next
+  press in the frame closes it (`zettlr-quiver:host-popover-dismissed`). The
+  bridge keeps every event of a press on the diagram from Quiver, so that
+  press makes no vertex and changes no selection. A press on a control of
+  Quiver reaches that control.
 - Diagram changes are emitted from Quiver's own history/autosave mutation
   boundary. Zettlr does not infer edits from Quiver's DOM. A source request is
   answered after the pending change is posted, so only `zettlr-quiver:change`

@@ -68,9 +68,11 @@ Settings window.
 | to Quiver | `zettlr-quiver:load`, `zettlr-quiver:source` | Opens or replaces the `tikzcd` source, also after Undo or Redo (research R3) |
 | to Quiver | `zettlr-quiver:theme` | Sets the appearance (FR-005) |
 | to Quiver | `zettlr-quiver:display` | Fills the window |
+| to Quiver | `zettlr-quiver:host-popover` (`open`) | A menu of the shell opened or closed. While one is open, the next press in the frame is a closing press: the frame sends `zettlr-quiver:host-popover-dismissed`. A closing press on the diagram has no other effect; a closing press on a control of Quiver also acts on that control |
 | from Quiver | `zettlr-quiver:ready`, `zettlr-quiver:loaded` | The frame is ready; the diagram is shown |
 | from Quiver | `zettlr-quiver:change` | An edit, with the source: one step of the document history |
 | from Quiver | `zettlr-quiver:undo-request`, `zettlr-quiver:redo-request` | The Undo or Redo shortcut inside Quiver; the shell acts on the document history (FR-012b) |
 | from Quiver | `zettlr-quiver:save`, `zettlr-quiver:close-request`, `zettlr-quiver:error` | Save, close, and failure |
+| from Quiver | `zettlr-quiver:host-popover-dismissed` | A press in the frame while a menu of the shell is open; the shell closes that menu |
 
 Inside the shell, Quiver's toolbar shows no Undo, Redo, Save, autosave, theme, or About (research R3).
