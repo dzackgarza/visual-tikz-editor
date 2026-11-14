@@ -9080,7 +9080,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `adds a curve point with a finger double tap, as its hint says, in ${tablet.name}`,
+      `a double tap on a curve enters point editing, a double tap on the curve there adds a point, and a double tap off the curve leaves, in ${tablet.name}`,
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
@@ -9094,15 +9094,32 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
         await chooseTool(frame, input, "Lasso");
-        await input.touch([await strokePoint(page, curve, 0.25)]);
-        await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
-        const hint = await frame.locator("body").innerText();
-        assert.doesNotMatch(hint, /click/i, "The canvas hint names a mouse gesture");
-        assert.match(hint, /Double-tap the curve to add a point/);
-        await input.doubleTap(await strokePoint(page, curve, 0.5));
-        await expect
-          .poll(async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length)
-          .toBe(2);
+        const menu = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const segments = async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length;
+        const penTap = async (point: Point) => input.penStroke([point]);
+        for (const doubleTap of [
+          (point: Point) => input.doubleTap(point),
+          async (point: Point) => {
+            await penTap(point);
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            await penTap(point);
+          },
+        ]) {
+          const before = await segments();
+          // The first tap selects the curve; the second makes the pair a double tap, which opens its points.
+          await doubleTap(await strokePoint(page, curve, 0.25));
+          await expect(menu.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+          assert.deepEqual((await editorDebug(page)).selection, ["path:0"]);
+          assert.equal(await segments(), before, "the double tap that opens the points of a curve added a point to it");
+          // In point editing a double tap on the curve adds a point there, as a double-click does in Inkscape's node tool.
+          await doubleTap(await strokePoint(page, curve, 0.6));
+          await expect.poll(segments).toBe(before + 1);
+          await expect(menu.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+          // A double tap off the curve leaves point editing and keeps the curve selected.
+          await doubleTap((await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0]);
+          await expect(menu.getByRole("button", { name: "Edit Points", exact: true })).toBeVisible();
+          assert.deepEqual((await editorDebug(page)).selection, ["path:0"]);
+        }
       },
     );
   }
@@ -11213,6 +11230,65 @@ describe("standalone workbench host boundary", function () {
           message: "the pen drag under a held finger did not pull one point out of the stroke",
         })
         .toBeGreaterThan(40);
+    },
+  );
+
+  story(
+    { viewport: { width: 1024, height: 768 } },
+    "a pen held still on a point of a selected pen stroke moves that point",
+    async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await chooseTool(frame, input, "Pen");
+      const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      const wave: Point[] = Array.from({ length: 40 }, (_, i) => ({
+        x: box.x + 150 + i * 6,
+        y: box.y + 250 + 30 * Math.sin(i / 6),
+      }));
+      const stroke = frame.locator('[data-canvas-viewport="true"] path[data-source-id]');
+      await input.penStroke(wave);
+      await expect(stroke).toHaveCount(1);
+      await chooseTool(frame, input, "Lasso");
+      await input.touch([await strokePoint(page, stroke, 0.5)]);
+      await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+      const extent = () =>
+        stroke.evaluate((path) => {
+          const { x, y, width, height } = path.getBoundingClientRect();
+          return { x, y, width, height };
+        });
+      const before = await extent();
+      // The lowest part of the wave: a point pulled down from there makes the stroke taller and moves no edge but the bottom.
+      const point = await strokePoint(page, stroke, 0.25);
+      await input.penDown(point);
+      // Past the default of "Hold to move a point" (450 ms).
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      await expect(
+        frame.locator('[data-point-target="move"]'),
+        "the pen held on a point of the selected stroke did not take hold of that point",
+      ).toHaveCount(1);
+      for (let i = 1; i <= 12; i++) await input.penMove({ x: point.x, y: point.y + i * 10 });
+      await input.penUp({ x: point.x, y: point.y + 120 });
+      await expect
+        .poll(async () => (await extent()).height - before.height, {
+          message: "the pen held on a point and then dragged did not pull that point out of the stroke",
+        })
+        .toBeGreaterThan(40);
+      const after = await extent();
+      assert.ok(
+        Math.abs(after.x - before.x) < 1 && Math.abs(after.y - before.y) < 1 && Math.abs(after.width - before.width) < 1,
+        `the stroke moved or changed width: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`,
+      );
+      await expect(selectedPoints(frame)).toHaveCount(1);
+      // A drag with no hold still moves the stroke.
+      await page.locator(".document-bar").getByRole("button", { name: "Undo", exact: true }).click();
+      await expect.poll(async () => (await extent()).height).toBe(before.height);
+      await input.touch([(await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]))[0]]);
+      await input.touch([await strokePoint(page, stroke, 0.5)]);
+      await expect(frame.getByRole("button", { name: "Edit Points", exact: true })).toBeVisible();
+      const grip = await strokePoint(page, stroke, 0.25);
+      await input.penStroke(Array.from({ length: 13 }, (_, i) => ({ x: grip.x, y: grip.y + i * 10 })));
+      await expect.poll(async () => (await extent()).y - before.y).toBeGreaterThan(80);
+      assert.ok(Math.abs((await extent()).height - before.height) < 1);
     },
   );
 
