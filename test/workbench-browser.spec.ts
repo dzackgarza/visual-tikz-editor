@@ -5449,10 +5449,16 @@ describe("standalone workbench host boundary", function () {
       .evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
 
   /** The values of the drawing toolbar's presets, in order, read from their names "Colour n: value". */
+  /** The active tool's preset colours, in toolbar order, read from each preset's name "Colour n: value". */
   async function presetValues(frame: FrameLocator): Promise<string[]> {
-    return (await ariaEntries(drawingToolbar(frame))).flatMap(
-      (entry) => /^button "Colour \d+: (.+)"$/.exec(entry)?.slice(1) ?? [],
-    );
+    const names = await drawingToolbar(frame)
+      .getByRole("button", { name: /^Colour \d+: / })
+      .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label") ?? ""));
+    return names.map((name) => {
+      const value = /^Colour \d+: (.+)$/.exec(name)?.[1];
+      assert.ok(value, `A preset is named ${name}`);
+      return value;
+    });
   }
 
   for (const tablet of TABLET_VIEWPORTS) {
@@ -5575,10 +5581,12 @@ describe("standalone workbench host boundary", function () {
       await tap(presets().nth(1));
       await expect(presets().nth(1)).toHaveAttribute("aria-pressed", "true");
       const pen = await presetValues(frame);
+      assert.equal(pen.length, 5, `The Pen's presets before a restart: ${pen.join(", ")}`);
       await chooseTool(frame, input, "Fill");
       await tap(presets().nth(2));
       await expect(presets().nth(2)).toHaveAttribute("aria-pressed", "true");
       const fill = await presetValues(frame);
+      assert.equal(fill.length, 3, `The Fill's presets before a restart: ${fill.join(", ")}`);
       // Presets are preferences: choosing and adding them leaves the figure's source as written.
       assert.equal((await editorDebug(page)).source, source, "A preset change entered the source");
 
