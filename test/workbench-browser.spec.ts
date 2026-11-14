@@ -8193,8 +8193,8 @@ describe("standalone workbench host boundary", function () {
           const anchor = frame
             .locator('[data-handle-kind="move-handle"][data-source-id="path:0"]')
             .first();
+          // In Selecting, a tap on a point of the curve is a tap on the curve.
           await tap(await settledCenter(anchor));
-          await expect.poll(async () => (await editorDebug(page)).handle).not.toBeNull();
           await expect(lock).toHaveAttribute("aria-pressed", "true");
           assert.deepEqual((await editorDebug(page)).selection, ["path:0"]);
           const before = (await editorDebug(page)).viewport;
@@ -8788,7 +8788,8 @@ describe("standalone workbench host boundary", function () {
           ]);
           await expect.poll(async () => (await editorDebug(page)).source).not.toBe(before);
           assert.match((await editorDebug(page)).source, /\(6,0\)/);
-          await tap(await pointAt(1));
+          // The point stays chosen after a point command.
+          await expect(selectedPoints(frame)).toHaveCount(1);
           await input.touch([
             await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Delete", exact: true })),
           ]);
