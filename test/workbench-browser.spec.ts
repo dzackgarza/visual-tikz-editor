@@ -754,6 +754,56 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    { initialPage: "blank", document: "" },
+    "a stroke on the canvas of an empty file makes its tikzpicture",
+    async function () {
+      await page.goto(url);
+      const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
+      const viewport = frame.locator('[data-canvas-viewport="true"]');
+      await expect(viewport, "The canvas did not open on the empty file").toBeVisible({ timeout: 30_000 });
+      await editorReady(page);
+      await chooseTool(frame, "mouse", "Pen");
+      const box = await layoutBox(viewport);
+      await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * 0.55 + 90, box.y + box.height * 0.3 + 25, { steps: 12 });
+      await page.mouse.up();
+      await expect(lastPath(frame), "The canvas does not show the stroke").toBeInViewport();
+      await expect
+        .poll(() => readFile(documentPath!, "utf8"), { message: "The file does not hold the stroke in a tikzpicture" })
+        .toMatch(/^\\begin\{tikzpicture\}\s*\\draw[^;]+;\s*\\end\{tikzpicture\}\s*$/u);
+    },
+  );
+
+  story(
+    {},
+    "a tikzcd that Quiver exported, with its link comment and its display-math brackets, opens in Quiver and renders",
+    async function () {
+      // The text that q.uiver.app gives for one arrow from A to B with its default export settings.
+      await pasteCode(
+        page,
+        [
+          "% https://q.uiver.app/#q=WzAsMixbMCwwLCJBIl0sWzEsMCwiQiJdLFswLDFdXQ==",
+          String.raw`\[\begin{tikzcd}`,
+          "\tA & B",
+          "\t" + String.raw`\arrow[from=1-1, to=1-2]`,
+          String.raw`\end{tikzcd}\]`,
+        ].join("\n"),
+      );
+      await expect(page.frameLocator('iframe[title="Quiver diagram editor"]').locator(".vertex")).toHaveCount(2, {
+        timeout: 30_000,
+      });
+      assert.deepEqual(await viewControls(), ["Code: left sidebar", "Preview: right sidebar", "Quiver: right sidebar"]);
+      await expect(page.locator('iframe[title="TikZ visual editor"]')).toHaveCount(0);
+      await expect(page.locator(".workspace").getByRole("alert")).toHaveCount(0);
+      await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+      await expect(page.locator(".tikz-view-status")).toContainText("Up to date", { timeout: 40_000 });
+      await expect(page.locator(".tikz-figure-viewer-source")).toBeVisible();
+      await page.screenshot({ path: "test-results/workbench/quiver-export-rendered.png" });
+    },
+  );
+
   /** Two presses on an empty cell of Quiver: the first shows the focus point there, and the second makes a vertex. */
   async function addQuiverVertex(at: { x: number; y: number }): Promise<void> {
     const focusPoint = page.frameLocator('iframe[title="Quiver diagram editor"]').locator(".focus-point");
