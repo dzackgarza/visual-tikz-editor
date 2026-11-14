@@ -74,6 +74,7 @@ const emit = defineEmits<{
   (e: "undoRequest"): void;
   (e: "redoRequest"): void;
   (e: "popoverOpened"): void;
+  (e: "hostPopoverDismissed"): void;
   (e: "settingsRequest"): void;
   (e: "status", text: string): void;
   (e: "busy", busy: boolean): void;
@@ -174,12 +175,17 @@ function dismissPopover(): void {
   if (loaded.value) postToEditor({ action: "dismiss-popover" });
 }
 
+// A menu of the shell opened or closed: while one is open, the next press in the canvas closes it.
+function hostPopover(open: boolean): void {
+  if (loaded.value) postToEditor({ action: "host-popover", open });
+}
+
 // Keyboard focus goes back to the canvas after a window over it closes (FR-062).
 function focus(): void {
   frame.value?.focus();
 }
 
-defineExpose({ snapshot, currentSource, zoom, dismissPopover, focus });
+defineExpose({ snapshot, currentSource, zoom, dismissPopover, hostPopover, focus });
 
 function sendFullLoad(): void {
   // A load selects nothing, so the changes before it are spent.
@@ -401,6 +407,9 @@ function onMessage(event: MessageEvent): void {
       break;
     case "popover-opened":
       emit("popoverOpened");
+      break;
+    case "host-popover-dismissed":
+      emit("hostPopoverDismissed");
       break;
     case "settings-request":
       emit("settingsRequest");

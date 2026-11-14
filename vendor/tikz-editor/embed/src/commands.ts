@@ -25,6 +25,8 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('panel'), panel: panelSchema }),
   // The shell opened a popover of its own, so the canvas closes its open one.
   z.object({ ...identity, action: z.literal('dismiss-popover') }),
+  // A menu of the shell opened or closed. While one is open, the next press in the canvas closes it.
+  z.object({ ...identity, action: z.literal('host-popover'), open: z.boolean() }),
   z.object({ ...identity, action: z.literal('source') }),
   // A zoom command names a direction or a scale, where 1 is printed size.
   z.object({ ...identity, action: z.literal('zoom'),

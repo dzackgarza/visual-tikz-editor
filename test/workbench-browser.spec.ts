@@ -40,10 +40,14 @@ import {
   waveAcross,
 } from "./tablet";
 
-/** The canvas frame's session as its last `loaded` notification names it, and its snapshot replies by request. */
+/**
+ * The canvas frame's session as its last `loaded` notification names it, its snapshot replies by request, and
+ * how many reports that a shell menu opened or closed it has acknowledged.
+ */
 type CanvasProtocol = {
   session: { sessionId: string; revision: number } | null;
   snapshots: Record<string, EditorSnapshotResult>;
+  shellMenuReports: number;
 };
 
 /** The sensor channels of one pen event as the canvas frame received it. */
@@ -61,7 +65,7 @@ function recordCanvasProtocol(): void {
   if (window !== window.top) {
     return;
   }
-  const protocol: CanvasProtocol = { session: null, snapshots: {} };
+  const protocol: CanvasProtocol = { session: null, snapshots: {}, shellMenuReports: 0 };
   window.canvasProtocol = protocol;
   window.addEventListener("message", (event) => {
     const canvas = document.querySelector<HTMLIFrameElement>('iframe[title="TikZ visual editor"]');
@@ -75,6 +79,9 @@ function recordCanvasProtocol(): void {
     }
     if (message.event === "snapshot") {
       protocol.snapshots[message.requestId] = message;
+    }
+    if (message.event === "reply" && message.action === "host-popover" && message.status === "ok") {
+      protocol.shellMenuReports += 1;
     }
   });
 }
@@ -249,6 +256,20 @@ describe("standalone workbench host boundary", function () {
     const session = await page.evaluate(() => window.canvasProtocol.session);
     assert.ok(session !== null, "The canvas has not loaded a source");
     return session;
+  }
+
+  /**
+   * Runs `change`, which opens or closes one shell menu, and waits until the canvas frame has the report of it.
+   * The shell reports the change by a message that the frame gets some milliseconds later. A person presses
+   * after that; a press that this driver sends at once overtakes the message.
+   */
+  async function shellMenuChange(change: () => Promise<void>): Promise<void> {
+    const reports = () => page.evaluate(() => window.canvasProtocol.shellMenuReports);
+    const before = await reports();
+    await change();
+    await expect
+      .poll(reports, { message: "The canvas frame did not get the report that a shell menu opened or closed" })
+      .toBeGreaterThan(before);
   }
 
   /** Posts one frame-protocol command to the canvas from the shell's window. */
@@ -5165,14 +5186,18 @@ describe("standalone workbench host boundary", function () {
         await chooseTool(frame, input, "Shapes");
         for (const name of ["File", "Export", "More"]) {
           const shellMenu = page.locator(`details.file-menu[aria-label="${name}"]`);
-          const open = async () => {
-            await input.touch([await stableCenter(shellMenu.locator("summary"))]);
-            await expect(shellMenu).toHaveAttribute("open", "");
-          };
+          const open = () =>
+            shellMenuChange(async () => {
+              await input.touch([await stableCenter(shellMenu.locator("summary"))]);
+              await expect(shellMenu).toHaveAttribute("open", "");
+            });
           for (const [contact, press] of contacts) {
             await open();
-            await press(await pointOutside(shellMenu.locator(".file-menu-items"), empty));
-            await expect(shellMenu, `A ${contact} press on the canvas did not close ${name}`).not.toHaveAttribute("open");
+            const point = await pointOutside(shellMenu.locator(".file-menu-items"), empty);
+            await shellMenuChange(async () => {
+              await press(point);
+              await expect(shellMenu, `A ${contact} press on the canvas did not close ${name}`).not.toHaveAttribute("open");
+            });
             // The press's own effect is complete before the next tap opens the Shapes menu.
             await input.touch([await stableCenter(shapes)]);
             await expect(toolMenu).toBeVisible();
@@ -5181,8 +5206,10 @@ describe("standalone workbench host boundary", function () {
             await expect(toolMenu).toHaveCount(0);
           }
           await open();
-          await page.keyboard.press("Escape");
-          await expect(shellMenu, `Escape did not close ${name}`).not.toHaveAttribute("open");
+          await shellMenuChange(async () => {
+            await page.keyboard.press("Escape");
+            await expect(shellMenu, `Escape did not close ${name}`).not.toHaveAttribute("open");
+          });
         }
         // With no menu open the same press draws.
         const from = at(8, 9);

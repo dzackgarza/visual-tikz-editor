@@ -83,6 +83,7 @@
             :initial-mode="modeForView(view)" :panel="view === 'canvas' ? canvasPanel : null"
             @panel="canvasPanel = $event" @status="onEditorStatus(view, $event)"
             @undo-request="undoDocument" @redo-request="redoDocument" @popover-opened="closeShellMenus"
+            @host-popover-dismissed="closeShellMenus"
             @settings-request="openSettings" />
         </div>
         <div v-if="bothOpen" class="pane-divider" role="separator" aria-label="Resize sidebars"
@@ -218,18 +219,35 @@ function closeFileMenu(event: MouseEvent): void {
     event.currentTarget.open = false;
   }
 }
+const shellMenus = (): HTMLDetailsElement[] => [...window.document.querySelectorAll<HTMLDetailsElement>("details.file-menu")];
 // One popover at a time across shell and canvas (FR-004).
 function onShellMenuToggle(event: Event): void {
   const menu = event.currentTarget as HTMLDetailsElement;
   if (!menu.open) return;
-  for (const other of window.document.querySelectorAll<HTMLDetailsElement>("details.file-menu")) {
+  for (const other of shellMenus()) {
     if (other !== menu) other.open = false;
   }
   for (const editor of workbenches.values()) editor.dismissPopover();
 }
 function closeShellMenus(): void {
-  for (const menu of window.document.querySelectorAll<HTMLDetailsElement>("details.file-menu")) menu.open = false;
+  for (const menu of shellMenus()) menu.open = false;
 }
+// A press on another control of the shell closes the open menu, and the control still acts (FR-003).
+function closeShellMenusNotPressed(event: PointerEvent): void {
+  for (const menu of shellMenus()) {
+    if (!(event.target instanceof Node && menu.contains(event.target))) menu.open = false;
+  }
+}
+// A press in a canvas frame does not reach the shell, so each frame learns when a menu of the shell opens or
+// closes: the frame reports the next press, and the canvas gives that press no other effect. The observer
+// reads the menus' own state, because the toggle event comes after later input.
+let shellMenuOpen = false;
+const shellMenuObserver = new MutationObserver(() => {
+  const open = shellMenus().some((menu) => menu.open);
+  if (open === shellMenuOpen) return;
+  shellMenuOpen = open;
+  for (const editor of workbenches.values()) editor.hostPopover(open);
+});
 const nativeWindow = isTauri();
 const unsavedPrompt = ref<"closing" | "continuing" | null>(null);
 let resolvePrompt: ((choice: "save" | "discard" | "cancel") => void) | null = null;
@@ -672,6 +690,10 @@ async function exportDiagram(format: "pdf" | "svg" | "png"): Promise<void> {
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape" && shellMenus().some((menu) => menu.open)) {
+    closeShellMenus();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && !event.altKey &&
       (event.key === "-" || event.key === "=" || event.key === "+" || event.key === "0")) {
     if (isVisible("canvas")) {
@@ -712,6 +734,8 @@ async function copySource(): Promise<void> {
 
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("pointerdown", closeShellMenusNotPressed, true);
+  for (const menu of shellMenus()) shellMenuObserver.observe(menu, { attributes: true, attributeFilter: ["open"] });
   window.addEventListener("beforeunload", onBeforeUnload);
   systemDark.addEventListener("change", followSystemAppearance);
   if (nativeWindow) {
@@ -736,6 +760,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("pointerdown", closeShellMenusNotPressed, true);
+  shellMenuObserver.disconnect();
   window.removeEventListener("beforeunload", onBeforeUnload);
   systemDark.removeEventListener("change", followSystemAppearance);
   unlistenClose?.();

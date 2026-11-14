@@ -5,6 +5,7 @@ import { useEditorStore } from '@tikz-editor/app/store';
 import { PRINTED_SIZE_SCALE, getEditorSettings, publishOccupiedInsets, reloadEditorSettings, replaceSource } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
+import { markClosingPress } from '@tikz-editor/app/closing-press';
 import './styles.css';
 import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
 import { createSnapshotRequests, editorState } from './snapshots';
@@ -350,6 +351,7 @@ function HostBridge() {
 				status: error === undefined ? 'ok' : 'failed', error });
 		};
 
+		let hostPopoverOpen = false;
 		const handleMessage = (event: MessageEvent) => {
 			if (window.parent === window || event.source !== window.parent) return;
 			if (event.origin !== new URL(document.referrer).origin) return;
@@ -472,7 +474,20 @@ function HostBridge() {
 					window.dispatchEvent(new Event('tikz-embed-dismiss-popover'));
 					reply(command);
 					return;
+				case 'host-popover':
+					hostPopoverOpen = command.open;
+					reply(command);
+					return;
 			}
+		};
+
+		// While a menu of the shell is open, the next press here closes it and does nothing else:
+		// the canvas gives a closing press no other effect, as for a popup of its own.
+		const closeHostPopoverByPress = (event: PointerEvent) => {
+			if (!hostPopoverOpen) return;
+			hostPopoverOpen = false;
+			markClosingPress(event);
+			postToHost({ event: 'host-popover-dismissed' });
 		};
 
 		const handleKeydown = (event: KeyboardEvent) => {
@@ -513,6 +528,7 @@ function HostBridge() {
 			}
 		});
 		imageObserver.observe(document.body, { childList: true, subtree: true });
+		window.addEventListener('pointerdown', closeHostPopoverByPress, true);
 		window.addEventListener('keydown', handleKeydown, true);
 		return () => {
 			pendingLoad?.();
@@ -524,6 +540,7 @@ function HostBridge() {
 			unsubscribe();
 			for (const [name, listener] of forkEvents) window.removeEventListener(name, listener);
 			window.removeEventListener('message', handleMessage);
+			window.removeEventListener('pointerdown', closeHostPopoverByPress, true);
 			window.removeEventListener('keydown', handleKeydown, true);
 		};
 	}, []);

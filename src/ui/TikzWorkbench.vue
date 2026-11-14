@@ -107,6 +107,7 @@
         @undo-request="emit('undoRequest')"
         @redo-request="emit('redoRequest')"
         @popover-opened="emit('popoverOpened')"
+        @host-popover-dismissed="emit('hostPopoverDismissed')"
         @settings-request="emit('settingsRequest')"
         @status="onProviderStatus(provider.id, $event)"
         @busy="onProviderBusy(provider.id, $event)"
@@ -169,6 +170,7 @@ const emit = defineEmits<{
   (e: "undoRequest"): void;
   (e: "redoRequest"): void;
   (e: "popoverOpened"): void;
+  (e: "hostPopoverDismissed"): void;
   (e: "settingsRequest"): void;
   (e: "status", status: string): void;
 }>();
@@ -197,6 +199,7 @@ type EditorHandle = {
   currentSource?: (signal: AbortSignal) => Promise<string>;
   zoom?: (direction: "in" | "out" | "fit" | "selection" | "normal") => void;
   dismissPopover?: () => void;
+  hostPopover?: (open: boolean) => void;
   focus?: () => void;
 };
 const editorHandles = new Map<TikzPreviewModeId, EditorHandle>();
@@ -216,10 +219,13 @@ function zoom(direction: "in" | "out" | "fit" | "selection" | "normal"): void {
 function dismissPopover(): void {
   for (const editor of editorHandles.values()) editor.dismissPopover?.();
 }
+function hostPopover(open: boolean): void {
+  for (const editor of editorHandles.values()) editor.hostPopover?.(open);
+}
 function focus(): void {
   editorHandles.get(displayMode.value)?.focus?.();
 }
-defineExpose({ currentSource, zoom, dismissPopover, focus });
+defineExpose({ currentSource, zoom, dismissPopover, hostPopover, focus });
 const previewHandle = ref<{ refresh?: () => void } | null>(null);
 const providers: readonly TikzPreviewProvider[] = TIKZ_PREVIEW_PROVIDERS;
 const displayMode = requestedMode;

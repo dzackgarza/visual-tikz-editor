@@ -19,6 +19,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `panel` | `panel`: `layers` \| `properties` \| `null` | Opens one panel or closes the open one; `null` also when the shell opens the Code panel (FR-060, research R13) |
 | `replace-source` | `source`, `changed` | Shows the source that Undo, Redo, or another view wrote; keeps the viewport and the tool (research R3). After Undo or Redo, `changed` holds the ranges of `source` that the step wrote, and the selection becomes the objects, and in Edit Points the points, that they touch (FR-054). After an edit in another view, `changed` is null; the selection keeps the objects that the figure still holds, and the point selection clears |
 | `dismiss-popover` | — | Closes the canvas popover, because the shell opened one (research R16) |
+| `host-popover` | `open` | A menu of the shell opened or closed. While one is open, the next press in the frame is a closing press: the frame sends `host-popover-dismissed`, and the canvas gives that press no other effect, except ink with the Pen or the Eraser |
 | `zoom` | `direction`: `in` \| `out` \| `fit` \| `selection` \| `normal`, or `scale` | The zoom commands of the readout ([surfaces](surfaces.md), Canvas controls; research R8) |
 | `source`, `snapshot` | — | Reads the source or a rendered snapshot |
 | `keyboard` | `bottom` | The height of the on-screen keyboard over the frame |
@@ -37,6 +38,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `selection` | `empty` | Properties shows the figure when the selection is empty (FR-060a) |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | The panel that is open, after any change, including its own close button |
 | `popover-opened` | — | The canvas opened a popover; the shell closes its own (research R16) |
+| `host-popover-dismissed` | — | A press in the frame while a menu of the shell is open; the shell closes that menu |
 | `settings-request` | — | The Settings shortcut inside the canvas; the shell opens the Settings window (FR-062) |
 | `persistence-save` | `key`, `value` | A preference to keep outside the source, among them Settings › Appearance (FR-062) |
 | `view-state` | `state`: figure, selection, tool, view (the scale and the figure point at the centre of the canvas, as Inkscape keeps a document's zoom and centre), Zoom to Fit, geometry interpretation, and the locked and hidden statements (each its span and text; data-model Layer) | The settled view of the loaded file; the workbench keeps it in `$XDG_STATE_HOME/visual-tikz-editor/view-state.json`, keyed by file path, and sends it in the next `load` of that file (FR-040, FR-063) |
