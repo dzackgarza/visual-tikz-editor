@@ -6,6 +6,8 @@
  */
 
 import { strict as assert } from "node:assert";
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -221,4 +223,33 @@ describe("desktop package", function () {
     assert.equal(await app.script(z.number(), "return document.querySelectorAll('iframe').length;"), 0);
     assert.equal(await readFile(viewStateFile, "utf8"), older, "the start changed the file that it cannot read");
   });
+});
+
+describe("desktop package, when the application gets a signal", function () {
+  let app: DesktopApp;
+
+  afterEach(async function () {
+    await app.stop();
+  });
+
+  // SIGTERM is the signal of a session logout and of `kill`; SIGKILL gives the application no step of its own (issue #81).
+  for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+    it(`leaves no file host after ${signal}`, async function () {
+      app = await DesktopApp.start();
+      // The file host is the child process of the shell that serves the window's page.
+      const hostOfShell = () => {
+        const found = spawnSync("pgrep", ["-P", String(app.pid), "-x", "workbench-host"], { encoding: "utf8" });
+        return found.stdout.trim();
+      };
+      await expect.poll(hostOfShell, { message: "the shell started no file host", timeout: 30_000 }).toMatch(/^\d+$/);
+      const host = hostOfShell();
+      process.kill(app.pid, signal);
+      await expect
+        .poll(() => existsSync(`/proc/${app.pid}`), { message: `the application did not end at ${signal}` })
+        .toBe(false);
+      await expect
+        .poll(() => existsSync(`/proc/${host}`), { message: `the file host still runs after ${signal}` })
+        .toBe(false);
+    });
+  }
 });
