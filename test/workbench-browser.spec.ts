@@ -5386,6 +5386,109 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a text that gets no key leaves nothing in the diagram or in its history, in ${tablet.name}`,
+      async function () {
+        await author(axesFigure);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const source = async () => (await editorDebug(page)).source;
+        const texts = async () => ((await source()).match(/\{[^{}]*\};/g) ?? []).join(" ");
+        const textBox = frame.getByTestId("canvas-text-edit-textarea");
+        await chooseTool(frame, input, "Text");
+        // Escape with no key typed, for a text on empty canvas and for a label on a line.
+        for (const [name, point] of [
+          ["text", at(9, 9)],
+          ["label on a line", at(5, 0)],
+        ] as const) {
+          await input.penStroke([point]);
+          await expect(textBox, `The new ${name} is not in edit`).toBeFocused();
+          await page.keyboard.press("Escape");
+          await expect
+            .poll(source, { message: `The ${name} that got no key stayed in the diagram after Escape` })
+            .toBe(axesFigure);
+        }
+        // A tap elsewhere moves the text that got no key; the keys typed next go to the new place only.
+        await input.penStroke([at(9, 9)]);
+        await expect(textBox, "The new text is not in edit").toBeFocused();
+        await input.penStroke([at(9, 6)]);
+        await expect
+          .poll(texts, { message: "A tap elsewhere did not leave exactly one text in edit" })
+          .toBe("{node};");
+        await expect(textBox, "The text at the second tap is not in edit").toBeFocused();
+        await page.keyboard.type("z");
+        await expect.poll(texts, { message: "The typed key did not become the one text" }).toBe("{z};");
+        const typed = await source();
+        // The typed text is one step of the history; the placements that got no key are no step.
+        await input.touch([await stableCenter(documentHistory("Undo"))]);
+        await expect
+          .poll(source, { message: "One Undo after a typed text did not remove the text" })
+          .toBe(axesFigure);
+        await input.touch([await stableCenter(documentHistory("Redo"))]);
+        await expect.poll(source, { message: "Redo did not bring the typed text back" }).toBe(typed);
+        // A change of tool with no key typed.
+        await chooseTool(frame, input, "Text");
+        await input.penStroke([at(3, 9)]);
+        await expect(textBox, "The new text is not in edit").toBeFocused();
+        await chooseTool(frame, input, "Lasso");
+        await expect
+          .poll(source, { message: "The text that got no key stayed in the diagram after the tool changed" })
+          .toBe(typed);
+        await input.touch([await stableCenter(documentHistory("Undo"))]);
+        await expect
+          .poll(source, { message: "A text that got no key is a step of the history" })
+          .toBe(axesFigure);
+      },
+    );
+
+    story(
+      { viewport: tablet },
+      `while a text is in edit, the canvas shows no coordinate tooltip and no snap label, by pen and mouse, in ${tablet.name}`,
+      async function () {
+        await author(axesFigure);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const textBox = frame.getByTestId("canvas-text-edit-textarea");
+        const tooltip = frame.getByTestId("canvas-drag-tooltip");
+        const snapLabel = frame.locator("[data-snap-target]");
+        await chooseTool(frame, input, "Text");
+        // The pen lifts and stays in hover range; the mouse stays where it clicked and moves a little.
+        const contacts: [string, Point, (point: Point) => Promise<void>, (point: Point) => Promise<void>][] = [
+          ["pen", at(5, 0), (point) => input.penStroke([point]), (point) => input.penHover(point)],
+          [
+            "mouse",
+            at(4, 7),
+            (point) => page.mouse.click(point.x, point.y),
+            (point) => page.mouse.move(point.x + 2, point.y),
+          ],
+        ];
+        for (const [contact, point, tap, stay] of contacts) {
+          await tap(point);
+          await expect(textBox, `The label placed by ${contact} is not in edit`).toBeFocused();
+          await stay(point);
+          await stay(point);
+          await expect(tooltip, `A coordinate tooltip shows while the text placed by ${contact} is in edit`).toHaveCount(0);
+          await expect(snapLabel, `A snap label shows while the text placed by ${contact} is in edit`).toHaveCount(0);
+          await page.keyboard.type("w");
+          await expect(tooltip, `A coordinate tooltip shows while the text placed by ${contact} is typed`).toHaveCount(0);
+          // With no text in edit, the tool shows where the next text goes.
+          await page.keyboard.press("Escape");
+          await expect(textBox).toHaveCount(0);
+          await stay(point);
+          await expect(tooltip, `The Text tool shows no coordinates for the ${contact} after the edit ended`).toHaveCount(1);
+        }
+      },
+    );
+  }
+
   /** A stroke record with a field this build does not define, as an older build wrote it. */
   const unreadableInkRecord = encodeURIComponent(
     JSON.stringify({
