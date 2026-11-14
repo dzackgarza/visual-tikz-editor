@@ -65,11 +65,14 @@ To edit an existing file, pass its path: `visual-tikz-editor figure.tikz` or `ju
 | --- | --- | --- |
 | Diagram | The `.tikz` or `.tikzcd` file you open | Each accepted edit saves to the file. A change on disk stops the save and reports a conflict. |
 | Recovery draft | `$XDG_STATE_HOME/visual-tikz-editor/recovery.json` (default `~/.local/state`) | Holds an untitled diagram until Save As, and the edits that a disk conflict stopped. The editor restores the last diagram after a restart. |
+| View state | `$XDG_STATE_HOME/visual-tikz-editor/view-state.json` (default `~/.local/state`) | The view of each diagram: the zoom, the position, the tool, and the locked and hidden layers. A reopened diagram shows its last view. |
 | Preferences | `$XDG_CONFIG_HOME/visual-tikz-editor/preferences.json` (default `~/.config`) | Canvas settings, snapping rules, shortcuts, and colour collections. |
 | Render cache | `$XDG_CACHE_HOME/visual-tikz-editor` (default `~/.cache`) | Compiled TeX output for the render view and export. |
 | Images | Relative to the diagram's directory | `\includegraphics` paths and TeX inputs resolve there. |
 
-The editor serves its page on `127.0.0.1` only, on a free port. It makes no requests to other hosts. Layer locks and selection locks last only for the open session.
+The editor serves its page on `127.0.0.1` only, on a free port. It makes no requests to other hosts. Selection locks last only for the open session.
+
+If the editor cannot read its recovery draft, view state, or preferences file at a start, the window shows the path of the file and the reason, and the editor changes no file. Correct the file or move it to a different folder, then start the editor again.
 
 ## More documentation
 

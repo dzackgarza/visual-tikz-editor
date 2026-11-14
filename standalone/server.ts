@@ -22,6 +22,7 @@ import { editorStateSchema } from "../vendor/tikz-editor/embed/src/editor-state"
 import { parseMathJaxMacros } from "../src/mathjax-config";
 import { projectQuiverMacros } from "../src/quiver-macros";
 import { reportPageErrors } from "./page-reporter";
+import { startFailurePage, type UnreadableFile } from "./start-failure";
 import {
   renderTikz,
   resolveTikzDataDir,
@@ -57,16 +58,59 @@ let conflictSource: string | null = null;
 let conflictRevision: string | null = null;
 const packageRoot = process.env.TIKZ_WORKBENCH_ASSETS ?? path.resolve(import.meta.dir, "..");
 const pageRoot = path.join(packageRoot, "standalone", "dist");
+/**
+ * The text of a file that holds JSON. A person can edit these files and other builds write
+ * them, so a text that is not JSON is an issue of the parse, not an exception
+ * (Zod, "json(schema)": a JSON.parse failure becomes an issue; https://zod.dev/codecs).
+ */
+const jsonText = z.string().transform((text, context) => {
+  try {
+    return JSON.parse(text) as z.core.util.JSONType;
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    context.issues.push({ code: "custom", message: `The text is not JSON: ${error.message}`, input: text });
+    return z.NEVER;
+  }
+});
+
+/**
+ * Shows, in place of the workbench, the file that stops this start. The launcher opens its
+ * window at the printed address as it does for the workbench, so the person reads the reason
+ * in the window. The start goes no further: the host reads and writes no other file.
+ */
+async function stopStart(unreadable: UnreadableFile): Promise<never> {
+  console.error(`${new Date().toISOString()} file host: cannot read ${unreadable.file}\n${unreadable.reason}`);
+  const page = startFailurePage(unreadable);
+  const failure = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () => new Response(page, { status: 503, headers: { "content-type": "text/html; charset=utf-8" } }),
+  });
+  console.log(`TikZ workbench: http://127.0.0.1:${failure.port}/`);
+  return await new Promise<never>(() => {});
+}
+
+/** What `file` holds, or null when the file is absent. A file that does not hold `schema` stops the start. */
+async function readStartFile<T>(
+  file: string,
+  schema: z.ZodType<T, z.core.util.JSONType>,
+  about: Pick<UnreadableFile, "holds" | "withoutIt">,
+): Promise<T | null> {
+  if (!existsSync(file)) return null;
+  const read = jsonText.pipe(schema).safeParse(await readFile(file, "utf8"));
+  if (read.success) return read.data;
+  return await stopStart({ file, ...about, reason: z.prettifyError(read.error) });
+}
+
 const home = os.homedir();
 const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
 if (!path.isAbsolute(configHome)) throw new Error("XDG_CONFIG_HOME must be an absolute path");
 const preferencesPath = path.join(configHome, "visual-tikz-editor", "preferences.json");
-const preferencesFile = Bun.file(preferencesPath);
-const preferences: Record<string, string> = await preferencesFile.exists() ? await preferencesFile.json() : {};
-if (preferences === null || Array.isArray(preferences) || typeof preferences !== "object" ||
-    Object.values(preferences).some(value => typeof value !== "string")) {
-  throw new Error(`Invalid workbench preferences: ${preferencesPath}`);
-}
+const preferences: Record<string, string> =
+  (await readStartFile(preferencesPath, z.record(z.string(), z.string()), {
+    holds: "The settings of the application.",
+    withoutIt: "Without this file, each setting has its default value.",
+  })) ?? {};
 let preferenceWrite = Promise.resolve();
 const cacheHome = process.env.XDG_CACHE_HOME || path.join(home, ".cache");
 if (!path.isAbsolute(cacheHome)) throw new Error("XDG_CACHE_HOME must be an absolute path");
@@ -81,15 +125,18 @@ const RecoveryRecord = z.object({
   revision: z.string(),
 });
 type RecoveryRecord = z.infer<typeof RecoveryRecord>;
-let recoveryRecord: RecoveryRecord | null = existsSync(recoveryPath)
-  ? RecoveryRecord.parse(JSON.parse(await readFile(recoveryPath, "utf8")))
-  : null;
+let recoveryRecord: RecoveryRecord | null = await readStartFile(recoveryPath, RecoveryRecord, {
+  holds: "The draft of the diagram that was open when the application last stopped.",
+  withoutIt: "Without this file, the application opens no draft. The text of the draft stays in the file that you moved.",
+});
 // The view at which the canvas last showed each file, kept outside its source (FR-040, FR-063).
 const viewStatePath = path.join(stateHome, "visual-tikz-editor", "view-state.json");
 const ViewStates = z.record(z.string(), editorStateSchema);
-const viewStates: z.infer<typeof ViewStates> = existsSync(viewStatePath)
-  ? ViewStates.parse(JSON.parse(await readFile(viewStatePath, "utf8")))
-  : {};
+const viewStates: z.infer<typeof ViewStates> =
+  (await readStartFile(viewStatePath, ViewStates, {
+    holds: "The view of each diagram: the zoom, the position, the tool, and the locked and hidden layers.",
+    withoutIt: "Without this file, each diagram opens in its default view.",
+  })) ?? {};
 let viewStateWrite = Promise.resolve();
 /** The file whose view the canvas shows: its path, or the untitled document's identity. */
 const viewKey = (): string => documentPath ?? `untitled:${documentId}`;
