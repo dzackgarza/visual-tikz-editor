@@ -5405,12 +5405,16 @@ describe("standalone workbench host boundary", function () {
         await tap(refinement.getByRole("button", { name: "Accept", exact: true }));
         await expect(refinement).toHaveCount(0);
         await expect.poll(currentSource).not.toBe(before);
+        await storyScreenshot(page, `simplified-authored-curve-${tablet.name}`);
         const drawn = /\\draw\[blue\][^;]*;/.exec(await currentSource())?.[0] ?? "";
         const segments = (drawn.match(/\.\. controls|--/g) ?? []).length;
         assert.ok(segments >= 1 && segments < 3, `Simplify left ${segments} segments: ${drawn}`);
         // The refit keeps the draw options and the coordinates written at both ends, so the curve stays attached to (a).
         assert.match(drawn, /^\\draw\[blue\] \(1,6\) /, `Simplify rewrote the start: ${drawn}`);
         assert.match(drawn, / \(a\);$/, `Simplify detached the end from (a): ${drawn}`);
+        // The wave refits to one curve, and the corner at (7,6) and the straight run to (a) stay as drawn.
+        assert.match(drawn, /^\\draw\[blue\] \(1,6\) \.\. controls \([^)]+\) and \([^)]+\) \.\. \(7,6\) -- \(a\);$/,
+          `Simplify did not keep the corner and the straight run: ${drawn}`);
       },
     );
   }

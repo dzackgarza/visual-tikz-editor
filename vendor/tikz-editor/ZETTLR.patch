@@ -8139,14 +8139,14 @@ index cf4cf2cf..7277358e 100644
 +}
 +.cornerButtonActive { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..b0a8559f 100644
+index 4e22ccfa..136af658 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,18 @@
 +import { matchesCommand } from "../../settings/keybindings";
 +import {
 +  RiAlignItemLeftLine, RiCheckLine, RiDeleteBinLine, RiFileCopyLine, RiHistoryLine, RiLayoutColumnLine, RiMagicLine, RiMoreLine,
-+  RiPenNibLine, RiRoundedCorner, RiScissorsCutLine, RiShapeLine, RiTriangleLine, type RemixiconComponentType
++  RiPenNibLine, RiRoundedCorner, RiScissorsCutLine, RiTriangleLine, type RemixiconComponentType
 +} from "@remixicon/react";
 +import type { Statement } from "tikz-editor/ast/types";
 +import type paper from "paper";
@@ -8224,13 +8224,13 @@ index 4e22ccfa..b0a8559f 100644
 -generateFreehandToolSource
 +interpretFreehandToolSource,
 +sampleSelectedCurvePath,
++refitCurveRuns,
 +authoredCurvePath,
 +editAuthoredCurveNodes,
-+smoothAuthoredCurveJoints,
 +type FreehandInterpretation,
 +type FreehandPointerSample,
 +  originalInkDrawing,
-+  refittedInkDrawing,
++  authoredCurveEnds,
 +  withSnappedEnds,
  } from "./freehand-tool";
 +import { editSemanticCurveNodes } from "./semantic-curve-edit";
@@ -8346,7 +8346,7 @@ index 4e22ccfa..b0a8559f 100644
  function expandSvgViewBox(
    viewBox: SvgViewBox,
    viewportSize: { width: number; height: number },
-@@ -757,10 +836,58 @@ function computeAutoScaleForImportedTikz(
+@@ -757,10 +836,63 @@ function computeAutoScaleForImportedTikz(
    return formatScopeScale(clampedScale);
  }
  
@@ -8358,18 +8358,23 @@ index 4e22ccfa..b0a8559f 100644
 +function refitRefinement(offer: FreehandResultOffer, toleranceUnits: number, smoothing: number): FreehandInterpretation | null {
 +  const draft = { ...offer.draft, points: smoothFreehandPoints(offer.draft.points, smoothing) };
 +  const toleranceWorld = toleranceUnits * PT_PER_CM;
-+  const ends = offer.originalStroke?.ends;
++  const ends = offer.originalStroke ? offer.originalStroke.ends : offer.curve?.ends;
 +  if (!offer.curve) return interpretFreehandToolSource(draft, 1, { strokeColor: offer.strokeColor, lineWidth: offer.originalStroke?.lineWidth, toleranceWorld, ends,
 +    minAnchorSpacingWorld: 12 / Math.max(offer.zoom, 0.01) });
-+  const fit = interpretFreehandToolSource(draft, 1, { preserveCurve: true, toleranceWorld, ends,
++  let start = 0;
++  const runs = offer.curve.runs.map((run) => {
++    const points = smoothFreehandPoints(offer.draft.points.slice(start, run.end + 1), smoothing);
++    start = run.end;
++    return { points, straight: run.straight };
++  });
++  const fit = refitCurveRuns(runs, { toleranceWorld, ends: ends ?? {}, smoothJoints: offer.curve.autoSmooth,
 +    minAnchorSpacingWorld: 12 / Math.max(offer.zoom, 0.01) });
 +  if (!fit) return null;
-+  const source = fit.source.replace(/^\\draw(?:\[[^\]]*\])?/u, offer.curve.prefix);
-+  return { ...fit, source: offer.curve.autoSmooth ? smoothAuthoredCurveJoints(source) : source };
++  return { source: fit.replace(/^\\draw/u, offer.curve.prefix), rawSource: offer.rawSource, kind: "curve" };
 +}
 +
 +function fittedSegments(source: string): number {
-+  return (source.match(/\.\.\s+controls\b/gu) ?? []).length;
++  return (source.match(/\.\.\s+controls\b|--/gu) ?? []).length;
 +}
 +
 +/**
@@ -8407,7 +8412,7 @@ index 4e22ccfa..b0a8559f 100644
  }) {
    const platform = getActiveEditorPlatform();
    const [prefersNonBlinkingTextInsertionIndicator, setPrefersNonBlinkingTextInsertionIndicator] = useState(false);
-@@ -774,6 +901,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -774,6 +906,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot,
      toolMode,
      selectedElementIds,
@@ -8416,7 +8421,7 @@ index 4e22ccfa..b0a8559f 100644
      focusedScopeId,
      hoveredElementId,
      activeCanvasDragKind,
-@@ -791,8 +920,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -791,8 +925,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestValue,
      showGrid,
      showTransparencyGrid,
@@ -8425,7 +8430,7 @@ index 4e22ccfa..b0a8559f 100644
      bucketFillColor,
      selectedAddShape,
      selectedAddMatrixRows,
-@@ -814,6 +941,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -814,6 +946,8 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot: s.snapshot,
      toolMode: s.toolMode,
      selectedElementIds: s.selectedElementIds,
@@ -8434,7 +8439,7 @@ index 4e22ccfa..b0a8559f 100644
      focusedScopeId: s.focusedScopeId,
      hoveredElementId: s.hoveredElementId,
      activeCanvasDragKind: s.activeCanvasDragKind,
-@@ -831,8 +960,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -831,8 +965,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      zoomScaleRequestValue: s.zoomScaleRequestValue,
      showGrid: s.showGrid,
      showTransparencyGrid: s.showTransparencyGrid,
@@ -8443,7 +8448,7 @@ index 4e22ccfa..b0a8559f 100644
      bucketFillColor: s.bucketFillColor,
      selectedAddShape: s.selectedAddShape,
      selectedAddMatrixRows: s.selectedAddMatrixRows,
-@@ -845,8 +972,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -845,8 +977,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      showDevPanel: s.showDevPanel,
      dispatch: s.dispatch
    })));
@@ -8455,7 +8460,7 @@ index 4e22ccfa..b0a8559f 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,34 +1018,145 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,34 +1023,157 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -8556,6 +8561,18 @@ index 4e22ccfa..b0a8559f 100644
 +    const sourcePath = authoredCurvePath(selectedCurve.path, selectedCurve.original);
 +    return sourcePath ? { ...selectedCurve, sourcePath } : null;
 +  }, [selectedCurve]);
++  // Simplify applies to an open curve of two or more straight or cubic segments; it refits the curve's
++  // drawn points, in the picture's coordinates (FR-027).
++  const simplifiableCurve = useMemo(() => {
++    if (!selectedCurve) return null;
++    const { transform, commands } = selectedCurve.path;
++    const local = sampleSelectedCurvePath({ ...selectedCurve.path, transform: undefined }, 1);
++    const segments = commands.filter((command) => command.kind !== "M").length;
++    if (!local || segments < 2) return null;
++    const { points } = local.draft;
++    const drawn = transform ? points.map((point) => applyMatrix(transform, point)) : points;
++    return { ...selectedCurve, drawn, runs: local.runs, segments };
++  }, [selectedCurve]);
 +  const contextualControlHandleIds = useMemo(() => {
 +    const relevant = new Set<string>();
 +    const sourceId = selectedCurve?.path.sourceRef.sourceId;
@@ -8609,7 +8626,7 @@ index 4e22ccfa..b0a8559f 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
-@@ -933,26 +1173,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -933,26 +1190,13 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
    const [equationModalTarget, setEquationModalTarget] = useState<EquationNodeTarget | null>(null);
@@ -8637,7 +8654,7 @@ index 4e22ccfa..b0a8559f 100644
    const bucketPreviewSessionRef = useRef<BucketPreviewSession | null>(null);
  
    useEffect(() => {
-@@ -1046,22 +1273,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1046,22 +1290,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      };
    }, [activeCanvasTextEditSourceId, dispatch]);
  
@@ -8660,11 +8677,11 @@ index 4e22ccfa..b0a8559f 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
-@@ -1132,9 +1343,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1132,9 +1360,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
      onConvertNodePositionToAbsolute: handleConvertNodePositionToAbsoluteCommand,
-+    onSimplifySelectedPath: selectedPathForFit ? () => simplifySelectedPath() : undefined,
++    onSimplifySelectedPath: simplifiableCurve ? () => simplifySelectedPath() : undefined,
      onOpenEditEquation: handleOpenEditEquationCommand,
 +    onOpenRepeat,
      activeHandleIdOverride: contextMenuHandleIdOverride
@@ -8673,7 +8690,7 @@ index 4e22ccfa..b0a8559f 100644
  
    const dispatchCanvasTransform = useCallback(
      (transform: CanvasTransform) => {
-@@ -1156,16 +1370,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1156,16 +1387,28 @@ export const CanvasPanel = memo(function CanvasPanel({
    const interactionSvgRef = useRef<SVGSVGElement | null>(null);
    const dragRef = useRef<DragState | null>(null);
    const suppressNextBackgroundClickRef = useRef(false);
@@ -8704,7 +8721,7 @@ index 4e22ccfa..b0a8559f 100644
    const guideDragRef = useRef<GuideDragState | null>(null);
    const snapDebugDragRef = useRef<SnapDebugOverlayDragState | null>(null);
    const textEngineRef = useRef<NodeTextEngine | null>(null);
-@@ -1235,6 +1461,24 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1235,6 +1478,24 @@ export const CanvasPanel = memo(function CanvasPanel({
        return { element, transform };
      });
    }, [pathAttachedNodePreview, snapshot.source]);
@@ -8729,7 +8746,7 @@ index 4e22ccfa..b0a8559f 100644
    const pendingTouchViewportRef = useRef<PendingTouchViewport | null>(null);
  
    // Cache viewport boundary once on drag-start, clear on drag-end (avoids getBoundingClientRect per frame)
-@@ -1265,10 +1509,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1265,10 +1526,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      [setActiveCanvasDragKind]
    );
  
@@ -8740,7 +8757,7 @@ index 4e22ccfa..b0a8559f 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1300,7 +1540,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1300,7 +1557,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setMagnifierState(null);
      setPendingAdornmentTextEditTargetId(null);
      setPathAttachedNodePreview(null);
@@ -8748,7 +8765,7 @@ index 4e22ccfa..b0a8559f 100644
      setToolCursorWorld(null);
      setNodeAnchorOverlay(null);
      setSnapLines([]);
-@@ -1321,10 +1560,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1321,10 +1577,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      setDragState
    ]);
  
@@ -8759,7 +8776,7 @@ index 4e22ccfa..b0a8559f 100644
    const logSnapDebug = useCallback(
      (input: SnapDebugLogInput) => {
        if (!showDevPanel) {
-@@ -1509,23 +1744,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1509,23 +1761,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      );
    }, [showDevPanel, viewportSize.height, viewportSize.width]);
  
@@ -8783,7 +8800,7 @@ index 4e22ccfa..b0a8559f 100644
    const pathSelectionHint = useMemo(() => {
      if (
        warning != null ||
-@@ -1541,13 +1759,11 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1541,13 +1776,11 @@ export const CanvasPanel = memo(function CanvasPanel({
        selectedElementIds,
        editHandles: snapshot.editHandles,
        elements: snapshot.scene?.elements,
@@ -8797,7 +8814,7 @@ index 4e22ccfa..b0a8559f 100644
      editParseOptions,
      selectedElementIds,
      snapshot.editHandles,
-@@ -1761,11 +1977,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1761,11 +1994,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        return;
      }
      const handleKeyDown = (event: KeyboardEvent) => {
@@ -8810,7 +8827,7 @@ index 4e22ccfa..b0a8559f 100644
        if (event.key !== "Escape" && !isUndo) {
          return;
        }
-@@ -1810,19 +2022,37 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1810,19 +2039,37 @@ export const CanvasPanel = memo(function CanvasPanel({
    } = useCanvasSelectionDerivedState({
      snapshot,
      selectedElementIds,
@@ -8850,7 +8867,7 @@ index 4e22ccfa..b0a8559f 100644
    sourceBoundsSvgRef.current = sourceBoundsSvg;
    liveResizeFramesRef.current = resizeFramesBySource;
  
-@@ -1838,16 +2068,22 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1838,16 +2085,22 @@ export const CanvasPanel = memo(function CanvasPanel({
      onTopRulerPointerDown,
      onLeftRulerPointerDown
    } = useCanvasGuidesAndRulers({
@@ -8874,7 +8891,7 @@ index 4e22ccfa..b0a8559f 100644
      svgResultRef,
      canvasTransformRef,
      guideDragRef,
-@@ -1857,44 +2093,51 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1857,44 +2110,51 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const { toolPreview } = useCanvasDerivedState({
      svgResult,
@@ -8936,7 +8953,7 @@ index 4e22ccfa..b0a8559f 100644
      MIN_SCALE,
      MAX_SCALE
    });
-@@ -1921,15 +2164,19 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1921,15 +2181,19 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const applyActionWithFeedback = useCallback(
@@ -8965,7 +8982,7 @@ index 4e22ccfa..b0a8559f 100644
          evaluateOptions: { sourceFingerprint, textEngine: textEngineRef.current },
          parseOptions: { ...editParseOptions, propertyWriteMode: "drag-frame", sourceFingerprint }
        });
-@@ -1940,13 +2187,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1940,13 +2204,14 @@ export const CanvasPanel = memo(function CanvasPanel({
            setWarning(`${result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
          }
  
@@ -8981,7 +8998,7 @@ index 4e22ccfa..b0a8559f 100644
              precomputedResult: result
            });
          }
-@@ -1975,6 +2223,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,6 +2240,243 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -9225,7 +9242,7 @@ index 4e22ccfa..b0a8559f 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
-@@ -2055,69 +2540,295 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2055,69 +2557,294 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -9494,33 +9511,33 @@ index 4e22ccfa..b0a8559f 100644
 +  }, [autoApplyFit, freehandResultOffer, applyFreehandSuggestion]);
 +
 +  // Simplify opens the refinement on the selected curve with its first simpler pass previewed; a stroke that
-+  // kept its recorded ink is refitted from the ink.
++  // kept its recorded ink is refitted from the ink, any other curve from its drawn points.
 +  const simplifySelectedPath = useCallback(() => {
-+    if (!selectedPathForFit) return;
-+    const inverse = selectedOriginal.entry ? inverseMatrix(resolveFigureCoordinateFrame(source, editParseOptions)) : null;
-+    const draft = selectedOriginal.entry && inverse
-+      ? { points: selectedOriginal.entry.stroke.samples.map((sample) => applyMatrix(inverse, makeWorldPoint(pt(sample.x), pt(sample.y)))), minSampleDistanceWorld: 0 }
-+      : sampleSelectedCurvePath(selectedPathForFit.sourcePath, 1);
-+    const prefix = /^\s*\\draw(?:\[[^\]]*\])?/.exec(selectedPathForFit.original)?.[0];
-+    if (!draft) { setWarning("Simplify could not read this curve's points."); return; }
++    if (!simplifiableCurve) return;
++    const inverse = inverseMatrix(resolveFigureCoordinateFrame(source, editParseOptions));
++    if (!inverse) { setWarning("This picture has a singular coordinate frame."); return; }
++    const { original, from } = simplifiableCurve;
++    const prefix = /^\s*\\draw(?:\[[^\]]*\])?/.exec(original)?.[0];
 +    if (!prefix) { setWarning("Simplify could not read this curve's draw command."); return; }
++    const ink = selectedOriginal.entry?.stroke ?? null;
++    const rawWorldPoints = ink ? ink.samples.map((sample) => makeWorldPoint(pt(sample.x), pt(sample.y))) : simplifiableCurve.drawn;
 +    const current = useEditorStore.getState();
-+    const { original, from } = selectedPathForFit;
 +    const offer: FreehandResultOffer = {
-+      draft, interpretation: { source: original, rawSource: original, kind: "curve" }, curve: { prefix, autoSmooth: autoSmoothNodes },
-+      rawSource: original, originalStroke: selectedOriginal.entry?.stroke ?? null, baselineDrawing: original,
-+      rawWorldPoints: selectedOriginal.entry
-+        ? selectedOriginal.entry.stroke.samples.map((sample) => makeWorldPoint(pt(sample.x), pt(sample.y)))
-+        : sampleSelectedCurvePath(selectedPathForFit.path, 1)?.points ?? draft.points,
-+      strokeId: selectedPathForFit.path.sourceRef.sourceId, documentId: current.activeDocumentId, baseSource: current.source, autoApply: false,
++      draft: { points: rawWorldPoints.map((point) => applyMatrix(inverse, point)), minSampleDistanceWorld: 0 },
++      interpretation: { source: original, rawSource: original, kind: "curve" },
++      // Recorded ink has no corners of its own; drawn points keep the curve's corners and straight runs.
++      curve: { prefix, autoSmooth: autoSmoothNodes, ends: authoredCurveEnds(original),
++        runs: ink ? [{ end: rawWorldPoints.length - 1, straight: false }] : simplifiableCurve.runs },
++      rawSource: original, originalStroke: ink, baselineDrawing: original, rawWorldPoints,
++      strokeId: simplifiableCurve.path.sourceRef.sourceId, documentId: current.activeDocumentId, baseSource: current.source, autoApply: false,
 +      smoothing: 0, from, toleranceUnits: simplificationUnits, zoom: canvasTransform.scale, strokeColor: creationStrokeColor,
 +      sourceRevision: current.sourceRevision, appliedEdit: null
 +    };
-+    const simpler = simplerRefit(offer, simplificationUnits, selectedPathForFit.sourcePath.commands.filter((command) => command.kind === "C").length);
++    const simpler = simplerRefit(offer, simplificationUnits, simplifiableCurve.segments);
 +    if (!simpler) { setWarning("This curve is already as simple as Simplify can make it."); return; }
 +    setWarning(null);
 +    showFreehandPreview(offer, simpler.interpretation, simpler.toleranceUnits, 0);
-+  }, [autoSmoothNodes, canvasTransform.scale, creationStrokeColor, editParseOptions, selectedOriginal.entry, simplificationUnits, selectedPathForFit, showFreehandPreview, source]);
++  }, [autoSmoothNodes, canvasTransform.scale, creationStrokeColor, editParseOptions, selectedOriginal.entry, simplificationUnits, simplifiableCurve, showFreehandPreview, source]);
 +
 +  // After a restore or refit replaces a stroke's drawing, the selection follows the stroke by its envelope key.
 +  const pendingOriginalSelectionRef = useRef<string | null>(null);
@@ -9541,14 +9558,13 @@ index 4e22ccfa..b0a8559f 100644
 +    if (statement) dispatch({ type: "SELECT", id: statement.id, additive: false });
 +  }, [dispatch, snapshot.parseResult, snapshot.source, source]);
 +
-+  const applyOriginalStroke = (key: string, fit: boolean) => {
++  const restoreOriginalStroke = (key: string) => {
 +    const current = useEditorStore.getState();
 +    const entry = originalStrokes(current.source).find((candidate) => candidate.stroke.key === key);
 +    if (!entry) return;
 +    const inverse = inverseMatrix(resolveFigureCoordinateFrame(current.source, editParseOptions));
 +    if (!inverse) { setWarning("This picture has a singular coordinate frame."); return; }
-+    const next = fit ? refittedInkDrawing(entry.stroke, inverse, simplificationUnits * PT_PER_CM) : originalInkDrawing(entry.stroke, inverse);
-+    if (next === null) { setWarning("No geometric fit is available for this stroke."); return; }
++    const next = originalInkDrawing(entry.stroke, inverse);
 +    pendingOriginalSelectionRef.current = entry.stroke.key;
 +    dispatch({ type: "REPLACE_FREEHAND_RESULT", from: entry.drawingFrom,
 +      before: current.source.slice(entry.drawingFrom, entry.drawingTo), after: next,
@@ -9557,7 +9573,7 @@ index 4e22ccfa..b0a8559f 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2843,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2859,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -9565,7 +9581,7 @@ index 4e22ccfa..b0a8559f 100644
          return;
        }
  
-@@ -2141,7 +2851,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2867,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -9573,7 +9589,7 @@ index 4e22ccfa..b0a8559f 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2867,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2883,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -9581,7 +9597,7 @@ index 4e22ccfa..b0a8559f 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2881,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2897,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -9611,7 +9627,7 @@ index 4e22ccfa..b0a8559f 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3736,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3011,6 +3752,8 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -9620,7 +9636,7 @@ index 4e22ccfa..b0a8559f 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3049,12 +3776,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3049,12 +3792,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          setWarning(`${resolution.result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
        }
  
@@ -9637,7 +9653,7 @@ index 4e22ccfa..b0a8559f 100644
      },
      setSnapLines,
      logSnapDebug,
-@@ -3064,9 +3794,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3810,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -9647,7 +9663,7 @@ index 4e22ccfa..b0a8559f 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3804,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3820,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -9655,7 +9671,7 @@ index 4e22ccfa..b0a8559f 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3875,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3891,10 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -9667,7 +9683,7 @@ index 4e22ccfa..b0a8559f 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3902,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3918,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -9677,7 +9693,7 @@ index 4e22ccfa..b0a8559f 100644
      ]
    );
  
-@@ -3192,6 +3924,64 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3940,64 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -9742,7 +9758,7 @@ index 4e22ccfa..b0a8559f 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +4010,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +4026,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -9761,7 +9777,7 @@ index 4e22ccfa..b0a8559f 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +4044,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4060,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -9772,7 +9788,7 @@ index 4e22ccfa..b0a8559f 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4067,330 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4083,330 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -10105,7 +10121,7 @@ index 4e22ccfa..b0a8559f 100644
    const {
      onViewportKeyDown,
      onViewportPaste,
-@@ -3306,6 +4418,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4434,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -10113,7 +10129,7 @@ index 4e22ccfa..b0a8559f 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4443,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4459,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -10138,7 +10154,7 @@ index 4e22ccfa..b0a8559f 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4561,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4577,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -10173,7 +10189,7 @@ index 4e22ccfa..b0a8559f 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4582,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4598,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -10181,7 +10197,7 @@ index 4e22ccfa..b0a8559f 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4596,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4612,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -10189,7 +10205,7 @@ index 4e22ccfa..b0a8559f 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4672,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3582,7 +4688,7 @@ export const CanvasPanel = memo(function CanvasPanel({
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -10198,7 +10214,7 @@ index 4e22ccfa..b0a8559f 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4717,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4733,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -10207,7 +10223,7 @@ index 4e22ccfa..b0a8559f 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4796,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4812,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -10231,23 +10247,23 @@ index 4e22ccfa..b0a8559f 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4909,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4925,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
-+        includeSimplifyPathForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection === true && selectedPathForFit !== null,
++        includeSimplifyPathForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection === true && simplifiableCurve !== null,
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4922,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4938,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
-+      selectedPathForFit,
++      simplifiableCurve,
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4933,254 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4949,251 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -10255,11 +10271,8 @@ index 4e22ccfa..b0a8559f 100644
 +  const [selectionHintElement, setSelectionHintElement] = useState<HTMLDivElement | null>(null);
 +  // A stroke that kept its recorded original offers it from the selection's own control, not a second panel.
 +  const selectedOriginalKey = selectedOriginal.entry?.stroke.key ?? null;
-+  const originalStrokeActions: StripEntry[] = selectedOriginal.entry && selectedOriginalKey !== null ? [
-+    { kind: "action", label: "Restore original stroke", icon: RiHistoryLine, run: () => { applyOriginalStroke(selectedOriginalKey, false); } },
-+    ...(selectedOriginal.entry.stroke.intent === "geometry"
-+      ? [{ kind: "action" as const, label: "Reapply original fit", icon: RiShapeLine, run: () => { applyOriginalStroke(selectedOriginalKey, true); } }]
-+      : [])
++  const originalStrokeActions: StripEntry[] = selectedOriginalKey !== null ? [
++    { kind: "action", label: "Restore Original Stroke", icon: RiHistoryLine, run: () => { restoreOriginalStroke(selectedOriginalKey); } }
 +  ] : [];
 +  // Restore original differs from Cancel only on a selected curve whose source keeps the recorded stroke.
 +  const refinementOriginalKey = freehandResultOffer?.curve ? freehandResultOffer.originalStroke?.key ?? null : null;
@@ -10287,7 +10300,7 @@ index 4e22ccfa..b0a8559f 100644
 +    if (pointCount === 0 && !touchNodeSelection) {
 +      return [
 +        { kind: "action", label: "Edit Points", icon: RiPenNibLine, run: () => { setTouchNodeSelection(true); } },
-+        ...(selectedPathForFit ? [{ kind: "action" as const, label: "Simplify", icon: RiMagicLine, run: simplifySelectedPath }] : []),
++        ...(simplifiableCurve ? [{ kind: "action" as const, label: "Simplify", icon: RiMagicLine, run: simplifySelectedPath }] : []),
 +        ...originalStrokeActions, lock, ...duplicate, more
 +      ];
 +    }
@@ -10502,7 +10515,7 @@ index 4e22ccfa..b0a8559f 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5200,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5213,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -10529,7 +10542,7 @@ index 4e22ccfa..b0a8559f 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5235,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5248,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -10545,7 +10558,7 @@ index 4e22ccfa..b0a8559f 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3903,16 +5260,33 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3903,16 +5273,33 @@ export const CanvasPanel = memo(function CanvasPanel({
          handleStrokeWidth={handleStrokeWidth}
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
@@ -10582,7 +10595,7 @@ index 4e22ccfa..b0a8559f 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5294,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5307,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -10592,7 +10605,7 @@ index 4e22ccfa..b0a8559f 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5307,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5320,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -10627,7 +10640,7 @@ index 4e22ccfa..b0a8559f 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5361,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5374,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -10635,7 +10648,7 @@ index 4e22ccfa..b0a8559f 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5370,39 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5383,39 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -10656,7 +10669,7 @@ index 4e22ccfa..b0a8559f 100644
 +            <button type="button" disabled={!simplerRefinement} onClick={simplifyRefinementAgain}>Simplify again</button>
 +            <button type="button" onClick={() => applyFreehandSuggestion()}>Accept</button>
 +            <button type="button" onClick={cancelFreehandOffer}>Cancel</button>
-+            {refinementOriginalKey !== null ? <button type="button" onClick={() => { dismissFreehandOffer(); applyOriginalStroke(refinementOriginalKey, false); }}>Restore original</button> : null}
++            {refinementOriginalKey !== null ? <button type="button" onClick={() => { dismissFreehandOffer(); restoreOriginalStroke(refinementOriginalKey); }}>Restore original</button> : null}
 +            {freehandResultOffer.curve ? null : <button type="button" aria-expanded={freehandDefaultsOpen} onClick={() => setFreehandDefaultsOpen(!freehandDefaultsOpen)}>Defaults</button>}
 +          </div>
 +          {freehandDefaultsOpen && !freehandResultOffer.curve ? <div className={freehandPopupCss.defaults} role="group" aria-label="New strokes">
@@ -11816,7 +11829,7 @@ index 00000000..71cb58d6
 +  return strokes;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-index a7b0a7e2..8d3c7d2f 100644
+index a7b0a7e2..37a50353 100644
 --- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
 @@ -2,18 +2,23 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
@@ -11824,7 +11837,7 @@ index a7b0a7e2..8d3c7d2f 100644
  import { buildDrawOptions } from "tikz-editor/edit/element-templates";
  import type { WorldPoint } from "../coords/types";
 +import type { ScenePath } from "tikz-editor/semantic/types";
-+import { inkStyleOptions, originalDrawingSource, tikzStrokeColor, type OriginalStroke } from '../../original-ink';
++import { originalDrawingSource, type OriginalStroke } from '../../original-ink';
 +import { applyMatrix } from "tikz-editor/semantic/transform";
 +import type { WorldTransform } from "tikz-editor/coords/transforms";
 +import { geometryScope } from "./paper-scope";
@@ -11904,7 +11917,7 @@ index a7b0a7e2..8d3c7d2f 100644
  
    if (previewPoints.length < FREEHAND_MIN_POINTS) {
      const previewSegments: Array<{ kind: "line"; from: WorldPoint; to: WorldPoint }> = [];
-@@ -133,37 +149,309 @@ export function resolveFreehandPreviewSegments(
+@@ -133,37 +149,383 @@ export function resolveFreehandPreviewSegments(
    return previewSegments;
  }
  
@@ -12113,11 +12126,54 @@ index a7b0a7e2..8d3c7d2f 100644
 +  return { source, rawSource, kind: "curve" };
 +}
 +
-+export function sampleSelectedCurvePath(path: ScenePath, zoom: number): FreehandToolDraft | null {
-+  if (path.transform || !path.commands.some((command) => command.kind === "C")) return null;
++/** A run of a sampled curve between corners: the sample index it ends at, and whether each of its segments is straight. */
++export type CurveRun = { end: number; straight: boolean };
++
++/** A sampled curve and its runs, in order; the last run ends at the last sample. */
++export type SampledCurve = { draft: FreehandToolDraft; runs: CurveRun[] };
++
++// A joint where the curve's direction turns by more than this is a corner. It stays above the tilt that
++// writing a fitted handle to 0.01 cm gives, so a refit's own smooth joints are not corners.
++const CORNER_COSINE = Math.cos((10 * Math.PI) / 180);
++
++type SampledCommand = ScenePath["commands"][number];
++
++function firstDirection(from: WorldPoint, candidates: readonly WorldPoint[]): { x: number; y: number } | null {
++  for (const to of candidates) {
++    const length = Math.sqrt(distanceSquared(from, to));
++    if (length > 1e-9) return { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
++  }
++  return null;
++}
++
++/** The unit directions in which a straight or cubic segment leaves `from` and arrives at its end. */
++function segmentDirections(command: SampledCommand, from: WorldPoint): { start: { x: number; y: number } | null; end: { x: number; y: number } | null } {
++  if (command.kind === "C") {
++    const end = firstDirection(command.to, [command.c2, command.c1, from]);
++    return { start: firstDirection(from, [command.c1, command.c2, command.to]), end: end && { x: -end.x, y: -end.y } };
++  }
++  const direction = command.kind === "L" ? firstDirection(from, [command.to]) : null;
++  return { start: direction, end: direction };
++}
++
++/** Samples of an open path of straight and cubic segments, in its own coordinates, split at its corners; null for any other path. */
++export function sampleSelectedCurvePath(path: ScenePath, zoom: number): SampledCurve | null {
++  if (path.transform) return null;
 +  const points: WorldPoint[] = [];
++  const runs: CurveRun[] = [];
++  let straight = true;
++  let arriving: { x: number; y: number } | null = null;
 +  let current: WorldPoint | null = null;
 +  for (const command of path.commands) {
++    if (command.kind !== "M" && current) {
++      const directions = segmentDirections(command, current);
++      if (arriving && directions.start && arriving.x * directions.start.x + arriving.y * directions.start.y < CORNER_COSINE) {
++        runs.push({ end: points.length - 1, straight });
++        straight = true;
++      }
++      arriving = directions.end;
++      straight &&= command.kind === "L";
++    }
 +    if (command.kind === "M") {
 +      if (points.length > 0) return null;
 +      current = command.to;
@@ -12147,9 +12203,40 @@ index a7b0a7e2..8d3c7d2f 100644
 +      return null;
 +    }
 +  }
-+  return points.length >= FREEHAND_MIN_POINTS
-+    ? { points, minSampleDistanceWorld: 0 }
-+    : null;
++  if (points.length < FREEHAND_MIN_POINTS) return null;
++  runs.push({ end: points.length - 1, straight });
++  return { draft: { points, minSampleDistanceWorld: 0 }, runs };
++}
++
++/**
++ * Refit a curve run by run. Schneider's fitter fits a digitized curve between corners found beforehand
++ * (P. J. Schneider, "An Algorithm for Automatically Fitting Digitized Curves", Graphics Gems, 1990), and
++ * paper.js's PathFitter, which implements it, finds none; so a corner stays a corner, a straight run stays
++ * one straight segment, and each other run is refit at the tolerance. Null when a run does not fit.
++ */
++export function refitCurveRuns(
++  runs: readonly { points: WorldPoint[]; straight: boolean }[],
++  options: { toleranceWorld: number; ends: StrokeEnds; minAnchorSpacingWorld: number; smoothJoints: boolean }
++): string | null {
++  const parts: string[] = [];
++  for (const [index, run] of runs.entries()) {
++    const ends: StrokeEnds = {
++      ...(index === 0 && options.ends.start !== undefined ? { start: options.ends.start } : {}),
++      ...(index === runs.length - 1 && options.ends.end !== undefined ? { end: options.ends.end } : {})
++    };
++    let body: string;
++    if (run.straight) {
++      body = `${formatEnd(run.points[0], ends.start)} -- ${formatEnd(run.points[run.points.length - 1], ends.end)}`;
++    } else {
++      const fit = interpretFreehandToolSource({ points: run.points, minSampleDistanceWorld: 0 }, 1,
++        { preserveCurve: true, toleranceWorld: options.toleranceWorld, ends, minAnchorSpacingWorld: options.minAnchorSpacingWorld });
++      if (fit?.kind !== "curve") return null;
++      const source = options.smoothJoints ? smoothAuthoredCurveJoints(fit.source) : fit.source;
++      body = source.replace(/^\\draw\s*/u, "").replace(/;\s*$/u, "");
++    }
++    parts.push(index === 0 ? body : body.replace(/^\([^()]*\)\s*/u, ""));
++  }
++  return `\\draw ${parts.join(" ")};`;
 +}
 +
 +/** Refit a selected run of cubic segments while retaining source outside it. */
@@ -12175,9 +12262,9 @@ index a7b0a7e2..8d3c7d2f 100644
 +    ...path,
 +    commands: [{ kind: "M", to: start.to }, ...commands.slice(startAnchor + 1, endAnchor + 1)]
 +  };
-+  const draft = sampleSelectedCurvePath(selectedPath, zoom);
-+  if (!draft) return null;
-+  const fitted = interpretFreehandToolSource(draft, zoom, { preserveCurve: true, toleranceWorld });
++  const sampled = sampleSelectedCurvePath(selectedPath, zoom);
++  if (!sampled) return null;
++  const fitted = interpretFreehandToolSource(sampled.draft, zoom, { preserveCurve: true, toleranceWorld });
 +  if (fitted?.kind !== "curve") return null;
 +  const fittedSegments = [...fitted.source.matchAll(segmentPattern)];
 +  if (fittedSegments.length >= endAnchor - startAnchor || fittedSegments.length === 0) return null;
@@ -12228,7 +12315,7 @@ index a7b0a7e2..8d3c7d2f 100644
  function polylineLength(points: readonly WorldPoint[]): number {
    let length = 0;
    for (let i = 1; i < points.length; i += 1) {
-@@ -176,16 +464,156 @@ function formatPointCm(point: WorldPoint): string {
+@@ -176,16 +538,160 @@ function formatPointCm(point: WorldPoint): string {
    return `(${formatNumber(point.x * CM_PER_PT)},${formatNumber(point.y * CM_PER_PT)})`;
  }
  
@@ -12246,6 +12333,17 @@ index a7b0a7e2..8d3c7d2f 100644
 -function clampSmoothingTolerancePx(value: number): number {
 -  if (!Number.isFinite(value)) {
 -    return FREEHAND_SMOOTHING_DEFAULT_PX;
++/**
++ * The coordinates written at a curve's two ends, so a refit writes them again as authored: a named
++ * point stays attached and a number keeps its digits. A relative or nested end has none.
++ */
++export function authoredCurveEnds(source: string): StrokeEnds {
++  const body = source.replace(/^\s*\\draw(?:\[[^\]]*\])?\s*/u, "");
++  const start = /^\(([^()]*)\)/u.exec(body)?.[1];
++  const end = /(?<!\+)\(([^()]*)\)\s*;\s*$/u.exec(body)?.[1];
++  return { ...(start === undefined ? {} : { start }), ...(end === undefined ? {} : { end }) };
++}
++
 +/** Numeric authored coordinates are the metric for fitting, independent of rendered transforms. */
 +export function authoredCurvePath(path: ScenePath, source: string): ScenePath | null {
 +  const prefix = /^\s*\\draw(?:\[[^\]]*\])?\s*/.exec(source);
@@ -12382,13 +12480,6 @@ index a7b0a7e2..8d3c7d2f 100644
 +  return originalDrawingSource({ ...stroke, samples: stroke.samples.map((sample, index) => ({ ...sample, x: points[index].x, y: points[index].y })) });
 +}
 +
-+/** Recorded ink refitted at a tolerance: one draw command carrying the ink's colour and style, or null when no geometric fit exists. */
-+export function refittedInkDrawing(stroke: OriginalStroke, inverse: WorldTransform, toleranceWorld: number): string | null {
-+  const fit = interpretFreehandToolSource({ points: localInkPoints(stroke, inverse), minSampleDistanceWorld: 0 }, 1, { strokeColor: tikzStrokeColor(stroke), toleranceWorld, ends: stroke.ends });
-+  if (!fit || fit.kind === "raw") return null;
-+  const style = inkStyleOptions(stroke);
-+  return style.length === 0 ? fit.source : fit.source.replace(/^\\draw(?:\[([^\]]*)\])?/u, (_, options: string | undefined) => `\\draw[${[...(options ? [options] : []), ...style].join(", ")}]`);
-+}
 +
 diff --git a/packages/app/src/ui/canvas-panel/geometry.ts b/packages/app/src/ui/canvas-panel/geometry.ts
 index 5660d6d8..3b0fc806 100644
@@ -14333,11 +14424,11 @@ index 505c4845..be0a5770 100644
        return {
          type: "points",
 diff --git a/packages/app/src/ui/canvas-panel/types.ts b/packages/app/src/ui/canvas-panel/types.ts
-index dac6b0b3..14b5b1bb 100644
+index dac6b0b3..10da00a8 100644
 --- a/packages/app/src/ui/canvas-panel/types.ts
 +++ b/packages/app/src/ui/canvas-panel/types.ts
 @@ -1,8 +1,10 @@
-+import type { FreehandInterpretation, FreehandToolDraft } from "./freehand-tool";
++import type { CurveRun, FreehandInterpretation, FreehandToolDraft, StrokeEnds } from "./freehand-tool";
 +import type { OriginalStroke } from "../../original-ink";
  import type { AdornmentOwnerGeometry, Span, Statement } from "tikz-editor/ast/types";
  import type { ComplexPathSegment } from "tikz-editor/edit/element-templates";
@@ -14421,7 +14512,7 @@ index dac6b0b3..14b5b1bb 100644
  export type PathAppendTarget = {
    elementId: string;
    end: "start" | "end";
-@@ -280,9 +305,34 @@ export type PathToolDraft = {
+@@ -280,9 +305,38 @@ export type PathToolDraft = {
    appendTarget?: PathAppendTarget;
  };
  
@@ -14437,8 +14528,12 @@ index dac6b0b3..14b5b1bb 100644
 +export type FreehandResultOffer = {
 +  draft: FreehandToolDraft;
 +  interpretation: FreehandInterpretation;
-+  /** Set for a selected curve: the draw command it keeps, and whether a refit smooths the surviving joints. */
-+  curve: { prefix: string; autoSmooth: boolean } | null;
++  /**
++   * Set for a selected curve: the draw command it keeps, whether a refit smooths the surviving joints, and the
++   * end coordinates a refit writes as authored when no recorded stroke supplies them, and the runs between the
++   * corners a refit keeps.
++   */
++  curve: { prefix: string; autoSmooth: boolean; ends: StrokeEnds; runs: CurveRun[] } | null;
 +  rawSource: string;
 +  rawWorldPoints: WorldPoint[];
 +  /** The recorded stroke; a selected curve has one only when the source keeps it. */
@@ -14459,7 +14554,7 @@ index dac6b0b3..14b5b1bb 100644
  };
  
  export type TextSelectionOverlay = {
-@@ -442,8 +492,42 @@ export type HandleDisplay =
+@@ -442,8 +496,42 @@ export type HandleDisplay =
        cursor: string;
        kind: "rotate-element";
        elementId: string;
