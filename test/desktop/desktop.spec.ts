@@ -213,7 +213,7 @@ describe("desktop package", function () {
       },
     });
     await writeFile(join(seed, "view-state.json"), older);
-    app = await DesktopApp.start(seed);
+    app = await DesktopApp.start({ seedState: seed });
     const viewStateFile = join(app.stateDirectory, "view-state.json");
     const message = () => app.script(z.string(), "return document.querySelector('[role=\"alert\"]')?.innerText ?? '';");
     await expect
@@ -222,6 +222,26 @@ describe("desktop package", function () {
     assert.ok((await message()).includes("locked"), "the window does not name the field that the file lacks");
     assert.equal(await app.script(z.number(), "return document.querySelectorAll('iframe').length;"), 0);
     assert.equal(await readFile(viewStateFile, "utf8"), older, "the start changed the file that it cannot read");
+  });
+});
+
+describe("desktop package, when the file host stops before the window opens", function () {
+  // A start that opens no window gets no session; the harness then ends its own processes, and no application is left to stop.
+  let app: DesktopApp | undefined;
+
+  afterEach(async function () {
+    await app?.screenshot("test-results/desktop/host-stopped-before-the-window.png");
+    await app?.stop();
+  });
+
+  it("shows in a window why the file host stopped, for a command line that names no file", async function () {
+    // The host cannot open a diagram that is not there, and stops before it serves a page (issue #80).
+    const absent = join(await mkdtemp(join(tmpdir(), "desktop-absent-")), "absent.tikz");
+    const started = await DesktopApp.start({ args: [absent] });
+    app = started;
+    const message = () =>
+      started.script(z.string(), "return document.querySelector('[role=\"alert\"]')?.innerText ?? '';");
+    await expect.poll(message, { message: "the window does not show why the file host stopped" }).toContain(absent);
   });
 });
 

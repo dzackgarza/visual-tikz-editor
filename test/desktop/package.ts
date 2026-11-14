@@ -50,8 +50,11 @@ export class DesktopApp {
     private readonly end: () => void,
   ) {}
 
-  /** Starts the package on fresh XDG directories. `seedState` is copied to the state directory first. */
-  static async start(seedState?: string): Promise<DesktopApp> {
+  /**
+   * Starts the package on fresh XDG directories. `seedState` is copied to the state directory first,
+   * and `args` is the application's command line.
+   */
+  static async start({ seedState, args = [] }: { seedState?: string; args?: string[] } = {}): Promise<DesktopApp> {
     assert.ok(existsSync(BINARY), `Build the desktop package first (just package): ${BINARY}`);
     const home = await mkdtemp(join(tmpdir(), "desktop-package-"));
     const stateDirectory = join(home, "state", "visual-tikz-editor");
@@ -81,33 +84,44 @@ export class DesktopApp {
       stdio: ["ignore", "inherit", "inherit"],
       detached: true,
     });
-    // A start that fails, or a run that ends early, leaves no driver, application, or display.
     const end = () => {
       process.kill(-driver.pid!, "SIGTERM");
       display.kill();
     };
+    // A run that ends early leaves no driver, application, or display.
     process.once("exit", end);
     const origin = `http://127.0.0.1:${port}`;
-    await expect(async () => {
-      await call(origin, "GET", "/status");
-    }, "WebKitWebDriver did not start").toPass({ timeout: 10_000 });
-    const created = z
-      .object({ sessionId: z.string(), capabilities: z.object({ "webkit:processID": z.number() }) })
-      .parse(
-        await call(origin, "POST", "/session", {
-          capabilities: { alwaysMatch: { "webkitgtk:browserOptions": { binary: BINARY, args: [] } } },
-        }),
+    let started = false;
+    try {
+      await expect(async () => {
+        await call(origin, "GET", "/status");
+      }, "WebKitWebDriver did not start").toPass({ timeout: 10_000 });
+      // The driver makes the session when the application has a window; with no window, this command gets no answer.
+      const created = z
+        .object({ sessionId: z.string(), capabilities: z.object({ "webkit:processID": z.number() }) })
+        .parse(
+          await call(origin, "POST", "/session", {
+            capabilities: { alwaysMatch: { "webkitgtk:browserOptions": { binary: BINARY, args } } },
+          }),
+        );
+      const app = new DesktopApp(
+        stateDirectory,
+        created.capabilities["webkit:processID"],
+        driver,
+        origin,
+        `/session/${created.sessionId}`,
+        end,
       );
-    const app = new DesktopApp(
-      stateDirectory,
-      created.capabilities["webkit:processID"],
-      driver,
-      origin,
-      `/session/${created.sessionId}`,
-      end,
-    );
-    await app.command("POST", "/window/rect", { width: 1366, height: 1024 });
-    return app;
+      await app.command("POST", "/window/rect", { width: 1366, height: 1024 });
+      started = true;
+      return app;
+    } finally {
+      // A start that fails leaves none of them either.
+      if (!started) {
+        process.off("exit", end);
+        end();
+      }
+    }
   }
 
   private command(method: string, path: string, body?: Json): Promise<Json> {
