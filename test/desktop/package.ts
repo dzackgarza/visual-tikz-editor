@@ -9,7 +9,7 @@
  *
  * WebKitWebDriver 2.54 delivers mouse pointer actions in full. A pen sequence stops after a
  * pointerdown on which the page calls preventDefault, a touch contact arrives as a mouse, and
- * wheel actions and Ctrl chords do not reach the page. The stories here therefore use mouse
+ * wheel actions do not reach the page. The stories here therefore use mouse
  * contacts, and make wheel events in the page.
  */
 

@@ -8079,7 +8079,7 @@ index 00000000..75663a53
 +  );
 +}
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
-index cf4cf2cf..cef2a888 100644
+index cf4cf2cf..e35aad8e 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.module.css
 @@ -27,15 +27,19 @@
@@ -8195,7 +8195,7 @@ index cf4cf2cf..cef2a888 100644
  :global([data-canvas-invert]) .svgLayer {
    background: #e8e8e8;
    filter: invert(1) hue-rotate(180deg);
-@@ -205,6 +219,38 @@
+@@ -205,6 +219,44 @@
    background-image: none;
  }
  
@@ -8207,6 +8207,12 @@ index cf4cf2cf..cef2a888 100644
 +:global([data-color-scheme="dark"]) .svgLayer :global([fill="#000000"]),
 +:global([data-color-scheme="dark"]) .svgLayer :global([fill="black"]) {
 +  fill: #eeeeee;
++}
++
++/* Text that MathJax renders states its colour as `color`, and its glyphs fill with currentColor (packages/core/src/svg/emit.ts). */
++:global([data-color-scheme="dark"]) .svgLayer :global([color="#000000"]),
++:global([data-color-scheme="dark"]) .svgLayer :global([color="black"]) {
++  color: #eeeeee;
 +}
 +
 +:global([data-color-scheme="dark"]) .rulerTickMinor,
@@ -8234,7 +8240,7 @@ index cf4cf2cf..cef2a888 100644
  .svgLayer :global(svg) {
    display: block;
    width: 100%;
-@@ -323,59 +369,34 @@
+@@ -323,59 +375,34 @@
  }
  
  .gridMinor {
@@ -8304,7 +8310,7 @@ index cf4cf2cf..cef2a888 100644
  }
  
  .hitRegions {
-@@ -390,6 +411,16 @@
+@@ -390,6 +417,16 @@
    fill: transparent;
  }
  
@@ -8321,7 +8327,7 @@ index cf4cf2cf..cef2a888 100644
  .selectionOverlay {
    pointer-events: none;
  }
-@@ -568,6 +599,14 @@
+@@ -568,6 +605,14 @@
    vector-effect: non-scaling-stroke;
  }
  
@@ -8336,7 +8342,7 @@ index cf4cf2cf..cef2a888 100644
  .marqueeRect {
    fill: rgba(40, 122, 212, 0.12);
    stroke: none;
-@@ -709,22 +748,6 @@
+@@ -709,22 +754,6 @@
    user-select: text;
  }
  
@@ -8359,7 +8365,7 @@ index cf4cf2cf..cef2a888 100644
  .dragTooltip {
    max-width: none;
    pointer-events: none;
-@@ -935,3 +958,43 @@
+@@ -935,3 +964,43 @@
      print-color-adjust: exact;
    }
  }

@@ -15,7 +15,7 @@ Each accepted edit to a saved file writes the file. An untitled diagram keeps a 
 
 **Properties** in the document bar shows the selected objects. With nothing selected, it shows the figure: its X and Y scale, the size of one lattice step, and its bounds.
 
-**Copy source** copies the TikZ source to the clipboard without saving the file. **More › Settings…** › Appearance sets light, dark, or the system's appearance.
+**Copy source** copies the TikZ source to the clipboard without saving the file. **More › Settings…** › Appearance sets light, dark, or the system's appearance. In the dark appearance, the canvas shows lines and text in the default colour as light; the source does not change.
 
 ## Views
 
