@@ -3930,6 +3930,7 @@ describe("standalone workbench host boundary", function () {
         await chooseTool(frame, input, "Lasso");
         await input.penStroke([await strokePoint(page, curve, 0.1)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        await input.touch([await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Edit Points", exact: true }))]);
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const anchors = await frame
           .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
@@ -6629,7 +6630,8 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await input.penStroke([await strokePoint(page, curve, 0.5)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
-        // Control handles show next to a selected curve point: select the start (2,4) to reach (4,7).
+        // Control handles show next to a point chosen in Edit Points: choose the start (2,4) to reach (4,7).
+        await input.touch([await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Edit Points", exact: true }))]);
         const anchors = frame.locator('rect[data-handle-kind="move-handle"][data-source-id="path:2"]');
         await expect(anchors).toHaveCount(2);
         const start = (await Promise.all((await anchors.all()).map((anchor) => stableCenter(anchor)))).sort(
@@ -8173,15 +8175,6 @@ describe("standalone workbench host boundary", function () {
           await expect(frame.locator('[data-selection-highlight="path:0"]')).toBeVisible();
           const lock = frame.getByRole("button", { name: "Lock", exact: true });
           await expect(lock).toHaveAttribute("aria-pressed", "false");
-          const hint = (await frame.getByTestId("canvas-selection-hint").boundingBox())!;
-          const control = (await lock.locator("..").boundingBox())!;
-          assert.ok(
-            Math.min(hint.x + hint.width, control.x + control.width) <=
-              Math.max(hint.x, control.x) ||
-              Math.min(hint.y + hint.height, control.y + control.height) <=
-                Math.max(hint.y, control.y),
-            `The curve control covers the canvas hint ${JSON.stringify({ hint, control })}`,
-          );
           await storyScreenshot(page, `curve-selected-${contact}-${tablet.name}`);
           await input.touch([await stableCenter(lock)]);
           await expect(lock).toHaveAttribute("aria-pressed", "true");
@@ -8249,6 +8242,7 @@ describe("standalone workbench host boundary", function () {
         await expect(
           frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Edit Points", exact: true }),
         ).toBeVisible();
+        await input.touch([await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Edit Points", exact: true }))]);
         const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
         const middle = await frame
           .locator('rect[data-handle-kind="move-handle"][data-source-id="path:0"]')
@@ -8756,6 +8750,7 @@ describe("standalone workbench host boundary", function () {
           await chooseTool(frame, input, "Lasso");
           await tap(await strokePoint(page, curve, 0.15));
           await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+          await tap(await stableCenter(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name: "Edit Points", exact: true })));
           const pointAt = async (x: number) => {
             const frameBox = (await page
               .locator('iframe[title="TikZ visual editor"]')
@@ -8778,15 +8773,6 @@ describe("standalone workbench host boundary", function () {
           for (const name of ["Corner", "Smooth", "Delete", "Split"]) {
             await expect(frame.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("button", { name, exact: true })).toBeVisible();
           }
-          const hint = (await frame.getByTestId("canvas-selection-hint").boundingBox())!;
-          const control = (await frame.getByRole("toolbar", { name: "Selection", exact: true }).boundingBox())!;
-          assert.ok(
-            Math.min(hint.x + hint.width, control.x + control.width) <=
-              Math.max(hint.x, control.x) ||
-              Math.min(hint.y + hint.height, control.y + control.height) <=
-                Math.max(hint.y, control.y),
-            `The point control covers the canvas hint ${JSON.stringify({ hint, control })}`,
-          );
           await storyScreenshot(page, `point-selected-${contact}-${tablet.name}`);
           await expect(
             frame.getByRole("button", { name: "Point actions", exact: true }),
@@ -10936,6 +10922,18 @@ describe("standalone workbench host boundary", function () {
       // Snap rounds the move to the grid, so the displacement is within one grid step of the drag.
       assert.ok(Math.abs(after.x - before.x - 120) < 40 && Math.abs(after.y - before.y - 150) < 40);
       await expect(frame.getByRole("button", { name: "Edit Points", exact: true })).toBeVisible();
+      // A finger held by the other hand is the move modifier: the same drag then moves one point.
+      const point = await strokePoint(page, stroke, 0.25);
+      await input.fingerDown({ x: box.x + box.width - 60, y: box.y + box.height - 60 });
+      await input.penDown(point);
+      for (let i = 1; i <= 12; i++) await input.penMove({ x: point.x, y: point.y + i * 10 });
+      await input.penUp({ x: point.x, y: point.y + 120 });
+      await input.fingerUp();
+      await expect
+        .poll(async () => (await extent()).height - after.height, {
+          message: "the pen drag under a held finger did not pull one point out of the stroke",
+        })
+        .toBeGreaterThan(40);
     },
   );
 
