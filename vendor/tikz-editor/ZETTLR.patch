@@ -3149,7 +3149,7 @@ index 0e491d69..4217e724 100644
        data-testid="canvas-context-menu"
      >
 diff --git a/packages/app/src/ui/ColorPicker.module.css b/packages/app/src/ui/ColorPicker.module.css
-index dd74530a..435d19d4 100644
+index dd74530a..a4711fc5 100644
 --- a/packages/app/src/ui/ColorPicker.module.css
 +++ b/packages/app/src/ui/ColorPicker.module.css
 @@ -99,26 +99,14 @@
@@ -3209,19 +3209,24 @@ index dd74530a..435d19d4 100644
 +.rgbaChannels input { width: 100%; box-sizing: border-box; }
 +.collectionActions { display: flex; gap: 8px; flex-wrap: wrap; }
 +.customRow { display: flex; gap: 8px; align-items: center; }
-+.customRow input[type="color"] { width: 44px; height: 44px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; }
++.wheelRow { display: flex; gap: 12px; align-items: center; justify-content: center; }
 +.customRow button { flex: 1; }
 +.opacity { display: grid; gap: 4px; }
 +.opacity input[type="range"] { width: 100%; }
 diff --git a/packages/app/src/ui/ColorPicker.tsx b/packages/app/src/ui/ColorPicker.tsx
-index 49a2d341..d8791263 100644
+index 49a2d341..1a9658be 100644
 --- a/packages/app/src/ui/ColorPicker.tsx
 +++ b/packages/app/src/ui/ColorPicker.tsx
-@@ -1,43 +1,24 @@
+@@ -1,43 +1,29 @@
 -import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 -import { rgbToXcolorExpression, type RgbColor, type RgbToXcolorMode } from "xcolor-rgb-convert";
-+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
 +import { createPortal } from "react-dom";
++import { hexToHsva, hsvaToHex, hsvaToRgba, rgbaToHex, rgbaToHsva, type HsvaColor } from "@uiw/color-convert";
++import Alpha from "@uiw/react-color-alpha";
++import EditableInput from "@uiw/react-color-editable-input";
++import ShadeSlider from "@uiw/react-color-shade-slider";
++import Wheel from "@uiw/react-color-wheel";
 +import type { RgbColor } from "xcolor-rgb-convert";
  import { normalizeColor } from "tikz-editor/semantic/style/colors";
 -import { BASIC_PICKER_COLORS, BASIC_PICKER_COLOR_SET } from "../colors/color-palette";
@@ -3271,7 +3276,7 @@ index 49a2d341..d8791263 100644
    namedColorSwatches?: readonly NamedColorSwatch[];
    value: string | null;
    syntaxValue?: string | null;
-@@ -49,7 +30,7 @@ export type ColorPickerProps = {
+@@ -49,7 +35,7 @@ export type ColorPickerProps = {
  
  export function ColorPickerField({
    ariaLabel,
@@ -3280,7 +3285,7 @@ index 49a2d341..d8791263 100644
    namedColorSwatches = [],
    value,
    syntaxValue = null,
-@@ -59,9 +40,7 @@ export function ColorPickerField({
+@@ -59,9 +45,7 @@ export function ColorPickerField({
    onChange
  }: ColorPickerProps) {
    const [open, setOpen] = useState(false);
@@ -3291,7 +3296,7 @@ index 49a2d341..d8791263 100644
    const rootRef = useRef<HTMLDivElement | null>(null);
    const popoverRef = useRef<HTMLDivElement | null>(null);
    const normalizedNamedColorSwatches = useMemo(
-@@ -75,7 +54,7 @@ export function ColorPickerField({
+@@ -75,7 +59,7 @@ export function ColorPickerField({
    const normalizedValue = normalizeColorToken(value);
    const normalizedSyntaxValue = normalizeColorToken(syntaxValue);
    const displayLabel = mixed ? "mixed" : (normalizedSyntaxValue ?? normalizedValue ?? "none");
@@ -3300,7 +3305,7 @@ index 49a2d341..d8791263 100644
    const displaySwatchColor = displaySwatchToken
      ? cssColorForToken(displaySwatchToken, namedColorLookup)
      : null;
-@@ -90,7 +69,7 @@ export function ColorPickerField({
+@@ -90,7 +74,7 @@ export function ColorPickerField({
        if (!target) {
          return;
        }
@@ -3309,7 +3314,7 @@ index 49a2d341..d8791263 100644
          setOpen(false);
        }
      }
-@@ -137,24 +116,18 @@ export function ColorPickerField({
+@@ -137,24 +121,18 @@ export function ColorPickerField({
        const spaceAbove = rootRect.top - POPOVER_VIEWPORT_PADDING_PX - POPOVER_GAP_PX;
        const naturalHeight = popover.scrollHeight;
        const popoverWidth = Math.ceil(popover.getBoundingClientRect().width);
@@ -3342,7 +3347,7 @@ index 49a2d341..d8791263 100644
      }
  
      updatePopoverPlacement();
-@@ -193,7 +166,7 @@ export function ColorPickerField({
+@@ -193,7 +171,7 @@ export function ColorPickerField({
              style={displaySwatchColor != null ? { background: displaySwatchColor } : undefined}
              aria-hidden="true"
            />
@@ -3351,7 +3356,7 @@ index 49a2d341..d8791263 100644
          </span>
          <span className={css.triggerCaret} aria-hidden="true">
            <svg className={css.triggerCaretIcon} viewBox="0 0 12 8" focusable="false">
-@@ -201,802 +174,57 @@ export function ColorPickerField({
+@@ -201,802 +179,98 @@ export function ColorPickerField({
            </svg>
          </span>
        </button>
@@ -3496,7 +3501,21 @@ index 49a2d341..d8791263 100644
 -    setCustomShadeDragPointerId(null);
 -  }, [disabled]);
 -
--  useEffect(() => {
++/**
++ * The colour options (contracts/surfaces.md, Colour options): the palette of the active Settings collection
++ * in one row, the colour wheel, a shade slider, Opacity, and Hex. A picked colour is emitted as `#rrggbb`
++ * at full opacity and as `rgba(r,g,b,a)` below it; the TikZ writer turns either into an rgb value.
++ */
++export function ColorPicker({ ariaLabel, allowNone, namedColorSwatches = [], value, syntaxValue = null, disabled = false, onChange }: ColorPickerProps) {
++  const settings = useSettingsStore((state) => state.settings.colorPicker);
++  const setActivePalette = useSettingsStore((state) => state.setActivePalette);
++  const palette = activePalette(settings);
++  const lookup = useMemo(() => buildNamedColorLookup(normalizeNamedColorSwatches(namedColorSwatches)), [namedColorSwatches]);
++  const token = value && /^rgba?\(/i.test(value) ? value : syntaxValue ?? value ?? "black";
++  // The picker keeps its own HSVA so a hue survives zero saturation or brightness; a value it did not emit resets it.
++  const [hsva, setHsva] = useState(() => hsvaForToken(token, lookup));
++  const emitted = useRef<string | null>(null);
+   useEffect(() => {
 -    const previousTab = previousTabRef.current;
 -    const enteredCustom = previousTab !== "custom" && tab === "custom";
 -    previousTabRef.current = tab;
@@ -4107,23 +4126,7 @@ index 49a2d341..d8791263 100644
 -          ) : null}
 -        </div>
 -      )}
-+/** Noteful's picker: saved colours as swatches, one spectrum control, and opacity. Collections live in Settings. */
-+export function ColorPicker({ ariaLabel, allowNone, namedColorSwatches = [], value, syntaxValue = null, disabled = false, onChange }: ColorPickerProps) {
-+  const settings = useSettingsStore((state) => state.settings.colorPicker);
-+  const setActivePalette = useSettingsStore((state) => state.setActivePalette);
-+  const palette = activePalette(settings);
-+  const lookup = useMemo(() => buildNamedColorLookup(normalizeNamedColorSwatches(namedColorSwatches)), [namedColorSwatches]);
-+  const token = value && /^rgba?\(/i.test(value) ? value : syntaxValue ?? value ?? "black";
-+  const resolved = cssColorForToken(token, lookup) ?? "#000000";
-+  const rgba = resolved.match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/i);
-+  const rgb = rgba ? { r: Number(rgba[1]), g: Number(rgba[2]), b: Number(rgba[3]) } : resolveCustomRgbFromDriver(token, lookup);
-+  const alpha = rgba ? Number(rgba[4] ?? 1) : 1;
-+  const colors = [...new Set([...palette, ...namedColorSwatches.map((swatch) => swatch.token), ...(allowNone ? ["none"] : [])])];
-+  return <div className={css.coherentPicker} role="group" aria-label={ariaLabel}>
-+    <div className={css.savedSwatches} aria-label="Saved colors">
-+      {colors.map((color) => <button key={color} type="button" disabled={disabled} aria-label={`Choose ${color}`} title={color}
-+        aria-pressed={token === color} style={{ background: cssColorForToken(color, lookup) ?? "transparent" }} onClick={() => onChange(color)}>{color === "none" ? "∅" : ""}</button>)}
-     </div>
+-    </div>
 -  );
 -}
 -
@@ -4142,9 +4145,42 @@ index 49a2d341..d8791263 100644
 -  return {
 -    mode,
 -    maxMixes: 2
--  };
--}
--
++    if (token !== emitted.current) setHsva(hsvaForToken(token, lookup));
++  }, [token, lookup]);
++  const emit = (next: HsvaColor) => {
++    const color = { ...next, a: Math.round(next.a * 100) / 100 };
++    const { r, g, b } = hsvaToRgba(color);
++    const emittedValue = color.a === 1 ? rgbaToHex({ r, g, b, a: 1 }) : `rgba(${r},${g},${b},${color.a})`;
++    setHsva(color);
++    emitted.current = emittedValue;
++    onChange(emittedValue);
+   };
++  const colors = [...new Set([...palette, ...namedColorSwatches.map((swatch) => swatch.token), ...(allowNone ? ["none"] : [])])];
++  return <div className={css.coherentPicker} role="group" aria-label={ariaLabel}>
++    <div className={css.savedSwatches} role="group" aria-label="Palette">
++      {colors.map((color) => <button key={color} type="button" disabled={disabled} aria-label={color}
++        aria-pressed={token === color} style={{ background: cssColorForToken(color, lookup) ?? "transparent" }} onClick={() => { onChange(color); }}>{color === "none" ? "∅" : ""}</button>)}
++    </div>
++    <div className={css.wheelRow}>
++      {/* The wheel shows hue and saturation at full brightness; the Shade slider beside it owns brightness. */}
++      <Wheel aria-label="Colour wheel" color={{ ...hsva, v: 100 }} width={WHEEL_SIZE_PX} height={WHEEL_SIZE_PX}
++        // A wheel tap on black would keep zero brightness and change nothing, so it lifts brightness to full.
++        onChange={(result) => { if (!disabled) emit({ ...hsva, h: result.hsva.h, s: result.hsva.s, v: hsva.v === 0 ? 100 : hsva.v }); }} />
++      <ShadeSlider hsva={hsva} direction="vertical" width={SLIDER_THICKNESS_PX} height={WHEEL_SIZE_PX}
++        innerProps={sliderProps("Shade", hsva.v, 0, 100)} onChange={(shade) => { if (!disabled) emit({ ...hsva, v: shade.v }); }} />
++    </div>
++    <Alpha hsva={hsva} width="100%" height={SLIDER_THICKNESS_PX}
++      innerProps={sliderProps("Opacity", hsva.a, 0, 1)} onChange={(alpha) => { if (!disabled) emit({ ...hsva, a: alpha.a }); }} />
++    <div className={css.customRow}>
++      <EditableInput label="Hex" value={hsvaToHex(hsva).replace(/^#/, "")} disabled={disabled}
++        style={HEX_FIELD_STYLE} inputStyle={{ fontSize: "inherit" }}
++        // The input reports a hex code as a string and, when its digits also read as a number, again as that number.
++        onChange={(_event, hex) => { if (typeof hex === "string") emit({ ...hexToHsva(hex), a: hsva.a }); }} />
++      <button type="button" disabled={disabled || palette.includes(token)} onClick={() => { setActivePalette([...palette, token]); }}>Save color</button>
++    </div>
++  </div>;
+ }
+ 
 -function isStandardTabColorSupported(
 -  driverValue: string | null,
 -  namedColorTokens: ReadonlySet<string>,
@@ -4165,29 +4201,34 @@ index 49a2d341..d8791263 100644
 -  if (darkMatch && toneSelectableTokens.has(darkMatch[1])) {
 -    return true;
 -  }
--
++const WHEEL_SIZE_PX = 200;
++const SLIDER_THICKNESS_PX = 44;
++/** The Hex field takes the picker's text size and theme colours in place of the library's 11 px grey. */
++const HEX_FIELD_STYLE: CSSProperties & Record<"--editable-input-label-color" | "--editable-input-color", string> = {
++  fontSize: 14,
++  "--editable-input-label-color": "var(--text-muted)",
++  "--editable-input-color": "var(--text)",
++};
+ 
 -  const lightMatch = driverValue.match(LIGHT_MIX_RE);
 -  if (lightMatch && toneSelectableTokens.has(lightMatch[1])) {
 -    return true;
 -  }
--
++/** The slider role and value of a colour library's drag surface, which renders a plain focusable div. */
++function sliderProps(label: string, now: number, min: number, max: number): HTMLAttributes<HTMLDivElement> {
++  return { role: "slider", "aria-label": label, "aria-valuemin": min, "aria-valuemax": max, "aria-valuenow": Math.round(now * 100) / 100 };
++}
+ 
 -  return false;
-+    <div className={css.customRow}>
-+      <input type="color" aria-label="Choose color" value={rgbToHex(rgb)} disabled={disabled} onChange={(event) => {
-+        const next = hexToRgb(event.currentTarget.value);
-+        onChange(alpha === 1 ? event.currentTarget.value : `rgba(${next.r},${next.g},${next.b},${alpha})`);
-+      }} />
-+      <button type="button" disabled={disabled || palette.includes(token)} onClick={() => setActivePalette([...palette, token])}>Save color</button>
-+    </div>
-+    <label className={css.opacity}>Opacity: {Math.round(alpha * 100)}%
-+      <input type="range" aria-label="Opacity" min={0} max={1} step={0.01} value={alpha} disabled={disabled}
-+        onChange={(event) => onChange(`rgba(${rgb.r},${rgb.g},${rgb.b},${event.currentTarget.valueAsNumber})`)} />
-+    </label>
-+  </div>;
++function hsvaForToken(token: string, lookup: ReadonlyMap<string, string>): HsvaColor {
++  const resolved = cssColorForToken(token, lookup) ?? "#000000";
++  const rgba = resolved.match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/i);
++  if (rgba) return rgbaToHsva({ r: Number(rgba[1]), g: Number(rgba[2]), b: Number(rgba[3]), a: Number(rgba[4] ?? 1) });
++  return rgbaToHsva({ ...resolveCustomRgbFromDriver(token, lookup), a: 1 });
  }
  
  function resolveCustomRgbFromDriver(
-@@ -1041,20 +269,6 @@ function normalizeColorToken(value: string | null): string | null {
+@@ -1041,20 +315,6 @@ function normalizeColorToken(value: string | null): string | null {
    return normalized.length === 0 ? null : normalized;
  }
  
@@ -4208,7 +4249,7 @@ index 49a2d341..d8791263 100644
  function normalizeNamedColorSwatches(swatches: readonly NamedColorSwatch[]): NamedColorSwatch[] {
    const normalized: NamedColorSwatch[] = [];
    const seen = new Set<string>();
-@@ -1083,190 +297,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
+@@ -1083,190 +343,6 @@ function buildNamedColorLookup(swatches: readonly NamedColorSwatch[]): ReadonlyM
    return lookup;
  }
  
@@ -4399,7 +4440,7 @@ index 49a2d341..d8791263 100644
  export function cssColorForToken(token: string, namedColorLookup: ReadonlyMap<string, string> | null = null): string | null {
    const normalizedToken = normalizeColorToken(token);
    if (!normalizedToken || normalizedToken === "none") {
-@@ -1392,134 +422,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
+@@ -1392,134 +468,6 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
    );
  }
  
@@ -6593,7 +6634,7 @@ index 0ddde08e..e59d48f6 100644
 +  grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
 +}
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..2687db85 100644
+index a3293df2..6b76cc84 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,5 +1,7 @@
@@ -6729,7 +6770,7 @@ index a3293df2..2687db85 100644
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
    const matrixPreviewColumns = matrixHoverSize?.columns ?? selectedAddMatrixColumns;
-@@ -56,70 +130,183 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,70 +130,185 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -6744,7 +6785,9 @@ index a3293df2..2687db85 100644
 +  const activePresetIndex = presetTool ? settings.toolbar.activePreset[presetTool] : -1;
 +  const presetColour = presetTool ? presets[activePresetIndex] : undefined;
 +  const [menu, setMenu] = useState<RailMenu | null>(null);
-+  const closeMenu = useCallback(() => { setMenu(null); setExactColor(""); }, []);
++  // Edit in the colour options shows the commands that reorder and remove presets.
++  const [editingPresets, setEditingPresets] = useState(false);
++  const closeMenu = useCallback(() => { setMenu(null); setExactColor(""); setEditingPresets(false); }, []);
 +  const [lastTextKind, setLastTextKind] = useState<"text" | "equation">("text");
 +  const [penWidthDraft, setPenWidthDraft] = useState<string | null>(null);
 +  // A tool change closes the open menu (FR-003).
@@ -6954,7 +6997,7 @@ index a3293df2..2687db85 100644
              }}
              testIdPrefix="toolbar-shape-choice"
            />
-@@ -132,9 +319,11 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -132,9 +321,11 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        const isSelected = (row: number, column: number): boolean =>
          row <= matrixPreviewRows && column <= matrixPreviewColumns;
        return (
@@ -6967,7 +7010,7 @@ index a3293df2..2687db85 100644
              data-testid="toolbar-matrix-picker-grid"
              onMouseLeave={() => { setMatrixHoverSize(null); }}
            >
-@@ -144,6 +333,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -144,6 +335,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                    <button
                      key={`${row}-${column}`}
                      type="button"
@@ -6975,7 +7018,7 @@ index a3293df2..2687db85 100644
                      className={[
                        popupCss.matrixPickerCell,
                        isSelected(row, column) ? popupCss.matrixPickerCellSelected : ""
-@@ -154,7 +344,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -154,7 +346,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                        dispatch({ type: "SET_ADD_MATRIX_PRESET", rows: row, columns: column });
                        dispatch({ type: "SET_TOOL_MODE", mode: "addMatrix" });
                        setMatrixHoverSize(null);
@@ -6984,7 +7027,7 @@ index a3293df2..2687db85 100644
                      }}
                      data-testid={`toolbar-matrix-picker-cell-${row}-${column}`}
                      aria-label={`${row} rows by ${column} columns`}
-@@ -170,69 +360,302 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,69 +362,305 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -7019,10 +7062,10 @@ index a3293df2..2687db85 100644
 +      dispatch({ type: "APPLY_EDIT_ACTION", historyMergeKey, action: { kind: "setProperty", elementId, level: "command", key, value } });
 +    }
 +  };
-+  const setPresets = (tool: PresetTool, colours: string[], active: number) => updateToolbarSettings({
++  const setPresets = (tool: PresetTool, colours: string[], active: number) => { updateToolbarSettings({
 +    presets: { ...settings.toolbar.presets, [tool]: colours },
 +    activePreset: { ...settings.toolbar.activePreset, [tool]: active }
-+  });
++  }); };
 +  const selectionKey = presetTool === "fill" ? "fill" : "draw";
 +  const tapPreset = (index: number) => {
 +    if (!presetTool) return;
@@ -7114,18 +7157,21 @@ index a3293df2..2687db85 100644
 +    const colour = presets[index];
 +    return <ToolbarPopupSection>
 +      <ColorPicker ariaLabel={`Colour ${index + 1}`} value={colour} syntaxValue={colour} allowNone={presetTool === "fill"}
-+        namedColorSwatches={projectNamedColorSwatches} onChange={(value) => editPreset(index, value)} />
++        namedColorSwatches={projectNamedColorSwatches} onChange={(value) => { editPreset(index, value); }} />
 +      <form className={css.exactColorForm} onSubmit={(event) => {
 +        event.preventDefault();
 +        if (exactColor.trim()) { editPreset(index, exactColor.trim()); setExactColor(""); }
 +      }}>
-+        <label>Exact xcolor <input type="text" value={exactColor} placeholder={colour} onChange={(event) => setExactColor(event.currentTarget.value)} /></label>
++        <label>Exact xcolor <input type="text" value={exactColor} placeholder={colour} onChange={(event) => { setExactColor(event.currentTarget.value); }} /></label>
 +        <button type="submit">Apply exact color</button>
 +      </form>
 +      <div className={css.presetActions}>
-+        <button type="button" disabled={index === 0} onClick={() => movePreset(index, -1)}>Move earlier</button>
-+        <button type="button" disabled={index === presets.length - 1} onClick={() => movePreset(index, 1)}>Move later</button>
-+        <button type="button" disabled={presets.length <= 1} onClick={() => removePreset(index)}>Remove colour</button>
++        <button type="button" aria-pressed={editingPresets} onClick={() => { setEditingPresets((current) => !current); }}>Edit</button>
++        {editingPresets ? <>
++          <button type="button" disabled={index === 0} onClick={() => { movePreset(index, -1); }}>Move earlier</button>
++          <button type="button" disabled={index === presets.length - 1} onClick={() => { movePreset(index, 1); }}>Move later</button>
++          <button type="button" disabled={presets.length <= 1} onClick={() => { removePreset(index); }}>Remove colour</button>
++        </> : null}
 +      </div>
 +    </ToolbarPopupSection>;
 +  };
@@ -7142,29 +7188,29 @@ index a3293df2..2687db85 100644
 +      <input type="range" aria-label="Width" min={PEN_WIDTH_MIN_PT} max={PEN_WIDTH_MAX_PT} step={0.1} value={penWidth}
 +        onChange={(event) => { setPenWidthDraft(null); setPenWidth(event.currentTarget.value); }} />
 +      <input type="number" aria-label="Width value" min={PEN_WIDTH_MIN_PT} max={PEN_WIDTH_MAX_PT} step={0.1}
-+        value={penWidthDraft ?? String(penWidth)} onChange={(event) => setPenWidth(event.currentTarget.value)}
-+        onBlur={() => setPenWidthDraft(null)} />
++        value={penWidthDraft ?? String(penWidth)} onChange={(event) => { setPenWidth(event.currentTarget.value); }}
++        onBlur={() => { setPenWidthDraft(null); }} />
 +    </label>
 +    <ToolbarPopupChoiceList label="Line style" choices={PEN_STYLES} selectedId={penStyle}
-+      onSelect={(style) => updateToolbarSettings({ penStyle: style as PenStyle })} />
++      onSelect={(style) => { updateToolbarSettings({ penStyle: style as PenStyle }); }} />
 +    <label className={css.menuField}>Opacity
 +      <input type="range" aria-label="Opacity" min={0.1} max={1} step={0.05} value={penOpacity}
-+        onChange={(event) => updateToolbarSettings({ penOpacity: Number(event.currentTarget.value) })} />
++        onChange={(event) => { updateToolbarSettings({ penOpacity: Number(event.currentTarget.value) }); }} />
 +      <output>{Math.round(penOpacity * 100)} %</output>
 +    </label>
 +    <label className={css.menuField}>Smoothing
 +      <input type="range" aria-label="Smoothing" min={0} max={1} step={0.05} value={penSmoothing}
-+        onChange={(event) => updateToolbarSettings({ penSmoothing: Number(event.currentTarget.value) })} />
++        onChange={(event) => { updateToolbarSettings({ penSmoothing: Number(event.currentTarget.value) }); }} />
 +      <output>{penSmoothing.toFixed(2)} cm</output>
 +    </label>
 +  </ToolbarPopupSection>;
 +
 +  const renderEraserMenu = () => <ToolbarPopupSection>
 +    <ToolbarPopupChoiceList label="Erase" choices={ERASER_MODES} selectedId={eraserMode}
-+      onSelect={(mode) => updateToolbarSettings({ eraserMode: mode as EraserMode })} />
++      onSelect={(mode) => { updateToolbarSettings({ eraserMode: mode as EraserMode }); }} />
 +    <label className={css.menuField}>Size
 +      <input type="range" aria-label="Size" min={ERASER_SIZE_MIN_PX} max={ERASER_SIZE_MAX_PX} step={2} value={eraserSize}
-+        onChange={(event) => updateToolbarSettings({ eraserSize: Number(event.currentTarget.value) })} />
++        onChange={(event) => { updateToolbarSettings({ eraserSize: Number(event.currentTarget.value) }); }} />
 +      <output>{eraserSize} px</output>
 +    </label>
 +  </ToolbarPopupSection>;
@@ -7172,8 +7218,8 @@ index a3293df2..2687db85 100644
 +  const renderShapesMenu = () => <ToolbarPopupSection>
 +    {constructionStepText ? <p className={css.menuHint}>{constructionStepText}</p> : null}
 +    {constructionStepText ? <div className={css.menuActions}>
-+      {constructionHasFinish ? <button type="button" onClick={() => canvasSession.send({ type: "construction.finish" })}>Finish</button> : null}
-+      <button type="button" onClick={() => canvasSession.send({ type: "construction.cancel" })}>Cancel</button>
++      {constructionHasFinish ? <button type="button" onClick={() => { canvasSession.send({ type: "construction.finish" }); }}>Finish</button> : null}
++      <button type="button" onClick={() => { canvasSession.send({ type: "construction.cancel" }); }}>Cancel</button>
 +    </div> : null}
 +    {geometryPage === "families" ? <>
 +      {isNumericConstruction(shownGeometry.id) ? <ShapeNumericEntry key={shownGeometry.id} construction={shownGeometry.id} onInserted={closeMenu} /> : null}
@@ -7190,10 +7236,10 @@ index a3293df2..2687db85 100644
 +          disabled: getToolCapabilityStatus(choice.mode).status === "unsupported"
 +        }))}
 +        selectedId={shownGeometry.id}
-+        onSelect={(id) => chooseGeometry(family.choices.find((choice) => choice.id === id)!)}
++        onSelect={(id) => { chooseGeometry(family.choices.find((choice) => choice.id === id)!); }}
 +      />
 +    </div>)}</> : <>
-+      <button type="button" className={popupCss.backButton} onClick={() => setGeometryPage("families")}>‹ Shapes</button>
++      <button type="button" className={popupCss.backButton} onClick={() => { setGeometryPage("families"); }}>‹ Shapes</button>
 +      {renderPopup(geometryPage === "shape" ? "shape-picker" : "matrix-picker")}
 +    </>}
 +  </ToolbarPopupSection>;
@@ -7274,7 +7320,7 @@ index a3293df2..2687db85 100644
 +      <RenderedTooltip content={description ? `${label}: ${description}` : label}>
 +        <button type="button" className={[css.btn, active ? css.btnActive : ""].filter(Boolean).join(" ")}
 +          aria-label={label} aria-description={description} aria-pressed={active}
-+          aria-haspopup="dialog" aria-expanded={open} onClick={() => tapTool(tool)}>
++          aria-haspopup="dialog" aria-expanded={open} onClick={() => { tapTool(tool); }}>
 +          <Icon size={18} />
 +        </button>
 +      </RenderedTooltip>
@@ -7287,7 +7333,7 @@ index a3293df2..2687db85 100644
 +    return <ToolbarToolPopup key={`preset-${index}`} label="Colour options" open={open} onClose={closeMenu} popup={open ? renderColourOptions(index) : null}>
 +      <button type="button" className={[css.btn, css.presetButton].join(" ")} title={colour}
 +        aria-label={`Colour ${index + 1}: ${colour}`} aria-pressed={active} aria-haspopup="dialog" aria-expanded={open}
-+        onClick={() => tapPreset(index)}>
++        onClick={() => { tapPreset(index); }}>
 +        <span className={css.colorSwatch} style={{ background: cssColorForToken(colour, namedColorLookup) ?? "transparent" }} />
 +      </button>
 +    </ToolbarToolPopup>;
@@ -7346,7 +7392,7 @@ index a3293df2..2687db85 100644
    const renderShapeButton = () => {
      const mode = "addShape" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -257,6 +680,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +685,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7354,7 +7400,7 @@ index a3293df2..2687db85 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +723,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +728,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7362,7 +7408,7 @@ index a3293df2..2687db85 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -321,7 +746,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +751,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -7370,7 +7416,7 @@ index a3293df2..2687db85 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +754,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +759,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -7382,7 +7428,7 @@ index a3293df2..2687db85 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +767,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +772,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -7412,7 +7458,7 @@ index a3293df2..2687db85 100644
 +          setDragPoint({ x: event.clientX + dragOffset.current.x, y: event.clientY + dragOffset.current.y });
 +          setDockPreview({ dock: dockAt(event.clientX, event.clientY), x: event.clientX, y: event.clientY });
 +        }}
-+        onPointerUp={(event) => finishToolbarDrag(event.clientX, event.clientY)}
++        onPointerUp={(event) => { finishToolbarDrag(event.clientX, event.clientY); }}
 +        onPointerCancel={() => {
 +          dragPointer.current = null;
 +          dragReady.current = false;
@@ -7443,7 +7489,7 @@ index a3293df2..2687db85 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -358,9 +833,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -358,9 +838,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
@@ -7454,7 +7500,7 @@ index a3293df2..2687db85 100644
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
-@@ -387,4 +860,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +865,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -8169,7 +8215,7 @@ index cf4cf2cf..7277358e 100644
 +}
 +.cornerButtonActive { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..39805c42 100644
+index 4e22ccfa..3f6722bc 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,18 @@
@@ -8201,7 +8247,7 @@ index 4e22ccfa..39805c42 100644
  } from "react";
  import { clientPoint as makeClientPoint,svgPoint as makeSvgPoint,worldPoint as makeWorldPoint,pt,px,svgBounds,viewportPoint } from "tikz-editor/coords/index";
  import {
-@@ -25,14 +35,23 @@ preflightPositionNodeRelativeToAction,
+@@ -25,14 +35,22 @@ preflightPositionNodeRelativeToAction,
  type EditAction,
  type EditActionResult
  } from "tikz-editor/edit/actions";
@@ -8211,7 +8257,6 @@ index 4e22ccfa..39805c42 100644
 +import { resolvePropertyTarget } from "tikz-editor/edit/property-target";
 +import { parseTikzForEdit } from "tikz-editor/edit/parse-options";
 +import { applyMatrix, inverseMatrix } from "tikz-editor/semantic/transform";
-+import { normalizeColor } from "tikz-editor/semantic/style/colors";
  import { PT_PER_CM,formatNumber } from "tikz-editor/edit/format";
  import {
  makeForeachTemplateTargetId,
@@ -8226,7 +8271,7 @@ index 4e22ccfa..39805c42 100644
  EditHandlePositioningContext,
  NodeAnchorTarget,
  SceneElement
-@@ -46,14 +65,18 @@ getKnuthPlassLineRangeFromPoint
+@@ -46,14 +64,18 @@ getKnuthPlassLineRangeFromPoint
  import { createMathJaxNodeTextEngine,getActiveMathJaxOutputJax } from "tikz-editor/text/mathjax-engine";
  import type { NodeTextEngine,NodeTextLayoutKind } from "tikz-editor/text/types";
  import { useShallow } from "zustand/react/shallow";
@@ -8243,11 +8288,11 @@ index 4e22ccfa..39805c42 100644
 +import { useSelector } from "@xstate/react";
 +import { canvasSession, changeTouches, newStrokeSettings, offerIsCurrent, pathDraftRef, sameIds, saveNewStrokeDefaults, setArcDraft, setFreehandResultOffer, setLockedSelection, setNewStrokeSettings, setPathDraft, setPendingBezier, setSelectedNodeIndices, setTapDraft, setTouchNodeSelection, settleReplacedSource } from "./canvas-session";
 +import { ExactRange } from "../ExactRange";
-+import { strokeEnvelope, originalStrokeSchema, originalDrawingSource, originalStrokes, smoothPolyline, strokeColorWithOpacity } from '../../original-ink';
++import { strokeEnvelope, originalStrokeSchema, originalStrokes, smoothPolyline } from '../../original-ink';
  import type { CanvasDragKind,CanvasTransform } from "../../store/types";
  import { resolveBucketFillEdit } from "./bucket-fill";
  import { recordDragPatchModeFullReason } from "./drag-patch-mode-debug";
-@@ -67,11 +90,30 @@ import { CanvasPanelView } from "./CanvasPanelView";
+@@ -67,11 +89,31 @@ import { CanvasPanelView } from "./CanvasPanelView";
  import { useCanvasContextMenuController,useCanvasContextMenuState } from "./useCanvasContextMenus";
  import {
  appendFreehandToolPoint,
@@ -8260,6 +8305,7 @@ index 4e22ccfa..39805c42 100644
 +type FreehandInterpretation,
 +type FreehandPointerSample,
 +  originalInkDrawing,
++  originalDrawingSource,
 +  authoredCurveEnds,
 +  withSnappedEnds,
  } from "./freehand-tool";
@@ -9399,7 +9445,6 @@ index 4e22ccfa..39805c42 100644
 +      setFreehandDraft(null); setToolCursorWorld(null); return;
 +    }
 +    const intent = current.freehandInterpretGeometry ? "geometry" : "ink";
-+    const originalColor = /^(?:#[0-9a-f]{6}(?:[0-9a-f]{2})?|rgba\()/iu.test(creationStrokeColor) ? creationStrokeColor : normalizeColor(creationStrokeColor);
 +    // The stroke is written against the names of the points it attaches to, so it follows them. Naming
 +    // a point edits its statement; later offsets are named first so earlier spans stay valid.
 +    let namedSource = current.source;
@@ -9414,7 +9459,8 @@ index 4e22ccfa..39805c42 100644
 +    }
 +    // The Pen's options apply to the stroke as it is drawn (FR-025); each is recorded only when it changes the drawing.
 +    const { penWidth, penStyle, penOpacity, penSmoothing } = useSettingsStore.getState().settings.toolbar;
-+    const original = originalStrokeSchema.parse({ key: crypto.randomUUID(), intent, color: strokeColorWithOpacity(originalColor, penOpacity), samples: draft.samples,
++    const original = originalStrokeSchema.parse({ key: crypto.randomUUID(), intent, color: creationStrokeColor, samples: draft.samples,
++      ...(penOpacity === 1 ? {} : { opacity: penOpacity }),
 +      ...(penWidth === DEFAULT_PEN_WIDTH_PT ? {} : { lineWidth: penWidth }),
 +      ...(penStyle === "solid" ? {} : { lineStyle: penStyle }),
 +      ...(penSmoothing === 0 ? {} : { smoothing: penSmoothing }),
@@ -11951,15 +11997,17 @@ index 00000000..71cb58d6
 +  return strokes;
 +}
 diff --git a/packages/app/src/ui/canvas-panel/freehand-tool.ts b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-index a7b0a7e2..37a50353 100644
+index a7b0a7e2..5cf4386d 100644
 --- a/packages/app/src/ui/canvas-panel/freehand-tool.ts
 +++ b/packages/app/src/ui/canvas-panel/freehand-tool.ts
-@@ -2,18 +2,23 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
+@@ -2,18 +2,25 @@ import { CM_PER_PT, formatNumber } from "tikz-editor/edit/format";
  import { pt, worldPoint } from "tikz-editor/coords/index";
  import { buildDrawOptions } from "tikz-editor/edit/element-templates";
  import type { WorldPoint } from "../coords/types";
 +import type { ScenePath } from "tikz-editor/semantic/types";
-+import { originalDrawingSource, type OriginalStroke } from '../../original-ink';
++import { svgToTikz } from "svg2tikz";
++import { tikzColorValue } from "tikz-editor/edit/color-value";
++import { smoothPolyline, type OriginalStroke } from "../../original-ink";
 +import { applyMatrix } from "tikz-editor/semantic/transform";
 +import type { WorldTransform } from "tikz-editor/coords/transforms";
 +import { geometryScope } from "./paper-scope";
@@ -11981,7 +12029,7 @@ index a7b0a7e2..37a50353 100644
  };
  
  export type FreehandBezierSegment = {
-@@ -22,20 +27,34 @@ export type FreehandBezierSegment = {
+@@ -22,20 +29,34 @@ export type FreehandBezierSegment = {
    to: WorldPoint;
  };
  
@@ -12021,7 +12069,7 @@ index a7b0a7e2..37a50353 100644
      points: [...draft.points, point]
    };
  }
-@@ -95,15 +114,12 @@ export function catmullRomToBezierSegments(points: readonly WorldPoint[]): Freeh
+@@ -95,15 +116,12 @@ export function catmullRomToBezierSegments(points: readonly WorldPoint[]): Freeh
  }
  
  export function resolveFreehandPreviewSegments(
@@ -12039,7 +12087,7 @@ index a7b0a7e2..37a50353 100644
  
    if (previewPoints.length < FREEHAND_MIN_POINTS) {
      const previewSegments: Array<{ kind: "line"; from: WorldPoint; to: WorldPoint }> = [];
-@@ -133,37 +149,383 @@ export function resolveFreehandPreviewSegments(
+@@ -133,37 +151,383 @@ export function resolveFreehandPreviewSegments(
    return previewSegments;
  }
  
@@ -12437,7 +12485,7 @@ index a7b0a7e2..37a50353 100644
  function polylineLength(points: readonly WorldPoint[]): number {
    let length = 0;
    for (let i = 1; i < points.length; i += 1) {
-@@ -176,16 +538,160 @@ function formatPointCm(point: WorldPoint): string {
+@@ -176,16 +540,218 @@ function formatPointCm(point: WorldPoint): string {
    return `(${formatNumber(point.x * CM_PER_PT)},${formatNumber(point.y * CM_PER_PT)})`;
  }
  
@@ -12477,11 +12525,9 @@ index a7b0a7e2..37a50353 100644
 +  const commands: ScenePath["commands"] = [{ kind: "M", to: coordinates[0] }];
 +  for (let index = 1; index < coordinates.length; index += 3) {
 +    commands.push({ kind: "C", c1: coordinates[index], c2: coordinates[index + 1], to: coordinates[index + 2] });
-   }
--  const rounded = Math.round(value);
--  return Math.max(FREEHAND_SMOOTHING_MIN_PX, Math.min(FREEHAND_SMOOTHING_MAX_PX, rounded));
++  }
 +  return { ...path, commands, transform: undefined };
- }
++}
 +
 +const authoredCubicSegmentPattern = /\s+\.\.\s+controls\s+(\([^)]+\))\s+and\s+(\([^)]+\))\s+\.\.\s+(\([^)]+\))/gu;
 +
@@ -12526,7 +12572,9 @@ index a7b0a7e2..37a50353 100644
 +    const drawPrefix = /^\s*\\draw(?:\[[^\]]*\])?/.exec(prefix);
 +    if (!drawPrefix) return null;
 +    prefix = drawPrefix[0] + " " + segments[survivors[0] - 1][3];
-+  }
+   }
+-  const rounded = Math.round(value);
+-  return Math.max(FREEHAND_SMOOTHING_MIN_PX, Math.min(FREEHAND_SMOOTHING_MAX_PX, rounded));
 +  const output = [prefix];
 +  for (let index = 0; index < survivors.length - 1; index++) {
 +    const left = survivors[index], right = survivors[index + 1];
@@ -12555,7 +12603,7 @@ index a7b0a7e2..37a50353 100644
 +  const last = segments[segments.length - 1];
 +  output.push(source.slice(last.index + last[0].length));
 +  return output.join("");
-+}
+ }
 +
 +/**
 + * Remove corners at the joints between segments fromSegment..toSegment: each joint's two handles turn to
@@ -12587,6 +12635,64 @@ index a7b0a7e2..37a50353 100644
 +    return segment.replace(/(\.\.\s+controls\s+)\([^)]+\)(\s+and\s+)\([^)]+\)/u,
 +      (_, first: string, second: string) => first + formatCmPoint(c1) + second + formatCmPoint(c2));
 +  });
++}
++
++function strokeColorComponents(color: string): { rgb: number[]; alpha: number } | null {
++  if (/^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/u.test(color)) {
++    return {
++      rgb: [1, 3, 5].map((offset) => Number.parseInt(color.slice(offset, offset + 2), 16)),
++      alpha: color.length === 9 ? Number.parseInt(color.slice(7, 9), 16) / 255 : 1,
++    };
++  }
++  const match = /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*((?:0|1)(?:\.\d+)?|\.\d+)\s*\)$/u.exec(color);
++  if (match === null) return null;
++  const rgb = match.slice(1, 4).map(Number);
++  const alpha = Number(match[4]);
++  return rgb.every((value) => value <= 255) && alpha >= 0 && alpha <= 1 ? { rgb, alpha } : null;
++}
++
++/**
++ * The TikZ options of a stroke's drawing. Its colour is written as a shape writes it: black is TikZ's
++ * default and is left out, an xcolor expression stays as authored, and a picker colour becomes an rgb
++ * value. Opacity below 1, width, and dash style follow.
++ */
++function inkDrawOptions(stroke: OriginalStroke): string[] {
++  const { color, opacity: colourOpacity } = tikzColorValue(stroke.color);
++  // Rounded to four places, so 0.5 × 0.3 is written as 0.15 and not as its binary approximation.
++  const opacity = Math.round((colourOpacity ?? 1) * (stroke.opacity ?? 1) * 10_000) / 10_000;
++  return [
++    ...(stroke.color === "black" ? [] : [`draw=${color}`]),
++    ...(opacity === 1 ? [] : [`draw opacity=${opacity}`]),
++    ...(stroke.lineWidth === undefined ? [] : [`line width=${stroke.lineWidth}pt`]),
++    ...(stroke.lineStyle === undefined ? [] : [stroke.lineStyle]),
++  ];
++}
++
++/** A recorded stroke's TikZ drawing in its sample coordinates: its outline as a filled path, or its (smoothed) sample polyline. */
++export function originalDrawingSource(stroke: OriginalStroke): string {
++  if (stroke.outline !== undefined) {
++    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
++    // The converter uses downward SVG coordinates and centimetres. The ink
++    // contract uses the same upward point coordinates as its sensor samples.
++    svg.setAttribute("viewBox", "0 -1 1 1");
++    const path = document.createElementNS(svg.namespaceURI, "path");
++    path.setAttribute("d", stroke.outline.path);
++    const fill = strokeColorComponents(stroke.outline.fill);
++    path.setAttribute("fill", fill === null ? stroke.outline.fill : `rgb(${fill.rgb.join(",")})`);
++    if (fill !== null && fill.alpha < 1) path.setAttribute("fill-opacity", String(fill.alpha));
++    svg.append(path);
++    return svgToTikz(svg, { scale: 1 / 28.4528, precision: 8 })
++      .replace("\\begin{tikzpicture}", "\\begin{scope}[yscale=-1]")
++      .replace("\\end{tikzpicture}", "\\end{scope}");
++  }
++  const samples = stroke.smoothing === undefined ? stroke.samples : smoothPolyline(stroke.samples, stroke.smoothing);
++  const last = samples.length - 1;
++  const point = (index: number) => {
++    const name = index === 0 ? stroke.ends?.start : index === last ? stroke.ends?.end : undefined;
++    return name === undefined ? `(${samples[index].x}pt,${samples[index].y}pt)` : `(${name})`;
++  };
++  const options = inkDrawOptions(stroke);
++  return `\\draw${options.length === 0 ? "" : `[${options.join(",")}]`} ${samples.map((_sample, index) => point(index)).join(" -- ")};`;
 +}
 +
 +function localInkPoints(stroke: OriginalStroke, inverse: WorldTransform): WorldPoint[] {
@@ -20945,7 +21051,7 @@ index 07f3731a..bd1a5754 100644
    const intrinsicWorldHeight = floorBounds.maxY - floorBounds.minY;
    const intrinsicLocal = nodeLinearTransform
 diff --git a/packages/core/src/edit/actions/set-property.ts b/packages/core/src/edit/actions/set-property.ts
-index 56e1001d..20282e27 100644
+index 56e1001d..c7f6f578 100644
 --- a/packages/core/src/edit/actions/set-property.ts
 +++ b/packages/core/src/edit/actions/set-property.ts
 @@ -1,3 +1,4 @@
@@ -20953,7 +21059,7 @@ index 56e1001d..20282e27 100644
  import type { EditActionResultLike } from "../result-types.js";
  import { parseOptionListRaw } from "../../options/parse.js";
  import { applyOptionMutationsToTarget, normalizeOptionKey, rewriteOptionListMutations, type OptionMutation } from "../option-mutations.js";
-@@ -82,7 +83,12 @@ export function applySetPropertyActionRaw(
+@@ -82,7 +83,14 @@ export function applySetPropertyActionRaw(
    if (removePrimaryKey) {
      mutations.set(key, { kind: "remove" });
    } else {
@@ -20961,26 +21067,31 @@ index 56e1001d..20282e27 100644
 +    const colorKey = key === "draw" || key === "fill" || key === "text";
 +    const color = colorKey ? tikzColorValue(action.value) : null;
 +    mutations.set(key, { kind: "set", value: color?.color ?? action.value });
-+    if (color?.opacity !== null && color?.opacity !== undefined) {
-+      mutations.set(`${key} opacity`, { kind: "set", value: String(color.opacity) });
++    // A picker colour states its opacity: below 1 it is written, at 1 an authored one is removed (data-model Colour).
++    const opacity = color?.opacity ?? null;
++    if (opacity !== null) {
++      mutations.set(`${key} opacity`, opacity < 1 ? { kind: "set", value: String(opacity) } : { kind: "remove" });
 +    }
    }
    const rewritten = applyOptionMutationsToTarget(source, resolved.target, mutations);
    if (!rewritten) {
 diff --git a/packages/core/src/edit/color-value.ts b/packages/core/src/edit/color-value.ts
 new file mode 100644
-index 00000000..1e817909
+index 00000000..ecb954c1
 --- /dev/null
 +++ b/packages/core/src/edit/color-value.ts
-@@ -0,0 +1,21 @@
-+/** Convert picker RGBA values into TikZ color and opacity options. */
+@@ -0,0 +1,25 @@
++/**
++ * Convert a colour value into a TikZ colour and opacity. A picker colour (`#rrggbb`, `#rrggbbaa`, or
++ * `rgba(...)`) states its opacity; an xcolor expression states none, so its opacity is null.
++ */
 +export function tikzColorValue(value: string): { color: string; opacity: number | null } {
 +  // HTML hex from a colour control is not an xcolor expression: write it as an rgb value, its alpha as opacity.
 +  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})?$/iu.exec(value.trim());
 +  if (hex) {
-+    const [red, green, blue] = hex.slice(1, 4).map((part) => parseInt(part, 16));
-+    const alpha = hex[4] === undefined ? 255 : parseInt(hex[4], 16);
-+    return { color: `{rgb,255:red,${red};green,${green};blue,${blue}}`, opacity: alpha === 255 ? null : alpha / 255 };
++    const [red, green, blue] = hex.slice(1, 4).map((part) => Number.parseInt(part, 16));
++    const alpha = hex[4] === undefined ? 255 : Number.parseInt(hex[4], 16);
++    return { color: `{rgb,255:red,${red};green,${green};blue,${blue}}`, opacity: alpha / 255 };
 +  }
 +  if (value.trim().startsWith("#")) throw new Error(`Colour ${value} is neither #rrggbb nor #rrggbbaa.`);
 +  const rgba = /^rgba\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d*(?:\.\d+)?)\s*\)$/iu.exec(value.trim());
@@ -20990,9 +21101,10 @@ index 00000000..1e817909
 +  return { color: `{rgb,255:red,${channels[0]};green,${channels[1]};blue,${channels[2]}}`, opacity };
 +}
 +
++/** The options that draw a new element in `value`; opacity is written only below 1 (data-model Colour). */
 +export function tikzColorOptions(key: "draw" | "fill" | "text", value: string): string[] {
 +  const { color, opacity } = tikzColorValue(value);
-+  return [`${key}=${color}`, ...(opacity === null ? [] : [`${key === "draw" ? "draw" : key === "fill" ? "fill" : "text"} opacity=${opacity}`])];
++  return [`${key}=${color}`, ...(opacity !== null && opacity < 1 ? [`${key} opacity=${opacity}`] : [])];
 +}
 diff --git a/packages/core/src/edit/coordinate-frame.ts b/packages/core/src/edit/coordinate-frame.ts
 new file mode 100644
@@ -21837,6 +21949,32 @@ index 00000000..2bfef34c
 +  }
 +  return `node${Date.now()}`;
 +}
+diff --git a/packages/core/src/edit/option-mutations.ts b/packages/core/src/edit/option-mutations.ts
+index f9e8ef94..4a34af58 100644
+--- a/packages/core/src/edit/option-mutations.ts
++++ b/packages/core/src/edit/option-mutations.ts
+@@ -589,10 +589,20 @@ function shouldSerializeAsBareColorOption(
+     serializationContext.bareColorKey === key &&
+     normalizedValue !== "false" &&
+     normalizedValue !== "none" &&
+-    isLikelyBareColorOption(value)
++    tikzReadsBareColor(value)
+   );
+ }
+ 
++/**
++ * Whether TikZ reads `value` as a colour when it stands alone as an option: the `/tikz/.unknown` handler of
++ * tikz.code.tex takes a key that contains `!` or names a defined colour, and nothing else, so an
++ * `{rgb,255:...}` or `#hex` value needs its key.
++ */
++function tikzReadsBareColor(value: string): boolean {
++  const trimmed = value.trim();
++  return !/^[#{]|^rgb/i.test(trimmed) && isLikelyBareColorOption(trimmed);
++}
++
+ function resolveFlagAliasKey(
+   entry: Extract<OptionEntry, { kind: "flag" }>,
+   mutations: ReadonlyMap<string, OptionMutation>,
 diff --git a/packages/core/src/edit/path-editing.ts b/packages/core/src/edit/path-editing.ts
 index feb259fd..4ea358d5 100644
 --- a/packages/core/src/edit/path-editing.ts
@@ -25395,6 +25533,26 @@ index 5e2d6e99..c55a9748 100644
      expect(node?.writeTargetId).not.toBe(node?.id);
    });
  
+diff --git a/test/option-mutations.spec.ts b/test/option-mutations.spec.ts
+index 13c104dd..dc33c414 100644
+--- a/test/option-mutations.spec.ts
++++ b/test/option-mutations.spec.ts
+@@ -20,11 +20,13 @@ describe("option mutation serialization", () => {
+     expect(rewriteOptionListMutations(parseOptionListRaw("[red, -]"), mutations)).toBe("[red]");
+   });
+ 
+-  it("serializes bare draw colors only for color-like values", () => {
++  it("serializes bare draw colors only for values TikZ reads as a bare color", () => {
+     const drawContext = { bareColorKey: "draw" as const };
+ 
++    // TikZ's /tikz/.unknown handler reads a bare option as a color only when it contains `!` or names a
++    // defined color; a bare `{rgb,…}` fails with "I do not know the key '/tikz/rgb'".
+     expect(serializeOptionEntry("draw", "{rgb,255:red,1;green,2;blue,3}", drawContext)).toBe(
+-      "{rgb,255:red,1;green,2;blue,3}"
++      "draw={rgb,255:red,1;green,2;blue,3}"
+     );
+     expect(serializeOptionEntry("draw", "red!30!blue", drawContext)).toBe("red!30!blue");
+     expect(serializeOptionEntry("draw", "not a color expression", drawContext)).toBe(
 diff --git a/test/path-edit-actions.spec.ts b/test/path-edit-actions.spec.ts
 index 2a480a89..de3df784 100644
 --- a/test/path-edit-actions.spec.ts

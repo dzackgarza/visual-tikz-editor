@@ -1,22 +1,13 @@
-import { svgToTikz } from 'svg2tikz';
 import { z } from 'zod';
 
 const coordinate = z.number();
-function strokeColorComponents(color: string): { rgb: number[]; alpha: number } | null {
-  if (/^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/.test(color)) {
-    return { rgb: [1, 3, 5].map(offset => parseInt(color.slice(offset, offset + 2), 16)),
-      alpha: color.length === 9 ? parseInt(color.slice(7, 9), 16) / 255 : 1 };
-  }
-  const match = /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*((?:0|1)(?:\.\d+)?|\.\d+)\s*\)$/.exec(color);
-  if (match === null) return null;
-  const rgb = match.slice(1, 4).map(Number);
-  const alpha = Number(match[4]);
-  return rgb.every(value => value <= 255) && alpha >= 0 && alpha <= 1 ? { rgb, alpha } : null;
-}
 export const originalStrokeSchema = z.object({
   key: z.string().regex(/^[A-Za-z0-9_-]+$/),
   intent: z.enum(['geometry', 'ink']),
-  color: z.string().refine(color => strokeColorComponents(color) !== null, 'Expected hex RGB, hex RGBA or rgba() color'),
+  /** The Pen preset as the toolbar holds it: an xcolor expression such as `red!50!blue`, or a picker colour (data-model Colour). */
+  color: z.string().regex(/\S/u, 'Expected a colour'),
+  /** The Pen's opacity, present only when below 1; it multiplies any opacity the colour states. */
+  opacity: z.number().gt(0).lt(1).optional(),
   /** The pen's line width in points, present only when it differs from TikZ's default. */
   lineWidth: z.number().positive().optional(),
   /** The pen's TikZ dash style, present only when the line is not solid. */
@@ -40,25 +31,6 @@ export const originalStrokeSchema = z.object({
 }).strict();
 
 export type OriginalStroke = z.infer<typeof originalStrokeSchema>;
-export function tikzStrokeColor(stroke: OriginalStroke): string {
-  const components = strokeColorComponents(stroke.color);
-  if (components === null) throw new Error('Invalid original ink color');
-  const { rgb } = components;
-  return `{rgb,255:red,${rgb[0]};green,${rgb[1]};blue,${rgb[2]}}`;
-}
-
-export function tikzStrokeOpacity(stroke: OriginalStroke): number {
-  const components = strokeColorComponents(stroke.color);
-  if (components === null) throw new Error('Invalid original ink color');
-  return components.alpha;
-}
-
-/** A stroke colour with its alpha multiplied by an opacity, as rgba() so the opacity is written exactly. */
-export function strokeColorWithOpacity(color: string, opacity: number): string {
-  const components = strokeColorComponents(color);
-  if (components === null) throw new Error('Invalid original ink color');
-  return opacity === 1 ? color : `rgba(${components.rgb.join(',')},${components.alpha * opacity})`;
-}
 
 /** TeX's point: 72.27 pt to the inch, 2.54 cm to the inch (The TeXbook, ch. 10). */
 const PT_PER_CM = 72.27 / 2.54;
@@ -81,41 +53,6 @@ export function smoothPolyline<Point extends { x: number; y: number }>(points: r
   });
 }
 
-/** The TikZ options a stroke's drawing carries beyond its colour: opacity below 1, width, and dash style. */
-export function inkStyleOptions(stroke: OriginalStroke): string[] {
-  const opacity = tikzStrokeOpacity(stroke);
-  return [
-    ...(opacity === 1 ? [] : [`draw opacity=${opacity}`]),
-    ...(stroke.lineWidth === undefined ? [] : [`line width=${stroke.lineWidth}pt`]),
-    ...(stroke.lineStyle === undefined ? [] : [stroke.lineStyle]),
-  ];
-}
-
-export function originalDrawingSource(stroke: OriginalStroke): string {
-  if (stroke.outline !== undefined) {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    // The converter uses downward SVG coordinates and centimetres. The ink
-    // contract uses the same upward point coordinates as its sensor samples.
-    svg.setAttribute('viewBox', '0 -1 1 1');
-    const path = document.createElementNS(svg.namespaceURI, 'path');
-    path.setAttribute('d', stroke.outline.path);
-    const fill = strokeColorComponents(stroke.outline.fill);
-    path.setAttribute('fill', fill === null ? stroke.outline.fill : `rgb(${fill.rgb.join(',')})`);
-    if (fill !== null && fill.alpha < 1) path.setAttribute('fill-opacity', String(fill.alpha));
-    svg.append(path);
-    return svgToTikz(svg, { scale: 1 / 28.4528, precision: 8 })
-      .replace('\\begin{tikzpicture}', '\\begin{scope}[yscale=-1]')
-      .replace('\\end{tikzpicture}', '\\end{scope}');
-  }
-  const samples = stroke.smoothing === undefined ? stroke.samples : smoothPolyline(stroke.samples, stroke.smoothing);
-  const last = samples.length - 1;
-  const point = (index: number) => {
-    const name = index === 0 ? stroke.ends?.start : index === last ? stroke.ends?.end : undefined;
-    return name === undefined ? `(${samples[index].x}pt,${samples[index].y}pt)` : `(${name})`;
-  };
-  const options = [`draw=${tikzStrokeColor(stroke)}`, ...inkStyleOptions(stroke)].join(',');
-  return `\\draw[${options}] ${samples.map((_sample, index) => point(index)).join(' -- ')};`;
-}
 export const originalAssociationSchema = z.object({
   stroke: originalStrokeSchema,
   sourceIds: z.array(z.string()),

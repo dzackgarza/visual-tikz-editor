@@ -119,7 +119,7 @@ object menu with the commands that apply.
 - [X] T037 [US3] Rebuild the object menu in `.cache/tikz-editor/packages/app/src/ui/SelectionStrip.tsx` and `CanvasPanel.tsx:4944-4991`: above the selection at once, only the commands that apply, More with Cut, Copy, Paste, Delete, Transform, Reorder, Repeat… (research R14)
 - [X] T038 [US3] Make Simplify and Restore Original Stroke object-menu commands on a selected curve, using `restore-ink` (FR-027), in `.cache/tikz-editor/packages/app/src/ui/SelectionStrip.tsx`
 - [ ] T039 [US3] Keep per-tool presets (three by default, at most 12, data-model Tool `presets[tool]` "`Colour[]`, 1–12") as preferences through `persistence-save` in the fork store `.cache/tikz-editor/packages/app/src/store/`
-- [ ] T040 [US3] Replace the native colour input of `.cache/tikz-editor/packages/app/src/ui/ColorPicker.tsx:199-228` with the colour options of research R6 (`@uiw/react-color-wheel`, `@uiw/react-color-alpha`, `@uiw/react-color-editable-input`, the palette, the exact `xcolor` field); write opacity as TikZ `opacity` only when below 1 (data-model Colour)
+- [X] T040 [US3] Replace the native colour input of `.cache/tikz-editor/packages/app/src/ui/ColorPicker.tsx:199-228` with the colour options of research R6 (`@uiw/react-color-wheel`, `@uiw/react-color-alpha`, `@uiw/react-color-editable-input`, the palette, the exact `xcolor` field); write opacity as TikZ `opacity` only when below 1 (data-model Colour)
 - [ ] T041 [US3] Rewrite the replaced stories near lines 8287 and 1886 of `test/workbench-browser.spec.ts`; rebuild the fork and run the US3 stories green
 
 ---

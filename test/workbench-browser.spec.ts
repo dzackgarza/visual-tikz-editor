@@ -5717,7 +5717,16 @@ describe("standalone workbench host boundary", function () {
         const exact = options.getByRole("textbox", { name: "Exact xcolor", exact: true });
         await expect(hex).toBeVisible();
         await expect(exact).toBeVisible();
-        await expect(options.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+        const edit = options.getByRole("button", { name: "Edit", exact: true });
+        await expect(edit).toBeVisible();
+        // Edit shows the commands that reorder and remove the toolbar's colours; until then they are hidden.
+        const removeColour = options.getByRole("button", { name: "Remove colour", exact: true });
+        await expect(removeColour).toHaveCount(0);
+        await tap(edit);
+        await expect(options.getByRole("button", { name: "Move later", exact: true })).toBeVisible();
+        await expect(removeColour).toBeVisible();
+        await tap(edit);
+        await expect(removeColour).toHaveCount(0);
 
         // The palette is the active collection of Settings › Colors, laid out in rows.
         const paletteColours = async () =>
@@ -5789,7 +5798,10 @@ describe("standalone workbench host boundary", function () {
 
         // A hex code at full opacity is written as its rgb triple, with no opacity.
         await toggleOptions(true);
-        await hex.fill("ff0000");
+        // The field puts the caret after its digits when it takes focus; a user selects them and types over them.
+        await tap(hex);
+        await hex.press("ControlOrMeta+a");
+        await hex.pressSequentially("ff0000");
         await hex.press("Enter");
         if (await options.isVisible()) await toggleOptions(false);
         const hexLine = await drawLine();
@@ -10810,13 +10822,17 @@ describe("standalone workbench host boundary", function () {
       const colour = drawingToolbar(frame).getByRole("button", { name: /^Colour 1: / });
       await tap(colour);
       const popup = frame.getByRole("dialog", { name: "Colour options" });
-      await popup.getByLabel("Choose color", { exact: true }).fill("#112233");
+      const hex = popup.getByRole("textbox", { name: "Hex", exact: true });
+      // The field puts the caret after its digits when it takes focus; a user selects them and types over them.
+      await tap(hex);
+      await hex.press("ControlOrMeta+a");
+      await hex.pressSequentially("112233");
       const opacity = popup.getByRole("slider", { name: "Opacity" });
       await opacity.focus();
       for (let step = 0; step < 50; step++) {
         await opacity.press("ArrowLeft");
       }
-      await expect(opacity).toHaveValue("0.5");
+      await expect(opacity).toHaveAttribute("aria-valuenow", "0.5");
       await tap(colour);
       await expect(popup).toHaveCount(0);
       const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
