@@ -3081,10 +3081,13 @@ describe("standalone workbench host boundary", function () {
         await step("The fill is not in the source");
         assert.match(last(), /blue/);
 
-        // A text label goes on empty canvas.
+        // A text label goes on empty canvas; the keys typed make it a part of the document.
         await chooseTool(frame, input, "Text");
         await expect(toolbarItem(frame, "Text")).toHaveAttribute("aria-pressed", "true");
         await input.penStroke([{ x: box.x + box.width / 2, y: box.y - 40 }]);
+        await expect(frame.getByTestId("canvas-text-edit-textarea"), "The label is not in edit").toBeFocused();
+        await page.keyboard.type("L");
+        await expect.poll(source, { message: "The typed key is not the label" }).toMatch(/\{L\};/);
         await step("The label is not in the source");
         const final = last();
         assert.match(final, /\\node/);
@@ -3572,9 +3575,11 @@ describe("standalone workbench host boundary", function () {
         await input.penHover(at(7, 3));
         await expect.poll(targetLabel, { message: "Hovering the line did not name it" }).toBe("On line");
         await input.penStroke([at(7, 3)]);
+        await expect(frame.getByTestId("canvas-text-edit-textarea"), "The label is not in edit").toBeFocused();
+        await page.keyboard.type("m");
         await expect
           .poll(source, { message: "The label was not attached to the line" })
-          .toMatch(/\\draw \(5,3\) -- \(9,3\) node\[midway[^\]]*\] \{[^}]*\};/);
+          .toMatch(/\\draw \(5,3\) -- \(9,3\) node\[midway[^\]]*\] \{m\};/);
         await editorReady(page);
         await expect.poll(labelId, { message: "The label is not a path-attached node" }).toMatch(/./);
         const label = await labelId();

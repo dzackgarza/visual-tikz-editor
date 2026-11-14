@@ -8404,7 +8404,7 @@ index cf4cf2cf..cef2a888 100644
 +}
 +.cornerButtonActive { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..d699688e 100644
+index 4e22ccfa..cd2b58e5 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,19 @@
@@ -9329,7 +9329,7 @@ index 4e22ccfa..d699688e 100644
 -        sourceRefs: snapshot.editHandles.map((handle) => handle.sourceRef)
 -      });
 -      const result = applyEditAction(sourceForEdit, snapshot.editHandles, action, {
-+    (action: EditAction, historyMergeKey?: string, base?: EditBase): ApplyActionFeedback => {
++    (action: EditAction, historyMergeKey?: string, base?: EditBase, recordInHistory?: boolean): ApplyActionFeedback => {
 +      const sourceForEdit = base?.source ?? source;
 +      const editHandles = base?.editHandles ?? snapshot.editHandles;
 +      // A gesture base is indexed by the handles it started with, which carry the fingerprint of that source.
@@ -9345,7 +9345,7 @@ index 4e22ccfa..d699688e 100644
          evaluateOptions: { sourceFingerprint, textEngine: textEngineRef.current },
          parseOptions: { ...editParseOptions, propertyWriteMode: "drag-frame", sourceFingerprint }
        });
-@@ -1940,13 +2192,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1940,13 +2192,15 @@ export const CanvasPanel = memo(function CanvasPanel({
            setWarning(`${result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
          }
  
@@ -9356,12 +9356,13 @@ index 4e22ccfa..d699688e 100644
              type: "APPLY_EDIT_ACTION",
              action,
              historyMergeKey,
++            recordInHistory,
              precomputedSource: sourceForEdit,
 +            precomputedAgainstGestureBase: base?.editHandles != null,
              precomputedResult: result
            });
          }
-@@ -1975,15 +2228,252 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,19 +2229,312 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -9616,7 +9617,67 @@ index 4e22ccfa..d699688e 100644
      },
      [snapshot.scene]
    );
-@@ -2055,69 +2545,254 @@ export const CanvasPanel = memo(function CanvasPanel({
+ 
++  // The text that the Text tool placed and that has no key yet. It is in the canvas source only: the placement is no
++  // step of the history, so the first key records placement and text as one step, and a text that gets no key leaves
++  // nothing. tldraw deletes a text shape whose edit ends with no text (https://tldraw.dev/sdk-features/text-shape), and
++  // a click with Inkscape's Text tool makes no object until a character is typed.
++  const untypedTextRef = useRef<{
++    sourceBefore: string;
++    placedSource: string;
++    lastStep: ReturnType<typeof useEditorStore.getState>["lastStep"];
++    sourceId: string | null;
++    inEdit: boolean;
++  } | null>(null);
++
++  const placeTextInEdit = useCallback(
++    (action: EditAction, at: WorldPoint): ApplyActionFeedback => {
++      const before = useEditorStore.getState();
++      queueSelectionForAddedElement(at, undefined, true);
++      const feedback = applyActionWithFeedback(action, undefined, undefined, false);
++      if (feedback.newSource !== undefined) {
++        untypedTextRef.current = { sourceBefore: before.source, placedSource: feedback.newSource, lastStep: before.lastStep, sourceId: null, inEdit: false };
++      }
++      return feedback;
++    },
++    [applyActionWithFeedback, queueSelectionForAddedElement]
++  );
++
++  const discardUntypedText = useCallback((): boolean => {
++    const untyped = untypedTextRef.current;
++    if (!untyped) return false;
++    untypedTextRef.current = null;
++    const current = useEditorStore.getState();
++    // A key, or any other edit, made the text a part of the document.
++    if (current.source !== untyped.placedSource || current.lastStep !== untyped.lastStep) return false;
++    pendingAddedSelectionRef.current = null;
++    setPendingTextEditTargetId(null);
++    dispatchCanvasTextEditAction({ type: "session_close" });
++    if (untyped.sourceId !== null && current.selectedElementIds.has(untyped.sourceId)) dispatch({ type: "CLEAR_SELECTION" });
++    dispatch({ type: "SET_SOURCE_TRANSIENT", source: untyped.sourceBefore });
++    return true;
++  }, [dispatch, dispatchCanvasTextEditAction]);
++
++  // The edit of the placed text ended, by Escape, by a press elsewhere, or by a change of the document.
++  useEffect(() => {
++    const untyped = untypedTextRef.current;
++    if (!untyped) return;
++    if (textEditingSession !== null && textEditingSession.sourceId === untyped.sourceId) {
++      untyped.inEdit = true;
++      return;
++    }
++    if (untyped.inEdit) discardUntypedText();
++  }, [discardUntypedText, textEditingSession]);
++
++  // Another tool does not continue the text.
++  useEffect(() => {
++    if (toolMode !== "addNode") discardUntypedText();
++  }, [discardUntypedText, toolMode]);
++
+   const commitPathToolSegment = useCallback((segment: PathToolGestureSegment) => {
+     setPathDraft((previousDraft) => {
+       if (!previousDraft) {
+@@ -2055,69 +2602,254 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
  
@@ -9907,7 +9968,7 @@ index 4e22ccfa..d699688e 100644
  
    const finalizePathDraft = useCallback(
      (closed: boolean) => {
-@@ -2132,7 +2807,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2132,7 +2864,6 @@ export const CanvasPanel = memo(function CanvasPanel({
        if (!draft || !pathToolHasDrawableSegments(draft)) {
          setPathDraft(null);
          setToolCursorWorld(null);
@@ -9915,7 +9976,7 @@ index 4e22ccfa..d699688e 100644
          return;
        }
  
-@@ -2141,7 +2815,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2141,7 +2872,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!segSource) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -9923,7 +9984,7 @@ index 4e22ccfa..d699688e 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2158,7 +2831,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2158,7 +2888,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          if (!snippet) {
            setPathDraft(null);
            setToolCursorWorld(null);
@@ -9931,7 +9992,7 @@ index 4e22ccfa..d699688e 100644
            return;
          }
          const ok = applyActionWithFeedback({
-@@ -2173,11 +2845,28 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2173,11 +2902,28 @@ export const CanvasPanel = memo(function CanvasPanel({
  
        setPathDraft(null);
        setToolCursorWorld(null);
@@ -9961,7 +10022,7 @@ index 4e22ccfa..d699688e 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -2717,9 +3406,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2717,9 +3463,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      return () => { textarea.removeEventListener("beforeinput", handleBeforeInput); };
    }, [dispatchTextEditBeforeInputIntent, textEditingSession]);
  
@@ -9973,7 +10034,7 @@ index 4e22ccfa..d699688e 100644
        return;
      }
      if (document.activeElement !== textarea) {
-@@ -2730,16 +3420,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2730,16 +3477,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      if (textarea.selectionStart !== start || textarea.selectionEnd !== end) {
        textarea.setSelectionRange(start, end);
      }
@@ -9990,7 +10051,7 @@ index 4e22ccfa..d699688e 100644
    }, [textEditingSession, textEditPopupHeight]);
  
    useEffect(() => {
-@@ -3010,7 +3690,9 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3010,7 +3747,9 @@ export const CanvasPanel = memo(function CanvasPanel({
      [handleNodePositionTargetPick, suppressNextBackgroundClickRef]
    );
  
@@ -10001,7 +10062,7 @@ index 4e22ccfa..d699688e 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3049,12 +3731,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3049,12 +3788,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          setWarning(`${resolution.result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
        }
  
@@ -10018,7 +10079,7 @@ index 4e22ccfa..d699688e 100644
      },
      setSnapLines,
      logSnapDebug,
-@@ -3064,9 +3749,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3806,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -10028,7 +10089,7 @@ index 4e22ccfa..d699688e 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3759,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3816,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -10036,7 +10097,7 @@ index 4e22ccfa..d699688e 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3830,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3887,10 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -10048,7 +10109,7 @@ index 4e22ccfa..d699688e 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3857,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3914,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -10058,7 +10119,7 @@ index 4e22ccfa..d699688e 100644
      ]
    );
  
-@@ -3192,6 +3879,64 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3936,64 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -10123,8 +10184,13 @@ index 4e22ccfa..d699688e 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3965,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3218,14 +4020,23 @@ export const CanvasPanel = memo(function CanvasPanel({
+     viewportRef,
+     toolMode,
      closeTextEditingSession,
++    placeTextInEdit,
++    discardUntypedText,
++    textInEdit: textEditingSession !== null || pendingTextEditTargetId !== null,
      startMarqueeSelection,
      pendingTouchViewportRef,
 +    selectionLocked: heldSelection !== null,
@@ -10142,7 +10208,7 @@ index 4e22ccfa..d699688e 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +3999,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +4059,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -10153,7 +10219,7 @@ index 4e22ccfa..d699688e 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,17 +4022,371 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,17 +4082,371 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -10527,7 +10593,7 @@ index 4e22ccfa..d699688e 100644
  
    const {
      onViewportKeyDown,
-@@ -3306,6 +4415,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4475,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -10535,7 +10601,7 @@ index 4e22ccfa..d699688e 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4440,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4500,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -10560,7 +10626,7 @@ index 4e22ccfa..d699688e 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4558,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4618,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -10595,7 +10661,7 @@ index 4e22ccfa..d699688e 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4579,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4639,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -10603,7 +10669,7 @@ index 4e22ccfa..d699688e 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4593,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4653,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -10611,7 +10677,7 @@ index 4e22ccfa..d699688e 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3528,12 +4615,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3528,12 +4675,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      resolveEditableTextTargetById,
      resolveRenderedMathTextElement,
      viewportRef,
@@ -10626,11 +10692,23 @@ index 4e22ccfa..d699688e 100644
      canvasTransform,
      svgResult
    });
-@@ -3577,12 +4664,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3543,7 +4690,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+     if (!pending) {
+       return;
+     }
+-    if (snapshot.source !== source) {
++    // An effect of this same commit can have added the element: the scene to read is the one of the store's source.
++    if (snapshot.source !== source || source !== useEditorStore.getState().source) {
+       return;
+     }
+ 
+@@ -3577,12 +4725,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          );
  
      dispatch({ type: "SELECT", id: selectedId, additive: false });
-+    if (pending.editText) setPendingTextEditTargetId(selectedId);
++    if (!pending.editText) return;
++    setPendingTextEditTargetId(selectedId);
++    if (untypedTextRef.current) untypedTextRef.current.sourceId = selectedId;
    }, [dispatch, snapshot.scene, snapshot.source, source]);
  
    const dragControllerConfig = useMemo(() => ({
@@ -10641,7 +10719,7 @@ index 4e22ccfa..d699688e 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4715,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4778,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -10650,7 +10728,7 @@ index 4e22ccfa..d699688e 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4794,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4857,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -10674,7 +10752,7 @@ index 4e22ccfa..d699688e 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4907,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4970,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -10682,7 +10760,7 @@ index 4e22ccfa..d699688e 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4920,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4983,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -10690,7 +10768,7 @@ index 4e22ccfa..d699688e 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4931,295 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4994,295 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -10986,7 +11064,7 @@ index 4e22ccfa..d699688e 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5239,27 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5302,27 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -11015,7 +11093,7 @@ index 4e22ccfa..d699688e 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5276,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5339,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -11031,7 +11109,7 @@ index 4e22ccfa..d699688e 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3903,16 +5301,33 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3903,16 +5364,33 @@ export const CanvasPanel = memo(function CanvasPanel({
          handleStrokeWidth={handleStrokeWidth}
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
@@ -11068,7 +11146,7 @@ index 4e22ccfa..d699688e 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5335,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5398,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -11078,7 +11156,7 @@ index 4e22ccfa..d699688e 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5348,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5411,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -11113,7 +11191,7 @@ index 4e22ccfa..d699688e 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3947,7 +5383,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3947,7 +5446,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          }}
          dragTooltip={dragTooltip}
          dragTooltipBoundary={dragTooltipBoundaryRef.current}
@@ -11122,7 +11200,7 @@ index 4e22ccfa..d699688e 100644
          copyWarningToClipboard={copyWarningToClipboard}
          onWarningBarKeyDown={onWarningBarKeyDown}
          textEditingSession={textEditingSession}
-@@ -3965,7 +5401,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3965,7 +5464,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaPaste={handleTextEditTextareaPaste}
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
@@ -11130,7 +11208,7 @@ index 4e22ccfa..d699688e 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5409,26 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5472,26 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -15154,7 +15232,7 @@ index e53466d3..1426f789 100644
    return Number(value.toFixed(4)).toString();
  }
 diff --git a/packages/app/src/ui/canvas-panel/types.ts b/packages/app/src/ui/canvas-panel/types.ts
-index dac6b0b3..527d6a30 100644
+index dac6b0b3..6f3c7332 100644
 --- a/packages/app/src/ui/canvas-panel/types.ts
 +++ b/packages/app/src/ui/canvas-panel/types.ts
 @@ -1,8 +1,10 @@
@@ -15169,7 +15247,7 @@ index dac6b0b3..527d6a30 100644
  import type { EditHandle, NodeAnchorTarget, SceneElement, SceneText } from "tikz-editor/semantic/types";
  import type { SvgViewBox } from "tikz-editor/svg/index";
  import type { NodeTextLayoutKind } from "tikz-editor/text/types";
-@@ -33,10 +35,20 @@ export type CanvasSvgRenderModel = SessionSnapshot["svgModel"];
+@@ -33,10 +35,22 @@ export type CanvasSvgRenderModel = SessionSnapshot["svgModel"];
  
  export type CanvasEditParseOptions = EditParseOptions;
  
@@ -15187,11 +15265,13 @@ index dac6b0b3..527d6a30 100644
    action: EditAction,
    historyMergeKey?: string,
 -  sourceOverride?: string
-+  base?: EditBase
++  base?: EditBase,
++  /** False for a change that is no step of the history until a later edit takes it along. */
++  recordInHistory?: boolean
  ) => ApplyActionFeedback;
  
  export type CanvasContextMenuState = {
-@@ -119,7 +131,9 @@ export type DragState =
+@@ -119,7 +133,9 @@ export type DragState =
        pointerId: number;
        elementIds: string[];
        startWorld: WorldPoint;
@@ -15201,7 +15281,7 @@ index dac6b0b3..527d6a30 100644
        lastAppliedTotalDelta: WorldVector;
        adornmentDrag?: {
          ownerPoint: WorldPoint;
-@@ -167,6 +181,8 @@ export type DragState =
+@@ -167,6 +183,8 @@ export type DragState =
              yshift: number;
            }
          | null;
@@ -15210,7 +15290,7 @@ index dac6b0b3..527d6a30 100644
        measurementMode: "center" | "opposite-corner";
        preserveAspectDuringResize: boolean;
        historyMergeKey: string;
-@@ -203,6 +219,8 @@ export type DragState =
+@@ -203,6 +221,8 @@ export type DragState =
        gridResizeSnap: GridResizeSnapConfig | null;
        historyMergeKey: string;
        activeEndpointAnchor: NodeAnchorTarget | null;
@@ -15219,7 +15299,7 @@ index dac6b0b3..527d6a30 100644
      }
    | {
        kind: "pan";
-@@ -217,6 +235,8 @@ export type DragState =
+@@ -217,6 +237,8 @@ export type DragState =
        currentWorld: WorldPoint;
        additive: boolean;
        baseSelectedIds: string[];
@@ -15228,7 +15308,7 @@ index dac6b0b3..527d6a30 100644
      }
    | {
        kind: "tool-create";
-@@ -254,7 +274,8 @@ export type DragState =
+@@ -254,7 +276,8 @@ export type DragState =
        kind: "tool-freehand";
        pointerId: number;
        points: WorldPoint[];
@@ -15238,7 +15318,7 @@ index dac6b0b3..527d6a30 100644
      }
    ;
  
-@@ -262,6 +283,8 @@ export type PendingAddedSelection = {
+@@ -262,6 +285,8 @@ export type PendingAddedSelection = {
    beforeIds: Set<string>;
    preferredWorld: WorldPoint;
    preferredSourceId?: string;
@@ -15247,7 +15327,7 @@ index dac6b0b3..527d6a30 100644
  };
  
  export type PendingBezier = {
-@@ -269,6 +292,12 @@ export type PendingBezier = {
+@@ -269,6 +294,12 @@ export type PendingBezier = {
    endWorld: WorldPoint;
  };
  
@@ -15260,7 +15340,7 @@ index dac6b0b3..527d6a30 100644
  export type PathAppendTarget = {
    elementId: string;
    end: "start" | "end";
-@@ -280,9 +309,35 @@ export type PathToolDraft = {
+@@ -280,9 +311,35 @@ export type PathToolDraft = {
    appendTarget?: PathAppendTarget;
  };
  
@@ -15299,7 +15379,7 @@ index dac6b0b3..527d6a30 100644
  };
  
  export type TextSelectionOverlay = {
-@@ -442,8 +497,42 @@ export type HandleDisplay =
+@@ -442,8 +499,42 @@ export type HandleDisplay =
        cursor: string;
        kind: "rotate-element";
        elementId: string;
@@ -17514,11 +17594,12 @@ index 371637b1..48ccc6a5 100644
      source,
      startTextEditingSession
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..a21f7d9e 100644
+index 709cc1b9..3617da50 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-@@ -1,18 +1,28 @@
- import { useCallback, useEffect, type MouseEvent as ReactMouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+@@ -1,18 +1,29 @@
+-import { useCallback, useEffect, type MouseEvent as ReactMouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
++import { useCallback, useEffect, useState, type MouseEvent as ReactMouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
  import { viewportPoint, clientPoint as makeClientPoint, worldPoint, pt, px } from "tikz-editor/coords/index";
  import { buildSnapContext, resolveSnapSettings, snapToolPointer, type SnapGuideInput, type SnapLine, type SnapSettingsPatch } from "tikz-editor/edit/snapping";
 -import type { NodeAnchorTarget } from "tikz-editor/semantic/types";
@@ -17531,7 +17612,7 @@ index 709cc1b9..a21f7d9e 100644
 +import { arcThroughThree, circleOnDiameter, circleThroughThree, clientToWorldPoint, distanceSquared } from "./geometry";
 +import { useSettingsStore } from "../../settings/useSettingsStore";
 +import { activeSnapRules } from "../../settings/types";
-+import type { ElementTemplate } from "tikz-editor/edit/actions";
++import type { EditAction, ElementTemplate } from "tikz-editor/edit/actions";
  import { createPathToolDraft, pathToolCloseRadiusWorld, pathToolCurrentPoint, pathToolShouldClose } from "./path-tool";
  import { resolvePathEndpointSnap } from "./path-endpoint-snap";
 +import { resolveLabelHostSnap } from "./label-host-snap";
@@ -17546,10 +17627,11 @@ index 709cc1b9..a21f7d9e 100644
 +  ArcDraft,
 +  TapConstruction,
 +  TapDraft,
++  ApplyActionFeedback,
    ApplyActionWithFeedbackFn,
    CanvasDispatch,
    CanvasEditParseOptions,
-@@ -37,12 +47,18 @@ export type UseCanvasToolInteractionsArgs = {
+@@ -37,12 +48,18 @@ export type UseCanvasToolInteractionsArgs = {
    closeTextEditingSession: () => void;
    startMarqueeSelection: (pointerId: number, clientPoint: ClientPoint, additiveSelection: boolean) => boolean;
    pendingTouchViewportRef: MutableRefObject<PendingTouchViewport | null>;
@@ -17568,7 +17650,7 @@ index 709cc1b9..a21f7d9e 100644
    snapshot: CanvasSnapshot;
    source: string;
    setWarning: StateSetter<string | null>;
-@@ -65,16 +81,22 @@ export type UseCanvasToolInteractionsArgs = {
+@@ -65,16 +82,28 @@ export type UseCanvasToolInteractionsArgs = {
    setFreehandDraft: StateSetter<FreehandToolDraft | null>;
    setMagnifierState: StateSetter<MagnifierState | null>;
    setDragCursorLock: StateSetter<string | null>;
@@ -17583,6 +17665,12 @@ index 709cc1b9..a21f7d9e 100644
 -  queueSelectionForAddedElement: (preferredWorld: WorldPoint, preferredSourceId?: string) => void;
 +  queueSelectionForAddedElement: (preferredWorld: WorldPoint, preferredSourceId?: string, editText?: boolean) => void;
    applyActionWithFeedback: ApplyActionWithFeedbackFn;
++  /** Places the text of the Text tool and puts it in edit. */
++  placeTextInEdit: (action: EditAction, at: WorldPoint) => ApplyActionFeedback;
++  /** Removes the text that the Text tool placed and that got no key; false when there is none. */
++  discardUntypedText: () => boolean;
++  /** A text of the canvas is in edit, or its edit is about to start. */
++  textInEdit: boolean;
    pendingAddedSelectionRef: MutableRefObject<PendingAddedSelection | null>;
    dispatch: CanvasDispatch;
    selectedAddMatrixRows: number;
@@ -17592,7 +17680,7 @@ index 709cc1b9..a21f7d9e 100644
    pathDraft: PathToolDraft | null;
    pathSegmentDraft: Extract<DragState, { kind: "tool-path-segment" }> | null;
    dragRef: MutableRefObject<DragState | null>;
-@@ -84,6 +106,11 @@ export type UseCanvasToolInteractionsArgs = {
+@@ -84,6 +113,11 @@ export type UseCanvasToolInteractionsArgs = {
    parseOptions: CanvasEditParseOptions;
  };
  
@@ -17604,7 +17692,7 @@ index 709cc1b9..a21f7d9e 100644
  export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
    const {
      viewportRef,
-@@ -91,12 +118,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -91,12 +125,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -17622,7 +17710,7 @@ index 709cc1b9..a21f7d9e 100644
      snapshot,
      source,
      setWarning,
-@@ -119,6 +151,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -119,6 +158,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -17633,7 +17721,7 @@ index 709cc1b9..a21f7d9e 100644
      magnifierState,
      pathDraftRef,
      finalizePathDraft,
-@@ -129,6 +165,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -129,26 +172,40 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
      selectedAddMatrixRows,
      selectedAddMatrixColumns,
      creationStrokeColor,
@@ -17641,10 +17729,17 @@ index 709cc1b9..a21f7d9e 100644
      pathDraft,
      pathSegmentDraft,
      dragRef,
-@@ -137,18 +174,26 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+     toolDraft,
+     bezierBendDraft,
      freehandDraft,
-     parseOptions
+-    parseOptions
++    parseOptions,
++    placeTextInEdit,
++    discardUntypedText,
++    textInEdit
    } = args;
++  // A press with Text that waits for the scene of the current source.
++  const [deferredTextPress, setDeferredTextPress] = useState<{ world: WorldPoint; ctrlKey: boolean; metaKey: boolean } | null>(null);
 +  // The Label tool's host path under the pointer: an editable line or arrow within reach, when the Objects rule is on.
 +  const labelHostAt = useCallback(
 +    (event: { ctrlKey: boolean; metaKey: boolean }, world: WorldPoint) =>
@@ -17670,7 +17765,7 @@ index 709cc1b9..a21f7d9e 100644
    );
  
    useEffect(() => {
-@@ -200,6 +245,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -200,6 +257,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          !pendingBezier &&
          !freehandDraft &&
          (toolMode === "addNode" ||
@@ -17679,7 +17774,7 @@ index 709cc1b9..a21f7d9e 100644
            toolMode === "addMatrix" ||
            (isToolCreateMode(toolMode) && toolMode !== "addFreehand"));
  
-@@ -211,10 +258,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -211,10 +270,10 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        setDragTooltip({
          kind: "tool-create",
          anchor: makeClientPoint(px(event.clientX), px(event.clientY)),
@@ -17692,7 +17787,7 @@ index 709cc1b9..a21f7d9e 100644
    );
  
    const onBackgroundClick = useCallback(
-@@ -223,7 +270,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -223,7 +282,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          suppressNextBackgroundClickRef.current = false;
          return;
        }
@@ -17701,7 +17796,145 @@ index 709cc1b9..a21f7d9e 100644
          return;
        }
        if (event.shiftKey || event.ctrlKey || event.metaKey) {
-@@ -267,7 +314,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -234,6 +293,137 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+     [dispatch, suppressNextBackgroundClickRef, toolMode]
+   );
+ 
++  const toolSnapContextNow = useCallback(
++    () =>
++      snapshot.scene
++        ? buildSnapContext({
++            sceneElements: snapshot.scene.elements,
++            selectedSourceIds: [],
++            guides: snapGuideInput,
++            settings: snapSettingsPatch,
++            zoom: canvasTransform.scale,
++            viewportWorld: viewportWorldBounds
++          })
++        : null,
++    [canvasTransform.scale, snapGuideInput, snapSettingsPatch, snapshot.scene, viewportWorldBounds]
++  );
++
++  /** Places the object of a tap tool (Text, Point, Image, Matrix) at `world`, and says whether it did; `previewWorld` is where the hover showed it. */
++  const placeTapObject = useCallback(
++    (
++      world: WorldPoint,
++      modifiers: { ctrlKey: boolean; metaKey: boolean },
++      toolSnapContext: ReturnType<typeof toolSnapContextNow>,
++      previewWorld: WorldPoint | null
++    ): boolean => {
++      setDragTooltip(null);
++      const bypassSnap = modifiers.ctrlKey || modifiers.metaKey;
++      const snapResult = toolSnapContext
++          ? snapToolPointer({
++              context: toolSnapContext,
++              pointer: world,
++              kind: "node",
++              modifiers: { ctrlOrMeta: bypassSnap }
++            })
++          : { snappedPoint: world, offset: undefined, lines: [] as SnapLine[] };
++      const snapSettings = resolveSnapSettings(snapSettingsPatch);
++      const previewToleranceWorld = snapSettings.thresholdPx / Math.max(canvasTransform.scale, 1e-6);
++      const previewMatchesClick =
++        !bypassSnap &&
++        previewWorld != null &&
++        distanceSquared(world, previewWorld) <= previewToleranceWorld * previewToleranceWorld;
++      // A label placed on a line or arrow is written as a node on that path, so it follows the path.
++      const labelHost = toolMode === "addNode" ? labelHostAt(modifiers, world) : null;
++      const nodeAt = labelHost?.world ?? (previewMatchesClick ? previewWorld : snapResult.snappedPoint ?? world);
++      const imageFileName = toolMode === "addImage" ? window.prompt("Image path relative to this document:") : null;
++      if (toolMode === "addImage" && !imageFileName) return false;
++      if (imageFileName && (!/^[A-Za-z0-9_./ -]+\.(?:png|jpe?g|svg)$/iu.test(imageFileName.trim()) || imageFileName.includes("..") || imageFileName.startsWith("/"))) {
++        setWarning("Image path must name a relative PNG, JPEG, or SVG file.");
++        return false;
++      }
++      setSnapLines(snapResult.lines);
++      logSnapDebug({
++        phase: "tool-add-node",
++        snapshotMatchesSource: true,
++        dragKind: null,
++        context: toolSnapContext,
++        rawPoint: world,
++        snappedPoint: nodeAt,
++        offset: snapResult.offset,
++        lines: snapResult.lines
++      });
++      const action: EditAction = labelHost ? {
++        kind: "addPathAttachedNode",
++        elementId: labelHost.sourceId,
++        point: nodeAt,
++        text: DEFAULT_NODE_TEXT,
++        textColor: creationStrokeColor
++      } : {
++        kind: "addElement",
++        template: toolMode === "addMatrix"
++          ? {
++              kind: "matrix",
++              rows: selectedAddMatrixRows,
++              columns: selectedAddMatrixColumns,
++              matrixKind: "nodes"
++            }
++          : toolMode === "addPoint"
++            ? { kind: "filledCircle", edge: worldPoint(pt(nodeAt.x + 1), pt(nodeAt.y)) }
++            : toolMode === "addImage"
++              ? { kind: "image", fileName: imageFileName! }
++            : { kind: "node", textColor: creationStrokeColor },
++        at: nodeAt
++      };
++      if (toolMode === "addPoint" || toolMode === "addImage") queueSelectionForAddedElement(nodeAt);
++      // Text goes into edit where it is placed, as a click with Inkscape's Text tool places the cursor
++      // (https://inkscape-manuals.readthedocs.io/en/1.1/writing-text.html): the keys typed next replace the placeholder.
++      const ok = toolMode === "addNode" ? placeTextInEdit(action, nodeAt) : applyActionWithFeedback(action);
++      if (!ok.sourceChanged) {
++        pendingAddedSelectionRef.current = null;
++        return false;
++      }
++      setToolDraft(null);
++      setToolCursorWorld(null);
++      setSnapLines([]);
++      return true;
++    },
++    [
++      applyActionWithFeedback,
++      canvasTransform.scale,
++      creationStrokeColor,
++      labelHostAt,
++      logSnapDebug,
++      pendingAddedSelectionRef,
++      placeTextInEdit,
++      queueSelectionForAddedElement,
++      selectedAddMatrixColumns,
++      selectedAddMatrixRows,
++      setDragTooltip,
++      setSnapLines,
++      setToolCursorWorld,
++      setToolDraft,
++      setWarning,
++      snapSettingsPatch,
++      toolMode
++    ]
++  );
++
++  useEffect(() => {
++    if (!deferredTextPress || snapshot.source !== source) return;
++    setDeferredTextPress(null);
++    if (toolMode === "addNode") placeTapObject(deferredTextPress.world, deferredTextPress, toolSnapContextNow(), null);
++  }, [deferredTextPress, placeTapObject, snapshot.source, source, toolMode, toolSnapContextNow]);
++
++  // While a text is in edit, the Text tool shows no placement mark: the pointer rests where the text was placed.
++  const textToolQuiet = toolMode === "addNode" && textInEdit;
++  useEffect(() => {
++    if (!textToolQuiet) return;
++    setNodeAnchorOverlay(null);
++    setToolCursorWorld(null);
++    setSnapLines([]);
++    setDragTooltip(null);
++  }, [setDragTooltip, setNodeAnchorOverlay, setSnapLines, setToolCursorWorld, textToolQuiet]);
++
+   const onInteractionPointerDown = useCallback(
+     (event: ReactPointerEvent<SVGSVGElement>) => {
+       viewportRef.current?.focus({ preventScroll: true });
+@@ -267,7 +457,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -17711,7 +17944,7 @@ index 709cc1b9..a21f7d9e 100644
        if (canPan) {
          const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
          setDragState({
-@@ -280,7 +328,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -280,7 +471,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -17720,7 +17953,7 @@ index 709cc1b9..a21f7d9e 100644
          const clientPoint = makeClientPoint(px(event.clientX), px(event.clientY));
          const world = clientToWorldPoint(clientPoint, interactionSvgRef.current, svgResult.viewBox);
          if (!world) {
-@@ -295,6 +343,16 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -295,6 +486,16 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            event.preventDefault();
            return;
          }
@@ -17737,32 +17970,41 @@ index 709cc1b9..a21f7d9e 100644
          const drawDragKind: DragState["kind"] =
            toolMode === "addPath"
              ? "tool-path-segment"
-@@ -303,7 +361,9 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -303,7 +504,16 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              : toolMode === "addBezier" && pendingBezier
                ? "tool-bezier-bend"
                : "tool-create";
 -        if (snapshot.source !== source) {
++        // A tap with Text waits for the scene. A press elsewhere moves a text that got no key: that text goes, and this
++        // press places the next one. A tap soon after a change, such as the Escape that removed a text, is not lost.
++        if (toolMode === "addNode" && (discardUntypedText() || snapshot.source !== source)) {
++          setDeferredTextPress({ world, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
++          event.preventDefault();
++          return;
++        }
 +        // A freehand stroke snaps its start against the last computed scene and inserts into the source current at release,
 +        // so it can start while the previous stroke still recomputes.
 +        if (snapshot.source !== source && toolMode !== "addFreehand") {
            setWarning("Wait for recompute to finish before starting a draw gesture.");
            setSnapLines([]);
            logSnapDebug({
-@@ -316,8 +376,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -316,28 +526,20 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            });
            return;
          }
 -        const shouldSnapToolStart = toolMode !== "addFreehand";
 -        const toolSnapContext = shouldSnapToolStart && snapshot.scene
-+        const toolSnapContext = snapshot.scene
-           ? buildSnapContext({
-               sceneElements: snapshot.scene.elements,
-               selectedSourceIds: [],
-@@ -327,17 +386,19 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
-               viewportWorld: viewportWorldBounds
-             })
-           : null;
+-          ? buildSnapContext({
+-              sceneElements: snapshot.scene.elements,
+-              selectedSourceIds: [],
+-              guides: snapGuideInput,
+-              settings: snapSettingsPatch,
+-              zoom: canvasTransform.scale,
+-              viewportWorld: viewportWorldBounds
+-            })
+-          : null;
 -        const startSnapResult = toolSnapContext && shouldSnapToolStart
++        const toolSnapContext = toolSnapContextNow();
 +        // A freehand stroke starts where the pen touched; it attaches only to an existing point, when it is finalized.
 +        // Inkscape's pencil tool likewise skips start and end snapping for pressure input (src/ui/tools/pencil-tool.cpp).
 +        const startSnapResult = toolSnapContext && toolMode !== "addFreehand"
@@ -17781,7 +18023,7 @@ index 709cc1b9..a21f7d9e 100644
              ? resolveEndpointAnchorSnap({
                  pointerWorld: world,
                  zoom: toolSnapContext?.zoom ?? canvasTransform.scale,
-@@ -346,19 +407,84 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -346,19 +548,84 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                })
              : null;
          const startEndpointAnchor = lineToolStartAnchorSnap?.snappedAnchor ?? null;
@@ -17868,7 +18110,7 @@ index 709cc1b9..a21f7d9e 100644
            setNodeAnchorOverlay(null);
            setFreehandDraft(nextFreehandDraft);
            setDragTooltip(null);
-@@ -366,16 +492,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -366,16 +633,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
              kind: "tool-freehand",
              pointerId: event.pointerId,
              points: nextFreehandDraft.points,
@@ -17888,7 +18130,7 @@ index 709cc1b9..a21f7d9e 100644
            });
            return;
          }
-@@ -384,7 +511,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -384,7 +652,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            const activeDraft = pathDraftRef.current;
            if (!activeDraft) {
              // Check if click is near an endpoint of an existing open path
@@ -17897,7 +18139,7 @@ index 709cc1b9..a21f7d9e 100644
                ? resolvePathEndpointSnap({
                    pointerWorld: resolvedStart,
                    zoom: canvasTransform.scale,
-@@ -515,7 +642,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -515,62 +783,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            return;
          }
  
@@ -17905,66 +18147,65 @@ index 709cc1b9..a21f7d9e 100644
 +        if (toolMode === "addNode" || toolMode === "addPoint" || toolMode === "addImage" || toolMode === "addMatrix") {
            event.preventDefault();
            event.stopPropagation();
-           setDragTooltip(null);
-@@ -534,7 +661,15 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
-             !bypassSnap &&
-             toolCursorWorld != null &&
-             distanceSquared(world, toolCursorWorld) <= previewToleranceWorld * previewToleranceWorld;
+-          setDragTooltip(null);
+-          const bypassSnap = event.ctrlKey || event.metaKey;
+-          const snapResult = toolSnapContext
+-              ? snapToolPointer({
+-                  context: toolSnapContext,
+-                  pointer: world,
+-                  kind: "node",
+-                  modifiers: { ctrlOrMeta: bypassSnap }
+-                })
+-              : { snappedPoint: world, offset: undefined, lines: [] as SnapLine[] };
+-          const snapSettings = resolveSnapSettings(snapSettingsPatch);
+-          const previewToleranceWorld = snapSettings.thresholdPx / Math.max(canvasTransform.scale, 1e-6);
+-          const previewMatchesClick =
+-            !bypassSnap &&
+-            toolCursorWorld != null &&
+-            distanceSquared(world, toolCursorWorld) <= previewToleranceWorld * previewToleranceWorld;
 -          const nodeAt = previewMatchesClick ? toolCursorWorld : snapResult.snappedPoint ?? world;
-+          // A label placed on a line or arrow is written as a node on that path, so it follows the path.
-+          const labelHost = toolMode === "addNode" ? labelHostAt(event, world) : null;
-+          const nodeAt = labelHost?.world ?? (previewMatchesClick ? toolCursorWorld : snapResult.snappedPoint ?? world);
-+          const imageFileName = toolMode === "addImage" ? window.prompt("Image path relative to this document:") : null;
-+          if (toolMode === "addImage" && !imageFileName) return;
-+          if (imageFileName && (!/^[A-Za-z0-9_./ -]+\.(?:png|jpe?g|svg)$/iu.test(imageFileName.trim()) || imageFileName.includes("..") || imageFileName.startsWith("/"))) {
-+            setWarning("Image path must name a relative PNG, JPEG, or SVG file.");
-+            return;
-+          }
-           setSnapLines(snapResult.lines);
-           logSnapDebug({
-             phase: "tool-add-node",
-@@ -547,9 +682,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
-             lines: snapResult.lines
-           });
-           if (toolMode !== "addMatrix") {
+-          setSnapLines(snapResult.lines);
+-          logSnapDebug({
+-            phase: "tool-add-node",
+-            snapshotMatchesSource: true,
+-            dragKind: null,
+-            context: toolSnapContext,
+-            rawPoint: world,
+-            snappedPoint: nodeAt,
+-            offset: snapResult.offset,
+-            lines: snapResult.lines
+-          });
+-          if (toolMode !== "addMatrix") {
 -            queueSelectionForAddedElement(nodeAt);
-+            // Text goes into edit where it is placed, as a click with Inkscape's Text tool places the cursor
-+            // (https://inkscape-manuals.readthedocs.io/en/1.1/writing-text.html): the keys typed next replace the placeholder.
-+            queueSelectionForAddedElement(nodeAt, undefined, toolMode === "addNode");
-           }
+-          }
 -          const ok = applyActionWithFeedback({
-+          const ok = applyActionWithFeedback(labelHost ? {
-+            kind: "addPathAttachedNode",
-+            elementId: labelHost.sourceId,
-+            point: nodeAt,
-+            text: DEFAULT_NODE_TEXT,
-+            textColor: creationStrokeColor
-+          } : {
-             kind: "addElement",
-             template: toolMode === "addMatrix"
-               ? {
-@@ -558,7 +701,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
-                   columns: selectedAddMatrixColumns,
-                   matrixKind: "nodes"
-                 }
+-            kind: "addElement",
+-            template: toolMode === "addMatrix"
+-              ? {
+-                  kind: "matrix",
+-                  rows: selectedAddMatrixRows,
+-                  columns: selectedAddMatrixColumns,
+-                  matrixKind: "nodes"
+-                }
 -              : { kind: "node", strokeColor: creationStrokeColor },
-+              : toolMode === "addPoint"
-+                ? { kind: "filledCircle", edge: worldPoint(pt(nodeAt.x + 1), pt(nodeAt.y)) }
-+                : toolMode === "addImage"
-+                  ? { kind: "image", fileName: imageFileName! }
-+                : { kind: "node", textColor: creationStrokeColor },
-             at: nodeAt
-           });
-           if (!ok.sourceChanged) {
-@@ -566,7 +713,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
-           }
-           if (ok.sourceChanged) {
-             suppressNextBackgroundClickRef.current = true;
+-            at: nodeAt
+-          });
+-          if (!ok.sourceChanged) {
+-            pendingAddedSelectionRef.current = null;
+-          }
+-          if (ok.sourceChanged) {
+-            suppressNextBackgroundClickRef.current = true;
 -            dispatch({ type: "SET_TOOL_MODE", mode: "select" });
-             setToolDraft(null);
-             setToolCursorWorld(null);
-             setSnapLines([]);
-@@ -609,7 +755,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+-            setToolDraft(null);
+-            setToolCursorWorld(null);
+-            setSnapLines([]);
+-          }
++          // The click of this press belongs to the placement.
++          if (placeTapObject(world, event, toolSnapContext, toolCursorWorld)) suppressNextBackgroundClickRef.current = true;
+           return;
+         }
+ 
+@@ -609,7 +826,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -17973,11 +18214,13 @@ index 709cc1b9..a21f7d9e 100644
          if (event.pointerType === "touch") {
            const pending = pendingTouchViewportRef.current;
            if (!event.isPrimary || (pending && pending.pointerId !== event.pointerId)) {
-@@ -649,10 +795,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -649,18 +866,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        }
      },
      [
-+      labelHostAt,
++      discardUntypedText,
++      placeTapObject,
++      toolSnapContextNow,
 +      pointTargetAt,
 +      fingerHeld,
 +      beginPointMove,
@@ -17992,7 +18235,15 @@ index 709cc1b9..a21f7d9e 100644
        finalizePathDraft,
        logSnapDebug,
        queueSelectionForAddedElement,
-@@ -669,6 +822,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+       setDragState,
+       setNodeAnchorOverlay,
+-      selectedAddMatrixRows,
+-      selectedAddMatrixColumns,
+-      snapshot.scene,
+       snapshot.source,
+       snapshot.editHandles,
+       source,
+@@ -669,11 +892,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        nodeAnchorTargets,
        matrixCellAnchorHints,
        pendingBezier,
@@ -18000,8 +18251,13 @@ index 709cc1b9..a21f7d9e 100644
 +      setArcDraft,
        toolMode,
        toolCursorWorld,
-       snapGuideInput,
-@@ -704,7 +859,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+-      snapGuideInput,
+       snapSettingsPatch,
+-      viewportWorldBounds,
+       interactionSvgRef,
+       dragRef,
+       pathDraftRef,
+@@ -704,7 +927,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        if (event.button !== 0 || event.target !== event.currentTarget) {
          return;
        }
@@ -18010,7 +18266,15 @@ index 709cc1b9..a21f7d9e 100644
          if (toolMode !== "magnify") {
            onInteractionPointerDown(event as unknown as ReactPointerEvent<SVGSVGElement>);
          }
-@@ -812,6 +967,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -727,6 +950,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+         setDragTooltip(null);
+         return;
+       }
++      if (textToolQuiet) return;
+       if (toolMode === "magnify") {
+         const magnifier = magnifierState;
+         if (magnifier?.pointerId !== event.pointerId) {
+@@ -812,6 +1036,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchors =
@@ -18018,7 +18282,7 @@ index 709cc1b9..a21f7d9e 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -826,7 +982,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -826,7 +1051,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpoint =
@@ -18027,7 +18291,7 @@ index 709cc1b9..a21f7d9e 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -851,11 +1007,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -851,11 +1076,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -18054,7 +18318,7 @@ index 709cc1b9..a21f7d9e 100644
        }
        logSnapDebug({
          phase: "tool-hover-move",
-@@ -865,10 +1034,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -865,10 +1103,13 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          rawPoint: world,
          snappedPoint: snapped.snappedPoint ?? world,
          offset: snapped.offset,
@@ -18063,12 +18327,13 @@ index 709cc1b9..a21f7d9e 100644
        });
      },
      [
++      textToolQuiet,
 +      labelHostAt,
 +      setArcDraft,
        canvasTransform.scale,
        logSnapDebug,
        nodeAnchorTargets,
-@@ -883,6 +1054,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -883,6 +1124,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
@@ -18076,7 +18341,15 @@ index 709cc1b9..a21f7d9e 100644
        toolMode,
        snapGuideInput,
        snapSettingsPatch,
-@@ -996,6 +1168,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -925,6 +1167,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+         setDragTooltip(null);
+         return;
+       }
++      if (textToolQuiet) return;
+       if (toolMode === "magnify") {
+         if (magnifierState?.pointerId !== event.pointerId) {
+           setNodeAnchorOverlay(null);
+@@ -996,6 +1239,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchorsEnter =
@@ -18084,7 +18357,7 @@ index 709cc1b9..a21f7d9e 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -1010,7 +1183,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1010,7 +1254,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpointEnter =
@@ -18093,7 +18366,7 @@ index 709cc1b9..a21f7d9e 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -1035,11 +1208,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1035,11 +1279,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -18120,7 +18393,7 @@ index 709cc1b9..a21f7d9e 100644
        }
        logSnapDebug({
          phase: "tool-hover-enter",
-@@ -1049,10 +1235,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1049,10 +1306,13 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          rawPoint: world,
          snappedPoint: snapped.snappedPoint ?? world,
          offset: snapped.offset,
@@ -18129,12 +18402,13 @@ index 709cc1b9..a21f7d9e 100644
        });
      },
      [
++      textToolQuiet,
 +      labelHostAt,
 +      setArcDraft,
        canvasTransform.scale,
        logSnapDebug,
        nodeAnchorTargets,
-@@ -1067,6 +1255,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1067,6 +1327,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
