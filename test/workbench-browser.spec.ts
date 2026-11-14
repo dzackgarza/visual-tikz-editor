@@ -5203,7 +5203,6 @@ describe("standalone workbench host boundary", function () {
         await expect(line).toBeAttached();
         const input = await TabletInput.attach(page);
         await fitDiagram(frame, input);
-        const at = await figureAxes(frame);
         const lasso = toolbarItem(frame, "Lasso");
         const toolMenu = activeToolMenu(frame);
         const selection = async () => [...(await editorDebug(page)).selection].sort();
@@ -5218,11 +5217,15 @@ describe("standalone workbench host boundary", function () {
         await input.touch([await stableCenter(documentPanelButton("Properties"))]);
         const properties = sidePanel(frame, "Properties");
         await expect(properties).toBeVisible();
-        // Empty points of the figure that Properties does not cover.
+        // The canvas moves when Properties opens, so the figure is located after that.
+        const at = await figureAxes(frame);
+        const inside = (box: { x: number; y: number; width: number; height: number }, point: Point) =>
+          point.x > box.x && point.x < box.x + box.width && point.y > box.y && point.y < box.y + box.height;
+        const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
         const panel = await layoutBox(properties);
-        const empty = [at(-1, -1), at(10, -1), at(-1, 9), at(11, 2)].filter(
-          (point) =>
-            point.x < panel.x || point.x > panel.x + panel.width || point.y < panel.y || point.y > panel.y + panel.height,
+        // Empty points of the figure that the canvas shows and Properties does not cover.
+        const empty = [at(-1, -1), at(10, -1), at(-1, 9), at(11, 2), at(9, 9), at(9, 6), at(11, 11), at(4, 1.5)].filter(
+          (point) => inside(canvas, point) && !inside(panel, point),
         );
         const popups: [string, Locator, Locator][] = [
           [
@@ -5255,6 +5258,24 @@ describe("standalone workbench host boundary", function () {
         // With no popup open the same tap clears the selection.
         await input.penStroke([empty[0]]);
         await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a tap on another control of the shell closes File, and the control still acts, in ${tablet.name}`,
+      async function () {
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const file = page.locator('details.file-menu[aria-label="File"]');
+        await input.touch([await stableCenter(file.locator("summary"))]);
+        await expect(file).toHaveAttribute("open", "");
+        await input.touch([await stableCenter(documentPanelButton("Layers"))]);
+        await expect(sidePanel(frame, "Layers"), "The tap on Layers did not open it").toBeVisible();
+        await expect(file, "File stayed open after a tap on Layers").not.toHaveAttribute("open");
       },
     );
   }
