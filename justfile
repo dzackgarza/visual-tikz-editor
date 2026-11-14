@@ -35,12 +35,16 @@ build: install
 package:
     bun run package
 
+# Run the stories of the desktop package: the built application in WebKitGTK, by WebDriver.
+test-desktop: package
+    bun run test:desktop
+
 # Sync the desktop app and menu entry for this user.
 install-desktop: package
     bash scripts/install-desktop.sh
 
 # Write the release assets of HEAD, qualified by a green Development diagnostics run.
-release-assets run: package
+release-assets run: test-desktop
     bash scripts/release-assets.sh "{{run}}"
 
 [private]

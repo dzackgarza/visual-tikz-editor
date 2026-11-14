@@ -5615,6 +5615,74 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `after a press on a button, the arrow keys, Escape, and Delete act on the selection, in ${tablet.name}`,
+      async function () {
+        // Issue #83: a button that took the keyboard focus at a press took the keys from the canvas.
+        await author(textFigure);
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:4"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const at = await figureAxes(frame);
+        const source = async () => (await editorDebug(page)).source;
+        const selection = async () => (await editorDebug(page)).selection.length;
+        const blueLines = async () => ((await source()).match(/\\draw\[[^\]]*blue[^\]]*\]/g) ?? []).length;
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const selectLine = async () => {
+          await input.penStroke([at(10, -1)]);
+          await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toBe(0);
+          await input.penStroke([at(4, 4)]);
+          await expect.poll(selection, { message: "A tap did not select the line" }).toBe(1);
+        };
+        await chooseTool(frame, input, "Lasso");
+
+        // A colour of the bar, by touch.
+        await selectLine();
+        await input.touch([await stableCenter(toolbarItem(frame, "Colour 2: blue"))]);
+        await expect.poll(blueLines, { message: "The line did not take the colour" }).toBe(1);
+        await page.keyboard.press("ArrowRight");
+        await expect
+          .poll(async () => /\\draw\[[^\]]*blue[^\]]*\] \(([\d.]+),4\) -- \(([\d.]+),4\);/.exec(await source())?.slice(1).map(Number), {
+            message: "The arrow key after the colour tap did not move the line",
+          })
+          .toEqual([expect.closeTo(2.05, 3), expect.closeTo(6.05, 3)]);
+        await page.keyboard.press("Escape");
+        await expect.poll(selection, { message: "Escape after the colour tap did not clear the selection" }).toBe(0);
+
+        // A button of the selection bar, by mouse.
+        await selectLine();
+        const duplicate = await stableCenter(strip.getByRole("button", { name: "Duplicate", exact: true }));
+        await page.mouse.click(duplicate.x, duplicate.y);
+        await expect.poll(blueLines, { message: "Duplicate made no second line" }).toBe(2);
+        await page.keyboard.press("Delete");
+        await expect.poll(blueLines, { message: "Delete after Duplicate did not remove the selected line" }).toBe(1);
+
+        // An item of the More menu, by pen: the item is gone when the key comes.
+        await selectLine();
+        const ordered = await source();
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "More", exact: true }))]);
+        await input.penStroke([await stableCenter(frame.getByRole("menuitem", { name: /^Reorder/ }))]);
+        await input.penStroke([await stableCenter(frame.getByRole("menuitem", { name: "Bring to Front", exact: true }))]);
+        await expect.poll(source, { message: "Bring to Front did not change the order" }).not.toBe(ordered);
+        await page.keyboard.press("Delete");
+        await expect.poll(blueLines, { message: "Delete after an item of More did not remove the selected line" }).toBe(0);
+
+        // A control of the document bar, by mouse: the press is in the shell's window.
+        await page.keyboard.press("Control+z");
+        await expect.poll(blueLines, { message: "Undo did not return the line" }).toBe(1);
+        await selectLine();
+        const layers = await stableCenter(documentPanelButton("Layers"));
+        await page.mouse.click(layers.x, layers.y);
+        await expect(sidePanel(frame, "Layers")).toBeVisible();
+        await page.keyboard.press("Delete");
+        await expect.poll(blueLines, { message: "Delete after a press on Layers did not remove the selected line" }).toBe(0);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `the Lasso selects by tap, by Freehand, Rectangle, and Oval drag, and moves by a drag on the selection, in ${tablet.name}`,
       async function () {
         await author(String.raw`\begin{tikzpicture}

@@ -33,6 +33,7 @@ just install-desktop            # package, then install it for this user
 | --- | --- |
 | `bun run test:logic` | The fork's Vitest specs, in the fork checkout `.cache/tikz-editor` (made on first use) |
 | `bun run test:browser --grep '<story>'` | Matching Mocha browser stories, in Playwright Chromium |
+| `just test-desktop` | The stories of the desktop package (`test/desktop/`): `just package`, then the built application on an Xvfb display, driven through WebKitWebDriver. `just release-assets` runs it first |
 | `just test-commit` | The syntax check of staged files; the pre-commit hook runs it |
 | `just test-push` | The syntax check of outgoing commits; the pre-push hook runs it |
 | `just test-ci` | The commit check, the logic tests and the browser suite under coverage, diff coverage, and the lint and debt checks |
