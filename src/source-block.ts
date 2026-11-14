@@ -4,8 +4,6 @@
  * as one block; a Markdown host supplies one raw or fenced block.
  */
 
-export const FIGURE_ENVIRONMENTS: ReadonlySet<string> = new Set(["tikzcd", "tikzpicture"]);
-
 export interface TikzSourceBlock {
   from: number;
   to: number;
@@ -65,16 +63,13 @@ export function tikzBlockHasContiguousSource(block: TikzSourceBlock): boolean {
   return semanticLength === block.source.length;
 }
 
-const ENVIRONMENT_OPEN_RE = /^\\begin\{([A-Za-z]+\*?)\}/u;
+// Quiver's parser skips white space and comments, then an optional `\[`, then white space and comments
+// again, before `\begin{tikzcd}` (`parse_diagram` in src/parser.mjs of https://github.com/varkor/quiver).
+// A comment takes its whole line, so a line of many % has one reading.
+const BLANK = String.raw`(?:\s|%[^\n]*(?:\n|$))*`;
+const TIKZCD_START_RE = new RegExp(String.raw`^${BLANK}(?:\\\[${BLANK})?\\begin\{tikzcd\}`, "u");
 
-/**
- * The figure environment if `text` (ignoring trailing whitespace) is exactly
- * one `\begin{name}…\end{name}` block of a supported figure environment.
- */
-export function rawTikzEnvironment(text: string): string | null {
-  const match = ENVIRONMENT_OPEN_RE.exec(text);
-  if (match === null || !text.trimEnd().endsWith(`\\end{${match[1]}}`)) {
-    return null;
-  }
-  return FIGURE_ENVIRONMENTS.has(match[1]) ? match[1] : null;
+/** Whether `text` is a tikzcd diagram: it starts as Quiver's parser requires. */
+export function isTikzcdSource(text: string): boolean {
+  return TIKZCD_START_RE.test(text);
 }

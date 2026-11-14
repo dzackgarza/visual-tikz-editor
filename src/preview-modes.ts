@@ -65,7 +65,10 @@ export const TIKZ_PREVIEW_MODES: readonly TikzPreviewModeDescriptor[] = [
     sourceError: (target) =>
       !tikzBlockHasContiguousSource(target)
         ? "Move this diagram out of the surrounding Markdown block to use the visual editor"
-        : !TIKZPICTURE_RE.test(target.source)
+        : // The canvas makes the environment at the first object of a source with no text. It has no place
+          // for an object in a source with text and no environment (the missing-tikzpicture diagnostic
+          // of tikz-editor, packages/core/src/transform/cst-to-ast.ts).
+          target.source.trim() !== "" && !TIKZPICTURE_RE.test(target.source)
           ? "The visual editor requires a \\begin{tikzpicture} ... \\end{tikzpicture} environment"
           : null,
   },

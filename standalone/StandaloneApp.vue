@@ -123,7 +123,7 @@ import { DocumentHistory } from "../src/document-history";
 import { editorStateSchema, type ChangedRange, type EditorState, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
-import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
+import { contiguousSourceLineRanges, isTikzcdSource } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
 import { tikzEditorMode, type TikzPreviewModeId } from "../src/preview-modes";
 import { keepFocusAtButtonPress } from "../vendor/tikz-editor/embed/src/button-focus";
@@ -444,7 +444,7 @@ const status = computed(() => {
 const target = computed<TikzLivePreviewTarget | null>(() => {
   if (document.value === null) return null;
   const text = source.value;
-  const tikzcd = document.value.path.endsWith(".tikzcd") || rawTikzEnvironment(text) === "tikzcd";
+  const tikzcd = document.value.path.endsWith(".tikzcd") || isTikzcdSource(text);
   return {
     from: 0,
     to: text.length,

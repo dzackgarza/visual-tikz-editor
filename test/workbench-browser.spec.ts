@@ -771,8 +771,12 @@ describe("standalone workbench host boundary", function () {
       await page.mouse.up();
       await expect(lastPath(frame), "The canvas does not show the stroke").toBeInViewport();
       await expect
-        .poll(() => readFile(documentPath!, "utf8"), { message: "The file does not hold the stroke in a tikzpicture" })
-        .toMatch(/^\\begin\{tikzpicture\}\s*\\draw[^;]+;\s*\\end\{tikzpicture\}\s*$/u);
+        .poll(() => readFile(documentPath!, "utf8"), {
+          message: "The file is not one tikzpicture that holds the record of one stroke",
+        })
+        .toMatch(
+          /^\\begin\{tikzpicture\}\n% workbench-ink:[^\n]+\n\\begin\{scope\}\n\\draw[^;\n]+;\n\\end\{scope\}\n% workbench-ink-end:[^\n]+\n\\end\{tikzpicture\}$/u,
+        );
     },
   );
 
@@ -799,7 +803,8 @@ describe("standalone workbench host boundary", function () {
       await expect(page.locator(".workspace").getByRole("alert")).toHaveCount(0);
       await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
       await expect(page.locator(".tikz-view-status")).toContainText("Up to date", { timeout: 40_000 });
-      await expect(page.locator(".tikz-figure-viewer-source")).toBeVisible();
+      await expect(page.locator(".tikz-compiler-preview-error")).toHaveCount(0);
+      await expect(page.locator(".tikz-figure-viewer")).toBeVisible();
       await page.screenshot({ path: "test-results/workbench/quiver-export-rendered.png" });
     },
   );
