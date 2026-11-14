@@ -353,14 +353,22 @@ async function handleRender(request: Request): Promise<Response> {
   return Response.json(await renderTikz({ ...body, docPath: resourcePath() }, config));
 }
 
+const FIGURE = String.raw`\\begin\{(tikzpicture|tikzcd)\}[\s\S]*?\\end\{\1\}`;
+// A figure in display-math brackets, which Quiver's export puts around a tikzcd.
+const DISPLAYED_FIGURE_RE = new RegExp(String.raw`\\\[\s*${FIGURE}\s*\\\]`, "gu");
+
 function authoredFigures(source: string): string[] {
-  const figure = /\\begin\{(tikzpicture|tikzcd)\}[\s\S]*?\\end\{\1\}/gu;
+  const figure = new RegExp(FIGURE, "gu");
   const matches = [...source.matchAll(figure)];
   if (matches.length === 0) {
     if (/^\s*\\input\s*\{[^}]+\.tikz(?:cd)?\}\s*$/u.test(source)) return [source.trim()];
     throw new Error("Export requires a complete tikzpicture or tikzcd figure");
   }
-  const remainder = source.replace(figure, "").replace(/^\s*%[^\n]*(?:\n|$)/gmu, "").trim();
+  const remainder = source
+    .replace(DISPLAYED_FIGURE_RE, "")
+    .replace(figure, "")
+    .replace(/^\s*%[^\n]*(?:\n|$)/gmu, "")
+    .trim();
   if (remainder !== "") throw new Error("Export source contains text outside its figures");
   return matches.map((match) => match[0]);
 }
