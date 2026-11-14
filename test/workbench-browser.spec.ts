@@ -10897,6 +10897,48 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    { viewport: { width: 1024, height: 768 } },
+    "a drag that starts on the ink of a selected pen stroke moves the stroke",
+    async function () {
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await chooseTool(frame, input, "Pen");
+      const box = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+      // Samples 6 px apart: every part of the ink is within reach of a point of the stroke.
+      const wave: Point[] = Array.from({ length: 40 }, (_, i) => ({
+        x: box.x + 150 + i * 6,
+        y: box.y + 250 + 30 * Math.sin(i / 6),
+      }));
+      const stroke = frame.locator('[data-canvas-viewport="true"] path[data-source-id]');
+      await input.penStroke(wave);
+      await expect(stroke).toHaveCount(1);
+      await chooseTool(frame, input, "Lasso");
+      await input.touch([await strokePoint(page, stroke, 0.5)]);
+      await expect.poll(async () => (await editorDebug(page)).selection.length).toBe(1);
+      const extent = () =>
+        stroke.evaluate((path) => {
+          const { x, y, width, height } = path.getBoundingClientRect();
+          return { x, y, width, height };
+        });
+      const before = await extent();
+      const grip = await strokePoint(page, stroke, 0.25);
+      await input.penStroke(
+        Array.from({ length: 13 }, (_, i) => ({ x: grip.x + (120 * i) / 12, y: grip.y + (150 * i) / 12 })),
+      );
+      await expect.poll(async () => (await extent()).y, { message: "the drag changed nothing" }).not.toBe(before.y);
+      const after = await extent();
+      // A moved stroke keeps its extent. A stroke with one point pulled away grows by the drag.
+      assert.ok(
+        Math.abs(after.width - before.width) < 1 && Math.abs(after.height - before.height) < 1,
+        `the extent of the stroke changed from ${before.width} × ${before.height} to ${after.width} × ${after.height}`,
+      );
+      // Snap rounds the move to the grid, so the displacement is within one grid step of the drag.
+      assert.ok(Math.abs(after.x - before.x - 120) < 40 && Math.abs(after.y - before.y - 150) < 40);
+      await expect(frame.getByRole("button", { name: "Edit Points", exact: true })).toBeVisible();
+    },
+  );
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
