@@ -714,6 +714,55 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  /** Two presses on an empty cell of Quiver: the first shows the focus point there, and the second makes a vertex. */
+  async function addQuiverVertex(at: { x: number; y: number }): Promise<void> {
+    const focusPoint = page.frameLocator('iframe[title="Quiver diagram editor"]').locator(".focus-point");
+    await page.mouse.click(at.x, at.y);
+    await expect(focusPoint, "The press was not on an empty cell of Quiver").toHaveClass(/revealed/);
+    await page.mouse.click(at.x, at.y);
+  }
+
+  story({}, "the first vertex that presses add in the Quiver view reaches the source", async function () {
+    const code = page.locator(".cm-content");
+    await code.fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
+    const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+    await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
+    const box = await layoutBox(page.locator('iframe[title="Quiver diagram editor"]'));
+    await addQuiverVertex({ x: box.x + box.width * 0.75, y: box.y + box.height * 0.75 });
+    await expect(quiver.locator(".vertex")).toHaveCount(3);
+    await expect
+      .poll(() => code.innerText(), { message: "The vertex that Quiver shows did not reach the source" })
+      .toContain(String.raw`\bullet`);
+  });
+
+  story({}, "Undo after a label and a new vertex in Quiver takes back only the vertex", async function () {
+    const bar = page.locator(".document-bar");
+    const code = page.locator(".cm-content");
+    await code.fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
+    const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+    await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
+    await quiver.locator(".vertex").nth(1).click();
+    const label = quiver.locator(".label-input");
+    await label.click();
+    await page.keyboard.press("Control+A");
+    await label.pressSequentially("Typed", { delay: 150 });
+    await expect.poll(() => code.innerText(), { message: "The Quiver label did not reach the source" }).toContain("Typed");
+    await page.keyboard.press("Escape");
+    const box = await layoutBox(page.locator('iframe[title="Quiver diagram editor"]'));
+    await addQuiverVertex({ x: box.x + box.width * 0.75, y: box.y + box.height * 0.75 });
+    await expect(quiver.locator(".vertex")).toHaveCount(3);
+    await expect
+      .poll(() => code.innerText(), { message: "The vertex that Quiver shows did not reach the source" })
+      .toContain(String.raw`\bullet`);
+
+    await bar.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect.poll(() => code.innerText(), { message: "Undo did not take back the vertex" }).not.toContain(String.raw`\bullet`);
+    assert.ok((await code.innerText()).includes("Typed"), "Undo took back the label together with the vertex");
+    await expect(quiver.locator(".vertex")).toHaveCount(2);
+  });
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
