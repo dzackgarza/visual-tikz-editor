@@ -3762,8 +3762,10 @@ class History {
         if (invoke) {
             this.redo(ui);
         } else {
-            ui.autosave_diagram();
+            // The host's change hook reads this event at `present - 1`, so the event is counted
+            // before the hook runs, as in `redo`.
             ++this.present;
+            ui.autosave_diagram();
         }
 
         this.states.push(state);

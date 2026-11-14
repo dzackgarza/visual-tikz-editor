@@ -15,7 +15,7 @@ index 06a13bd..dd16833 100644
                  if (!this.is_finished() && !this.check(this.col_delim) && !this.check("\\\\")
                      && !this.check("\\ar[") && !this.check("\\arrow[") && !this.check("\\end")
 diff --git a/src/ui.mjs b/src/ui.mjs
-index 1c7718a..9089986 100644
+index 1c7718a..a9e250a 100644
 --- a/src/ui.mjs
 +++ b/src/ui.mjs
 @@ -63,7 +63,7 @@ Object.assign(CONSTANTS, {
@@ -185,7 +185,19 @@ index 1c7718a..9089986 100644
          if (this.start_new_history) {
              this.start_new_history = false;
              this.save_diagram();
-@@ -3783,6 +3819,12 @@ class History {
+@@ -3726,8 +3762,10 @@ class History {
+         if (invoke) {
+             this.redo(ui);
+         } else {
+-            ui.autosave_diagram();
++            // The host's change hook reads this event at `present - 1`, so the event is counted
++            // before the hook runs, as in `redo`.
+             ++this.present;
++            ui.autosave_diagram();
+         }
+ 
+         this.states.push(state);
+@@ -3783,6 +3821,12 @@ class History {
              this.effect(ui, actions.actions, false);
              if (unchanged) {
                  this.pop(ui);
@@ -198,7 +210,7 @@ index 1c7718a..9089986 100644
              } else {
                  ui.autosave_diagram();
              }
-@@ -6978,31 +7020,51 @@ class Toolbar {
+@@ -6978,31 +7022,51 @@ class Toolbar {
  
          // Add all of the toolbar buttons.
  
@@ -273,7 +285,7 @@ index 1c7718a..9089986 100644
  
          const select = add_subtoolbar("Select", "select");
  
-@@ -7315,49 +7377,51 @@ class Toolbar {
+@@ -7315,49 +7379,51 @@ class Toolbar {
              settings,
          );
  
@@ -365,7 +377,7 @@ index 1c7718a..9089986 100644
          ui.switch_theme(ui.theme);
  
          add_action(
-@@ -7378,20 +7442,22 @@ class Toolbar {
+@@ -7378,20 +7444,22 @@ class Toolbar {
              },
          );
  
@@ -402,7 +414,7 @@ index 1c7718a..9089986 100644
  
          // Disable those buttons that need to be disabled.
          this.update(ui);
-@@ -7412,9 +7478,11 @@ class Toolbar {
+@@ -7412,9 +7480,11 @@ class Toolbar {
  
          const default_pan = [UIMode.Default, UIMode.Pan];
  
@@ -417,7 +429,7 @@ index 1c7718a..9089986 100644
          enable_if("select-all",
              ui.in_mode(...default_pan) && ui.selection.size < ui.quiver.all_cells().length);
          const connected_components = ui.quiver.connected_components(ui.selection);
-@@ -8521,6 +8589,16 @@ export class Edge extends Cell {
+@@ -8521,6 +8591,16 @@ export class Edge extends Cell {
  let KaTeX = null;
  let Typst = null;
  
@@ -434,7 +446,7 @@ index 1c7718a..9089986 100644
  class PromiseQueue {
      constructor() {
          // Start with a resolved promise.
-@@ -8585,6 +8663,12 @@ const load_typst = (ui) => {
+@@ -8585,6 +8665,12 @@ const load_typst = (ui) => {
  
  // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
  document.addEventListener("DOMContentLoaded", () => {
@@ -447,7 +459,7 @@ index 1c7718a..9089986 100644
      // We don't want the browser being too clever and trying to restore the scroll position, as that
      // won't play nicely with the auto-centring.
      if ("scrollRestoration" in window.history) {
-@@ -8720,12 +8804,12 @@ document.addEventListener("DOMContentLoaded", () => {
+@@ -8720,12 +8806,12 @@ document.addEventListener("DOMContentLoaded", () => {
      };
  
      // Immediately load the KaTeX library as an ES6 module (regardless of the current renderer).
