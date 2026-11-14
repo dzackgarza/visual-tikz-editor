@@ -33,7 +33,7 @@ type ElementReference = z.infer<typeof elementSchema>;
 type Json = z.infer<ReturnType<typeof z.json>>;
 
 /** WebDriver's key codes (https://www.w3.org/TR/webdriver2/#keyboard-actions). */
-export const KEY = { control: "", delete: "" } as const;
+export const KEY = { control: "\uE009", delete: "\uE017", escape: "\uE00C" } as const;
 
 /** An offset, in CSS pixels, from the centre of the canvas. */
 export type Offset = { x: number; y: number };

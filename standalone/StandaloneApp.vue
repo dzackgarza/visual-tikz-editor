@@ -126,6 +126,7 @@ import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
 import type { TikzRenderResult } from "../src/tikz-render";
 import type { TikzPreviewModeId } from "../src/preview-modes";
+import { keepFocusAtButtonPress } from "../vendor/tikz-editor/embed/src/button-focus";
 import type { Panel } from "../vendor/tikz-editor/embed/src/commands";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
 import SourceEditor from "./SourceEditor.vue";
@@ -735,6 +736,7 @@ async function copySource(): Promise<void> {
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("pointerdown", closeShellMenusNotPressed, true);
+  window.addEventListener("mousedown", keepFocusAtButtonPress, true);
   for (const menu of shellMenus()) shellMenuObserver.observe(menu, { attributes: true, attributeFilter: ["open"] });
   window.addEventListener("beforeunload", onBeforeUnload);
   systemDark.addEventListener("change", followSystemAppearance);
@@ -761,6 +763,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("pointerdown", closeShellMenusNotPressed, true);
+  window.removeEventListener("mousedown", keepFocusAtButtonPress, true);
   shellMenuObserver.disconnect();
   window.removeEventListener("beforeunload", onBeforeUnload);
   systemDark.removeEventListener("change", followSystemAppearance);

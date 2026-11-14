@@ -30,6 +30,8 @@ A finger held by the other hand is the move modifier in every state: while it is
 
 A change of colour or another attribute applies to the selection when one exists, and otherwise to the objects drawn next, as in Ipe ([dock](prior-art/drawing-dock.md) item 6, [panels](prior-art/panels.md) items 5–6). With nothing selected, Properties shows the attributes the next object gets. A setting in Settings is a lasting preference; a changed setting shows its own reset control ([selection specification](prior-art/selection-and-settings.md) item 9).
 
+The keys act on the selection after a press on any control. A press on a button, a menu item, or a control of the document bar leaves the keyboard focus where it is, as Safari does by design ([WebKit bug 22261](https://bugs.webkit.org/show_bug.cgi?id=22261#c68)) and as GTK does with [`focus-on-click`](https://docs.gtk.org/gtk4/property.Widget.focus-on-click.html) off. A text field that has the focus gives it to the pressed control, which ends its edit.
+
 ## Commit, cancel, and undo
 
 - One gesture is one undo step: a stroke with its attachments, a point move with every attached object it updates, a finished construction.

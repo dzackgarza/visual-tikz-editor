@@ -45,7 +45,7 @@ describe("desktop package", function () {
   const zoomReadout = () =>
     app.script(z.string(), "return document.querySelector('button[aria-label=\"Zoom and display\"]').textContent.trim();");
   const toolOptions = () =>
-    app.script(z.number(), "return document.querySelectorAll('[role=\"dialog\"][aria-label=\"Tool options\"]').length;");
+    app.script(z.number(), "return document.querySelectorAll('[role=\"dialog\"][aria-label=\"Active Tool Menu\"]').length;");
   const wave = (x: number, y: number): Offset[] =>
     Array.from({ length: 16 }, (_, i) => ({ x: x + i * 12, y: y + 25 * Math.sin(i / 2.5) }));
 
@@ -130,7 +130,7 @@ describe("desktop package", function () {
     await expect.poll(toolOptions, { message: "the press on the canvas did not close the Shapes menu" }).toBe(0);
     assert.equal(await source(), withMenu, "the press that closed the Shapes menu changed the diagram");
 
-    // Text: a tap places a text in edit, and the typed keys are its text.
+    // Text: a tap places a text in edit, the typed keys are its text, and Escape ends the edit.
     await app.press("Text");
     await app.contact([{ x: 250, y: 200 }]);
     await expect
@@ -139,7 +139,7 @@ describe("desktop package", function () {
       })
       .toBe("canvas-text-edit-textarea");
     await app.keys(["x", "+", "y"]);
-    await app.contact([{ x: 400, y: 330 }]);
+    await app.keys([KEY.escape]);
     await expect
       .poll(async () => (await source()).split("\n").filter((line) => line.includes("\\node")), {
         message: "the typed keys are not the text of one plain node",
@@ -191,6 +191,11 @@ describe("desktop package", function () {
     await app.press("Pen");
     await app.contact(wave(-100, 260));
     await expect.poll(strokeRecords, { message: "the stroke after the zoom is not in the source" }).toBe(4);
+    await expect
+      .poll(async () => (await pathBoxes()).filter((path) => path.width > 150).length, {
+        message: "the canvas does not show the stroke after the zoom",
+      })
+      .toBe(4);
   });
 
   it("shows the file and the reason in the window at a start on a view-state file of an older build", async function () {

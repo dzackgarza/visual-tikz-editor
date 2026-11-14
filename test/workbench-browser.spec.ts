@@ -5670,6 +5670,7 @@ describe("standalone workbench host boundary", function () {
         // A control of the document bar, by mouse: the press is in the shell's window.
         await page.keyboard.press("Control+z");
         await expect.poll(blueLines, { message: "Undo did not return the line" }).toBe(1);
+        await editorReady(page);
         await selectLine();
         const layers = await stableCenter(documentPanelButton("Layers"));
         await page.mouse.click(layers.x, layers.y);

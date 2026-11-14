@@ -10,6 +10,7 @@ import './styles.css';
 import { commandIdentitySchema, hostCommandSchema, type HostCommand } from './commands';
 import { createSnapshotRequests, editorState } from './snapshots';
 import { FRAME_PROTOCOL_VERSION, type CommandFailure } from './events';
+import { keepFocusAtButtonPress } from './button-focus';
 import { parseTikzForEdit } from 'tikz-editor/edit/parse-options';
 import { walkStatements } from 'tikz-editor/ast/walk';
 
@@ -529,6 +530,7 @@ function HostBridge() {
 		});
 		imageObserver.observe(document.body, { childList: true, subtree: true });
 		window.addEventListener('pointerdown', closeHostPopoverByPress, true);
+		window.addEventListener('mousedown', keepFocusAtButtonPress, true);
 		window.addEventListener('keydown', handleKeydown, true);
 		return () => {
 			pendingLoad?.();
@@ -541,6 +543,7 @@ function HostBridge() {
 			for (const [name, listener] of forkEvents) window.removeEventListener(name, listener);
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('pointerdown', closeHostPopoverByPress, true);
+			window.removeEventListener('mousedown', keepFocusAtButtonPress, true);
 			window.removeEventListener('keydown', handleKeydown, true);
 		};
 	}, []);
