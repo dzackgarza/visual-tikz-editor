@@ -5122,9 +5122,9 @@ describe("standalone workbench host boundary", function () {
           await strokePoint(page, frame.locator('svg [data-source-id="path:4"]').first(), 0.5),
         ]);
         await expect.poll(selection, { message: "A tap did not select the line" }).toEqual(["path:4"]);
-        // The line's selection strip sits beside it and, at the landscape fit, over the loop's start;
+        // The line's selection strip sits above it and, at the landscape fit, over the loop's start;
         // a tap on empty canvas clears both first.
-        await input.penStroke([at(10, 10)]);
+        await input.penStroke([at(10, -1)]);
         await expect.poll(selection, { message: "A tap on empty canvas kept the selection" }).toEqual([]);
         // Freehand is the default shape: a loop round both circles.
         await input.penStroke([at(8, 5.5), at(0.5, 5.5), at(0.5, 2.5), at(8, 2.5), at(8, 5.4)]);
