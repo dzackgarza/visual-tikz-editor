@@ -5122,6 +5122,18 @@ describe("standalone workbench host boundary", function () {
           .poll(source, { message: "The second tap did not start a second text in the tool's colour" })
           .toMatch(/\\node\[text=blue\] at \([^)]*\) \{z\};/);
         expect(await source(), "The second tap changed the first text").toMatch(/\{x\+y\};/);
+        // Text placed on a line is a label of that line; it is in edit and in the Text tool's colour as well.
+        await chooseShape(frame, input, "Line");
+        const [from, to] = [at(0.3, 0.75), at(0.6, 0.75)];
+        await input.penStroke([from, { x: (from.x + to.x) / 2, y: from.y }, to]);
+        await expect.poll(source, { message: "The line was not drawn" }).toMatch(/\\draw \([^)]*\) -- \([^)]*\);/);
+        await chooseTool(frame, input, "Text");
+        await input.penStroke([{ x: (from.x + to.x) / 2, y: from.y }]);
+        await expect.poll(source, { message: "The tap on the line placed no label" }).toMatch(/ node\[/);
+        await page.keyboard.type("w");
+        await expect
+          .poll(source, { message: "The label on the line is not in edit in the tool's colour" })
+          .toMatch(/-- \([^)]*\) node\[midway,auto(?:=right)?,text=blue\] \{w\};/);
       },
     );
   }

@@ -8332,7 +8332,7 @@ index cf4cf2cf..cef2a888 100644
 +}
 +.cornerButtonActive { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..633e27bc 100644
+index 4e22ccfa..7b03d2be 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,19 @@
@@ -8648,7 +8648,7 @@ index 4e22ccfa..633e27bc 100644
      handleSizePx: s.settings.canvas.handleSizePx,
      zoomSpeed: s.settings.canvas.zoomSpeed,
      snapHapticsEnabled: s.settings.canvas.snapHapticsEnabled,
-@@ -889,34 +1018,180 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -889,41 +1018,187 @@ export const CanvasPanel = memo(function CanvasPanel({
    const [guidePreview, setGuidePreview] = useState<GuidePreview | null>(null);
    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
    const svgResult = useMemo(() => {
@@ -8837,6 +8837,14 @@ index 4e22ccfa..633e27bc 100644
    const [marqueeDraft, setMarqueeDraft] = useState<Extract<DragState, { kind: "marquee" }> | null>(null);
    const [nodeAnchorOverlay, setNodeAnchorOverlay] = useState<NodeAnchorOverlayState | null>(null);
    const [canvasTextEditState, setCanvasTextEditState] = useState(INITIAL_CANVAS_TEXT_EDIT_STATE);
+   const canvasTextEditStateRef = useRef(INITIAL_CANVAS_TEXT_EDIT_STATE);
+   const textEditingSession = canvasTextEditState.session;
+   const textSelectionOverlay = canvasTextEditState.selectionOverlay;
+-  const [pendingAdornmentTextEditTargetId, setPendingAdornmentTextEditTargetId] = useState<string | null>(null);
++  const [pendingTextEditTargetId, setPendingTextEditTargetId] = useState<string | null>(null);
+   const [pendingNodePositionTargetPick, setPendingNodePositionTargetPick] = useState<{ nodeSourceId: string } | null>(null);
+   const suppressNodeAnchorClickRef = useRef(false);
+   const [pendingNodePositionAnchorHoverSourceId, setPendingNodePositionAnchorHoverSourceId] = useState<string | null>(null);
 @@ -933,26 +1208,13 @@ export const CanvasPanel = memo(function CanvasPanel({
    const contextMenus = useCanvasContextMenuState();
    const { contextMenuState, setContextMenuState, contextMenuContextRef, contextMenuHandleIdOverride } = contextMenus;
@@ -8888,6 +8896,15 @@ index 4e22ccfa..633e27bc 100644
    const canvasCommandStateRef = useRef<{
      source: string;
      selectedElementIds: ReadonlySet<string>;
+@@ -1099,7 +1345,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+       type: "APPLY_EDIT_ACTION",
+       action: result.action
+     });
+-    setPendingAdornmentTextEditTargetId(result.pendingTextTargetId);
++    setPendingTextEditTargetId(result.pendingTextTargetId);
+   }, [contextMenuContextRef, dispatch]);
+   const handlePositionNodeRelativeToCommand = useCallback(() => {
+     const state = canvasCommandStateRef.current;
 @@ -1132,9 +1378,12 @@ export const CanvasPanel = memo(function CanvasPanel({
      onAddNodeAdornment: handleAddNodeAdornmentCommand,
      onPositionNodeRelativeTo: handlePositionNodeRelativeToCommand,
@@ -8968,9 +8985,12 @@ index 4e22ccfa..633e27bc 100644
    useLayoutEffect(() => {
      const nextContextKey = canvasFigureContextKey(activeDocumentId, activeFigureId);
      if (previousCanvasContextKeyRef.current === nextContextKey) {
-@@ -1300,7 +1575,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1298,9 +1573,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+     setPendingBezier(null);
+     setMarqueeDraft(null);
      setMagnifierState(null);
-     setPendingAdornmentTextEditTargetId(null);
+-    setPendingAdornmentTextEditTargetId(null);
++    setPendingTextEditTargetId(null);
      setPathAttachedNodePreview(null);
 -    setExpandedDensePathSourceId(null);
      setToolCursorWorld(null);
@@ -9254,7 +9274,7 @@ index 4e22ccfa..633e27bc 100644
              precomputedResult: result
            });
          }
-@@ -1975,6 +2213,243 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -1975,15 +2213,252 @@ export const CanvasPanel = memo(function CanvasPanel({
      },
      [activeDocumentId, dispatch, editParseOptions, source, sourceRevision, snapshot.editHandles]
    );
@@ -9498,6 +9518,17 @@ index 4e22ccfa..633e27bc 100644
    applyActionWithFeedbackRef.current = applyActionWithFeedback;
  
    const queueSelectionForAddedElement = useCallback(
+-    (preferredWorld: WorldPoint, preferredSourceId?: string) => {
++    (preferredWorld: WorldPoint, preferredSourceId?: string, editText = false) => {
+       const beforeIds = new Set<string>();
+       for (const element of snapshot.scene?.elements ?? []) {
+         beforeIds.add(element.sourceRef.sourceId);
+       }
+-      pendingAddedSelectionRef.current = { beforeIds, preferredWorld, preferredSourceId };
++      pendingAddedSelectionRef.current = { beforeIds, preferredWorld, preferredSourceId, editText };
+     },
+     [snapshot.scene]
+   );
 @@ -2055,69 +2530,254 @@ export const CanvasPanel = memo(function CanvasPanel({
      toolDraft
    ]);
@@ -9843,7 +9874,36 @@ index 4e22ccfa..633e27bc 100644
    
  
    const resolveEditableTextTarget = useCallback(
-@@ -3011,6 +3685,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -2717,9 +3391,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+     return () => { textarea.removeEventListener("beforeinput", handleBeforeInput); };
+   }, [dispatchTextEditBeforeInputIntent, textEditingSession]);
+ 
++  // The popup is hidden until it is measured, and a hidden textarea cannot take focus.
+   useEffect(() => {
+     const textarea = textEditTextareaRef.current;
+-    if (!textEditingSession || !textarea) {
++    if (!textEditingSession || !textarea || textEditPopupHeight == null) {
+       return;
+     }
+     if (document.activeElement !== textarea) {
+@@ -2730,16 +3405,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+     if (textarea.selectionStart !== start || textarea.selectionEnd !== end) {
+       textarea.setSelectionRange(start, end);
+     }
+-  }, [textEditingSession]);
+-
+-  useEffect(() => {
+-    const textarea = textEditTextareaRef.current;
+-    if (!textEditingSession?.isForeachTemplateEdit || !textarea || textEditPopupHeight == null) {
+-      return;
+-    }
+-    if (document.activeElement !== textarea) {
+-      textarea.focus({ preventScroll: true });
+-    }
+   }, [textEditingSession, textEditPopupHeight]);
+ 
+   useEffect(() => {
+@@ -3011,6 +3676,8 @@ export const CanvasPanel = memo(function CanvasPanel({
    );
  
    const { onElementPointerDown, onElementDoubleClick } = useCanvasElementInteractions({
@@ -9852,7 +9912,7 @@ index 4e22ccfa..633e27bc 100644
      svgResult,
      toolMode,
      selectedElementIds,
-@@ -3049,12 +3725,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3049,12 +3716,15 @@ export const CanvasPanel = memo(function CanvasPanel({
          setWarning(`${resolution.result.reason} (${skippedCount} handle${skippedCount === 1 ? "" : "s"} skipped)`);
        }
  
@@ -9869,7 +9929,7 @@ index 4e22ccfa..633e27bc 100644
      },
      setSnapLines,
      logSnapDebug,
-@@ -3064,9 +3743,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3064,9 +3734,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      viewportWorldBounds,
      setDragState,
      resolveEditableTextTarget,
@@ -9879,7 +9939,7 @@ index 4e22ccfa..633e27bc 100644
      scopeOverlay,
      focusedScopeId,
      applyActionWithFeedback,
-@@ -3077,6 +3753,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3077,6 +3744,7 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const {
      onHandlePointerDown,
@@ -9887,7 +9947,7 @@ index 4e22ccfa..633e27bc 100644
      onResizeHandlePointerDown,
      onRotateHandlePointerDown
    } = useCanvasHandleInteractions({
-@@ -3147,7 +3824,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3147,7 +3815,10 @@ export const CanvasPanel = memo(function CanvasPanel({
          startWorld: world,
          currentWorld: world,
          additive: additiveSelection,
@@ -9899,7 +9959,7 @@ index 4e22ccfa..633e27bc 100644
        };
        setDragState(nextMarquee);
        setMarqueeDraft(nextMarquee);
-@@ -3171,7 +3851,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3171,7 +3842,8 @@ export const CanvasPanel = memo(function CanvasPanel({
        setDragState,
        scopeOverlay,
        snapshot.source,
@@ -9909,7 +9969,7 @@ index 4e22ccfa..633e27bc 100644
      ]
    );
  
-@@ -3192,6 +3873,64 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3192,6 +3864,64 @@ export const CanvasPanel = memo(function CanvasPanel({
      dispatch
    });
  
@@ -9974,7 +10034,7 @@ index 4e22ccfa..633e27bc 100644
    const { onElementContextMenu, onCanvasContextMenu } = useCanvasSelectionInteractions({
      openCanvasContextMenuAt,
      closeTextEditingSession,
-@@ -3220,12 +3959,18 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3220,12 +3950,18 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      startMarqueeSelection,
      pendingTouchViewportRef,
@@ -9993,7 +10053,7 @@ index 4e22ccfa..633e27bc 100644
      snapshot,
      source,
      setWarning,
-@@ -3248,6 +3993,10 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3248,6 +3984,10 @@ export const CanvasPanel = memo(function CanvasPanel({
      setFreehandDraft,
      setMagnifierState,
      setDragCursorLock,
@@ -10004,7 +10064,7 @@ index 4e22ccfa..633e27bc 100644
      pathDraftRef,
      finalizePathDraft,
      queueSelectionForAddedElement,
-@@ -3267,18 +4016,351 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3267,18 +4007,351 @@ export const CanvasPanel = memo(function CanvasPanel({
      magnifierState
    });
  
@@ -10358,7 +10418,7 @@ index 4e22ccfa..633e27bc 100644
    const {
      onViewportKeyDown,
      onViewportPaste,
-@@ -3306,6 +4388,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3306,6 +4379,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      closeTextEditingSession,
      setMarqueeDraft,
      selectedElementIds,
@@ -10366,7 +10426,7 @@ index 4e22ccfa..633e27bc 100644
      applyActionWithFeedback,
      snapshot,
      source,
-@@ -3330,22 +4413,21 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3330,22 +4404,21 @@ export const CanvasPanel = memo(function CanvasPanel({
      setViewportSize,
      canvasTransform,
      canvasTransformRef,
@@ -10391,7 +10451,7 @@ index 4e22ccfa..633e27bc 100644
    });
  
    useCanvasGuideEffects({
-@@ -3449,33 +4531,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3449,33 +4522,13 @@ export const CanvasPanel = memo(function CanvasPanel({
      snapshot
    });
  
@@ -10426,7 +10486,7 @@ index 4e22ccfa..633e27bc 100644
        setToolCursorWorld(null);
        setSnapLines([]);
        if (
-@@ -3490,7 +4552,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3490,7 +4543,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addPath") {
@@ -10434,7 +10494,7 @@ index 4e22ccfa..633e27bc 100644
        setPathSegmentDraft(null);
        if (dragRef.current?.kind === "tool-path-segment") {
          setDragState(null);
-@@ -3505,7 +4566,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3505,7 +4557,6 @@ export const CanvasPanel = memo(function CanvasPanel({
      }
  
      if (toolMode !== "addBezier") {
@@ -10442,7 +10502,28 @@ index 4e22ccfa..633e27bc 100644
        setBezierBendDraft(null);
        if (dragRef.current?.kind === "tool-bezier-bend") {
          setDragState(null);
-@@ -3582,7 +4642,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3528,12 +4579,12 @@ export const CanvasPanel = memo(function CanvasPanel({
+     resolveEditableTextTargetById,
+     resolveRenderedMathTextElement,
+     viewportRef,
+-    pendingAdornmentTextEditTargetId,
++    pendingTextEditTargetId,
+     snapshot,
+     source,
+     sourceRevision,
+     startTextEditingSession,
+-    setPendingAdornmentTextEditTargetId,
++    setPendingTextEditTargetId,
+     canvasTransform,
+     svgResult
+   });
+@@ -3577,12 +4628,13 @@ export const CanvasPanel = memo(function CanvasPanel({
+         );
+ 
+     dispatch({ type: "SELECT", id: selectedId, additive: false });
++    if (pending.editText) setPendingTextEditTargetId(selectedId);
+   }, [dispatch, snapshot.scene, snapshot.source, source]);
+ 
    const dragControllerConfig = useMemo(() => ({
      applyActionWithFeedback,
      dispatch,
@@ -10451,7 +10532,7 @@ index 4e22ccfa..633e27bc 100644
      logSnapDebug,
      queueSelectionForAddedElement,
      snapshotSource: snapshot.source,
-@@ -3627,7 +4687,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3627,7 +4679,7 @@ export const CanvasPanel = memo(function CanvasPanel({
      creationFillColor,
      creationStrokeColor,
      dispatch,
@@ -10460,7 +10541,7 @@ index 4e22ccfa..633e27bc 100644
      dragRef,
      finalizeFreehandDraft,
      interactionSvgRef,
-@@ -3706,15 +4766,15 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3706,15 +4758,15 @@ export const CanvasPanel = memo(function CanvasPanel({
  
    const handleHalfSize = (handleSizePx / 2) / Math.max(canvasTransform.scale, 1e-3);
    const handleStrokeWidth = 1.2 / Math.max(canvasTransform.scale, 1e-3);
@@ -10484,7 +10565,7 @@ index 4e22ccfa..633e27bc 100644
    const snapCrossSize = 3 / Math.max(canvasTransform.scale, 1e-3);
    const snapSourceNames = useMemo(() => {
      const names = new Map<string, string>();
-@@ -3819,6 +4879,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3819,6 +4871,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          includeEditEquationForSingleNode: contextMenuState?.includeEditEquationForSingleNode ?? false,
          nodePositioningAction: contextMenuState?.nodePositioningAction ?? null,
          includePathSubmenuForSingleSelection: contextMenuState?.includePathSubmenuForSingleSelection ?? false,
@@ -10492,7 +10573,7 @@ index 4e22ccfa..633e27bc 100644
          includeFlattenForeach: contextMenuState?.includeFlattenForeach ?? false,
          includeMatrixMultiInsertRowAbove: contextMenuState?.includeMatrixMultiInsertRowAbove ?? false,
          includeMatrixMultiInsertRowBelow: contextMenuState?.includeMatrixMultiInsertRowBelow ?? false,
-@@ -3831,6 +4892,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3831,6 +4884,7 @@ export const CanvasPanel = memo(function CanvasPanel({
        contextMenuState?.includeEditEquationForSingleNode,
        contextMenuState?.nodePositioningAction,
        contextMenuState?.includePathSubmenuForSingleSelection,
@@ -10500,7 +10581,7 @@ index 4e22ccfa..633e27bc 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4903,269 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4895,269 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -10770,7 +10851,7 @@ index 4e22ccfa..633e27bc 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5185,27 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5177,27 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -10799,7 +10880,7 @@ index 4e22ccfa..633e27bc 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5222,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5214,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -10815,7 +10896,7 @@ index 4e22ccfa..633e27bc 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3903,16 +5247,33 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3903,16 +5239,33 @@ export const CanvasPanel = memo(function CanvasPanel({
          handleStrokeWidth={handleStrokeWidth}
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
@@ -10852,7 +10933,7 @@ index 4e22ccfa..633e27bc 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5281,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5273,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -10862,7 +10943,7 @@ index 4e22ccfa..633e27bc 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5294,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5286,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -10897,7 +10978,7 @@ index 4e22ccfa..633e27bc 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3965,7 +5347,6 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3965,7 +5339,6 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaPaste={handleTextEditTextareaPaste}
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
@@ -10905,7 +10986,7 @@ index 4e22ccfa..633e27bc 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5355,27 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5347,27 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -14803,7 +14884,7 @@ index e53466d3..1426f789 100644
    return Number(value.toFixed(4)).toString();
  }
 diff --git a/packages/app/src/ui/canvas-panel/types.ts b/packages/app/src/ui/canvas-panel/types.ts
-index dac6b0b3..4a949dc3 100644
+index dac6b0b3..7b97d788 100644
 --- a/packages/app/src/ui/canvas-panel/types.ts
 +++ b/packages/app/src/ui/canvas-panel/types.ts
 @@ -1,8 +1,10 @@
@@ -14878,7 +14959,16 @@ index dac6b0b3..4a949dc3 100644
      }
    ;
  
-@@ -269,6 +288,12 @@ export type PendingBezier = {
+@@ -262,6 +281,8 @@ export type PendingAddedSelection = {
+   beforeIds: Set<string>;
+   preferredWorld: WorldPoint;
+   preferredSourceId?: string;
++  /** The added element's text goes into edit once it is selected. */
++  editText: boolean;
+ };
+ 
+ export type PendingBezier = {
+@@ -269,6 +290,12 @@ export type PendingBezier = {
    endWorld: WorldPoint;
  };
  
@@ -14891,7 +14981,7 @@ index dac6b0b3..4a949dc3 100644
  export type PathAppendTarget = {
    elementId: string;
    end: "start" | "end";
-@@ -280,9 +305,35 @@ export type PathToolDraft = {
+@@ -280,9 +307,35 @@ export type PathToolDraft = {
    appendTarget?: PathAppendTarget;
  };
  
@@ -14930,7 +15020,7 @@ index dac6b0b3..4a949dc3 100644
  };
  
  export type TextSelectionOverlay = {
-@@ -442,8 +493,42 @@ export type HandleDisplay =
+@@ -442,8 +495,42 @@ export type HandleDisplay =
        cursor: string;
        kind: "rotate-element";
        elementId: string;
@@ -17040,8 +17130,82 @@ index 8078a5d4..e9865d22 100644
 +  visit(statements ?? []);
 +  return ids;
 +}
+diff --git a/packages/app/src/ui/canvas-panel/useCanvasTextEditingEffects.ts b/packages/app/src/ui/canvas-panel/useCanvasTextEditingEffects.ts
+index 371637b1..48ccc6a5 100644
+--- a/packages/app/src/ui/canvas-panel/useCanvasTextEditingEffects.ts
++++ b/packages/app/src/ui/canvas-panel/useCanvasTextEditingEffects.ts
+@@ -22,7 +22,7 @@ export type UseCanvasTextEditingEffectsArgs = {
+   resolveEditableTextTargetById: (sourceId: string, sceneTextId?: string) => EditableTextTarget | null;
+   resolveRenderedMathTextElement: (target: EditableTextTarget) => SVGSVGElement | null;
+   viewportRef: RefObject<HTMLDivElement | null>;
+-  pendingAdornmentTextEditTargetId: string | null;
++  pendingTextEditTargetId: string | null;
+   snapshot: CanvasSnapshot;
+   source: string;
+   sourceRevision: number;
+@@ -32,7 +32,7 @@ export type UseCanvasTextEditingEffectsArgs = {
+     selectionEnd: number,
+     historyMergeKey?: string
+   ) => void;
+-  setPendingAdornmentTextEditTargetId: StateSetter<string | null>;
++  setPendingTextEditTargetId: StateSetter<string | null>;
+   canvasTransform: CanvasTransform;
+   svgResult: CanvasSnapshot["svg"];
+ };
+@@ -237,18 +237,18 @@ export function useCanvasTextEditingEffects(args: UseCanvasTextEditingEffectsArg
+     resolveEditableTextTargetById,
+     resolveRenderedMathTextElement,
+     viewportRef,
+-    pendingAdornmentTextEditTargetId,
++    pendingTextEditTargetId,
+     snapshot,
+     source,
+     sourceRevision,
+     startTextEditingSession,
+-    setPendingAdornmentTextEditTargetId,
++    setPendingTextEditTargetId,
+     canvasTransform,
+     svgResult
+   } = args;
+ 
+   useEffect(() => {
+-    if (toolMode === "select" || !textEditingSession) {
++    if (toolMode === "select" || toolMode === "addNode" || !textEditingSession) {
+       return;
+     }
+     dispatchCanvasTextEditAction({ type: "session_close" });
+@@ -484,23 +484,23 @@ export function useCanvasTextEditingEffects(args: UseCanvasTextEditingEffectsArg
+   ]);
+ 
+   useEffect(() => {
+-    if (!pendingAdornmentTextEditTargetId) {
++    if (!pendingTextEditTargetId) {
+       return;
+     }
+-    if (snapshot.source !== source || !selectedElementIds.has(pendingAdornmentTextEditTargetId)) {
++    if (snapshot.source !== source || !selectedElementIds.has(pendingTextEditTargetId)) {
+       return;
+     }
+-    const target = resolveEditableTextTargetById(pendingAdornmentTextEditTargetId);
++    const target = resolveEditableTextTargetById(pendingTextEditTargetId);
+     if (!target) {
+       return;
+     }
+     startTextEditingSession(target, 0, target.text.length);
+-    setPendingAdornmentTextEditTargetId(null);
++    setPendingTextEditTargetId(null);
+   }, [
+-    pendingAdornmentTextEditTargetId,
++    pendingTextEditTargetId,
+     resolveEditableTextTargetById,
+     selectedElementIds,
+-    setPendingAdornmentTextEditTargetId,
++    setPendingTextEditTargetId,
+     snapshot.source,
+     source,
+     startTextEditingSession
 diff --git a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
-index 709cc1b9..372ad635 100644
+index 709cc1b9..99eac852 100644
 --- a/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 +++ b/packages/app/src/ui/canvas-panel/useCanvasToolInteractions.ts
 @@ -1,18 +1,28 @@
@@ -17095,7 +17259,7 @@ index 709cc1b9..372ad635 100644
    snapshot: CanvasSnapshot;
    source: string;
    setWarning: StateSetter<string | null>;
-@@ -65,6 +81,11 @@ export type UseCanvasToolInteractionsArgs = {
+@@ -65,16 +81,22 @@ export type UseCanvasToolInteractionsArgs = {
    setFreehandDraft: StateSetter<FreehandToolDraft | null>;
    setMagnifierState: StateSetter<MagnifierState | null>;
    setDragCursorLock: StateSetter<string | null>;
@@ -17107,7 +17271,11 @@ index 709cc1b9..372ad635 100644
    magnifierState: MagnifierState | null;
    pathDraftRef: MutableRefObject<PathToolDraft | null>;
    finalizePathDraft: (closed: boolean) => void;
-@@ -75,6 +96,7 @@ export type UseCanvasToolInteractionsArgs = {
+-  queueSelectionForAddedElement: (preferredWorld: WorldPoint, preferredSourceId?: string) => void;
++  queueSelectionForAddedElement: (preferredWorld: WorldPoint, preferredSourceId?: string, editText?: boolean) => void;
+   applyActionWithFeedback: ApplyActionWithFeedbackFn;
+   pendingAddedSelectionRef: MutableRefObject<PendingAddedSelection | null>;
+   dispatch: CanvasDispatch;
    selectedAddMatrixRows: number;
    selectedAddMatrixColumns: number;
    creationStrokeColor: string;
@@ -17446,21 +17614,27 @@ index 709cc1b9..372ad635 100644
            setSnapLines(snapResult.lines);
            logSnapDebug({
              phase: "tool-add-node",
-@@ -549,7 +684,12 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -547,9 +682,17 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+             lines: snapResult.lines
+           });
            if (toolMode !== "addMatrix") {
-             queueSelectionForAddedElement(nodeAt);
+-            queueSelectionForAddedElement(nodeAt);
++            // Text goes into edit where it is placed, as a click with Inkscape's Text tool places the cursor
++            // (https://inkscape-manuals.readthedocs.io/en/1.1/writing-text.html): the keys typed next replace the placeholder.
++            queueSelectionForAddedElement(nodeAt, undefined, toolMode === "addNode");
            }
 -          const ok = applyActionWithFeedback({
 +          const ok = applyActionWithFeedback(labelHost ? {
 +            kind: "addPathAttachedNode",
 +            elementId: labelHost.sourceId,
 +            point: nodeAt,
-+            text: DEFAULT_NODE_TEXT
++            text: DEFAULT_NODE_TEXT,
++            textColor: creationStrokeColor
 +          } : {
              kind: "addElement",
              template: toolMode === "addMatrix"
                ? {
-@@ -558,7 +698,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -558,7 +701,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
                    columns: selectedAddMatrixColumns,
                    matrixKind: "nodes"
                  }
@@ -17469,11 +17643,11 @@ index 709cc1b9..372ad635 100644
 +                ? { kind: "filledCircle", edge: worldPoint(pt(nodeAt.x + 1), pt(nodeAt.y)) }
 +                : toolMode === "addImage"
 +                  ? { kind: "image", fileName: imageFileName! }
-+                : { kind: "node", strokeColor: creationStrokeColor },
++                : { kind: "node", textColor: creationStrokeColor },
              at: nodeAt
            });
            if (!ok.sourceChanged) {
-@@ -566,7 +710,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -566,7 +713,6 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
            }
            if (ok.sourceChanged) {
              suppressNextBackgroundClickRef.current = true;
@@ -17481,7 +17655,7 @@ index 709cc1b9..372ad635 100644
              setToolDraft(null);
              setToolCursorWorld(null);
              setSnapLines([]);
-@@ -609,7 +752,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -609,7 +755,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          return;
        }
  
@@ -17490,7 +17664,7 @@ index 709cc1b9..372ad635 100644
          if (event.pointerType === "touch") {
            const pending = pendingTouchViewportRef.current;
            if (!event.isPrimary || (pending && pending.pointerId !== event.pointerId)) {
-@@ -649,10 +792,14 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -649,10 +795,14 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        }
      },
      [
@@ -17505,7 +17679,7 @@ index 709cc1b9..372ad635 100644
        finalizePathDraft,
        logSnapDebug,
        queueSelectionForAddedElement,
-@@ -669,6 +816,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -669,6 +819,8 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        nodeAnchorTargets,
        matrixCellAnchorHints,
        pendingBezier,
@@ -17514,7 +17688,7 @@ index 709cc1b9..372ad635 100644
        toolMode,
        toolCursorWorld,
        snapGuideInput,
-@@ -704,7 +853,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -704,7 +856,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        if (event.button !== 0 || event.target !== event.currentTarget) {
          return;
        }
@@ -17523,7 +17697,7 @@ index 709cc1b9..372ad635 100644
          if (toolMode !== "magnify") {
            onInteractionPointerDown(event as unknown as ReactPointerEvent<SVGSVGElement>);
          }
-@@ -812,6 +961,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -812,6 +964,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchors =
@@ -17531,7 +17705,7 @@ index 709cc1b9..372ad635 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -826,7 +976,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -826,7 +979,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpoint =
@@ -17540,7 +17714,7 @@ index 709cc1b9..372ad635 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -851,11 +1001,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -851,11 +1004,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -17567,7 +17741,7 @@ index 709cc1b9..372ad635 100644
        }
        logSnapDebug({
          phase: "tool-hover-move",
-@@ -865,10 +1028,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -865,10 +1031,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          rawPoint: world,
          snappedPoint: snapped.snappedPoint ?? world,
          offset: snapped.offset,
@@ -17580,7 +17754,7 @@ index 709cc1b9..372ad635 100644
        canvasTransform.scale,
        logSnapDebug,
        nodeAnchorTargets,
-@@ -883,6 +1047,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -883,6 +1050,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
@@ -17588,7 +17762,7 @@ index 709cc1b9..372ad635 100644
        toolMode,
        snapGuideInput,
        snapSettingsPatch,
-@@ -996,6 +1161,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -996,6 +1164,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          modifiers: { ctrlOrMeta: event.ctrlKey || event.metaKey }
        });
        const showNodeAnchorsEnter =
@@ -17596,7 +17770,7 @@ index 709cc1b9..372ad635 100644
          !toolDraft &&
          !bezierBendDraft &&
          !pathSegmentDraft &&
-@@ -1010,7 +1176,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1010,7 +1179,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          : null;
        const hoverEndpointAnchor = hoverEndpointAnchorOverlay?.snappedAnchor ?? null;
        const hoverPathEndpointEnter =
@@ -17605,7 +17779,7 @@ index 709cc1b9..372ad635 100644
            ? resolvePathEndpointSnap({
                pointerWorld: snapped.snappedPoint ?? world,
                zoom: canvasTransform.scale,
-@@ -1035,11 +1201,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1035,11 +1204,24 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          )
            ? pathDraft.startWorld
            : null;
@@ -17632,7 +17806,7 @@ index 709cc1b9..372ad635 100644
        }
        logSnapDebug({
          phase: "tool-hover-enter",
-@@ -1049,10 +1228,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1049,10 +1231,11 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
          rawPoint: world,
          snappedPoint: snapped.snappedPoint ?? world,
          offset: snapped.offset,
@@ -17645,7 +17819,7 @@ index 709cc1b9..372ad635 100644
        canvasTransform.scale,
        logSnapDebug,
        nodeAnchorTargets,
-@@ -1067,6 +1247,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
+@@ -1067,6 +1250,7 @@ export function useCanvasToolInteractions(args: UseCanvasToolInteractionsArgs) {
        pathDraft,
        pathSegmentDraft,
        toolDraft,
@@ -20291,7 +20465,7 @@ index ee4f9c27..1af5f913 100644
    "path_patterns",
    "path_operators_basic",
 diff --git a/packages/core/src/edit/actions.ts b/packages/core/src/edit/actions.ts
-index 29413180..bfb09b81 100644
+index 29413180..3799e02b 100644
 --- a/packages/core/src/edit/actions.ts
 +++ b/packages/core/src/edit/actions.ts
 @@ -1,9 +1,11 @@
@@ -20351,7 +20525,7 @@ index 29413180..bfb09b81 100644
    | { kind: "toggleClosedPath"; elementId: string; closed: boolean }
    | { kind: "deletePathPoint"; elementId: string; handleId: string }
    | { kind: "setPathPointKind"; elementId: string; handleId: string; pointKind: PathPointKind }
-+  | { kind: "addPathAttachedNode"; elementId: string; point: WorldPoint; text: string }
++  | { kind: "addPathAttachedNode"; elementId: string; point: WorldPoint; text: string; textColor: string }
    | { kind: "appendToPath"; elementId: string; end: "start" | "end"; segmentSource: string }
    | { kind: "insertPathPoint"; elementId: string; segmentIndex: number; point: WorldPoint }
    | {
@@ -20820,10 +20994,10 @@ index 00000000..bf6c9c1f
 +  return entry.kind === "kv" ? !NON_STYLE_OPTION_KEYS.has(key) : !NON_STYLE_OPTION_FLAGS.has(key);
 +}
 diff --git a/packages/core/src/edit/actions/path-editing-actions.ts b/packages/core/src/edit/actions/path-editing-actions.ts
-index 23a8fe28..bac9eecf 100644
+index 23a8fe28..4614c2fe 100644
 --- a/packages/core/src/edit/actions/path-editing-actions.ts
 +++ b/packages/core/src/edit/actions/path-editing-actions.ts
-@@ -3,11 +3,12 @@ import { worldPoint, worldVector } from "../../coords/points.js";
+@@ -3,11 +3,13 @@ import { worldPoint, worldVector } from "../../coords/points.js";
  import { pt } from "../../coords/scalars.js";
  import type { WorldPoint, WorldVector } from "../../coords/points.js";
  import type { EditHandle } from "../../semantic/types.js";
@@ -20832,12 +21006,13 @@ index 23a8fe28..bac9eecf 100644
  import { rewriteCoordinate } from "../rewrite.js";
  import { replaceSpan } from "../patch.js";
  import { CM_PER_PT, formatNumber } from "../format.js";
++import { tikzColorOptions } from "../color-value.js";
  import { closestPointOnLine, closestPointOnCubic, subdivideCubicAt } from "../curve-math.js";
 +import { resolvePathPositionPreset } from "../../semantic/path/path-attached.js";
  import {
    applyTextReplacements,
    lineIndentAtOffset,
-@@ -18,7 +19,9 @@ import {
+@@ -18,7 +20,9 @@ import {
    analyzeExplicitPathStatement,
    buildPathBodyFromSegments,
    buildStatementText,
@@ -20847,15 +21022,15 @@ index 23a8fe28..bac9eecf 100644
    resolveEligibleExplicitPath,
    resolvePathControlHandle,
    type ExplicitPathAnalysis,
-@@ -36,6 +39,7 @@ export type DeletePathPointAction = { elementId: string; handleId: string };
+@@ -36,6 +40,7 @@ export type DeletePathPointAction = { elementId: string; handleId: string };
  export type SetPathPointKindAction = { elementId: string; handleId: string; pointKind: PathPointKind };
  export type AppendToPathAction = { elementId: string; end: "start" | "end"; segmentSource: string };
  export type InsertPathPointAction = { elementId: string; segmentIndex: number; point: WorldPoint };
-+export type AddPathAttachedNodeAction = { elementId: string; point: WorldPoint; text: string };
++export type AddPathAttachedNodeAction = { elementId: string; point: WorldPoint; text: string; textColor: string };
  
  type PathEditingDeps = {
    normalizeElementIds: (elementIds: readonly string[]) => string[];
-@@ -304,6 +308,7 @@ export function applyDeletePathPointAction(
+@@ -304,6 +309,7 @@ export function applyDeletePathPointAction(
      analysis,
      previousSegment,
      nextSegment,
@@ -20863,7 +21038,7 @@ index 23a8fe28..bac9eecf 100644
      nextSegment.closesPath || (analysis.closed && anchorIndex === 0) ? "cycle" : undefined
    );
    if (!replacementSegment) {
-@@ -396,6 +401,28 @@ export function applySetPathPointKindAction(
+@@ -396,6 +402,28 @@ export function applySetPathPointKindAction(
      };
    }
  
@@ -20892,7 +21067,7 @@ index 23a8fe28..bac9eecf 100644
    if (previousSegment.kind !== "cubic" || nextSegment.kind !== "cubic") {
      return {
        kind: "unsupported",
-@@ -569,26 +596,133 @@ function buildDeletedWorldPointReplacement(
+@@ -569,26 +597,133 @@ function buildDeletedWorldPointReplacement(
    analysis: ExplicitPathAnalysis,
    previousSegment: ExplicitPathAnalysis["segments"][number],
    nextSegment: ExplicitPathAnalysis["segments"][number],
@@ -21037,7 +21212,7 @@ index 23a8fe28..bac9eecf 100644
  }
  
  function buildOpenPathBodyAfterDeletedPoint(
-@@ -733,26 +867,6 @@ function explicitSegmentText(source: string, analysis: ExplicitPathAnalysis, seg
+@@ -733,26 +868,6 @@ function explicitSegmentText(source: string, analysis: ExplicitPathAnalysis, seg
    return raw.replace(/\bcycle\b/u, targetRaw);
  }
  
@@ -21064,7 +21239,7 @@ index 23a8fe28..bac9eecf 100644
  function smoothControlPositions(anchor: WorldPoint, previousControl: WorldPoint, nextControl: WorldPoint): { prev: WorldPoint; next: WorldPoint } {
    const prevLength = Math.hypot(anchor.x - previousControl.x, anchor.y - previousControl.y);
    const nextLength = Math.hypot(nextControl.x - anchor.x, nextControl.y - anchor.y);
-@@ -920,21 +1034,65 @@ export function applyInsertPathPointAction(
+@@ -920,21 +1035,68 @@ export function applyInsertPathPointAction(
  function resolveControlWorld(
    editHandles: readonly EditHandle[],
    sourceId: string,
@@ -21114,6 +21289,9 @@ index 23a8fe28..bac9eecf 100644
 +  // Left of the path direction when the pointer lies on the left of the tangent (positive cross product, y up).
 +  const cross = closest.tangent.x * (action.point.y - closest.point.y) - closest.tangent.y * (action.point.x - closest.point.x);
 +  options.push(cross >= 0 ? "auto" : "auto=right");
++  if (action.textColor !== "black") {
++    options.push(...tikzColorOptions("text", action.textColor));
++  }
 +  const node = `node[${options.join(",")}] {${action.text}}`;
 +
 +  const bodyParts = [analysis.anchors[0].raw];
@@ -21255,7 +21433,7 @@ index 00000000..55b9240b
 +  return currentFrame(createSemanticEvaluationRun(parsed.figure, source).context).transform;
 +}
 diff --git a/packages/core/src/edit/element-templates.ts b/packages/core/src/edit/element-templates.ts
-index 3f807ed2..becddd97 100644
+index 3f807ed2..7d488c5f 100644
 --- a/packages/core/src/edit/element-templates.ts
 +++ b/packages/core/src/edit/element-templates.ts
 @@ -1,3 +1,4 @@
@@ -21263,6 +21441,15 @@ index 3f807ed2..becddd97 100644
  import { worldPoint } from "../coords/points.js";
  import { pt } from "../coords/scalars.js";
  import type { WorldPoint } from "../coords/points.js";
+@@ -11,7 +12,7 @@ export type AnchorReference = {
+ };
+ 
+ export type ElementTemplate =
+-  | { kind: "node"; name?: string; text?: string; shape?: string; minimumWidthPt?: number; minimumHeightPt?: number; strokeColor?: string; fillColor?: string }
++  | { kind: "node"; name?: string; text?: string; shape?: string; minimumWidthPt?: number; minimumHeightPt?: number; strokeColor?: string; fillColor?: string; textColor?: string }
+   | { kind: "matrix"; rows?: number; columns?: number; matrixKind?: "plain" | "nodes" | "math-nodes"; cells?: string[][] }
+   | { kind: "line"; hasArrow?: boolean; to?: WorldPoint; fromAnchor?: AnchorReference; toAnchor?: AnchorReference; strokeColor?: string }
+   | { kind: "bezier"; to?: WorldPoint; control1?: WorldPoint; control2?: WorldPoint; strokeColor?: string }
 @@ -19,13 +20,15 @@ export type ElementTemplate =
    | { kind: "rectangle"; corner?: WorldPoint; strokeColor?: string; fillColor?: string }
    | { kind: "ellipse"; corner?: WorldPoint; strokeColor?: string; fillColor?: string }
@@ -21280,7 +21467,19 @@ index 3f807ed2..becddd97 100644
  const SHAPE_TOOL_DEFAULT_MINIMUM_WIDTH_CM = 2.2;
  const SHAPE_TOOL_DEFAULT_MINIMUM_HEIGHT_CM = 1.4;
  const DEFAULT_LINE_LENGTH_PT = 2 * PT_PER_CM;
-@@ -128,7 +131,34 @@ export function generateElementSource(template: ElementTemplate, at: WorldPoint)
+@@ -62,7 +65,10 @@ export function generateElementSource(template: ElementTemplate, at: WorldPoint)
+         }
+         return `\\node[${optionParts.join(", ")}]${namePart} at ${atCoord} {${text}};`;
+       }
+-      const nodeOptions = buildNodeOptions(template.strokeColor, template.fillColor, false);
++      const nodeOptions = [
++        ...buildNodeOptions(template.strokeColor, template.fillColor, false),
++        ...(template.textColor && template.textColor !== "black" ? tikzColorOptions("text", template.textColor) : [])
++      ];
+       const optionText = nodeOptions.length > 0 ? `[${nodeOptions.join(", ")}]` : "";
+       return `\\node${optionText}${namePart} at ${atCoord} {${text}};`;
+     }
+@@ -128,7 +134,34 @@ export function generateElementSource(template: ElementTemplate, at: WorldPoint)
      case "circle": {
        const radiusPt = circleRadiusPt(at, template.edge);
        const circleOptions = buildDrawOptions(template.strokeColor, template.fillColor, false);
@@ -21316,7 +21515,7 @@ index 3f807ed2..becddd97 100644
      }
  
      case "filledCircle": {
-@@ -145,6 +175,7 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+@@ -145,6 +178,7 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
    }
  
    const resolvedEnd = resolveTikzpictureEndToken(source, figureSpan);
@@ -21324,7 +21523,7 @@ index 3f807ed2..becddd97 100644
    const endToken = resolvedEnd?.token ?? "\\end{tikzpicture}";
    const endIndex = resolvedEnd?.from ?? source.lastIndexOf(endToken);
    if (endIndex < 0) {
-@@ -160,8 +191,11 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+@@ -160,8 +194,11 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
    const endIndent = source.slice(endLineStart, endIndex).match(/^[ \t]*/)?.[0] ?? "";
    const bodyIndent = `${endIndent}  `;
  
@@ -21338,7 +21537,7 @@ index 3f807ed2..becddd97 100644
    const needsLeadingNewline = before.length > 0 && !before.endsWith("\n");
    const prefix = needsLeadingNewline ? "\n" : "";
  
-@@ -324,8 +358,8 @@ export function generateComplexPathPrependSource(
+@@ -324,8 +361,8 @@ export function generateComplexPathPrependSource(
  }
  
  function formatPointCm(point: WorldPoint): string {
@@ -21349,7 +21548,7 @@ index 3f807ed2..becddd97 100644
    return `(${x},${y})`;
  }
  
-@@ -429,7 +463,9 @@ function resolveBezierControls(
+@@ -429,7 +466,9 @@ function resolveBezierControls(
  export function buildDrawOptions(
    strokeColor: string | undefined,
    fillColor: string | undefined,
@@ -21360,7 +21559,7 @@ index 3f807ed2..becddd97 100644
  ): string {
    const parts: string[] = [];
  
-@@ -438,11 +474,15 @@ export function buildDrawOptions(
+@@ -438,11 +477,15 @@ export function buildDrawOptions(
    }
  
    if (strokeColor && strokeColor !== "black") {
@@ -21378,7 +21577,7 @@ index 3f807ed2..becddd97 100644
    }
  
    return parts.length > 0 ? `[${parts.join(", ")}]` : "";
-@@ -456,14 +496,33 @@ function buildNodeOptions(
+@@ -456,14 +499,33 @@ function buildNodeOptions(
    const parts: string[] = [];
  
    if (strokeColor) {
@@ -25977,7 +26176,7 @@ index 00000000..a1817e3f
 +});
 diff --git a/test/tablet-logic.spec.ts b/test/tablet-logic.spec.ts
 new file mode 100644
-index 00000000..e3a5326b
+index 00000000..90d2ac5a
 --- /dev/null
 +++ b/test/tablet-logic.spec.ts
 @@ -0,0 +1,437 @@
@@ -26292,21 +26491,21 @@ index 00000000..e3a5326b
 +    expect(resolved.analysis.segments.map((segment) => segment.raw)).toEqual(['-- (1,0) node[auto] {x}', '-- (2,1)']);
 +  });
 +
-+  it('writes a label as a node on the nearest segment, positioned along it and on the pointer side', () => {
++  it('writes a label as a node on the nearest segment, positioned along it and on the pointer side, in a colour other than black', () => {
 +    const source = figure('\\draw (5,3) -- (9,3);');
 +    const handles = handlesOf(source);
-+    const above = applyEditAction(source, handles, { kind: 'addPathAttachedNode', elementId: 'path:0', point: wp(cm(7), cm(3.2)), text: 'node' });
++    const above = applyEditAction(source, handles, { kind: 'addPathAttachedNode', elementId: 'path:0', point: wp(cm(7), cm(3.2)), text: 'node', textColor: 'black' });
 +    expect(above.kind).toBe('success');
 +    if (above.kind !== 'success') return;
 +    expect(above.newSource).toBe(figure('\\draw (5,3) -- (9,3) node[midway,auto] {node};'));
-+    const belowNearStart = applyEditAction(source, handles, { kind: 'addPathAttachedNode', elementId: 'path:0', point: wp(cm(6), cm(2.8)), text: 'node' });
++    const belowNearStart = applyEditAction(source, handles, { kind: 'addPathAttachedNode', elementId: 'path:0', point: wp(cm(6), cm(2.8)), text: 'node', textColor: 'black' });
 +    expect(belowNearStart.kind).toBe('success');
 +    if (belowNearStart.kind !== 'success') return;
 +    expect(belowNearStart.newSource).toBe(figure('\\draw (5,3) -- (9,3) node[near start,auto=right] {node};'));
-+    const second = applyEditAction(above.newSource, handlesOf(above.newSource), { kind: 'addPathAttachedNode', elementId: 'path:0', point: wp(cm(8.9), cm(3.1)), text: 'end' });
++    const second = applyEditAction(above.newSource, handlesOf(above.newSource), { kind: 'addPathAttachedNode', elementId: 'path:0', point: wp(cm(8.9), cm(3.1)), text: 'end', textColor: 'blue' });
 +    expect(second.kind).toBe('success');
 +    if (second.kind !== 'success') return;
-+    expect(second.newSource).toBe(figure('\\draw (5,3) -- (9,3) node[midway,auto] {node} node[at end,auto] {end};'));
++    expect(second.newSource).toBe(figure('\\draw (5,3) -- (9,3) node[midway,auto] {node} node[at end,auto,text=blue] {end};'));
 +  });
 +
 +  it('names the point a stroke end attaches to and reuses the name it already has', () => {
