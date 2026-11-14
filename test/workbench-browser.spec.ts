@@ -5562,6 +5562,7 @@ describe("standalone workbench host boundary", function () {
       const options = () => frame.getByRole("dialog", { name: "Colour options", exact: true });
       const tap = async (locator: Locator) => input.touch([await stableCenter(locator)]);
       const pressed = () => presets().evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-pressed")));
+      const source = (await editorDebug(page)).source;
 
       // The Pen gains two presets and keeps the second one chosen; the Fill keeps its third.
       await chooseTool(frame, input, "Pen");
@@ -5578,6 +5579,8 @@ describe("standalone workbench host boundary", function () {
       await tap(presets().nth(2));
       await expect(presets().nth(2)).toHaveAttribute("aria-pressed", "true");
       const fill = await presetValues(frame);
+      // Presets are preferences: choosing and adding them leaves the figure's source as written.
+      assert.equal((await editorDebug(page)).source, source, "A preset change entered the source");
 
       const configHome = workbench.configHome;
       await workbench.stop();
@@ -5594,6 +5597,7 @@ describe("standalone workbench host boundary", function () {
       await chooseTool(frame, input, "Fill");
       assert.deepEqual(await presetValues(frame), fill, "The Fill's presets after a restart");
       assert.deepEqual(await pressed(), ["false", "false", "true"], "The Fill's chosen preset after a restart");
+      assert.equal((await editorDebug(page)).source, source, "The reopened source holds a preset");
       await storyScreenshot(page, "presets-after-restart");
     },
   );
