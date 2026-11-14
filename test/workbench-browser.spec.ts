@@ -5331,7 +5331,8 @@ describe("standalone workbench host boundary", function () {
         );
 
         // Points in Edit Points: of Smooth, Corner, Split, Delete, Done, only those that apply to the
-        // joint at (5,6), in that order; Split, Delete, and Done apply to an interior point.
+        // joint at (5,6), in that order; Smooth applies to its corner, and Split, Delete, and Done to an
+        // interior point.
         await input.touch([await stableCenter(menu.getByRole("button", { name: "Edit Points", exact: true }))]);
         const joint = at(5, 6);
         await input.penStroke([joint]);
@@ -5342,7 +5343,7 @@ describe("standalone workbench host boundary", function () {
           pointOrder.filter((entry) => pointCommands.includes(entry)),
           "The object menu of a point holds other entries than Smooth, Corner, Split, Delete, Done, or another order",
         );
-        for (const entry of buttons("Split", "Delete", "Done")) {
+        for (const entry of buttons("Smooth", "Split", "Delete", "Done")) {
           assert.ok(pointCommands.includes(entry), `The object menu of an interior point lacks ${entry}`);
         }
         await storyScreenshot(page, `object-menu-point-${tablet.name}`);

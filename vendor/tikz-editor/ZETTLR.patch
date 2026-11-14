@@ -25229,7 +25229,7 @@ index 5e2d6e99..c55a9748 100644
    });
  
 diff --git a/test/path-edit-actions.spec.ts b/test/path-edit-actions.spec.ts
-index 2a480a89..726ce6bb 100644
+index 2a480a89..de3df784 100644
 --- a/test/path-edit-actions.spec.ts
 +++ b/test/path-edit-actions.spec.ts
 @@ -26,6 +26,16 @@ function handleIdFor(source: string, rendered: ReturnType<typeof renderTikzToSvg
@@ -25249,7 +25249,7 @@ index 2a480a89..726ce6bb 100644
  describe("path edit actions", () => {
    it("rejects malformed explicit paths with precise analysis reasons", () => {
      const cases = [
-@@ -620,7 +630,46 @@ describe("path edit actions", () => {
+@@ -620,7 +630,83 @@ describe("path edit actions", () => {
  
      expect(result.kind).toBe("success");
      if (result.kind !== "success") return;
@@ -25279,6 +25279,43 @@ index 2a480a89..726ce6bb 100644
 +    expect(result.newSource).toMatch(/\\draw \(1,6\) \.\. controls \([^)]+\) and \([^)]+\) \.\. \(7,7\);/u);
 +  });
 +
++  it("smooths a corner between a cubic and a straight segment by aligning the curve's handle with the line", () => {
++    const source = String.raw`\begin{tikzpicture}
++  \draw (1,6) .. controls (2,8) and (4,8) .. (5,6) -- (7,7);
++\end{tikzpicture}`;
++    const rendered = renderTikzToSvg(source);
++
++    const result = applyEditAction(source, rendered.semantic.editHandles, {
++      kind: "setPathPointKind",
++      elementId: "path:0",
++      handleId: handleIdFor(source, rendered, "(5,6)"),
++      pointKind: "smooth"
++    });
++
++    expect(result.kind === "success" ? "success" : result).toBe("success");
++    if (result.kind !== "success") return;
++    // The handle keeps its length √5 and turns to continue the line from (7,7) through (5,6); the line stays straight.
++    expect(result.newSource).toContain(String.raw`\draw (1,6) .. controls (2,8) and (3,5) .. (5,6) -- (7,7);`);
++  });
++
++  it("smooths a corner between a straight and a cubic segment by aligning the curve's handle with the line", () => {
++    const source = String.raw`\begin{tikzpicture}
++  \draw (0,0) -- (2,0) .. controls (2,1) and (4,1) .. (4,0);
++\end{tikzpicture}`;
++    const rendered = renderTikzToSvg(source);
++
++    const result = applyEditAction(source, rendered.semantic.editHandles, {
++      kind: "setPathPointKind",
++      elementId: "path:0",
++      handleId: handleIdFor(source, rendered, "(2,0)"),
++      pointKind: "smooth"
++    });
++
++    expect(result.kind === "success" ? "success" : result).toBe("success");
++    if (result.kind !== "success") return;
++    expect(result.newSource).toContain(String.raw`\draw (0,0) -- (2,0) .. controls (3,0) and (4,1) .. (4,0);`);
++  });
++
 +  it("deletes an interior point between a straight and a cubic segment", () => {
 +    const source = String.raw`\begin{tikzpicture}
 +  \draw (0,0) -- (1,0) .. controls (1,1) and (2,1) .. (2,0);
@@ -25297,7 +25334,7 @@ index 2a480a89..726ce6bb 100644
    });
  
    it("deletes a point from a closed polygon while preserving the cycle", () => {
-@@ -671,12 +720,13 @@ describe("path edit actions", () => {
+@@ -671,12 +757,13 @@ describe("path edit actions", () => {
  
      expect(result.kind).toBe("success");
      if (result.kind !== "success") return;
@@ -25315,7 +25352,7 @@ index 2a480a89..726ce6bb 100644
      const open = String.raw`\begin{tikzpicture}
    \draw (0,0) -- (1,0) -- (2,0);
  \end{tikzpicture}`;
-@@ -705,20 +755,6 @@ describe("path edit actions", () => {
+@@ -705,20 +792,6 @@ describe("path edit actions", () => {
        expect(tooFew.reason).toContain("too few");
      }
  
