@@ -70,22 +70,54 @@ export function withoutEmptyEnvelopes(source: string): string {
   return source.replace(/^[ \t]*% workbench-ink:[^\r\n]+\r?\n\\begin\{scope\}\s*\\end\{scope\}\r?\n% workbench-ink-end:[^\r\n]*(?:\r?\n|$)/gm, '');
 }
 
-export function originalStrokes(source: string) {
-  const entries: { stroke: OriginalStroke; from: number; to: number; drawingFrom: number; drawingTo: number }[] = [];
+/**
+ * The text of a record comment, read as a stroke. The source is text a person can edit and other
+ * builds write, so a text that is not a stroke is an issue of the parse, not an exception
+ * (Zod, "json(schema)": a JSON.parse failure becomes an issue; https://zod.dev/codecs).
+ */
+const strokeRecordSchema = z.string().transform((text, context) => {
+  try {
+    return JSON.parse(decodeURIComponent(text)) as z.core.util.JSONType;
+  } catch {
+    context.issues.push({ code: 'custom', message: 'The record is not URI-encoded JSON', input: text });
+    return z.NEVER;
+  }
+}).pipe(originalStrokeSchema);
+
+type StrokeRecords = {
+  entries: { stroke: OriginalStroke; from: number; to: number; drawingFrom: number; drawingTo: number }[];
+  /** The records that are not strokes of this build, each with the offset of its comment and the reason. */
+  unreadable: { from: number; reason: string }[];
+};
+
+function strokeRecords(source: string): StrokeRecords {
+  const records: StrokeRecords = { entries: [], unreadable: [] };
   const keys = new Set<string>();
   for (const match of source.matchAll(/^[ \t]*% workbench-ink:([^\r\n]+)\r?\n/gm)) {
-    const stroke = originalStrokeSchema.parse(JSON.parse(decodeURIComponent(match[1])));
-    if (keys.has(stroke.key)) throw new Error(`Duplicate original stroke key: ${stroke.key}`);
-    keys.add(stroke.key);
+    const read = strokeRecordSchema.safeParse(match[1]);
+    if (!read.success) { records.unreadable.push({ from: match.index, reason: read.error.issues[0].message }); continue; }
+    const stroke = read.data;
+    if (keys.has(stroke.key)) { records.unreadable.push({ from: match.index, reason: `A record before this one has the key ${stroke.key}` }); continue; }
     const scopeFrom = match.index + match[0].length;
     const scope = /^\\begin\{scope\}\r?\n/.exec(source.slice(scopeFrom));
-    if (scope === null) throw new Error(`Missing original stroke scope: ${stroke.key}`);
+    if (scope === null) { records.unreadable.push({ from: match.index, reason: `No \\begin{scope} follows the record ${stroke.key}` }); continue; }
     const drawingFrom = scopeFrom + scope[0].length;
     // The drawing is empty when `\end{scope}` follows `\begin{scope}` directly.
     const end = new RegExp(`(?:^|\\r?\\n)\\\\end\\{scope\\}\\r?\\n% workbench-ink-end:${stroke.key}(?=\\r?\\n|$)`).exec(source.slice(drawingFrom));
-    if (end === null) throw new Error(`Missing original stroke boundary: ${stroke.key}`);
+    if (end === null) { records.unreadable.push({ from: match.index, reason: `No "% workbench-ink-end:${stroke.key}" line closes the record` }); continue; }
+    keys.add(stroke.key);
     const drawingTo = drawingFrom + end.index;
-    entries.push({ stroke, from: match.index, to: drawingTo + end[0].length, drawingFrom, drawingTo });
+    records.entries.push({ stroke, from: match.index, to: drawingTo + end[0].length, drawingFrom, drawingTo });
   }
-  return entries;
+  return records;
+}
+
+/** The recorded strokes of the source. A record this build cannot read is not one of them: its drawing is ordinary TikZ. */
+export function originalStrokes(source: string) {
+  return strokeRecords(source).entries;
+}
+
+/** The stroke records of the source that this build cannot read. The source keeps them as they are. */
+export function unreadableStrokeRecords(source: string) {
+  return strokeRecords(source).unreadable;
 }

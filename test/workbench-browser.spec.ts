@@ -5182,11 +5182,20 @@ describe("standalone workbench host boundary", function () {
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const source = async () => (await editorDebug(page)).source;
-        // The figure is drawn: the axes and the drawing inside the unreadable record's scope.
-        await expect(
-          frame.locator("svg path[data-source-id]:visible"),
-          "The canvas does not show the three paths of the figure",
-        ).toHaveCount(3);
+        await expect
+          .poll(
+            async () =>
+              [
+                ...new Set(
+                  await frame
+                    .locator("svg path[data-source-id]")
+                    .evaluateAll((paths) => paths.map((path) => path.getAttribute("data-source-id"))),
+                ),
+              ].sort(),
+            { message: "The canvas does not show the two axes, the drawing of the record and the bounding box" },
+          )
+          // Statement 2 is the scope of the record; its drawing is statement 3.
+          .toEqual(["path:0", "path:1", "path:3", "path:4"]);
         await expect(frame.getByTestId("canvas-warning-message"), "The unreadable record is not reported").toContainText(
           "1 stroke record cannot be read",
         );

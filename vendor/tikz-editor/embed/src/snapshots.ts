@@ -62,15 +62,12 @@ export function createSnapshotRequests(send: (reply: EditorSnapshotResult) => vo
         fail(requestId, 'render-failed');
         continue;
       }
-      let originals;
-      try { originals = originalStrokes(request.source); }
-      catch { fail(requestId, 'invalid-original-ink'); continue; }
       const activeFigure = state.snapshot.figures.find(figure => figure.id === state.activeFigureId);
       if (activeFigure === undefined) { fail(requestId, 'render-failed'); continue; }
       // The canvas reports its view a frame after it shows the figure.
       const view = editorState(state, activeFigure.id);
       if (view === null) continue;
-      originals = originals.filter(original => original.from >= activeFigure.span.from && original.to <= activeFigure.span.to);
+      const originals = originalStrokes(request.source).filter(original => original.from >= activeFigure.span.from && original.to <= activeFigure.span.to);
       entry.exporting = true;
       const result: Omit<EditorSnapshot, "svg"> = {
         event: 'snapshot', status: 'ready',
