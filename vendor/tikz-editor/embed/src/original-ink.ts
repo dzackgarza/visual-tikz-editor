@@ -62,6 +62,14 @@ export function strokeEnvelope(stroke: OriginalStroke, source: string): string {
   return `% workbench-ink:${encodeURIComponent(JSON.stringify(stroke))}\n\\begin{scope}\n${source}\n\\end{scope}\n% workbench-ink-end:${stroke.key}\n`;
 }
 
+/**
+ * The source without each envelope that holds no drawing. An edit that removes the last statement
+ * of a drawing removes the stroke, so the stroke's samples leave the source with it.
+ */
+export function withoutEmptyEnvelopes(source: string): string {
+  return source.replace(/^[ \t]*% workbench-ink:[^\r\n]+\r?\n\\begin\{scope\}\s*\\end\{scope\}\r?\n% workbench-ink-end:[^\r\n]*(?:\r?\n|$)/gm, '');
+}
+
 export function originalStrokes(source: string) {
   const entries: { stroke: OriginalStroke; from: number; to: number; drawingFrom: number; drawingTo: number }[] = [];
   const keys = new Set<string>();
@@ -73,7 +81,8 @@ export function originalStrokes(source: string) {
     const scope = /^\\begin\{scope\}\r?\n/.exec(source.slice(scopeFrom));
     if (scope === null) throw new Error(`Missing original stroke scope: ${stroke.key}`);
     const drawingFrom = scopeFrom + scope[0].length;
-    const end = new RegExp(`\\r?\\n\\\\end\\{scope\\}\\r?\\n% workbench-ink-end:${stroke.key}(?=\\r?\\n|$)`).exec(source.slice(drawingFrom));
+    // The drawing is empty when `\end{scope}` follows `\begin{scope}` directly.
+    const end = new RegExp(`(?:^|\\r?\\n)\\\\end\\{scope\\}\\r?\\n% workbench-ink-end:${stroke.key}(?=\\r?\\n|$)`).exec(source.slice(drawingFrom));
     if (end === null) throw new Error(`Missing original stroke boundary: ${stroke.key}`);
     const drawingTo = drawingFrom + end.index;
     entries.push({ stroke, from: match.index, to: drawingTo + end[0].length, drawingFrom, drawingTo });

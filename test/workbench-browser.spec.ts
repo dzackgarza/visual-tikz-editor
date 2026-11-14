@@ -10888,6 +10888,12 @@ describe("standalone workbench host boundary", function () {
       await page.locator(".document-bar").getByRole("button", { name: "Undo", exact: true }).click();
       await expect.poll(async () => (await editorDebug(page)).source).toBe(drawn);
       await expect(strokes).toHaveCount(2);
+      // A record whose drawing is removed in the Code panel does not stop the canvas.
+      const emptied = drawn.replace(/^\\draw [^\n]*\n/m, "");
+      assert.equal(count(emptied, "\\draw"), 1);
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+      await pasteCode(page, emptied);
+      await expect(strokes).toHaveCount(1);
     },
   );
 
