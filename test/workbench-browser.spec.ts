@@ -5106,9 +5106,12 @@ describe("standalone workbench host boundary", function () {
         const source = async () => (await editorDebug(page)).source;
         const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
         const at = (x: number, y: number) => ({ x: canvas.x + canvas.width * x, y: canvas.y + canvas.height * y });
+        // A person types when the text box shows; keys sent before it has the keyboard do not reach it.
+        const textBox = frame.getByTestId("canvas-text-edit-textarea");
         await chooseTool(frame, input, "Text");
         await input.penStroke([at(0.3, 0.3)]);
         await expect.poll(source, { message: "The tap placed no text" }).toMatch(/\\node/);
+        await expect(textBox, "The new text is not in edit").toBeFocused();
         await page.keyboard.type("x+y");
         await expect
           .poll(source, { message: "The keys typed after the tap did not become the text" })
@@ -5117,11 +5120,16 @@ describe("standalone workbench host boundary", function () {
         // The tool's colour is the colour of the next text; a tap elsewhere ends the first text and starts the next.
         await input.touch([await stableCenter(toolbarItem(frame, "Colour 2: blue"))]);
         await input.penStroke([at(0.6, 0.6)]);
+        await expect.poll(source, { message: "The second tap placed no text" }).toMatch(/\{node\};/);
+        await expect(textBox, "The second text is not in edit").toBeFocused();
         await page.keyboard.type("z");
         await expect
           .poll(source, { message: "The second tap did not start a second text in the tool's colour" })
           .toMatch(/\\node\[text=blue\] at \([^)]*\) \{z\};/);
-        expect(await source(), "The second tap changed the first text").toMatch(/\{x\+y\};/);
+        // The first text was selected when the colour was tapped, so it took the colour, as text (FR-021).
+        expect(await source(), "The first text is not the typed text in the tapped colour, without a border").toMatch(
+          /\\node\[text=blue\] at \([^)]*\) \{x\+y\};/,
+        );
         // Text placed on a line is a label of that line; it is in edit and in the Text tool's colour as well.
         await chooseShape(frame, input, "Line");
         const [from, to] = [at(0.3, 0.75), at(0.6, 0.75)];
@@ -5130,6 +5138,7 @@ describe("standalone workbench host boundary", function () {
         await chooseTool(frame, input, "Text");
         await input.penStroke([{ x: (from.x + to.x) / 2, y: from.y }]);
         await expect.poll(source, { message: "The tap on the line placed no label" }).toMatch(/ node\[/);
+        await expect(textBox, "The label is not in edit").toBeFocused();
         await page.keyboard.type("w");
         await expect
           .poll(source, { message: "The label on the line is not in edit in the tool's colour" })

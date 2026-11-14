@@ -6704,7 +6704,7 @@ index 0ddde08e..09422b35 100644
 +  grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
 +}
 diff --git a/packages/app/src/ui/Toolbar.tsx b/packages/app/src/ui/Toolbar.tsx
-index a3293df2..3569c4e1 100644
+index a3293df2..f0fa9a8d 100644
 --- a/packages/app/src/ui/Toolbar.tsx
 +++ b/packages/app/src/ui/Toolbar.tsx
 @@ -1,5 +1,7 @@
@@ -6717,7 +6717,7 @@ index a3293df2..3569c4e1 100644
  import { useProjectNamedColorSwatches } from "../colors/project-named-colors";
  import { useEditorStore } from "../store/store";
  import { getActiveEditorPlatform } from "../platform/current";
-@@ -8,17 +10,26 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
+@@ -8,17 +10,27 @@ import { ColorPicker, cssColorForToken } from "./ColorPicker";
  import { getToolCapabilityStatus } from "./capabilities";
  import { RenderedTooltip } from "./RenderedTooltip";
  import {
@@ -6743,12 +6743,13 @@ index a3293df2..3569c4e1 100644
  import css from "./Toolbar.module.css";
 +import { useSelector } from "@xstate/react";
 +import { canvasSession, constructing, constructionFinishes, constructionName } from "./canvas-panel/canvas-session";
++import { colourPropertyAction } from "./canvas-panel/bucket-fill";
 +import { publishOccupiedInsets } from "./canvas-panel/occupied-insets";
 +import { isNumericConstruction, ShapeNumericEntry } from "./ShapeNumericEntry";
  
  const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    id: option.value,
-@@ -26,16 +37,62 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
+@@ -26,16 +38,67 @@ const SHAPE_POPUP_CHOICES = NODE_SHAPE_OPTIONS.map((option) => ({
    previewSvg: GENERATED_NODE_SHAPE_PREVIEWS[option.value] ?? null
  }));
  
@@ -6810,10 +6811,15 @@ index a3293df2..3569c4e1 100644
 +  const isConstructing = useSelector(canvasSession, constructing);
 +  const constructionHasFinish = useSelector(canvasSession, constructionFinishes);
 +  const selectedElementIds = useEditorStore((s) => s.selectedElementIds);
++  const sceneElements = useEditorStore((s) => s.snapshot.scene?.elements);
++  const source = useEditorStore((s) => s.source);
++  const editHandles = useEditorStore((s) => s.snapshot.editHandles);
++  const activeFigureId = useEditorStore((s) => s.activeFigureId);
++  const figureCount = useEditorStore((s) => s.snapshot.figures.length);
    const selectedAddShape = useEditorStore((s) => s.selectedAddShape);
    const selectedAddMatrixRows = useEditorStore((s) => s.selectedAddMatrixRows);
    const selectedAddMatrixColumns = useEditorStore((s) => s.selectedAddMatrixColumns);
-@@ -45,8 +102,25 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -45,8 +108,25 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      () => new Map(projectNamedColorSwatches.map((swatch) => [swatch.token, swatch.cssColor] as const)),
      [projectNamedColorSwatches]
    );
@@ -6840,7 +6846,7 @@ index a3293df2..3569c4e1 100644
    const [matrixHoverSize, setMatrixHoverSize] = useState<{ rows: number; columns: number } | null>(null);
    const matrixPreviewRows = matrixHoverSize?.rows ?? selectedAddMatrixRows;
    const matrixPreviewColumns = matrixHoverSize?.columns ?? selectedAddMatrixColumns;
-@@ -56,70 +130,185 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -56,70 +136,185 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      typeof navigator !== "undefined" &&
      /(mac|iphone|ipad)/i.test(navigator.platform);
    const showAppTitle = !isDesktop;
@@ -7067,7 +7073,7 @@ index a3293df2..3569c4e1 100644
              }}
              testIdPrefix="toolbar-shape-choice"
            />
-@@ -132,9 +321,11 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -132,9 +327,11 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        const isSelected = (row: number, column: number): boolean =>
          row <= matrixPreviewRows && column <= matrixPreviewColumns;
        return (
@@ -7080,7 +7086,7 @@ index a3293df2..3569c4e1 100644
              data-testid="toolbar-matrix-picker-grid"
              onMouseLeave={() => { setMatrixHoverSize(null); }}
            >
-@@ -144,6 +335,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -144,6 +341,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                    <button
                      key={`${row}-${column}`}
                      type="button"
@@ -7088,7 +7094,7 @@ index a3293df2..3569c4e1 100644
                      className={[
                        popupCss.matrixPickerCell,
                        isSelected(row, column) ? popupCss.matrixPickerCellSelected : ""
-@@ -154,7 +346,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -154,7 +352,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
                        dispatch({ type: "SET_ADD_MATRIX_PRESET", rows: row, columns: column });
                        dispatch({ type: "SET_TOOL_MODE", mode: "addMatrix" });
                        setMatrixHoverSize(null);
@@ -7097,7 +7103,7 @@ index a3293df2..3569c4e1 100644
                      }}
                      data-testid={`toolbar-matrix-picker-cell-${row}-${column}`}
                      aria-label={`${row} rows by ${column} columns`}
-@@ -170,69 +362,304 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -170,69 +368,320 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      return null;
    };
  
@@ -7124,19 +7130,35 @@ index a3293df2..3569c4e1 100644
 +  };
  
 -    const bucketFillColorCss = cssColorForToken(bucketFillColor, namedColorLookup) ?? "transparent";
-+  /** The selection takes the colour of a tapped preset (FR-021): its stroke, or its fill for the Fill tool. */
-+  const colourSelection = (value: string, key: "draw" | "fill") => {
++  /**
++   * The selection takes the colour of a tapped preset (FR-021): its fill for the Fill tool; otherwise its lines as
++   * `draw` and its text as `text` (PGF manual 17.4.1, "Text Parameters: Color and Opacity"). `draw` on a node
++   * draws the node's border, so text that shows no line does not get that key.
++   */
++  const colourSelection = (value: string, target: "lines and text" | "fill") => {
 +    if (selectedElementIds.size === 0) return;
 +    const historyMergeKey = `color:${Date.now()}`;
++    const inspected = { source, editHandles, parseOptions: { activeFigureId: activeFigureId ?? (figureCount > 1 ? null : undefined) } };
 +    for (const elementId of selectedElementIds) {
-+      dispatch({ type: "APPLY_EDIT_ACTION", historyMergeKey, action: { kind: "setProperty", elementId, level: "command", key, value } });
++      const parts = (sceneElements ?? []).filter((part) => part.sourceRef.sourceId === elementId);
++      const text = parts.find((part) => part.kind === "Text");
++      const line = parts.find((part) => part.kind !== "Text");
++      const writes = target === "fill"
++        ? parts.slice(0, 1).map((part) => colourPropertyAction(part, inspected, "fill", value))
++        : [
++            ...(line ? [colourPropertyAction(line, inspected, "stroke", value)] : []),
++            ...(text ? [colourPropertyAction(text, inspected, "text", value)] : [])
++          ];
++      for (const write of writes) {
++        if (write.action) dispatch({ type: "APPLY_EDIT_ACTION", historyMergeKey, action: write.action });
++      }
 +    }
 +  };
 +  const setPresets = (tool: PresetTool, colours: string[], active: number) => { updateToolbarSettings({
 +    presets: { ...settings.toolbar.presets, [tool]: colours },
 +    activePreset: { ...settings.toolbar.activePreset, [tool]: active }
 +  }); };
-+  const selectionKey = presetTool === "fill" ? "fill" : "draw";
++  const selectionKey = presetTool === "fill" ? "fill" : "lines and text";
 +  const tapPreset = (index: number) => {
 +    if (!presetTool) return;
 +    // A second tap on the active preset opens its colour options (FR-022).
@@ -7461,7 +7483,7 @@ index a3293df2..3569c4e1 100644
    const renderShapeButton = () => {
      const mode = "addShape" as const;
      const toolDef = TOOL_BUTTONS.find((b) => b.mode === mode)!;
-@@ -257,6 +684,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -257,6 +706,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7469,7 +7491,7 @@ index a3293df2..3569c4e1 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -299,6 +727,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -299,6 +749,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
              type="button"
              className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
              aria-label={toolDef.label}
@@ -7477,7 +7499,7 @@ index a3293df2..3569c4e1 100644
              aria-haspopup="dialog"
              aria-expanded={openPopupMode === mode}
              disabled={unsupported}
-@@ -321,7 +750,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -321,7 +772,6 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      const buttonTitle = unsupported
        ? `${title}\n${capability.reason}`
        : title;
@@ -7485,7 +7507,7 @@ index a3293df2..3569c4e1 100644
      const isActive = toolMode === mode;
  
      return (
-@@ -330,9 +758,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -330,9 +780,10 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            type="button"
            className={[css.btn, isActive ? css.btnActive : ""].filter(Boolean).join(" ")}
            aria-label={label}
@@ -7497,7 +7519,7 @@ index a3293df2..3569c4e1 100644
              setOpenPopupMode(null);
            }}
          >
-@@ -342,8 +771,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -342,8 +793,58 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
      );
    };
  
@@ -7558,7 +7580,7 @@ index a3293df2..3569c4e1 100644
        {showAppTitle ? (
          <>
            <span className={css.title}>
-@@ -358,9 +837,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -358,9 +859,7 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
            const separator = toolDef.separatorBefore ? <div key={`sep-${toolDef.mode}`} className={css.separator} /> : null;
            // Special handling for bucket and shape buttons
            let button;
@@ -7569,7 +7591,7 @@ index a3293df2..3569c4e1 100644
              button = renderMatrixButton();
            } else if (toolDef.mode === "addShape") {
              button = renderShapeButton();
-@@ -387,4 +864,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
+@@ -387,4 +886,5 @@ export function Toolbar({ updateChip = null }: ToolbarProps) {
        ) : null}
      </div>
    );
@@ -11732,6 +11754,109 @@ index 00000000..a2cb4a9b
 +  if (resolved.target === "none") return lines.filter((line) => line.type !== "target");
 +  return withSnapTarget(lines, resolved.point, resolved.label);
 +}
+diff --git a/packages/app/src/ui/canvas-panel/bucket-fill.ts b/packages/app/src/ui/canvas-panel/bucket-fill.ts
+index 1a3b65b5..2c3a107f 100644
+--- a/packages/app/src/ui/canvas-panel/bucket-fill.ts
++++ b/packages/app/src/ui/canvas-panel/bucket-fill.ts
+@@ -18,6 +18,45 @@ export type BucketFillEditResolution =
+       reason?: string;
+     };
+ 
++/** The inspector colour properties that own each colour of an element. */
++const COLOUR_PROPERTY_IDS = {
++  fill: ["fill-color", "adornment-fill-color"],
++  stroke: ["stroke-color", "adornment-draw-color"],
++  text: ["node-text-color", "adornment-text-color", "text-color"]
++} as const;
++
++export type ColourRole = keyof typeof COLOUR_PROPERTY_IDS;
++
++/**
++ * The `setProperty` action that writes `colorToken` as the `role` colour of `element`, at the write target the
++ * element's inspector names. For a node that target is the node's own option list, not the options of its command.
++ */
++export function colourPropertyAction(
++  element: SceneElement,
++  snapshot: InspectorSnapshot,
++  role: ColourRole,
++  colorToken: string
++): { action: Extract<EditAction, { kind: "setProperty" }> } | { action: null; reason: string | undefined } {
++  const ids: readonly string[] = COLOUR_PROPERTY_IDS[role];
++  const property = getInspectorDescriptor(element, snapshot).sections
++    .flatMap((section) => section.properties)
++    .find((candidate): candidate is Extract<InspectorProperty, { kind: "color" }> => candidate.kind === "color" && ids.includes(candidate.id));
++  if (!property || !property.write.writable || property.write.elementId.length === 0) {
++    return { action: null, reason: property?.write.reason };
++  }
++  return {
++    action: {
++      kind: "setProperty",
++      elementId: property.write.elementId,
++      level: property.write.level,
++      key: property.write.key,
++      value: colorToken,
++      propertyId: property.write.propertyId,
++      clearKeys: colorClearKeys(property.syntaxValue)
++    }
++  };
++}
++
+ export function resolveBucketFillEdit(args: {
+   sourceId: string;
+   colorToken: string;
+@@ -44,28 +83,18 @@ export function resolveBucketFillEdit(args: {
+     return { kind: "noop" };
+   }
+ 
+-  const descriptor = getInspectorDescriptor(element, {
++  const fill = colourPropertyAction(element, {
+     source,
+     editHandles,
+     parseOptions: {
+       activeFigureId:
+         activeFigureId ?? (figureCount > 1 ? null : undefined)
+     }
+-  });
+-  const fillProperty = findFillColorProperty(descriptor.sections.flatMap((section) => section.properties));
+-  if (!fillProperty || !fillProperty.write.writable || fillProperty.write.elementId.length === 0) {
+-    return { kind: "noop", reason: fillProperty?.write.reason };
++  }, "fill", colorToken);
++  if (!fill.action) {
++    return { kind: "noop", reason: fill.reason };
+   }
+-
+-  const action: Extract<EditAction, { kind: "setProperty" }> = {
+-    kind: "setProperty",
+-    elementId: fillProperty.write.elementId,
+-    level: fillProperty.write.level,
+-    key: fillProperty.write.key,
+-    value: colorToken,
+-    propertyId: fillProperty.write.propertyId,
+-    clearKeys: colorClearKeys(fillProperty.syntaxValue)
+-  };
++  const action = fill.action;
+   const result = applyEditAction(source, editHandles ?? [], action, {
+     parseOptions: {
+       activeFigureId:
+@@ -89,18 +118,6 @@ export function resolveBucketFillEdit(args: {
+   };
+ }
+ 
+-function findFillColorProperty(properties: readonly InspectorProperty[]): Extract<InspectorProperty, { kind: "color" }> | null {
+-  for (const property of properties) {
+-    if (property.kind !== "color") {
+-      continue;
+-    }
+-    if (property.id === "fill-color" || property.id === "adornment-fill-color") {
+-      return property;
+-    }
+-  }
+-  return null;
+-}
+-
+ function colorClearKeys(syntaxValue: string | null): string[] | undefined {
+   const normalized = syntaxValue?.trim() ?? "";
+   return normalized.length > 0 ? [normalized] : undefined;
 diff --git a/packages/app/src/ui/canvas-panel/canvas-session.ts b/packages/app/src/ui/canvas-panel/canvas-session.ts
 new file mode 100644
 index 00000000..e62dcc07
