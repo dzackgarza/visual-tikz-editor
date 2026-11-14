@@ -5340,6 +5340,43 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    { viewport: TABLET_VIEWPORTS[0] },
+    "on the dark canvas, text in the default colour shows in the colour of a line in the default colour",
+    async function () {
+      await editorReady(page);
+      await page.emulateMedia({ colorScheme: "dark" });
+      const frame = editorFrame(page);
+      await expect(frame.locator("html")).toHaveAttribute("data-color-scheme", "dark");
+      const input = await TabletInput.attach(page);
+      const source = async () => (await editorDebug(page)).source;
+      const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
+      const at = (x: number, y: number) => ({ x: canvas.x + canvas.width * x, y: canvas.y + canvas.height * y });
+      await chooseTool(frame, input, "Pen");
+      await input.penStroke([at(0.3, 0.3), at(0.4, 0.35), at(0.5, 0.3)]);
+      await expect.poll(source, { message: "The pen drew no stroke" }).toMatch(/\\draw/);
+      await chooseTool(frame, input, "Text");
+      await input.penStroke([at(0.4, 0.5)]);
+      await expect(frame.getByTestId("canvas-text-edit-textarea"), "The new text is not in edit").toBeFocused();
+      await page.keyboard.type("x+y");
+      await page.keyboard.press("Escape");
+      // The source states no colour for the stroke or for the text: both have the default colour.
+      await expect.poll(source).toMatch(/\\node at \([^)]*\) \{x\+y\};/);
+      expect(await source(), "The stroke states a colour").toMatch(/\\draw \(/);
+      const glyph = frame.locator('svg [data-text-renderer="mathjax"] path').first();
+      // The stroke is the one drawn path that has a source identifier; the glyphs of the text have none.
+      const stroke = frame.locator("svg path[data-source-id]").first();
+      const lineColour = await stroke.evaluate((path) => getComputedStyle(path).stroke);
+      expect(lineColour, "The line in the default colour is not light on the dark canvas").toBe("rgb(238, 238, 238)");
+      await storyScreenshot(page, "dark-canvas-default-text");
+      await expect
+        .poll(() => glyph.evaluate((path) => getComputedStyle(path).fill), {
+          message: "The text in the default colour does not show in the colour of the line",
+        })
+        .toBe(lineColour);
+    },
+  );
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
