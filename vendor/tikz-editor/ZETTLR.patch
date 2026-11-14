@@ -8139,7 +8139,7 @@ index cf4cf2cf..7277358e 100644
 +}
 +.cornerButtonActive { border-color: var(--accent); background: var(--accent); color: #fff; }
 diff --git a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
-index 4e22ccfa..136af658 100644
+index 4e22ccfa..6eb6a36b 100644
 --- a/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 +++ b/packages/app/src/ui/canvas-panel/CanvasPanel.tsx
 @@ -1,9 +1,18 @@
@@ -10263,7 +10263,7 @@ index 4e22ccfa..136af658 100644
        contextMenuState?.includeFlattenForeach,
        contextMenuState?.includeMatrixMultiInsertRowAbove,
        contextMenuState?.includeMatrixMultiInsertRowBelow,
-@@ -3841,9 +4949,251 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3841,9 +4949,273 @@ export const CanvasPanel = memo(function CanvasPanel({
      ]
    );
  
@@ -10355,23 +10355,44 @@ index 4e22ccfa..136af658 100644
 +  // The selection control's own content height at each width it has had, measured, so
 +  // placement can keep all of it on screen. Its actions wrap, so a narrower control is taller.
 +  const [selectionControlHeights, setSelectionControlHeights] = useState<ReadonlyMap<number, number>>(new Map());
++  // The width that holds all of the control's actions in one row.
++  const [selectionControlRowWidth, setSelectionControlRowWidth] = useState<number | null>(null);
 +  const selectionControlObservers = useRef<{ content: MutationObserver; size: ResizeObserver } | null>(null);
 +  const measureSelectionControl = useCallback((element: HTMLDivElement | null) => {
 +    selectionControlObservers.current?.content.disconnect();
 +    selectionControlObservers.current?.size.disconnect();
 +    selectionControlObservers.current = null;
-+    if (!element) return;
++    if (!element) {
++      setSelectionControlRowWidth(null);
++      return;
++    }
++    // The border-box height of all of the content: the placed max height bounds the border box,
++    // and scrollHeight leaves the borders out.
++    const contentHeight = () => element.scrollHeight + element.offsetHeight - element.clientHeight;
 +    const measure = (known: ReadonlyMap<number, number>) => {
 +      const width = parseFloat(element.style.width);
-+      return known.get(width) === element.scrollHeight ? known : new Map(known).set(width, element.scrollHeight);
++      const height = contentHeight();
++      return known.get(width) === height ? known : new Map(known).set(width, height);
++    };
++    // The max-content width is the one-row width, measured with its height so that placement
++    // never takes the height of a wrapped, narrower control for it. The placed width is put
++    // back before the next frame, so the observers never see the measuring width.
++    const measureRow = (known: ReadonlyMap<number, number>) => {
++      const placed = element.style.width;
++      element.style.width = "max-content";
++      const rowWidth = Math.ceil(element.getBoundingClientRect().width);
++      const rowHeight = contentHeight();
++      element.style.width = placed;
++      setSelectionControlRowWidth(rowWidth);
++      return known.get(rowWidth) === rowHeight ? known : new Map(known).set(rowWidth, rowHeight);
 +    };
 +    // New content makes every measured height stale; a new width only adds one.
-+    const content = new MutationObserver(() => setSelectionControlHeights(measure(new Map())));
++    const content = new MutationObserver(() => setSelectionControlHeights(measure(measureRow(new Map()))));
 +    content.observe(element, { childList: true, subtree: true, characterData: true });
 +    const size = new ResizeObserver(() => setSelectionControlHeights(measure));
 +    size.observe(element);
 +    selectionControlObservers.current = { content, size };
-+    setSelectionControlHeights(measure(new Map()));
++    setSelectionControlHeights(measure(measureRow(new Map())));
 +  }, []);
 +  // What the pen can pick, in SVG coordinates: each object's stroke, or null when the pen
 +  // picks it anywhere inside its bounds. The control stays off it.
@@ -10422,7 +10443,8 @@ index 4e22ccfa..136af658 100644
 +    const rightEdge = Math.min((viewport?.right ?? window.innerWidth), window.innerWidth - insets.right) - 8;
 +    const topEdge = Math.max((viewport?.top ?? 0), insets.top) + 8;
 +    const bottomEdge = Math.min((viewport?.bottom ?? window.innerHeight), window.innerHeight - insets.bottom) - 8;
-+    const width = Math.max(0, Math.min(300, rightEdge - leftEdge));
++    // Whole pixels: a measured height is known by the width the style serialises.
++    const width = Math.max(0, Math.min(selectionControlRowWidth ?? 300, Math.floor(rightEdge - leftEdge)));
 +    const bounds = [...selectedElementIds].flatMap((id) => {
 +      const box = sourceBoundsSvg.get(id) ?? scopeOverlay.boundsByScopeId.get(id);
 +      return box ? [box] : [];
@@ -10515,7 +10537,7 @@ index 4e22ccfa..136af658 100644
          prefersNonBlinkingTextInsertionIndicator={prefersNonBlinkingTextInsertionIndicator}
          showRulers={showRulers}
          viewportSize={viewportSize}
-@@ -3863,7 +5213,25 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3863,7 +5235,25 @@ export const CanvasPanel = memo(function CanvasPanel({
          onViewportDragOver={onViewportDragOver}
          onViewportDrop={onViewportDrop}
          onBackgroundClick={handleBackgroundClick}
@@ -10542,7 +10564,7 @@ index 4e22ccfa..136af658 100644
          onViewportPointerUp={onViewportPointerUp}
          svgResult={svgResult}
          noActiveFigure={snapshot.figures.length > 0 && snapshot.activeFigureId == null}
-@@ -3880,12 +5248,14 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3880,12 +5270,14 @@ export const CanvasPanel = memo(function CanvasPanel({
          repeatPreviewModel={repeatPreviewModel}
          interactionSvgRef={interactionSvgRef}
          onInteractionPointerDown={onInteractionPointerDown}
@@ -10558,7 +10580,7 @@ index 4e22ccfa..136af658 100644
          gridMinorStrokeWidth={gridMinorStrokeWidth}
          gridMajorStrokeWidth={gridMajorStrokeWidth}
          gridAxisStrokeWidth={gridAxisStrokeWidth}
-@@ -3903,16 +5273,33 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3903,16 +5295,33 @@ export const CanvasPanel = memo(function CanvasPanel({
          handleStrokeWidth={handleStrokeWidth}
          previewArrowPoints={previewArrowPoints}
          hitRegions={hitRegions}
@@ -10595,7 +10617,7 @@ index 4e22ccfa..136af658 100644
          selectionBoxes={selectionBoxes}
          adornmentHighlightBoxes={adornmentHighlightBoxes}
          selectedAdornmentConnectors={selectedAdornmentConnectors}
-@@ -3920,7 +5307,8 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3920,7 +5329,8 @@ export const CanvasPanel = memo(function CanvasPanel({
          textSelectionOverlay={textSelectionOverlay}
          selectionDragStrokeWidth={selectionDragStrokeWidth}
          matrixSelectionSourceIds={matrixSelectionSourceIds}
@@ -10605,7 +10627,7 @@ index 4e22ccfa..136af658 100644
          curveControlStrokeWidth={curveControlStrokeWidth}
          nodeAnchorOverlay={pendingNodePositionAnchorOverlay ?? nodeAnchorOverlay}
          onNodeAnchorPointerDown={pendingNodePositionTargetPick ? handleNodeAnchorPointerDown : undefined}
-@@ -3932,10 +5320,30 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3932,10 +5342,30 @@ export const CanvasPanel = memo(function CanvasPanel({
          }
          nodePositionTargetTooltip={nodePositionTargetTooltip}
          handleHalfSize={handleHalfSize}
@@ -10640,7 +10662,7 @@ index 4e22ccfa..136af658 100644
          platform={platform}
          contextMenuState={contextMenuState}
          commandRuntimeBindings={commandRuntime.bindings}
-@@ -3966,6 +5374,7 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3966,6 +5396,7 @@ export const CanvasPanel = memo(function CanvasPanel({
          onTextEditTextareaDrop={handleTextEditTextareaDrop}
          onTextEditTextareaKeyDown={handleTextEditTextareaKeyDown}
          selectionHint={canvasSelectionHint}
@@ -10648,7 +10670,7 @@ index 4e22ccfa..136af658 100644
          showDevPanel={false}
          snapDebugRect={snapDebugRect}
          onSnapDebugMovePointerDown={onSnapDebugMovePointerDown}
-@@ -3974,6 +5383,39 @@ export const CanvasPanel = memo(function CanvasPanel({
+@@ -3974,6 +5405,39 @@ export const CanvasPanel = memo(function CanvasPanel({
          magnifierState={magnifierState}
          RULER_SIZE={RULER_SIZE}
        />
@@ -11082,7 +11104,7 @@ index f0ff59f8..b7ade8f0 100644
    );
 diff --git a/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 new file mode 100644
-index 00000000..1db74b71
+index 00000000..b503625a
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/FreehandResultPopup.module.css
 @@ -0,0 +1,119 @@
@@ -11202,7 +11224,7 @@ index 00000000..1db74b71
 +.lockToggle[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 +
 +/* The object menu: one row of the commands that apply, then More. */
-+.strip { width: auto; min-width: 160px; }
++.strip { max-width: calc(100vw - 24px); }
 +.stripRow { display: flex; flex-wrap: wrap; gap: 6px; }
 +.stripRow button { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 10px; }
 diff --git a/packages/app/src/ui/canvas-panel/SelectionStrip.tsx b/packages/app/src/ui/canvas-panel/SelectionStrip.tsx
@@ -13055,7 +13077,7 @@ index 00000000..6948104e
 +  window.dispatchEvent(new Event(OCCUPIED_INSETS_EVENT));
 +}
 diff --git a/packages/app/src/ui/canvas-panel/overlays.tsx b/packages/app/src/ui/canvas-panel/overlays.tsx
-index 13b3ad2b..76a96c6a 100644
+index 13b3ad2b..2399cfb6 100644
 --- a/packages/app/src/ui/canvas-panel/overlays.tsx
 +++ b/packages/app/src/ui/canvas-panel/overlays.tsx
 @@ -1,6 +1,6 @@
@@ -13396,7 +13418,7 @@ index 13b3ad2b..76a96c6a 100644
                  onPointerDown={onPointerDown}
                  onContextMenu={onContextMenu}
                  data-handle-kind="rotate-element-stem"
-@@ -1160,7 +1313,9 @@ export function HandleOverlay({
+@@ -1160,11 +1313,14 @@ export function HandleOverlay({
                cy={display.point.y}
                r={handleHalfSize}
                strokeWidth={handleStrokeWidth}
@@ -13407,7 +13429,12 @@ index 13b3ad2b..76a96c6a 100644
                onPointerDown={onPointerDown}
                onContextMenu={onContextMenu}
                data-handle-kind={display.kind}
-@@ -1183,7 +1338,9 @@ export function HandleOverlay({
+               data-source-id={display.handle.sourceRef.sourceId}
++              data-selected={selectedNodeHandleIds.has(display.handle.id) || undefined}
+             />
+           );
+         }
+@@ -1183,11 +1339,14 @@ export function HandleOverlay({
                  ? `rotate(${fmt(display.rotationDeg)} ${fmt(display.point.x)} ${fmt(display.point.y)})`
                  : undefined
              }
@@ -13418,6 +13445,11 @@ index 13b3ad2b..76a96c6a 100644
              onPointerDown={onPointerDown}
              onContextMenu={onContextMenu}
              data-handle-kind={display.kind}
+             data-source-id={display.kind === "move-handle" ? display.handle.sourceRef.sourceId : display.elementId}
++            data-selected={(display.kind === "move-handle" && selectedNodeHandleIds.has(display.handle.id)) || undefined}
+             data-resize-role={display.kind === "resize-element" ? display.role : undefined}
+           />
+         );
 diff --git a/packages/app/src/ui/canvas-panel/panel-helpers.ts b/packages/app/src/ui/canvas-panel/panel-helpers.ts
 index 65f82022..d7245709 100644
 --- a/packages/app/src/ui/canvas-panel/panel-helpers.ts
@@ -14056,10 +14088,10 @@ index 0766ca92..e319bfa7 100644
      const ancestors = scopeOverlay.ancestorScopeIdsBySourceId.get(sourceId) ?? [];
 diff --git a/packages/app/src/ui/canvas-panel/selection-strip-place.ts b/packages/app/src/ui/canvas-panel/selection-strip-place.ts
 new file mode 100644
-index 00000000..4302bf82
+index 00000000..ce538914
 --- /dev/null
 +++ b/packages/app/src/ui/canvas-panel/selection-strip-place.ts
-@@ -0,0 +1,135 @@
+@@ -0,0 +1,141 @@
 +import type paper from "paper";
 +import type { HitRegion } from "./hit-regions";
 +import { geometryScope } from "./paper-scope";
@@ -14153,17 +14185,23 @@ index 00000000..4302bf82
 +    return rows ? [rows] : [];
 +  });
 +
-+  const stackedLeft = Math.min(Math.max(subject.left, area.left), Math.max(area.left, area.right - width));
-+  const stackedRows = taken(stackedLeft, width);
-+  const stackedFloor = floorAt(stackedLeft, width);
-+  const stackedHeight = heightAt(width);
-+  const aboveEnd = Math.min(subject.top, stackedFloor);
-+  const aboveStart = Math.max(area.top, ...stackedRows.filter(([top]) => top < aboveEnd).map(([, bottom]) => bottom));
-+  const aboveTop = Math.max(aboveStart, aboveEnd - stackedHeight);
-+  places.push({ left: stackedLeft, top: aboveTop, width, maxHeight: aboveEnd - aboveTop, needed: stackedHeight });
-+  const belowTop = Math.max(subject.bottom, area.top);
-+  const belowEnd = Math.min(stackedFloor, ...stackedRows.filter(([, bottom]) => bottom > belowTop).map(([top]) => top));
-+  places.push({ left: stackedLeft, top: belowTop, width, maxHeight: belowEnd - belowTop, needed: stackedHeight });
++  // Above or below the selection: in one row, else wrapped to the selection's own columns,
++  // where another object beside the selection does not stand in the way.
++  // Whole pixels: a measured height is known by the width the style serialises.
++  const subjectWidth = Math.min(width, Math.max(NARROW_STRIP_WIDTH, Math.floor(subject.right - subject.left)));
++  for (const stackedWidth of new Set([width, subjectWidth])) {
++    const stackedLeft = Math.min(Math.max(subject.left, area.left), Math.max(area.left, area.right - stackedWidth));
++    const stackedRows = taken(stackedLeft, stackedWidth);
++    const stackedFloor = floorAt(stackedLeft, stackedWidth);
++    const stackedHeight = heightAt(stackedWidth);
++    const aboveEnd = Math.min(subject.top, stackedFloor);
++    const aboveStart = Math.max(area.top, ...stackedRows.filter(([top]) => top < aboveEnd).map(([, bottom]) => bottom));
++    const aboveTop = Math.max(aboveStart, aboveEnd - stackedHeight);
++    places.push({ left: stackedLeft, top: aboveTop, width: stackedWidth, maxHeight: aboveEnd - aboveTop, needed: stackedHeight });
++    const belowTop = Math.max(subject.bottom, area.top);
++    const belowEnd = Math.min(stackedFloor, ...stackedRows.filter(([, bottom]) => bottom > belowTop).map(([top]) => top));
++    places.push({ left: stackedLeft, top: belowTop, width: stackedWidth, maxHeight: belowEnd - belowTop, needed: stackedHeight });
++  }
 +
 +  for (const side of ["right", "left"] as const) {
 +    const room = side === "right" ? area.right - subject.right : subject.left - area.left;
@@ -20444,7 +20482,7 @@ index 00000000..bf6c9c1f
 +  return entry.kind === "kv" ? !NON_STYLE_OPTION_KEYS.has(key) : !NON_STYLE_OPTION_FLAGS.has(key);
 +}
 diff --git a/packages/core/src/edit/actions/path-editing-actions.ts b/packages/core/src/edit/actions/path-editing-actions.ts
-index 23a8fe28..daf414e1 100644
+index 23a8fe28..bac9eecf 100644
 --- a/packages/core/src/edit/actions/path-editing-actions.ts
 +++ b/packages/core/src/edit/actions/path-editing-actions.ts
 @@ -3,11 +3,12 @@ import { worldPoint, worldVector } from "../../coords/points.js";
@@ -20487,7 +20525,36 @@ index 23a8fe28..daf414e1 100644
      nextSegment.closesPath || (analysis.closed && anchorIndex === 0) ? "cycle" : undefined
    );
    if (!replacementSegment) {
-@@ -569,26 +574,133 @@ function buildDeletedWorldPointReplacement(
+@@ -396,6 +401,28 @@ export function applySetPathPointKindAction(
+     };
+   }
+ 
++  if (action.pointKind === "smooth" && previousSegment.kind !== nextSegment.kind) {
++    // Inkscape's Node::setType(NODE_SMOOTH) (src/ui/tool/node.cpp) keeps a neighbouring line straight and turns
++    // the curve's handle to continue it, keeping the handle's length; a retracted handle takes a third of the
++    // distance to the curve's other anchor.
++    const curve = previousSegment.kind === "cubic" ? previousSegment : nextSegment;
++    if (curve.kind !== "cubic") return { kind: "unsupported", reason: "The selected point has no curve beside it." };
++    const controlItem = analysis.statement.items[curve === previousSegment ? curve.control2Index : curve.control1Index];
++    const control = controlItem?.kind === "Coordinate" ? resolvePathControlHandle(editHandles, action.elementId, controlItem, source) : null;
++    if (!control) return { kind: "unsupported", reason: "The curve's handle at the selected point could not be resolved." };
++    const node = handleResolution.handle.world;
++    const [lineEnd, curveEnd] = curve === previousSegment ? [afterAnchor, beforeAnchor] : [beforeAnchor, afterAnchor];
++    const away = normalizeVector(wv(node.x - lineEnd.x, node.y - lineEnd.y));
++    if (!away) return { kind: "unsupported", reason: "The straight segment at the selected point has no length." };
++    const kept = Math.hypot(control.world.x - node.x, control.world.y - node.y);
++    const length = kept > 1e-9 ? kept : Math.hypot(curveEnd.x - node.x, curveEnd.y - node.y) / 3;
++    const text = rewriteCoordinate(wp(node.x + away.x * length, node.y + away.y * length), control, source);
++    if (!text) return { kind: "unsupported", reason: "Point type rewrite failed for the curve's handle." };
++    const replacement = applyTextReplacements(source, [{ span: control.sourceRef.sourceSpan, text }]);
++    if (replacement.patches.length === 0) return { kind: "unsupported", reason: "Point is already using that handle configuration." };
++    return { kind: "success", newSource: replacement.source, patches: replacement.patches, changedSourceIds: [action.elementId] };
++  }
++
+   if (previousSegment.kind !== "cubic" || nextSegment.kind !== "cubic") {
+     return {
+       kind: "unsupported",
+@@ -569,26 +596,133 @@ function buildDeletedWorldPointReplacement(
    analysis: ExplicitPathAnalysis,
    previousSegment: ExplicitPathAnalysis["segments"][number],
    nextSegment: ExplicitPathAnalysis["segments"][number],
@@ -20632,7 +20699,7 @@ index 23a8fe28..daf414e1 100644
  }
  
  function buildOpenPathBodyAfterDeletedPoint(
-@@ -733,26 +845,6 @@ function explicitSegmentText(source: string, analysis: ExplicitPathAnalysis, seg
+@@ -733,26 +867,6 @@ function explicitSegmentText(source: string, analysis: ExplicitPathAnalysis, seg
    return raw.replace(/\bcycle\b/u, targetRaw);
  }
  
@@ -20659,7 +20726,7 @@ index 23a8fe28..daf414e1 100644
  function smoothControlPositions(anchor: WorldPoint, previousControl: WorldPoint, nextControl: WorldPoint): { prev: WorldPoint; next: WorldPoint } {
    const prevLength = Math.hypot(anchor.x - previousControl.x, anchor.y - previousControl.y);
    const nextLength = Math.hypot(nextControl.x - anchor.x, nextControl.y - anchor.y);
-@@ -920,21 +1012,65 @@ export function applyInsertPathPointAction(
+@@ -920,21 +1034,65 @@ export function applyInsertPathPointAction(
  function resolveControlWorld(
    editHandles: readonly EditHandle[],
    sourceId: string,

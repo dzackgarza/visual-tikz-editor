@@ -73,6 +73,10 @@ export async function startWorkbench(
 export const editorFrame = (page: Page): FrameLocator =>
   page.frameLocator('iframe[title="TikZ visual editor"]');
 
+/** The points of a curve chosen in point editing: the anchors drawn in the accent colour. */
+export const selectedPoints = (frame: FrameLocator): Locator =>
+  frame.locator('[data-handle-kind="move-handle"][data-selected="true"]');
+
 export type Box = NonNullable<Awaited<ReturnType<Locator["boundingBox"]>>>;
 
 /**
