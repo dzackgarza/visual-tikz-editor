@@ -714,6 +714,49 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  /** The accessible names of the view controls that the shell offers, in their order. */
+  const viewControls = () =>
+    page.locator(".view-rail button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
+
+  story(
+    { initialPage: "blank" },
+    "a tikzpicture offers the canvas and no Quiver, and a tikzcd offers Quiver and no canvas",
+    async function () {
+      await page.goto(url);
+      await editorReady(page);
+      assert.deepEqual(await viewControls(), ["Code: left sidebar", "Preview: right sidebar", "Canvas: right sidebar"]);
+      await page.getByRole("group", { name: "File" }).locator("summary").click();
+      await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
+      await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible({ timeout: 30_000 });
+      assert.deepEqual(await viewControls(), ["Code: left sidebar", "Preview: right sidebar", "Quiver: right sidebar"]);
+    },
+  );
+
+  story(
+    {},
+    "a source that becomes a tikzcd opens in Quiver and one that becomes a tikzpicture opens in the canvas, and no view tells why another is not there",
+    async function () {
+      const canvas = page.locator('iframe[title="TikZ visual editor"]');
+      const quiver = page.locator('iframe[title="Quiver diagram editor"]');
+      const alerts = page.locator(".workspace").getByRole("alert");
+      await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+      await expect(page.frameLocator('iframe[title="Quiver diagram editor"]').locator(".vertex")).toHaveCount(2, {
+        timeout: 30_000,
+      });
+      await expect(quiver).toBeVisible();
+      await expect(canvas).toHaveCount(0);
+      await expect(alerts).toHaveCount(0);
+      await page.screenshot({ path: "test-results/workbench/source-became-tikzcd.png" });
+      await pasteCode(page, String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\end{tikzpicture}`);
+      await expect(
+        page.frameLocator('iframe[title="TikZ visual editor"]').locator("circle[data-source-id]"),
+      ).toBeInViewport({ timeout: 30_000 });
+      await expect(quiver).toHaveCount(0);
+      await expect(alerts).toHaveCount(0);
+      await page.screenshot({ path: "test-results/workbench/source-became-tikzpicture.png" });
+    },
+  );
+
   /** Two presses on an empty cell of Quiver: the first shows the focus point there, and the second makes a vertex. */
   async function addQuiverVertex(at: { x: number; y: number }): Promise<void> {
     const focusPoint = page.frameLocator('iframe[title="Quiver diagram editor"]').locator(".focus-point");
