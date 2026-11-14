@@ -8693,6 +8693,77 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `selects what Undo and Redo changed, and nothing when a step or a Code edit removes the selection, in ${tablet.name}`,
+      async function () {
+        const authored = String.raw`\begin{tikzpicture}
+\draw (0,0) rectangle (2,2);
+\draw (4,0) -- (6,2);
+\end{tikzpicture}`;
+        await author(authored);
+        const frame = editorFrame(page);
+        const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
+        const line = frame.locator('svg [data-source-id="path:1"]').first();
+        await expect(line).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        const selection = async () => [...(await editorDebug(page)).selection];
+        const source = async () => (await editorDebug(page)).source;
+        const history = async (name: "Undo" | "Redo", after: string) => {
+          await input.penStroke([await stableCenter(documentHistory(name))]);
+          await expect.poll(source).toBe(after);
+          await editorReady(page);
+        };
+        const tapEmptyCanvas = async () => input.penStroke(await emptyCanvasGesture(frame, [{ x: 0, y: 0 }]));
+
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([await strokePoint(page, rectangle, 0.1)]);
+        await expect.poll(selection).toEqual(["path:0"]);
+        await input.penStroke([await stableCenter(strip.getByRole("button", { name: "More", exact: true }))]);
+        await input.penStroke([await stableCenter(frame.getByRole("menuitem", { name: /^Transform/ }))]);
+        await input.penStroke([await stableCenter(frame.getByRole("menu").last().getByRole("menuitem", { name: "Rotate Right 90°", exact: true }))]);
+        await expect.poll(source).toMatch(/rotate/);
+        const rotated = await source();
+        await input.penStroke([await strokePoint(page, line, 0.5)]);
+        await expect.poll(selection).toEqual(["path:1"]);
+        // Undo and Redo select the rectangle that the step changed, whatever was selected before (FR-054).
+        await history("Undo", authored);
+        await expect.poll(selection).toEqual(["path:0"]);
+        await tapEmptyCanvas();
+        await expect.poll(selection).toEqual([]);
+        await history("Redo", rotated);
+        await expect.poll(selection).toEqual(["path:0"]);
+
+        // Undo of a drawn stroke leaves nothing selected, though the stroke was selected.
+        await chooseTool(frame, input, "Pen");
+        await input.penStroke(await emptyCanvasGesture(frame, Array.from({ length: 16 }, (_, i) => ({ x: -i * 6, y: i * 2 + Math.sin(i) * 3 }))));
+        await expect.poll(async () => (await source()).match(/\\draw/gu)?.length).toBe(3);
+        const stroked = await source();
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:2"]').first(), 0.5)]);
+        await expect.poll(selection).toEqual(["path:2"]);
+        await history("Undo", rotated);
+        await expect.poll(selection).toEqual([]);
+        await history("Redo", stroked);
+        await expect.poll(selection).toEqual(["path:2"]);
+
+        // A Code edit that removes the selected object leaves nothing selected, and Properties shows the figure (FR-060a).
+        await input.penStroke([await strokePoint(page, line, 0.5)]);
+        await expect.poll(selection).toEqual(["path:1"]);
+        const properties = sidePanel(frame, "Properties");
+        if (!(await properties.isVisible())) await input.touch([await stableCenter(documentPanelButton("Properties"))]);
+        await expect(properties.getByText(/^Selected /u)).toBeVisible();
+        await author(stroked.replace("\\draw (4,0) -- (6,2);\n", ""));
+        await expect.poll(selection).toEqual([]);
+        await expect(properties.getByText("Figure Bounds", { exact: true })).toBeVisible();
+        await storyScreenshot(page, `selection-after-history-${tablet.name}`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `aligns and distributes three selected objects as separate undo steps in ${tablet.name}`,
       async function () {
         await editorReady(page);
