@@ -17,10 +17,11 @@ import {
 /** The step of the source editor: its keystrokes join as CodeMirror joins typing. */
 export const CODE_STEP = "code";
 
-/** One change of the document and the source after it. */
+/** One change of the document and the source after it; `history` marks a change by Undo or Redo. */
 export interface DocumentChange {
   changes: ChangeSet;
   source: string;
+  history: boolean;
 }
 
 const step = Annotation.define<string>();
@@ -89,7 +90,7 @@ export class DocumentHistory {
     void tr.state;
     if (editStep !== this.lastStep) this.lastStepTime = time;
     this.lastStep = editStep;
-    this.apply(tr);
+    this.apply(tr, false);
   }
 
   undo(): boolean {
@@ -105,7 +106,7 @@ export class DocumentHistory {
     const changes = this.state.changes({ from: 0, to: this.state.doc.length, insert: source });
     this.state = this.create(source);
     this.lastStep = null;
-    this.notify(changes);
+    this.notify(changes, false);
   }
 
   private step(command: typeof undo): boolean {
@@ -114,17 +115,17 @@ export class DocumentHistory {
     if (result.tr === undefined) return false;
     // The next edit starts a new step, even one that continues the step undone.
     this.lastStep = null;
-    this.apply(result.tr);
+    this.apply(result.tr, true);
     return true;
   }
 
-  private apply(tr: Transaction): void {
+  private apply(tr: Transaction, history: boolean): void {
     this.state = tr.state;
-    if (!tr.changes.empty) this.notify(tr.changes);
+    if (!tr.changes.empty) this.notify(tr.changes, history);
   }
 
-  private notify(changes: ChangeSet): void {
-    const change = { changes, source: this.source };
+  private notify(changes: ChangeSet, history: boolean): void {
+    const change = { changes, source: this.source, history };
     for (const listener of this.listeners) listener(change);
   }
 }

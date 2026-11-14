@@ -117,8 +117,9 @@ import { RiArrowGoBackLine, RiArrowGoForwardLine, RiEqualizerLine, RiMoreLine, R
 import { z } from "zod";
 import SettingsWindow from "./SettingsWindow.vue";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import type { ChangeSet } from "@codemirror/state";
 import { DocumentHistory } from "../src/document-history";
-import { editorStateSchema, type EditorState, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../src/host";
+import { editorStateSchema, type ChangedRange, type EditorState, type TikzWorkbenchHost, type TikzWorkbenchTheme } from "../src/host";
 import type { TikzLivePreviewTarget } from "../src/live-preview";
 import type { QuiverMacroProjection } from "../src/quiver-macros";
 import { contiguousSourceLineRanges, rawTikzEnvironment } from "../src/source-block";
@@ -337,7 +338,13 @@ const documentHistory = new DocumentHistory("");
 const source = ref("");
 const canUndo = ref(false);
 const canRedo = ref(false);
+// The changes the canvas has not yet taken, as one change from the source it last took, and
+// whether Undo or Redo made any of them.
+let untakenChanges: ChangeSet | null = null;
+let untakenHistory = false;
 documentHistory.subscribe((change) => {
+  untakenChanges = untakenChanges === null ? change.changes : untakenChanges.compose(change.changes);
+  untakenHistory ||= change.history;
   source.value = change.source;
   canUndo.value = documentHistory.canUndo;
   canRedo.value = documentHistory.canRedo;
@@ -442,8 +449,16 @@ const host: TikzWorkbenchHost = {
     sourceSelection.value = { from, to };
   },
   readSource: (from, to) => source.value.slice(from, to),
-  writeSource: (from, to, insert, step) => {
-    documentHistory.edit({ from, to, insert }, step);
+  writeSource: (edits, step) => {
+    documentHistory.edit(edits, step);
+  },
+  takeChangedRanges: () => {
+    const ranges: ChangedRange[] = [];
+    untakenChanges?.iterChangedRanges((_fromA, _toA, from, to) => { ranges.push({ from, to }); });
+    const history = untakenHistory;
+    untakenChanges = null;
+    untakenHistory = false;
+    return history ? ranges : null;
   },
   rendering: {
     render: async (request) => {

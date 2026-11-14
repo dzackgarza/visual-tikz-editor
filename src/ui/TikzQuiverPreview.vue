@@ -191,7 +191,7 @@ function applyEditorSource(source: string, step: string): void {
   }
   if (source === quiverSourceForSession(active.source)) return;
   const replacement = quiverReplacement(active.source, source);
-  props.host.writeSource(replacement.from, replacement.to, replacement.insert, step);
+  props.host.writeSource([{ from: replacement.from, to: replacement.to, insert: replacement.insert }], step);
   session.value = { ...active, source: replacement.next };
   errorMessage.value = "";
 }

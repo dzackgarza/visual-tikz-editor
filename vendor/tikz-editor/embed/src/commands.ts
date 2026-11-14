@@ -10,12 +10,17 @@ export const commandIdentitySchema = z.object({
 const identity = commandIdentitySchema.shape;
 export const panelSchema = z.enum(['layers', 'properties']).nullable();
 export type Panel = z.infer<typeof panelSchema>;
+/** A range of the new source that a change wrote; an empty range marks a deletion. */
+export const changedRangeSchema = z.object({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative() })
+  .refine(range => range.from <= range.to, 'A changed range ends before it starts');
+export type ChangedRange = z.infer<typeof changedRangeSchema>;
 
 export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('load'), source: z.string(), fileName: z.string(),
     imageBaseUrl: z.string().optional(), nativeClipboard: z.boolean().optional(), state: editorStateSchema.optional(), autosave: z.literal(0).optional() }),
-  // The source that the shell's document history restored; the viewport and the tool stay.
-  z.object({ ...identity, action: z.literal('replace-source'), source: z.string() }),
+  // The source that Undo, Redo, or another view wrote, and the ranges of it that the change
+  // wrote; the viewport and the tool stay.
+  z.object({ ...identity, action: z.literal('replace-source'), source: z.string(), changed: z.array(changedRangeSchema).nullable() }),
   z.object({ ...identity, action: z.literal('display'), fullscreen: z.boolean() }),
   z.object({ ...identity, action: z.literal('panel'), panel: panelSchema }),
   // The shell opened a popover of its own, so the canvas closes its open one.

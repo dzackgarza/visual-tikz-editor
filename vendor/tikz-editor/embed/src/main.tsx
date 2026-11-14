@@ -2,7 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setActiveEditorPlatform } from '@tikz-editor/app/platform/current';
 import { useEditorStore } from '@tikz-editor/app/store';
-import { PRINTED_SIZE_SCALE, getEditorSettings, publishOccupiedInsets, reloadEditorSettings } from '@tikz-editor/app';
+import { PRINTED_SIZE_SCALE, getEditorSettings, publishOccupiedInsets, reloadEditorSettings, replaceSource } from '@tikz-editor/app';
 import type { EditorPlatform } from '@tikz-editor/app/platform/types';
 import type { DocumentFileRef } from '@tikz-editor/app/store/types';
 import './styles.css';
@@ -285,6 +285,8 @@ function HostBridge() {
 		let previousStep = useEditorStore.getState().lastStep;
 		let previousSelection = '';
 		let previousSelectionEmpty: boolean | null = null;
+		// The selection that the last `replace-source` made; it stays out of the Code panel's cursor.
+		let hostSelection: ReadonlySet<string> | null = null;
 		// The settled view of the loaded file goes to the shell, which reopens the file at it.
 		let loadedRevision = -1;
 		let previousView = '';
@@ -325,7 +327,7 @@ function HostBridge() {
 					const selection = JSON.stringify([state.sourceRevision, from, to, state.activeHandleId]);
 					if (selection !== previousSelection) {
 						previousSelection = selection;
-						postToHost({ event: 'source-selection', source: state.source, from, to });
+						if (state.selectedElementIds !== hostSelection || handle) postToHost({ event: 'source-selection', source: state.source, from, to });
 					}
 				} else previousSelection = '';
 			}
@@ -369,7 +371,9 @@ function HostBridge() {
 			}
 			switch (command.action) {
 				case 'replace-source':
-					useEditorStore.getState().dispatch({ type: 'CODE_EDITED', source: command.source });
+					replaceSource({ source: command.source, changed: command.changed });
+					// The shell made this selection; it does not go back to the Code panel's cursor.
+					hostSelection = useEditorStore.getState().selectedElementIds;
 					reply(command);
 					return;
 				case 'load': {

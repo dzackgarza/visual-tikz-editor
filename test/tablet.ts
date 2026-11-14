@@ -295,6 +295,21 @@ function debugFrame(page: Page): Frame | undefined {
     .find((candidate) => new URL(candidate.url()).pathname === "/tikz-editor/index.html");
 }
 
+/**
+ * Replaces the Code panel's text as a paste does. A Playwright fill makes CodeMirror rebuild the document
+ * from its line elements, and that rebuild can keep an empty line where a removed line was.
+ */
+export async function pasteCode(page: Page, text: string): Promise<void> {
+  const code = page.locator(".cm-content");
+  await code.click();
+  await code.press("ControlOrMeta+a");
+  await code.evaluate((element, pasted) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", pasted);
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  }, text);
+}
+
 export async function editorDebug(page: Page): Promise<EditorDebug> {
   const frame = debugFrame(page);
   if (frame === undefined) {

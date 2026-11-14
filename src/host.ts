@@ -9,8 +9,9 @@ import type { TikzRenderSuccess } from "./live-preview";
 import type { QuiverMacroProjection } from "./quiver-macros";
 import type { TikzRenderRequest, TikzRenderResult } from "./tikz-render";
 import type { EditorState } from "../vendor/tikz-editor/embed/src/editor-state";
+import type { ChangedRange } from "../vendor/tikz-editor/embed/src/commands";
 
-export type { HostCommand } from "../vendor/tikz-editor/embed/src/commands";
+export type { ChangedRange, HostCommand } from "../vendor/tikz-editor/embed/src/commands";
 export type {
   CommandFailure,
   CommandReply,
@@ -34,6 +35,13 @@ export { requestEditorSource } from "./editor-source";
 
 export type TikzWorkbenchTheme = "light" | "dark";
 
+/** One replacement of [from, to) of the source document by `insert`. */
+export interface SourceEdit {
+  from: number;
+  to: number;
+  insert: string;
+}
+
 export interface TikzWorkbenchRendering {
   render: (request: TikzRenderRequest) => Promise<TikzRenderResult>;
   figureUrl: (figure: TikzRenderSuccess) => string;
@@ -48,11 +56,17 @@ export interface TikzWorkbenchHost {
   /** The authored bytes that the source document stores in [from, to). */
   readSource: (from: number, to: number) => string;
   /**
-   * Replace [from, to) of the source document. The host then passes the
-   * workbench a target that describes the changed document. Consecutive writes
-   * with one `step` are one step of the document history.
+   * Apply `edits`, each in the coordinates of the document before the write, as one change of
+   * the source document. The host then passes the workbench a target that describes the changed
+   * document. Consecutive writes with one `step` are one step of the document history.
    */
-  writeSource: (from: number, to: number, insert: string, step: string) => void;
+  writeSource: (edits: readonly SourceEdit[], step: string) => void;
+  /**
+   * The ranges of the current source that the document's changes wrote since the last call, in
+   * source order; an empty range marks a deletion. Null when no Undo or Redo made any of the
+   * changes. A call forgets the changes it reports.
+   */
+  takeChangedRanges: () => ChangedRange[] | null;
   /** The compiled TeX view. */
   rendering: TikzWorkbenchRendering;
   /** The tikzcd editor. */

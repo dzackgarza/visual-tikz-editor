@@ -35,14 +35,27 @@ describe("tikz-editor source bridge", function () {
     const session = tikzEditorSessionForBlock(target());
     const edited = source.replace("{A};", "{B};") + "\n% arbitrary hand-authored tail";
     const replacement = tikzEditorReplacement(session, edited);
+    const document = " ".repeat(40) + source;
+    const applied = replacement.edits.reduceRight(
+      (text, edit) => text.slice(0, edit.from) + edit.insert + text.slice(edit.to),
+      document,
+    );
 
-    assert.strictEqual(replacement.from, 40);
-    assert.strictEqual(replacement.to, 40 + source.length);
-    assert.strictEqual(replacement.insert, edited);
+    assert.strictEqual(applied.slice(40), edited);
     assert.strictEqual(replacement.next.source, edited);
     assert.strictEqual(replacement.next.sourceTo, 40 + edited.length);
-    assert.ok(replacement.insert.includes("\\foreach"));
-    assert.ok(replacement.insert.includes(".. controls"));
+  });
+
+  it("writes only the changed spans, so a step of the history names what it changed (FR-054)", function () {
+    const session = tikzEditorSessionForBlock(target());
+    const edited = source.replace("(1,2) and (2,2)", "(1,3) and (2,3)");
+    const replacement = tikzEditorReplacement(session, edited);
+    const curve = 40 + source.indexOf(String.raw`\draw (0,0)`);
+
+    assert.ok(replacement.edits.length > 0);
+    for (const edit of replacement.edits) {
+      assert.ok(edit.from >= curve && edit.to <= 40 + source.length, `${JSON.stringify(edit)} lies outside the edited curve`);
+    }
   });
 
   it("rejects tikzcd at the bridge boundary", function () {

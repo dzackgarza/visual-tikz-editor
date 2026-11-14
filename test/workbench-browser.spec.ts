@@ -24,6 +24,7 @@ import {
   dockGripPoint,
   fitDiagram,
   layoutBox,
+  pasteCode,
   type Point,
   settledCenter,
   selectedPoints,
@@ -294,7 +295,7 @@ describe("standalone workbench host boundary", function () {
     if (closed) {
       await code.click();
     }
-    await page.locator(".cm-content").fill(source);
+    await pasteCode(page, source);
     await expect.poll(async () => (await editorDebug(page)).source).toBe(source);
     if (closed) {
       await code.click();
@@ -375,17 +376,17 @@ describe("standalone workbench host boundary", function () {
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       await page.emulateMedia({ colorScheme: "dark" });
       const valid = String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (1cm);\end{tikzpicture}`;
-      await page.locator(".cm-content").fill(valid);
+      await pasteCode(page, valid);
       await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
       await expect(page.locator(".tikz-view-status")).toContainText("Up to date", {
         timeout: 40000,
       });
       const invalid = valid.replace("\\draw", "\\thisCommandDoesNotExist\\draw");
-      await page.locator(".cm-content").fill(invalid);
+      await pasteCode(page, invalid);
       await expect(page.locator(".tikz-compiler-preview-error")).toBeVisible({ timeout: 40000 });
       assert.equal(await page.locator(".cm-content").innerText(), invalid);
       await page.screenshot({ path: "test-results/workbench/dark-tablet-render-error.png" });
-      await page.locator(".cm-content").fill(valid);
+      await pasteCode(page, valid);
       await expect(page.locator(".tikz-view-status")).toContainText("Up to date", {
         timeout: 40000,
       });
@@ -479,7 +480,7 @@ describe("standalone workbench host boundary", function () {
 
       // For a tikzcd document, Settings opens over Quiver and its appearance reaches Quiver.
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-      await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+      await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
       await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
       const quiverFrame = page.locator('iframe[title="Quiver diagram editor"]');
       const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]').locator("body");
@@ -518,7 +519,7 @@ describe("standalone workbench host boundary", function () {
       await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible({ timeout: 30_000 });
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       const edited = String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`;
-      await page.locator(".cm-content").fill(edited);
+      await pasteCode(page, edited);
       await fileMenu.click();
       await page.getByRole("button", { name: "New tikzpicture", exact: true }).click();
       const prompt = page.getByRole("dialog", { name: "Save changes?" });
@@ -691,10 +692,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -777,10 +778,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -886,11 +887,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\node[draw] (A) at (5,5) {A};
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \node[draw] (A) at (5,5) {A};
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const node = frame.locator('svg [data-source-id="path:2"]').first();
@@ -1008,7 +1009,7 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`;
         const load = async (source: string) => {
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-          await page.locator(".cm-content").fill(source);
+          await pasteCode(page, source);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await expect.poll(async () => (await editorDebug(page)).source.trim()).toBe(source);
           await editorReady(page);
@@ -1141,14 +1142,14 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\draw (8,8) circle (3);
-\draw (-3,-3) rectangle (-1,-1);
-\draw (-3,4.5) -- (-1,4.5);
-\path[use as bounding box] (-6,-6) rectangle (14,14);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \draw (8,8) circle (3);
+        \draw (-3,-3) rectangle (-1,-1);
+        \draw (-3,4.5) -- (-1,4.5);
+        \path[use as bounding box] (-6,-6) rectangle (14,14);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const rectangle = frame.locator('svg [data-source-id="path:3"]').first();
@@ -1363,10 +1364,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -1440,12 +1441,12 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\draw (0,0) circle (2);
-\draw (4,-6) rectangle (6,-4);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \draw (0,0) circle (2);
+        \draw (4,-6) rectangle (6,-4);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
@@ -1542,10 +1543,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
-\draw (0,0) -- (5,0);
-\draw (0,0) -- (0,5);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
+        \draw (0,0) -- (5,0);
+        \draw (0,0) -- (0,5);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -1660,9 +1661,9 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
-\draw (0,0) -- (10,0);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
+        \draw (0,0) -- (10,0);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const axis = frame.locator('svg [data-source-id="path:0"]').first();
@@ -1877,11 +1878,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\path[use as bounding box] (-10,-10) rectangle (15,15);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -1940,11 +1941,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\path[use as bounding box] (-10,-10) rectangle (15,15);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -2005,11 +2006,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\path[use as bounding box] (-10,-10) rectangle (15,15);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -2084,9 +2085,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,6);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,6);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const square = frame.locator('svg [data-source-id="path:0"]').first();
@@ -2129,7 +2128,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzpicture}\draw (2,2) rectangle (6,5);\end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
@@ -2190,7 +2189,7 @@ describe("standalone workbench host boundary", function () {
 \draw (6,2) circle (1);
 \path[use as bounding box] (-10,-10) rectangle (15,15);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
@@ -2301,7 +2300,7 @@ describe("standalone workbench host boundary", function () {
 \draw (0,0) -- (0,10);
 \draw (2,2) rectangle (6,6);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const square = frame.locator('svg [data-source-id="path:2"]').first();
@@ -2376,10 +2375,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -2457,10 +2456,10 @@ describe("standalone workbench host boundary", function () {
         const drawLine = async (options: string, from: [number, number], to: [number, number]) => {
           await editorReady(page);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-          await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}${options}
-\draw (0,0) -- (5,0);
-\draw (0,0) -- (0,5);
-\end{tikzpicture}`);
+          await pasteCode(page, String.raw`\begin{tikzpicture}${options}
+          \draw (0,0) -- (5,0);
+          \draw (0,0) -- (0,5);
+          \end{tikzpicture}`);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
           await fitDiagram(frame, input);
@@ -2523,10 +2522,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
-\draw (0,0) -- (5,0);
-\draw (0,0) -- (0,5);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}[x=2cm,y=2cm]
+        \draw (0,0) -- (5,0);
+        \draw (0,0) -- (0,5);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -2580,13 +2579,13 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\draw (2,2) circle (1);
-\draw (6,2) circle (1);
-\path[use as bounding box] (-10,-10) rectangle (15,15);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \draw (2,2) circle (1);
+        \draw (6,2) circle (1);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:3"]').first()).toBeVisible();
@@ -2799,7 +2798,7 @@ describe("standalone workbench host boundary", function () {
         await page.goto(url);
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -2912,7 +2911,7 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`;
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -3000,7 +2999,7 @@ describe("standalone workbench host boundary", function () {
         await page
           .getByRole("button", { name: "Code: left sidebar", exact: true })
           .click();
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page
           .getByRole("button", { name: "Code: left sidebar", exact: true })
           .click();
@@ -3074,7 +3073,9 @@ describe("standalone workbench host boundary", function () {
 
         // The bucket fills the rectangle. A preset tap also colours a selection (FR-021), so a tap on empty canvas clears it first.
         // The Fill tool previews its fill under the pen, which redraws the rectangle, so the rectangle is measured before.
+        // A tap outside the line in Edit Points only clears its points, so Done ends Edit Points first.
         const box = (await rectangle.boundingBox())!;
+        await tap(strip.getByRole("button", { name: "Done", exact: true }));
         await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual([]);
         await chooseTool(frame, input, "Fill");
@@ -3148,7 +3149,7 @@ describe("standalone workbench host boundary", function () {
         const authored = `${firstAuthored}\n\n${secondAuthored}`;
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -3296,10 +3297,10 @@ describe("standalone workbench host boundary", function () {
       `keeps a fitted stroke's ends where the pen drew them when no point is within reach, in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (4,0);
-\draw (0,3) -- (4,3);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (4,0);
+        \draw (0,3) -- (4,3);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
@@ -3447,9 +3448,7 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         // Neither end is on the lattice, so a stroke that lands on one took the point, not the lattice.
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (0.37,0.61) -- (4.23,2.29);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (0.37,0.61) -- (4.23,2.29);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -3554,7 +3553,7 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`;
         const load = async (text: string) => {
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-          await page.locator(".cm-content").fill(text);
+          await pasteCode(page, text);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await expect.poll(async () => (await editorDebug(page)).source.trim()).toBe(text);
           await editorReady(page);
@@ -4116,9 +4115,9 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) .. controls (1,2) and (2,2) .. (3,0) .. controls (4,-2) and (5,-2) .. (6,0) .. controls (7,2) and (8,2) .. (9,0) .. controls (10,-2) and (11,-2) .. (12,0);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) .. controls (1,2) and (2,2) .. (3,0) .. controls (4,-2) and (5,-2) .. (6,0) .. controls (7,2) and (8,2) .. (9,0) .. controls (10,-2) and (11,-2) .. (12,0);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
@@ -4335,10 +4334,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw[red,line width=2pt,xshift=1cm] (0,0) -- (4,0);
-\draw (0,2) -- (4,2);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw[red,line width=2pt,xshift=1cm] (0,0) -- (4,0);
+        \draw (0,2) -- (4,2);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -4365,7 +4364,7 @@ describe("standalone workbench host boundary", function () {
         await page.reload();
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(source);
+        await pasteCode(page, source);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await editorReady(page);
         const reopened = editorFrame(page);
@@ -4389,11 +4388,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\tikzset{outer/.style={blue}}
-\begin{tikzpicture}[middle/.style={red}]
-\tikzset{inner/.style={green}}
-\draw (0,0) -- (4,0);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\tikzset{outer/.style={blue}}
+        \begin{tikzpicture}[middle/.style={red}]
+        \tikzset{inner/.style={green}}
+        \draw (0,0) -- (4,0);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -4425,7 +4424,7 @@ describe("standalone workbench host boundary", function () {
 \end{tikzpicture}`;
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -4589,9 +4588,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (2,1) -- (8,3);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (2,1) -- (8,3);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const line = frame.locator('svg [data-source-id="path:0"]').first();
@@ -4628,10 +4625,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (2,1) -- (8,3);
-\draw[step=1] (-6,-6) grid (-2,-2);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (2,1) -- (8,3);
+        \draw[step=1] (-6,-6) grid (-2,-2);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const [line, grid] = [
@@ -5877,7 +5874,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}\draw (0,0) -- (4,0);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (0,0) -- (4,0);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         await editorReady(page);
         await page.emulateMedia({ colorScheme: "dark" });
@@ -5907,9 +5904,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (2cm);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw[blue] (0,0) circle (2cm);\end{tikzpicture}`);
         const frame = editorFrame(page);
         const circle = frame.locator("circle[data-source-id]");
         await expect(circle).toBeAttached();
@@ -6088,11 +6083,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\draw (3,0) -- (5,1);\end{tikzpicture}`,
-          );
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (0,0) circle (1cm);\draw (3,0) -- (5,1);\end{tikzpicture}`);
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(2);
         const input = await TabletInput.attach(page);
@@ -6186,9 +6177,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\node at (2,1) {$x^2$};\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\node at (2,1) {$x^2$};\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -6481,7 +6470,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const source = String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`;
-        await page.locator(".cm-content").fill(source);
+        await pasteCode(page, source);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -6651,9 +6640,9 @@ describe("standalone workbench host boundary", function () {
       `edits figure bounds in scaled lattice units in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}[x=2cm,y=0.5cm]
-\draw (0,0) rectangle (4,6);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}[x=2cm,y=0.5cm]
+        \draw (0,0) rectangle (4,6);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -6709,9 +6698,9 @@ describe("standalone workbench host boundary", function () {
         // The lattice step Properties shows, with nothing selected, after the figure's options are set to `options`.
         const latticeStep = async (options: string) => {
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-          await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}${options}
-\draw (0,0) -- (3,2);
-\end{tikzpicture}`);
+          await pasteCode(page, String.raw`\begin{tikzpicture}${options}
+          \draw (0,0) -- (3,2);
+          \end{tikzpicture}`);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           await expect(frame.locator('svg [data-source-id="path:0"]').first()).toBeAttached();
           await tap(documentPanelButton("Properties"));
@@ -6758,11 +6747,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (0,0) -- (10,0);
-\draw (0,0) -- (0,10);
-\draw (2,4) .. controls (4,7) and (6,7) .. (8,4);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \draw (2,4) .. controls (4,7) and (6,7) .. (8,4);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator('svg [data-source-id="path:2"]').first();
@@ -7020,7 +7009,7 @@ describe("standalone workbench host boundary", function () {
         const source = String.raw`\begin{tikzpicture}
 \draw (0,0) rectangle (4,6);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(source);
+        await pasteCode(page, source);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -7081,9 +7070,7 @@ describe("standalone workbench host boundary", function () {
       `offers touch-sized Repeat dialog controls in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -7120,9 +7107,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(1);
         const input = await TabletInput.attach(page);
@@ -7177,9 +7162,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (-14,-18) -- (-2,-12);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (-14,-18) -- (-2,-12);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator("svg [data-source-id]")).toHaveCount(1);
@@ -7322,11 +7305,11 @@ describe("standalone workbench host boundary", function () {
       `keeps selection actions usable beside Layers when the selection fills the canvas in ${tablet.name}`,
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\begin{scope}[name=Long foreground layer]
-\draw (-100,-100) rectangle (100,100);
-\end{scope}
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \begin{scope}[name=Long foreground layer]
+        \draw (-100,-100) rectangle (100,100);
+        \end{scope}
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -7388,12 +7371,12 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\coordinate (a) at (-10,-14);
-\draw (a) -- (-4,-16);
-\begin{scope}[name=Front]
-\end{scope}
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \coordinate (a) at (-10,-14);
+        \draw (a) -- (-4,-16);
+        \begin{scope}[name=Front]
+        \end{scope}
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator("svg [data-source-id]").first()).toBeAttached();
@@ -7465,11 +7448,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (-1,-1) rectangle (1,1);
-\draw (6,-8) rectangle (9,-5);
-\path[use as bounding box] (-10,-10) rectangle (10,10);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (-1,-1) rectangle (1,1);
+        \draw (6,-8) rectangle (9,-5);
+        \path[use as bounding box] (-10,-10) rectangle (10,10);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const corner = frame.locator('svg [data-source-id="path:1"]').first();
@@ -7555,11 +7538,11 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (-1,-1) rectangle (1,1);
-\draw (6,-8) rectangle (9,-5);
-\path[use as bounding box] (-10,-10) rectangle (10,10);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (-1,-1) rectangle (1,1);
+        \draw (6,-8) rectangle (9,-5);
+        \path[use as bounding box] (-10,-10) rectangle (10,10);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const corner = frame.locator('svg [data-source-id="path:1"]').first();
@@ -7731,9 +7714,7 @@ describe("standalone workbench host boundary", function () {
         await context.grantPermissions(["clipboard-read", "clipboard-write"]);
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (0,0) circle (2cm);\end{tikzpicture}`);
         const frame = editorFrame(page);
         await expect(frame.locator("circle[data-source-id]")).toHaveCount(1);
         const input = await TabletInput.attach(page);
@@ -7825,9 +7806,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (-4,-2) -- (4,2);\end{tikzpicture}`);
         const frame = editorFrame(page);
         const line = frame.locator("[data-source-id]").first();
         await expect(line).toBeVisible();
@@ -7860,7 +7839,7 @@ describe("standalone workbench host boundary", function () {
 \draw (2,-4) .. controls (4,-4) and (0,4) .. (2,4);
 \draw (6,-4) -- (6,4);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(4);
@@ -7969,7 +7948,7 @@ describe("standalone workbench host boundary", function () {
 \draw (-6,-6) -- (-3,-6) arc[start angle=180, end angle=0, radius=2] -- (4,-6);
 \draw (-6,3) rectangle (-2,5);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(4);
@@ -8122,7 +8101,7 @@ describe("standalone workbench host boundary", function () {
 \draw (2,8) -- (12,14);
 \draw (8,-6) circle (3cm);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(2);
         const input = await TabletInput.attach(page);
@@ -8212,7 +8191,7 @@ describe("standalone workbench host boundary", function () {
 \draw (2,-4) -- (12,14);
 \draw (8,-6) circle (3cm);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         const frame = editorFrame(page);
         await expect(frame.locator("[data-source-id]")).toHaveCount(2);
         const input = await TabletInput.attach(page);
@@ -8268,11 +8247,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(
-            String.raw`\begin{tikzpicture}\draw (-6,-3) .. controls (-2,4) and (2,-4) .. (6,3);\end{tikzpicture}`,
-          );
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (-6,-3) .. controls (-2,4) and (2,-4) .. (6,3);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator("[data-source-id]").first();
@@ -8340,10 +8315,10 @@ describe("standalone workbench host boundary", function () {
         async function () {
           await editorReady(page);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-          await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (2,-2) .. controls (5,6) and (9,-6) .. (12,2);
-\draw (-6,14) -- (-2,18);
-\end{tikzpicture}`);
+          await pasteCode(page, String.raw`\begin{tikzpicture}
+          \draw (2,-2) .. controls (5,6) and (9,-6) .. (12,2);
+          \draw (-6,14) -- (-2,18);
+          \end{tikzpicture}`);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           const frame = editorFrame(page);
           await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
@@ -8432,9 +8407,9 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw[red, thick] (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw[red, thick] (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
@@ -8478,9 +8453,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page
-          .locator(".cm-content")
-          .fill(String.raw`\begin{tikzpicture}\draw (2,-2) rectangle (8,2);\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}\draw (2,-2) rectangle (8,2);\end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const rectangle = frame.locator('svg [data-source-id="path:0"]').first();
@@ -8509,7 +8482,7 @@ describe("standalone workbench host boundary", function () {
         const authored = String.raw`\begin{tikzpicture}
 \draw (1,1) .. controls (2,4) and (4,4) .. (5,1) .. controls (6,-2) and (8,-2) .. (9,1);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -8548,7 +8521,7 @@ describe("standalone workbench host boundary", function () {
         const authored = String.raw`\begin{tikzpicture}
 \draw (1,1) .. controls (2,4) and (4,4) .. (5,1) .. controls (6,-2) and (8,-2) .. (9,1);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page
           .getByRole("button", { name: "Code: left sidebar", exact: true })
           .click();
@@ -8639,7 +8612,7 @@ describe("standalone workbench host boundary", function () {
         const authored = String.raw`\begin{tikzpicture}
 \draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0) .. controls (15,-4) and (17,-4) .. (18,0);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -8682,8 +8655,10 @@ describe("standalone workbench host boundary", function () {
         await expect.poll(async () => (await editorDebug(page)).source).toBe(authored);
         await editorReady(page);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:0"]);
+        // The Undo restored the two deleted points, which stay selected (FR-054); a tap adds a third.
+        await expect(selectedPoints(frame)).toHaveCount(2);
         await input.penStroke([await pointAt(3)]);
-        await expect(selectedPoints(frame)).toHaveCount(1);
+        await expect(selectedPoints(frame)).toHaveCount(3);
         await input.penStroke([await stableCenter(action("Done"))]);
         await expect(action("Edit Points")).toBeVisible();
       },
@@ -8739,13 +8714,17 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke(await emptyCanvasGesture(frame, Array.from({ length: 16 }, (_, i) => ({ x: -i * 6, y: i * 2 + Math.sin(i) * 3 }))));
         await expect.poll(async () => (await source()).match(/\\draw/gu)?.length).toBe(3);
         const stroked = await source();
+        // The stroke is the one rendered object besides the rectangle and the line.
+        const drawn = frame.locator('svg [data-source-id]:not([data-source-id="path:0"]):not([data-source-id="path:1"])').first();
+        await expect(drawn).toBeAttached();
+        const strokeId = (await drawn.getAttribute("data-source-id"))!;
         await chooseTool(frame, input, "Lasso");
-        await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:2"]').first(), 0.5)]);
-        await expect.poll(selection).toEqual(["path:2"]);
+        await input.penStroke([await strokePoint(page, drawn, 0.5)]);
+        await expect.poll(selection).toEqual([strokeId]);
         await history("Undo", rotated);
         await expect.poll(selection).toEqual([]);
         await history("Redo", stroked);
-        await expect.poll(selection).toEqual(["path:2"]);
+        await expect.poll(selection).toEqual([strokeId]);
 
         // A Code edit that removes the selected object leaves nothing selected, and Properties shows the figure (FR-060a).
         await input.penStroke([await strokePoint(page, line, 0.5)]);
@@ -8755,6 +8734,8 @@ describe("standalone workbench host boundary", function () {
         await expect(properties.getByText(/^Selected /u)).toBeVisible();
         await author(stroked.replace("\\draw (4,0) -- (6,2);\n", ""));
         await expect.poll(selection).toEqual([]);
+        await storyScreenshot(page, `selection-after-code-edit-${tablet.name}`);
+        if (!(await properties.isVisible())) await input.touch([await stableCenter(documentPanelButton("Properties"))]);
         await expect(properties.getByText("Figure Bounds", { exact: true })).toBeVisible();
         await storyScreenshot(page, `selection-after-history-${tablet.name}`);
       },
@@ -8773,7 +8754,7 @@ describe("standalone workbench host boundary", function () {
 \draw (5,4) circle (1);
 \draw (10,3) circle (1);
 \end{tikzpicture}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
@@ -8795,17 +8776,20 @@ describe("standalone workbench host boundary", function () {
         await input.touch([await stableCenter(documentPanelButton("Properties"))]);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const source = async () => (await editorDebug(page)).source;
-        const command = async (group: string, name: string) => {
+        // Undo selects the circles that the step moved (FR-054).
+        const command = async (group: string, name: string, moved: string[]) => {
           await input.penStroke([await stableCenter(strip.getByRole("button", { name: group, exact: true }))]);
           await input.penStroke([await stableCenter(frame.getByRole("menu").last().getByRole("menuitem", { name, exact: true }))]);
           await expect.poll(source).not.toBe(authored);
           await input.penStroke([await stableCenter(documentHistory("Undo"))]);
           await expect.poll(source).toBe(authored);
           await editorReady(page);
-          await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
+          await expect.poll(selected).toEqual(moved);
         };
-        await command("Align", "Left");
-        await command("Distribute", "Horizontal");
+        await command("Align", "Left", ["path:1", "path:2"]);
+        await input.penStroke([{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }, { x: left, y: top + 1 }]);
+        await expect.poll(selected).toEqual(["path:0", "path:1", "path:2"]);
+        await command("Distribute", "Horizontal", ["path:1"]);
         await input.penStroke([(await emptyCanvasGesture(frame))[0]]);
         await expect.poll(selected).toEqual([]);
         await input.penStroke([await strokePoint(page, frame.locator('svg [data-source-id="path:0"]').first(), 0.15)]);
@@ -8831,9 +8815,9 @@ describe("standalone workbench host boundary", function () {
         async function () {
           await editorReady(page);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-          await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0) .. controls (15,-4) and (17,-4) .. (18,0);
-\end{tikzpicture}`);
+          await pasteCode(page, String.raw`\begin{tikzpicture}
+          \draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0) .. controls (15,-4) and (17,-4) .. (18,0);
+          \end{tikzpicture}`);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           const frame = editorFrame(page);
           const curve = frame.locator('svg [data-source-id="path:0"]').first();
@@ -8931,9 +8915,9 @@ describe("standalone workbench host boundary", function () {
         async function () {
           await editorReady(page);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-          await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0);
-\end{tikzpicture}`);
+          await pasteCode(page, String.raw`\begin{tikzpicture}
+          \draw (2,0) .. controls (3,4) and (5,4) .. (6,0) .. controls (7,-4) and (9,-4) .. (10,0) .. controls (11,4) and (13,4) .. (14,0);
+          \end{tikzpicture}`);
           await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
           const frame = editorFrame(page);
           const curve = frame.locator('svg [data-source-id="path:0"]').first();
@@ -9008,9 +8992,9 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (2,0) .. controls (6,8) and (10,8) .. (14,0);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (2,0) .. controls (6,8) and (10,8) .. (14,0);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         const curve = frame.locator('svg [data-source-id="path:0"]').first();
@@ -9085,10 +9069,10 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await editorReady(page);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\draw (4,-2) circle (2cm);
-\draw (10,-4) rectangle (14,0);
-\end{tikzpicture}`);
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (4,-2) circle (2cm);
+        \draw (10,-4) rectangle (14,0);
+        \end{tikzpicture}`);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const frame = editorFrame(page);
         await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeVisible();
@@ -9143,14 +9127,14 @@ describe("standalone workbench host boundary", function () {
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("workbench-ink:");
     const authored = String.raw`\begin{tikzpicture}\draw[red] (0,0) rectangle (4,3);\end{tikzpicture}`;
-    await page.locator(".cm-content").fill(authored);
+    await pasteCode(page, authored);
     await page.getByRole("button", { name: "Copy source", exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(authored);
   });
 
   it("copies the completed Quiver edit immediately after switching to rendered view", async function () {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
     await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
     const frame = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await frame.locator(".vertex").nth(1).click();
@@ -9167,7 +9151,7 @@ describe("standalone workbench host boundary", function () {
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("ClipboardFinal");
     const newer = String.raw`\begin{tikzcd}NewerAuthored \arrow[r] & Source\end{tikzcd}`;
-    await page.locator(".cm-content").fill(newer);
+    await pasteCode(page, newer);
     await page.getByRole("button", { name: "Copy source", exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(newer);
   });
@@ -9577,10 +9561,10 @@ describe("standalone workbench host boundary", function () {
       await page.goto(url);
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       await editorReady(page);
-      await page.locator(".cm-content").fill(String.raw`\begin{tikzpicture}
-\node at (0,0) {$x^2$};
-\draw[blue] (0,0) rectangle (2,1);
-\end{tikzpicture}`);
+      await pasteCode(page, String.raw`\begin{tikzpicture}
+      \node at (0,0) {$x^2$};
+      \draw[blue] (0,0) rectangle (2,1);
+      \end{tikzpicture}`);
       const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
       await expect(frame.locator('[data-canvas-viewport="true"]')).toBeVisible();
       await expect.poll(() => frame.locator("[data-source-id]").count()).toBeGreaterThan(1);
@@ -9605,9 +9589,9 @@ describe("standalone workbench host boundary", function () {
 
   it("keeps authored source when a notification names a load operation", async function () {
     const sourcePane = page.locator(".cm-content");
-    await sourcePane.fill(String.raw`\begin{tikzpicture}
-\draw (0,0) circle (1cm);
-\end{tikzpicture}`);
+    await pasteCode(page, String.raw`\begin{tikzpicture}
+    \draw (0,0) circle (1cm);
+    \end{tikzpicture}`);
     await editorReady(page);
     const authored = await sourcePane.innerText();
     await page.evaluate(() => {
@@ -9684,7 +9668,7 @@ describe("standalone workbench host boundary", function () {
 % Keep this authored comment.
 \draw[blue] (0,0) circle (1cm);
 \end{tikzpicture}`;
-      await sourcePane.fill(source);
+      await pasteCode(page, source);
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       const frame = editorFrame(page);
       await documentPanelButton("Properties").click();
@@ -10907,7 +10891,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
         const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
         await expect(
           page.getByRole("button", { name: "Quiver: right sidebar", exact: true }),
@@ -10946,7 +10930,7 @@ describe("standalone workbench host boundary", function () {
       async function () {
         const authored = String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
         await expect(page.getByRole("button", { name: "Quiver: right sidebar", exact: true })).toHaveAttribute("aria-pressed", "true");
         const code = () => page.locator(".cm-content").innerText();
@@ -10998,7 +10982,7 @@ describe("standalone workbench host boundary", function () {
   async function authorAndRender(width: number, height: number): Promise<void> {
     await editorReady(page);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-    await page.locator(".cm-content").fill(renderSwitchAuthored);
+    await pasteCode(page, renderSwitchAuthored);
     await editorReady(page);
     await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
     await expect(page.locator(".tikz-view-status")).toContainText("Up to date", { timeout: 40000 });
@@ -11065,7 +11049,7 @@ describe("standalone workbench host boundary", function () {
 \draw (1,2) -- (4,5);
 \end{tikzpicture}`;
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.locator(".cm-content").fill(authored);
+        await pasteCode(page, authored);
         await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
         const persistentHome = workbench.configHome;
         await page.goto("about:blank");

@@ -10,11 +10,15 @@
  *                  ordinary TikZ block and the vendored tikz-editor iframe.
  *                  The workbench does not parse or canonicalize the TikZ here: the
  *                  complete current bytes are handed to tikz-editor and its
- *                  complete edited bytes replace only the active block.
+ *                  complete edited bytes replace only the active block, as
+ *                  the edits of CodeMirror's diff between the two, so that
+ *                  the document history records only the changed spans.
  *
  * END HEADER
  */
 
+import { presentableDiff } from "@codemirror/merge";
+import type { SourceEdit } from "./host";
 import { type TikzSourceBlock, tikzBlockHasContiguousSource } from "./source-block";
 
 export interface TikzEditorSourceSession {
@@ -49,9 +53,8 @@ export function tikzEditorSessionForBlock(block: TikzSourceBlock): TikzEditorSou
 }
 
 export interface TikzEditorReplacement {
-  from: number;
-  to: number;
-  insert: string;
+  /** The edits, in document coordinates, that turn the block's bytes into tikz-editor's source. */
+  edits: SourceEdit[];
   next: TikzEditorSourceSession;
 }
 
@@ -65,9 +68,11 @@ export function tikzEditorReplacement(
 ): TikzEditorReplacement {
   const delta = source.length - session.source.length;
   return {
-    from: session.sourceFrom,
-    to: session.sourceTo,
-    insert: source,
+    edits: presentableDiff(session.source, source).map((change) => ({
+      from: session.sourceFrom + change.fromA,
+      to: session.sourceFrom + change.toA,
+      insert: source.slice(change.fromB, change.toB),
+    })),
     next: {
       ...session,
       blockTo: session.blockTo + delta,

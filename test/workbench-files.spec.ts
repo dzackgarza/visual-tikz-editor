@@ -9,6 +9,7 @@ import { type Browser, chromium, expect, type FrameLocator, type Page } from "@p
 import {
   buildWorkbench,
   editorReady,
+  pasteCode,
   startPageCoverage,
   startWorkbench,
   stopPageCoverage,
@@ -135,7 +136,7 @@ describe("standalone native file workflow", function () {
     await page.goto(url);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     await expect(page.locator(".cm-content")).toBeVisible({ timeout: 30_000 });
-    await page.locator(".cm-content").fill(authored);
+    await pasteCode(page, authored);
     await fileMenu().click();
     await page.getByRole("button", { name: "Save As…", exact: true }).click();
     await chooseFile("save");
@@ -190,9 +191,7 @@ describe("standalone native file workflow", function () {
     assert.equal((await cancelled).status(), 204);
     await expect(page.locator(".tikz-standalone-status")).toContainText("Saved");
     assert.equal(await readFile(diagramPath, "utf8"), edited);
-    await page
-      .locator(".cm-content")
-      .fill(String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`);
+    await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`);
     await page.getByRole("button", { name: "Quiver: right sidebar", exact: true }).click();
     const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await quiver.locator(".vertex").nth(1).click();
@@ -216,7 +215,7 @@ describe("standalone native file workflow", function () {
         provider === "visual"
           ? String.raw`\begin{tikzpicture}\draw (0,0) -- (2,1);\end{tikzpicture}`
           : String.raw`\begin{tikzcd}A \arrow[r, "f"] & B\end{tikzcd}`;
-      await page.locator(".cm-content").fill(authored);
+      await pasteCode(page, authored);
       const frame = page.frameLocator(
         provider === "visual"
           ? 'iframe[title="TikZ visual editor"]'
@@ -278,7 +277,7 @@ describe("standalone native file workflow", function () {
         provider === "visual" ? "(2,1)" : "B",
         provider === "visual" ? "(8,6)" : "HostAuthored",
       );
-      await page.locator(".cm-content").fill(later);
+      await pasteCode(page, later);
       await page.getByRole("button", { name: "Copy source", exact: true }).click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(later);
       await page.keyboard.press("Control+s");
@@ -298,7 +297,7 @@ describe("standalone native file workflow", function () {
     await page.request.post(`${url}api/new`, { data: "tikzcd" });
     await page.goto(url);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-    await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
     const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
     await quiver.locator(".vertex").nth(1).click();
@@ -331,7 +330,7 @@ describe("standalone native file workflow", function () {
     await copiesSavedFile();
 
     const newer = String.raw`\begin{tikzcd}SourcePane \arrow[r] & Newer\end{tikzcd}`;
-    await page.locator(".cm-content").fill(newer);
+    await pasteCode(page, newer);
     await expect(quiver.locator(".vertex").first()).toContainText("SourcePane");
     await quiver.locator(".vertex").nth(1).click();
     await quiver.locator(".label-input").fill("Resumed");
@@ -348,7 +347,7 @@ describe("standalone native file workflow", function () {
     await page.goto(url);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     const original = String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`;
-    await page.locator(".cm-content").fill(original);
+    await pasteCode(page, original);
     await fileMenu().click();
     await page.getByRole("button", { name: "Save As…", exact: true }).click();
     await chooseFile("save");
@@ -359,7 +358,7 @@ describe("standalone native file workflow", function () {
     const external = original.replace("(1,1)", "(2,2)");
     const edited = original.replace("(1,1)", "(3,3)");
     await writeFile(diagramPath, external, "utf8");
-    await page.locator(".cm-content").fill(edited);
+    await pasteCode(page, edited);
     await page.keyboard.press("Control+s");
     await expect(page.locator(".tikz-standalone-status")).toContainText("The file changed on disk");
     assert.equal(await readFile(diagramPath, "utf8"), external);
@@ -384,7 +383,7 @@ describe("standalone native file workflow", function () {
     await expect(page).toHaveTitle("Unsaved Document - Visual TikZ Editor");
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     const original = String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`;
-    await page.locator(".cm-content").fill(original);
+    await pasteCode(page, original);
     await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
     await expect(page).toHaveTitle("Unsaved Document - Visual TikZ Editor");
     await fileMenu().click();
@@ -395,7 +394,7 @@ describe("standalone native file workflow", function () {
     await expect(page).toHaveTitle("figure.tikz - Visual TikZ Editor");
     // A change on disk holds the edit unsaved until the conflict ends.
     await writeFile(diagramPath, original.replace("(1,1)", "(2,2)"), "utf8");
-    await page.locator(".cm-content").fill(original.replace("(1,1)", "(3,3)"));
+    await pasteCode(page, original.replace("(1,1)", "(3,3)"));
     await expect(page.locator(".tikz-standalone-status")).toContainText("The file changed on disk");
     await expect(page).toHaveTitle("*figure.tikz - Visual TikZ Editor");
   });
@@ -407,14 +406,14 @@ describe("standalone native file workflow", function () {
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     const original = String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`;
     const edited = original.replace("(1,1)", "(4,5)");
-    await page.locator(".cm-content").fill(original);
+    await pasteCode(page, original);
     await fileMenu().click();
     await page.getByRole("button", { name: "Save As…", exact: true }).click();
     await chooseFile("save");
     await expect.poll(() => existsSync(diagramPath)).toBe(true);
     await expect.poll(() => readFile(diagramPath, "utf8")).toBe(original);
     await expect(page.locator(".tikz-standalone-status")).toContainText("Saved");
-    await page.locator(".cm-content").fill(edited);
+    await pasteCode(page, edited);
     await expect.poll(() => readFile(diagramPath, "utf8")).toBe(edited);
     await expect(page.locator(".tikz-standalone-status")).toHaveText("Saved");
 
@@ -441,7 +440,7 @@ describe("standalone native file workflow", function () {
     await page.request.post(`${url}api/new`, { data: "tikzpicture" });
     await page.goto(url);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-    await page.locator(".cm-content").fill(authored);
+    await pasteCode(page, authored);
     await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
     for (const format of ["PDF", "SVG", "PNG"] as const) {
       diagramPath = join(directory, `figures.${format.toLowerCase()}`);
@@ -467,7 +466,7 @@ describe("standalone native file workflow", function () {
       }
     }
     assert.equal(await page.locator(".cm-line").evaluateAll((lines) => lines.map((line) => line.textContent).join("\n")), authored);
-    await page.locator(".cm-content").fill(authored.replace("(3,2)", "(4,2)"));
+    await pasteCode(page, authored.replace("(3,2)", "(4,2)"));
     await expect(page.locator(".tikz-standalone-status")).toContainText("Recovery saved");
   });
 
@@ -524,7 +523,7 @@ describe("standalone native file workflow", function () {
     await page.request.post(`${url}api/new`, { data: "tikzpicture" });
     await page.goto(url);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-    await page.locator(".cm-content").fill(authored);
+    await pasteCode(page, authored);
     diagramPath = filePath;
     await fileMenu().click();
     await page.getByRole("button", { name: "Save As…", exact: true }).click();
@@ -612,7 +611,7 @@ describe("standalone native file workflow", function () {
     await page.goto(url);
     await editorReady(page);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-    await page.locator(".cm-content").fill(authored);
+    await pasteCode(page, authored);
     await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
     const layersButton = page.locator(".document-bar").getByRole("button", { name: "Layers", exact: true });
     const layersPanel = (frame: FrameLocator) => frame.getByRole("complementary", { name: "Layers", exact: true });

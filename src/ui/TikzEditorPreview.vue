@@ -182,6 +182,8 @@ function focus(): void {
 defineExpose({ snapshot, currentSource, zoom, dismissPopover, focus });
 
 function sendFullLoad(): void {
+  // A load selects nothing, so the changes before it are spent.
+  props.host.takeChangedRanges();
   if (!hostReady.value) {
     return;
   }
@@ -205,6 +207,14 @@ function sendFullLoad(): void {
 watch(
   () => props.target,
   (target) => {
+    // Every change is taken, the canvas's own too, so the next replace-source names only its own.
+    // The ranges in the figure's source, clipped to it.
+    const changed = props.host.takeChangedRanges()
+      ?.filter((range) => range.to >= target.sourceFrom && range.from <= target.sourceTo)
+      .map((range) => ({
+        from: Math.max(range.from, target.sourceFrom) - target.sourceFrom,
+        to: Math.min(range.to, target.sourceTo) - target.sourceFrom,
+      })) ?? null;
     const next = tikzEditorSessionForBlock(target);
     const active = session.value;
     const sameIdentity = sameBlockIdentity(active.source, next);
@@ -222,7 +232,7 @@ watch(
     session.value = { ...active, source: next };
     if (sameSource) return;
     errorMessage.value = "";
-    if (loaded.value) postToEditor({ action: "replace-source", source: next.source });
+    if (loaded.value) postToEditor({ action: "replace-source", source: next.source, changed });
     else sendFullLoad();
   },
 );
@@ -276,8 +286,7 @@ function applyEditorSource(source: string, revision: number, step: number): void
 
   try {
     const replacement = tikzEditorReplacement(active.source, source);
-    props.host.writeSource(replacement.from, replacement.to, replacement.insert,
-      `canvas:${active.id}:${active.revision}:${step}`);
+    props.host.writeSource(replacement.edits, `canvas:${active.id}:${active.revision}:${step}`);
     session.value = { ...active, source: replacement.next };
     errorMessage.value = "";
   } catch (error) {

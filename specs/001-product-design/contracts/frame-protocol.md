@@ -17,7 +17,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `load` | `source`, `fileName`, `state`, `imageBaseUrl`, `nativeClipboard` | Opens the document at its kept view state (FR-040); a `state` whose figure the source no longer holds opens the document as one without a view state |
 | `display` | `fullscreen` | Fills the window |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | Opens one panel or closes the open one; `null` also when the shell opens the Code panel (FR-060, research R13) |
-| `replace-source` | `source` | Shows the source that Undo or Redo restored; keeps the viewport and the tool (research R3) |
+| `replace-source` | `source`, `changed` | Shows the source that Undo, Redo, or another view wrote; keeps the viewport and the tool (research R3). After Undo or Redo, `changed` holds the ranges of `source` that the step wrote, and the selection becomes the objects, and in Edit Points the points, that they touch (FR-054). After an edit in another view, `changed` is null; the selection keeps the objects that the figure still holds, and the point selection clears |
 | `dismiss-popover` | — | Closes the canvas popover, because the shell opened one (research R16) |
 | `zoom` | `direction`: `in` \| `out` \| `fit` \| `selection` \| `normal`, or `scale` | The zoom commands of the readout ([surfaces](surfaces.md), Canvas controls; research R8) |
 | `source`, `snapshot` | — | Reads the source or a rendered snapshot |
