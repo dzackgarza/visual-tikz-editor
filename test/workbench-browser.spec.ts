@@ -9097,14 +9097,19 @@ describe("standalone workbench host boundary", function () {
         const menu = frame.getByRole("toolbar", { name: "Selection", exact: true });
         const segments = async () => ((await editorDebug(page)).source.match(/\.\. controls/g) ?? []).length;
         const penTap = async (point: Point) => input.penStroke([point]);
-        for (const doubleTap of [
-          (point: Point) => input.doubleTap(point),
-          async (point: Point) => {
-            await penTap(point);
-            await new Promise((resolve) => setTimeout(resolve, 80));
-            await penTap(point);
-          },
-        ]) {
+        // Each contact adds its point at its own place: a double tap on a point that is already there adds none.
+        const contacts: [(point: Point) => Promise<void>, number][] = [
+          [(point) => input.doubleTap(point), 0.6],
+          [
+            async (point) => {
+              await penTap(point);
+              await new Promise((resolve) => setTimeout(resolve, 80));
+              await penTap(point);
+            },
+            0.4,
+          ],
+        ];
+        for (const [doubleTap, along] of contacts) {
           const before = await segments();
           // The first tap selects the curve; the second makes the pair a double tap, which opens its points.
           await doubleTap(await strokePoint(page, curve, 0.25));
@@ -9112,7 +9117,7 @@ describe("standalone workbench host boundary", function () {
           assert.deepEqual((await editorDebug(page)).selection, ["path:0"]);
           assert.equal(await segments(), before, "the double tap that opens the points of a curve added a point to it");
           // In point editing a double tap on the curve adds a point there, as a double-click does in Inkscape's node tool.
-          await doubleTap(await strokePoint(page, curve, 0.6));
+          await doubleTap(await strokePoint(page, curve, along));
           await expect.poll(segments).toBe(before + 1);
           await expect(menu.getByRole("button", { name: "Done", exact: true })).toBeVisible();
           // A double tap off the curve leaves point editing and keeps the curve selected.
