@@ -293,6 +293,46 @@ describe("desktop package, when the file host stops before the window opens", fu
   });
 });
 
+describe("desktop package, the launch log", function () {
+  let app: DesktopApp;
+
+  // The web process has ended when this story ends, so the window has no page to picture.
+  afterEach(async function () {
+    await app.stop();
+  });
+
+  it("holds an error thrown in the editor frame, with the frame and the stack, and the end of the web process, with WebKit's reason", async function () {
+    // FR-066 and the "Done when" of issue #71: the log is the evidence of a failure on a person's machine.
+    app = await DesktopApp.start();
+    await app.enterWindow();
+    await expect
+      .poll(() => app.script(z.number(), "return document.querySelectorAll('iframe[title=\"TikZ visual editor\"]').length;"), {
+        message: "the window did not show the editor",
+        timeout: 60_000,
+      })
+      .toBe(1);
+    await app.enterEditor();
+    await app.script(
+      z.null(),
+      "setTimeout(function thrownInTheEditorFrame() { throw new Error('a story threw this error in the editor frame'); }, 0); return null;",
+    );
+    const entry = /page error (\S+): Error: a story threw this error in the editor frame\n(.*)/;
+    await expect.poll(() => app.launchLog(), { message: "the log does not hold the error" }).toMatch(entry);
+    const [, frame, stack] = entry.exec(await app.launchLog())!;
+    assert.ok(frame!.includes("tikz-editor"), `the log names the frame ${frame}, not the editor frame`);
+    assert.ok(stack!.includes("thrownInTheEditorFrame"), `the log gives "${stack}" as the stack`);
+
+    // The web process is the child of the shell that renders the page. SIGKILL ends it as the kernel does when memory
+    // runs out; WebKit's own handler takes a SIGSEGV that another process sends, and the process goes on.
+    const webProcess = spawnSync("pgrep", ["-P", String(app.pid), "-f", "WebKitWebProcess"], { encoding: "utf8" }).stdout.trim();
+    assert.match(webProcess, /^\d+$/, "the shell has not exactly one web process");
+    process.kill(Number(webProcess), "SIGKILL");
+    await expect
+      .poll(() => app.launchLog(), { message: "the log does not hold the end of the web process" })
+      .toContain("WebKit web process terminated: Crashed");
+  });
+});
+
 describe("desktop package, when the application gets a signal", function () {
   let app: DesktopApp;
 
