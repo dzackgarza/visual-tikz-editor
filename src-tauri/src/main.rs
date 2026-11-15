@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::fs::{self, File};
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
@@ -6,6 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{http, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent, TerminatedPayload};
 use tauri_plugin_shell::ShellExt;
+use glib::translate::ToGlibPtr;
+use gtk::prelude::WidgetExt;
 use webkit2gtk::WebViewExt;
 
 struct Host(Mutex<Option<CommandChild>>);
@@ -104,6 +107,51 @@ fn open_launch_log() -> PathBuf {
     path
 }
 
+/// Reports each step of a pinch on a touchpad to the page, as a `touchpad-pinch` event of the
+/// window with the ratio of the step and the place of the pointer. The page zooms the view under
+/// the pointer by that ratio, about that place (`src/ui/TikzEditorPreview.vue`).
+///
+/// WebKitGTK answers a touchpad pinch itself: its zoom gesture magnifies the whole page between 1
+/// and 3 times and sends the page no event (`webkitWebViewBaseZoomChanged` and
+/// `ViewGestureController::setMagnification`, WebKit at `webkitgtk-2.52.3`). The canvas then cannot
+/// zoom, and the controls of the window leave the view (#18). GTK runs a widget's gestures for a
+/// touchpad pinch only when no handler of the widget's `event` signal has taken the event
+/// (`gtk_widget_event_internal`, GTK 3.24), so the handler here takes each pinch event.
+fn report_touchpad_pinch(view: &webkit2gtk::WebView) {
+    // The scale of the last pinch event, relative to the start of the pinch.
+    let last_scale = Cell::new(1.0);
+    view.connect_event(move |view, event| {
+        let Some(pinch) = event.downcast_ref::<gdk::EventTouchpadPinch>() else {
+            return glib::Propagation::Proceed;
+        };
+        let raw: *const gdk::ffi::GdkEventTouchpadPinch = pinch.to_glib_none().0;
+        // SAFETY: `raw` points to the event that `pinch` borrows for this call.
+        let phase = i32::from(unsafe { (*raw).phase });
+        if phase == gdk::ffi::GDK_TOUCHPAD_GESTURE_PHASE_BEGIN {
+            last_scale.set(1.0);
+        } else if phase == gdk::ffi::GDK_TOUCHPAD_GESTURE_PHASE_UPDATE {
+            let ratio = pinch.scale() / last_scale.get();
+            last_scale.set(pinch.scale());
+            if ratio.is_finite() && ratio > 0.0 && ratio != 1.0 {
+                // The place is in the pixels of the widget, which are the CSS pixels of the window's page.
+                let (x, y) = pinch.position();
+                view.evaluate_javascript(
+                    &format!("window.dispatchEvent(new CustomEvent('touchpad-pinch', {{ detail: {{ ratio: {ratio}, x: {x}, y: {y} }} }}));"),
+                    None,
+                    None,
+                    gio::Cancellable::NONE,
+                    |result| {
+                        if let Err(error) = result {
+                            eprintln!("The page did not take a touchpad pinch: {error}");
+                        }
+                    },
+                );
+            }
+        }
+        glib::Propagation::Stop
+    });
+}
+
 fn main() {
     let log = open_launch_log();
     tauri::Builder::default()
@@ -156,6 +204,7 @@ fn main() {
                                         webview.inner().connect_web_process_terminated(|_, reason| {
                                             eprintln!("WebKit web process terminated: {reason:?}");
                                         });
+                                        report_touchpad_pinch(&webview.inner());
                                     })
                                     .expect("could not watch the web process");
                                 window_open = true;

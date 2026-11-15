@@ -35,6 +35,7 @@
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { z } from "zod";
 import type { HostCommand, Panel } from "../../vendor/tikz-editor/embed/src/commands";
 import {
   type EditorNotification,
@@ -168,6 +169,20 @@ function reportKeyboard(always = false): void {
 
 function zoom(direction: "in" | "out" | "fit" | "selection" | "normal"): void {
   if (loaded.value) postToEditor({ action: "zoom", direction });
+}
+
+// The desktop shell reports each step of a pinch on a touchpad as a `touchpad-pinch` event of the
+// window (src-tauri/src/main.rs): WebKitGTK gives a page no event of that pinch. `ratio` is the
+// distance of the fingers relative to the step before, and `x` and `y` are the pointer in the window.
+const touchpadPinchSchema = z.object({ ratio: z.number().positive(), x: z.number(), y: z.number() });
+function onTouchpadPinch(event: Event): void {
+  const target = frame.value;
+  if (!loaded.value || target === null) return;
+  const { ratio, x, y } = touchpadPinchSchema.parse((event as CustomEvent<unknown>).detail);
+  const box = target.getBoundingClientRect();
+  // A frame that is not shown has an empty box, and a pinch over another part of the window is not for the canvas.
+  if (x < box.left || x >= box.right || y < box.top || y >= box.bottom) return;
+  postToEditor({ action: "zoom", factor: ratio, at: { x: x - box.left, y: y - box.top } });
 }
 
 // One popover at a time across shell and canvas (FR-004): the shell's menu closes the canvas's.
@@ -458,6 +473,7 @@ onMounted(() => {
   window.addEventListener("message", onMessage);
   window.visualViewport?.addEventListener("resize", reportKeyboardChange);
   window.visualViewport?.addEventListener("scroll", reportKeyboardChange);
+  window.addEventListener("touchpad-pinch", onTouchpadPinch);
 });
 
 onBeforeUnmount(() => {
@@ -465,6 +481,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("message", onMessage);
   window.visualViewport?.removeEventListener("resize", reportKeyboardChange);
   window.visualViewport?.removeEventListener("scroll", reportKeyboardChange);
+  window.removeEventListener("touchpad-pinch", onTouchpadPinch);
 });
 </script>
 

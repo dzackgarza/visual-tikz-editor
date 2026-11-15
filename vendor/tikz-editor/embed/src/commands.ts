@@ -28,10 +28,13 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   // A menu of the shell opened or closed. While one is open, the next press in the canvas closes it.
   z.object({ ...identity, action: z.literal('host-popover'), open: z.boolean() }),
   z.object({ ...identity, action: z.literal('source') }),
-  // A zoom command names a direction or a scale, where 1 is printed size.
+  // A zoom command names one of: a direction; a scale, where 1 is printed size; or a factor of the
+  // present scale with the point of the frame, in CSS pixels, that stays in its place.
   z.object({ ...identity, action: z.literal('zoom'),
-    direction: z.enum(['in', 'out', 'fit', 'selection', 'normal']).optional(), scale: z.number().positive().optional() })
-    .refine(command => (command.direction === undefined) !== (command.scale === undefined)),
+    direction: z.enum(['in', 'out', 'fit', 'selection', 'normal']).optional(), scale: z.number().positive().optional(),
+    factor: z.number().positive().optional(), at: z.object({ x: z.number(), y: z.number() }).optional() })
+    .refine(command => [command.direction, command.scale, command.factor].filter(value => value !== undefined).length === 1
+      && (command.factor === undefined) === (command.at === undefined)),
   // How far the host's on-screen keyboard reaches up from the bottom of this frame.
   z.object({ ...identity, action: z.literal('keyboard'), bottom: z.number().nonnegative() }),
   z.object({ ...identity, action: z.literal('clipboard-result'), targetRequestId: z.string().min(1), text: z.string().optional(), error: z.string().optional() }),

@@ -454,7 +454,17 @@ function HostBridge() {
 					reply(command); return;
 				case 'zoom': {
 					const dispatch = useEditorStore.getState().dispatch;
-					if (command.scale !== undefined) dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: command.scale * PRINTED_SIZE_SCALE });
+					if (command.factor !== undefined && command.at !== undefined) {
+						// The canvas zooms about the pointer at a wheel event with Ctrl, by exp(-deltaY × zoom speed).
+						// This is that event for the factor, so one rule places the view for the wheel and for the pinch.
+						const viewport = document.querySelector<HTMLElement>('[data-canvas-viewport="true"]');
+						if (!viewport) { reply(command, 'busy'); return; }
+						viewport.dispatchEvent(new WheelEvent('wheel', {
+							deltaY: -Math.log(command.factor) / getEditorSettings().canvas.zoomSpeed, ctrlKey: true,
+							clientX: command.at.x, clientY: command.at.y, bubbles: true, cancelable: true,
+						}));
+					}
+					else if (command.scale !== undefined) dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: command.scale * PRINTED_SIZE_SCALE });
 					else if (command.direction === 'normal') dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: PRINTED_SIZE_SCALE });
 					else if (command.direction === 'fit') dispatch({ type: 'REQUEST_FIT_TO_CONTENT' });
 					else if (command.direction === 'in' || command.direction === 'out') dispatch({ type: 'REQUEST_ZOOM', direction: command.direction });

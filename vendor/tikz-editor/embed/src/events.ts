@@ -5,7 +5,7 @@ import { snapshotResultSchema } from './snapshot-protocol';
 
 // A change to any message of commands.ts or events.ts raises this version. The shell
 // refuses an editor that reports another one.
-export const FRAME_PROTOCOL_VERSION = '8';
+export const FRAME_PROTOCOL_VERSION = '9';
 
 export const commandFailureSchema = z.enum(['invalid-command', 'stale-target', 'cancelled', 'timeout', 'busy']);
 export type CommandFailure = z.infer<typeof commandFailureSchema>;

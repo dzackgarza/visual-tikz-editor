@@ -2073,6 +2073,58 @@ describe("standalone workbench host boundary", function () {
 
   for (const tablet of TABLET_VIEWPORTS) {
     story(
+      {
+        viewport: tablet,
+        document: String.raw`\begin{tikzpicture}\draw (0,0) circle (1);\draw (3,0) circle (1);\end{tikzpicture}`,
+      },
+      `a touchpad pinch that the desktop shell reports zooms the figure by its ratio, about its place, in ${tablet.name}`,
+      async function () {
+        // WebKitGTK gives a page no event of a pinch on a touchpad, so the desktop shell reports each step
+        // of the pinch as a `touchpad-pinch` event of the window (src-tauri/src/main.rs; issue #18).
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const pinch = (detail: { ratio: number; x: number; y: number }) =>
+          page.evaluate((step) => {
+            window.dispatchEvent(new CustomEvent("touchpad-pinch", { detail: step }));
+          }, detail);
+        const scale = async () => Number((await shownTransform(frame)).scale);
+        /** The centre and the width of the first circle, in the window. */
+        const circle = async () => {
+          const box = (await frame.locator("svg [data-source-id]").first().boundingBox())!;
+          return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width };
+        };
+        await settledCenter(frame.locator("svg [data-source-id]").first());
+        const opened = { scale: await scale(), circle: await circle() };
+
+        // Three steps of a pinch whose fingers end at twice their distance, with the pointer on the circle's centre.
+        for (const ratio of [1.25, 1.2, 4 / 3]) await pinch({ ratio, x: opened.circle.x, y: opened.circle.y });
+        await expect
+          .poll(async () => (await scale()) / opened.scale, { message: "The pinch did not zoom the figure to twice its size" })
+          .toBeCloseTo(2, 5);
+        const zoomed = await circle();
+        assert.ok(
+          Math.abs(zoomed.width / opened.circle.width - 2) < 0.02,
+          `The circle is ${zoomed.width} px wide after the pinch, from ${opened.circle.width} px`,
+        );
+        assert.ok(
+          Math.hypot(zoomed.x - opened.circle.x, zoomed.y - opened.circle.y) <= 1,
+          `The place under the pinch moved: ${JSON.stringify({ opened: opened.circle, zoomed })}`,
+        );
+
+        // A pinch with the pointer on the document bar is not a pinch on the canvas.
+        const bar = (await page.locator(".document-bar").boundingBox())!;
+        await pinch({ ratio: 2, x: bar.x + bar.width / 2, y: bar.y + bar.height / 2 });
+        await pinch({ ratio: 0.5, x: zoomed.x, y: zoomed.y });
+        await expect
+          .poll(async () => (await scale()) / opened.scale, { message: "The pinch did not zoom the figure back" })
+          .toBeCloseTo(1, 5);
+        assert.equal(await page.evaluate(() => window.visualViewport!.scale), 1);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
       { viewport: tablet },
       `keeps the rail and its popups off the rulers, and the popups off the rail, docked bottom by default, docked left, and floating in ${tablet.name}`,
       async function () {
