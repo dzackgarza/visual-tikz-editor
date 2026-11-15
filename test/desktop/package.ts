@@ -11,12 +11,16 @@
  * pointerdown on which the page calls preventDefault, a touch contact arrives as a mouse, and
  * wheel actions do not reach the page. The stories here therefore use mouse
  * contacts, and make wheel events in the page.
+ *
+ * The driver has no touchpad and Xvfb has none either. `touchpad.c` is loaded into the application
+ * and gives its WebKitWebView the events that GDK makes for a pinch on a touchpad; `pinch` writes
+ * the pinch for it.
  */
 
 import { strict as assert } from "node:assert";
-import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdtempSync } from "node:fs";
+import { cp, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { expect } from "@playwright/test";
@@ -37,6 +41,23 @@ export const KEY = { control: "\uE009", delete: "\uE017", escape: "\uE00C" } as 
 
 /** An offset, in CSS pixels, from the centre of the canvas. */
 export type Offset = { x: number; y: number };
+const pointSchema = z.object({ x: z.number(), y: z.number() });
+
+/** The line that `touchpad.c` writes to the application's stderr, and so to the launch log, when a pinch has ended. */
+const PINCH_ENDED = /^touchpad: a pinch of \d+ updates ended$/gm;
+
+let touchpadLibrary: string | undefined;
+/** Builds `touchpad.c` against the GTK of this machine, once for a run. */
+function buildTouchpad(): string {
+  if (touchpadLibrary !== undefined) return touchpadLibrary;
+  const library = join(mkdtempSync(join(tmpdir(), "desktop-touchpad-")), "touchpad.so");
+  const gtk = execFileSync("pkg-config", ["--cflags", "--libs", "gtk+-3.0"], { encoding: "utf8" }).trim().split(/\s+/);
+  execFileSync("cc", ["-shared", "-fPIC", "-Wall", "-Wno-deprecated-declarations", "-o", library, resolve("test/desktop/touchpad.c"), ...gtk], {
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+  touchpadLibrary = library;
+  return library;
+}
 
 export class DesktopApp {
   private constructor(
@@ -48,6 +69,8 @@ export class DesktopApp {
     private readonly origin: string,
     private readonly session: string,
     private readonly end: () => void,
+    /** The file in which `pinch` writes a pinch for `touchpad.c`. */
+    private readonly touchpadFile: string,
   ) {}
 
   /**
@@ -67,6 +90,7 @@ export class DesktopApp {
       display.stdout!.once("data", (text) => resolve(String(text).trim()));
     });
     const { WAYLAND_DISPLAY: _wayland, ...inherited } = process.env;
+    const touchpadFile = join(home, "touchpad");
     const port = 4455 + Math.floor(Math.random() * 400);
     // The driver leads a process group of its own, so `stop` ends it with the application and the file host.
     const driver = spawn("WebKitWebDriver", [`--port=${port}`, "--host=127.0.0.1"], {
@@ -80,6 +104,8 @@ export class DesktopApp {
         XDG_CACHE_HOME: join(home, "cache"),
         XDG_DATA_HOME: join(home, "data"),
         TAURI_WEBVIEW_AUTOMATION: "true",
+        LD_PRELOAD: buildTouchpad(),
+        TOUCHPAD_FILE: touchpadFile,
       },
       stdio: ["ignore", "inherit", "inherit"],
       detached: true,
@@ -111,6 +137,7 @@ export class DesktopApp {
         origin,
         `/session/${created.sessionId}`,
         end,
+        touchpadFile,
       );
       await app.command("POST", "/window/rect", { width: 1366, height: 1024 });
       started = true;
@@ -197,6 +224,36 @@ export class DesktopApp {
       held === undefined ? presses : [{ type: "keyDown", value: held }, ...presses, { type: "keyUp", value: held }];
     await this.command("POST", "/actions", { actions: [{ type: "key", id: "keyboard", actions }] });
     await this.command("DELETE", "/actions");
+  }
+
+  /**
+   * A two-finger pinch on a touchpad, with the pointer at `at`. Each entry of `scales` is the distance
+   * between the fingers relative to their distance at the start. The editor's frame must be the target.
+   */
+  async pinch(at: Offset, scales: number[]): Promise<void> {
+    const centre = await this.script(
+      pointSchema,
+      `const box = document.querySelector('[data-canvas-viewport="true"]').getBoundingClientRect();
+       return { x: box.x + box.width / 2, y: box.y + box.height / 2 };`,
+    );
+    await this.enterWindow();
+    const frame = await this.script(
+      pointSchema,
+      `const box = document.querySelector('iframe[title="TikZ visual editor"]').getBoundingClientRect();
+       return { x: box.x, y: box.y };`,
+    );
+    await this.enterEditor();
+    const ended = async () => ((await this.launchLog()).match(PINCH_ENDED) ?? []).length;
+    const before = await ended();
+    await writeFile(this.touchpadFile, `${frame.x + centre.x + at.x} ${frame.y + centre.y + at.y} ${scales.join(" ")}\n`);
+    await expect.poll(ended, { message: "the application did not take the pinch" }).toBe(before + 1);
+  }
+
+  /** The text of the launch logs of this start (FR-066). */
+  async launchLog(): Promise<string> {
+    const directory = join(this.stateDirectory, "logs");
+    const logs = await Promise.all((await readdir(directory)).map((name) => readFile(join(directory, name), "utf8")));
+    return logs.join("");
   }
 
   /** Writes a picture of the window. */

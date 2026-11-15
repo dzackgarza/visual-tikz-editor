@@ -200,6 +200,54 @@ describe("desktop package", function () {
       .toBe(4);
   });
 
+  it("zooms the figure by a touchpad pinch, about the place of the pinch, and keeps the window at its size", async function () {
+    // WebKitGTK answers a touchpad pinch itself: it magnifies the page, up to three times, and the page
+    // gets no event of it (ViewGestureController::setMagnification; issue #18).
+    const file = join(await mkdtemp(join(tmpdir(), "desktop-pinch-")), "figure.tikz");
+    await writeFile(file, "\\begin{tikzpicture}\n\\draw (0,0) circle (1);\n\\draw (3,0) circle (1);\n\\end{tikzpicture}\n");
+    app = await DesktopApp.start({ args: [file] });
+    await editorReady();
+    const magnification = async (): Promise<number> => {
+      await app.enterWindow();
+      const scale = await app.script(z.number(), "return window.visualViewport.scale;");
+      await app.enterEditor();
+      return scale;
+    };
+    const canvasScale = () =>
+      app.script(z.number(), "return Number(document.querySelector('[data-testid=\"canvas-world-stage\"]').dataset.canvasScale);");
+    /** The first circle in the window: its centre as an offset from the centre of the canvas, and its width. */
+    const circle = () =>
+      app.script(
+        z.object({ x: z.number(), y: z.number(), width: z.number() }),
+        `const canvas = document.querySelector('[data-canvas-viewport="true"]').getBoundingClientRect();
+         const box = document.querySelector('svg [data-source-id]').getBoundingClientRect();
+         return { x: box.x + box.width / 2 - (canvas.x + canvas.width / 2), y: box.y + box.height / 2 - (canvas.y + canvas.height / 2), width: box.width };`,
+      );
+    await expect.poll(async () => (await circle()).width, { message: "the canvas does not show the figure" }).toBeGreaterThan(100);
+    const opened = { scale: await canvasScale(), circle: await circle() };
+
+    // The fingers move apart to twice their distance, with the pointer on the centre of the first circle.
+    await app.pinch(opened.circle, [1.1, 1.25, 1.5, 1.75, 2]);
+    assert.equal(await magnification(), 1, "the pinch magnified the window");
+    await expect
+      .poll(async () => (await canvasScale()) / opened.scale, { message: "the pinch did not zoom the figure to twice its size" })
+      .toBeCloseTo(2, 1);
+    const zoomed = await circle();
+    assert.ok(Math.abs(zoomed.width / opened.circle.width - 2) < 0.1, `the circle is ${zoomed.width} px wide after the pinch, from ${opened.circle.width} px`);
+    assert.ok(
+      Math.hypot(zoomed.x - opened.circle.x, zoomed.y - opened.circle.y) < 3,
+      `the place under the pinch moved from (${opened.circle.x}, ${opened.circle.y}) to (${zoomed.x}, ${zoomed.y})`,
+    );
+
+    // The fingers move together to half their distance: the figure is at its first size again.
+    await app.pinch(zoomed, [0.9, 0.75, 0.6, 0.5]);
+    assert.equal(await magnification(), 1, "the pinch magnified the window");
+    await expect
+      .poll(async () => (await canvasScale()) / opened.scale, { message: "the pinch did not zoom the figure back" })
+      .toBeCloseTo(1, 1);
+    assert.ok(await rendersCanvas(), "the canvas failed after the pinches");
+  });
+
   it("shows the file and the reason in the window at a start on a view-state file of an older build", async function () {
     // An entry of an older build has no `locked` and no `hidden` (issue #80).
     const seed = await mkdtemp(join(tmpdir(), "desktop-seed-"));
