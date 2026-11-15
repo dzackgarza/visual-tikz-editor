@@ -22140,7 +22140,7 @@ index 00000000..55b9240b
 +  return currentFrame(createSemanticEvaluationRun(parsed.figure, source).context).transform;
 +}
 diff --git a/packages/core/src/edit/element-templates.ts b/packages/core/src/edit/element-templates.ts
-index 3f807ed2..7d488c5f 100644
+index 3f807ed2..300ce5ef 100644
 --- a/packages/core/src/edit/element-templates.ts
 +++ b/packages/core/src/edit/element-templates.ts
 @@ -1,3 +1,4 @@
@@ -22222,15 +22222,28 @@ index 3f807ed2..7d488c5f 100644
      }
  
      case "filledCircle": {
-@@ -145,6 +178,7 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+@@ -144,13 +177,17 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+     return source;
    }
  
++  // A source with no text has no figure: its first element makes the environment. The parse gives such a
++  // source a placeholder figure that spans it, so this case comes before the check of the figure's closing token.
++  if (source.trim().length === 0) {
++    return `\\begin{tikzpicture}\n  ${normalizedSnippet}\n\\end{tikzpicture}`;
++  }
++
    const resolvedEnd = resolveTikzpictureEndToken(source, figureSpan);
 +  if (figureSpan && resolvedEnd === null) throw new Error("The active figure has no closing token");
    const endToken = resolvedEnd?.token ?? "\\end{tikzpicture}";
    const endIndex = resolvedEnd?.from ?? source.lastIndexOf(endToken);
    if (endIndex < 0) {
-@@ -160,8 +194,11 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
+-    if (source.trim().length === 0) {
+-      return `\\begin{tikzpicture}\n  ${normalizedSnippet}\n\\end{tikzpicture}`;
+-    }
+     return source.endsWith("\n")
+       ? `${source}${normalizedSnippet}`
+       : `${source}\n${normalizedSnippet}`;
+@@ -160,8 +197,11 @@ export function insertElementIntoSource(source: string, snippet: string, figureS
    const endIndent = source.slice(endLineStart, endIndex).match(/^[ \t]*/)?.[0] ?? "";
    const bodyIndent = `${endIndent}  `;
  
@@ -22244,7 +22257,7 @@ index 3f807ed2..7d488c5f 100644
    const needsLeadingNewline = before.length > 0 && !before.endsWith("\n");
    const prefix = needsLeadingNewline ? "\n" : "";
  
-@@ -324,8 +361,8 @@ export function generateComplexPathPrependSource(
+@@ -324,8 +364,8 @@ export function generateComplexPathPrependSource(
  }
  
  function formatPointCm(point: WorldPoint): string {
@@ -22255,7 +22268,7 @@ index 3f807ed2..7d488c5f 100644
    return `(${x},${y})`;
  }
  
-@@ -429,7 +466,9 @@ function resolveBezierControls(
+@@ -429,7 +469,9 @@ function resolveBezierControls(
  export function buildDrawOptions(
    strokeColor: string | undefined,
    fillColor: string | undefined,
@@ -22266,7 +22279,7 @@ index 3f807ed2..7d488c5f 100644
  ): string {
    const parts: string[] = [];
  
-@@ -438,11 +477,15 @@ export function buildDrawOptions(
+@@ -438,11 +480,15 @@ export function buildDrawOptions(
    }
  
    if (strokeColor && strokeColor !== "black") {
@@ -22284,7 +22297,7 @@ index 3f807ed2..7d488c5f 100644
    }
  
    return parts.length > 0 ? `[${parts.join(", ")}]` : "";
-@@ -456,14 +499,33 @@ function buildNodeOptions(
+@@ -456,14 +502,33 @@ function buildNodeOptions(
    const parts: string[] = [];
  
    if (strokeColor) {
