@@ -2126,6 +2126,77 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `a zoom step with a pen stroke selected takes no longer than with nothing selected, in ${tablet.name}`,
+      async function () {
+        // With a curve selected, each change of the view tried Smooth on every point of the curve, and each
+        // trial parsed the whole source. A zoom step then took 1.2 s in a figure of twelve strokes, against
+        // 33 ms with nothing selected; a turn of the wheel stopped the canvas for many seconds (issue #18).
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const source = async () => (await editorDebug(page)).source;
+        const selection = async () => (await editorDebug(page)).selection.length;
+        const area = await canvasFreeArea(frame);
+        const point = (fx: number, fy: number) => ({
+          x: area.left + (area.right - area.left) * fx,
+          y: area.top + (area.bottom - area.top) * fy,
+        });
+        await chooseTool(frame, input, "Pen");
+        for (let stroke = 0; stroke < 8; stroke += 1) {
+          const before = await source();
+          await input.penStroke(
+            Array.from({ length: 16 }, (_, i) => point(0.2 + (i * 0.6) / 15, 0.2 + stroke * 0.07 + Math.sin(i) * 0.01)),
+          );
+          await expect.poll(source, { message: "A pen stroke changed nothing" }).not.toBe(before);
+        }
+        /**
+         * The median time of five zoom steps by the wheel with Ctrl, in ms. A step runs from the wheel event
+         * to the second frame after the canvas shows the new scale.
+         */
+        const zoomStep = () =>
+          frame.locator('[data-canvas-viewport="true"]').evaluate(async (viewport) => {
+            const box = viewport.getBoundingClientRect();
+            const times: number[] = [];
+            for (let step = 0; step < 5; step += 1) {
+              const before = document.querySelector<HTMLElement>("[data-canvas-scale]")!.dataset.canvasScale;
+              const started = performance.now();
+              viewport.dispatchEvent(
+                new WheelEvent("wheel", {
+                  deltaY: step % 2 === 0 ? -60 : 60,
+                  ctrlKey: true,
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: box.left + box.width / 2,
+                  clientY: box.top + box.height / 2,
+                }),
+              );
+              while (document.querySelector<HTMLElement>("[data-canvas-scale]")!.dataset.canvasScale === before) {
+                await new Promise((resolve) => setTimeout(resolve, 4));
+              }
+              await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              times.push(performance.now() - started);
+            }
+            return times.sort((left, right) => left - right)[2];
+          });
+
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([await strokePoint(page, frame.locator("svg [data-source-id]").last(), 0.5)]);
+        await expect.poll(selection, { message: "The pen tap did not select the stroke" }).toBe(1);
+        const selected = await zoomStep();
+        await input.penStroke([point(0.9, 0.92)]);
+        await expect.poll(selection, { message: "The pen tap on the empty canvas kept the selection" }).toBe(0);
+        const unselected = await zoomStep();
+        assert.ok(
+          selected <= 3 * unselected + 50,
+          `A zoom step takes ${Math.round(selected)} ms with a stroke selected and ${Math.round(unselected)} ms with nothing selected`,
+        );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `keeps the rail and its popups off the rulers, and the popups off the rail, docked bottom by default, docked left, and floating in ${tablet.name}`,
       async function () {
         await editorReady(page);
