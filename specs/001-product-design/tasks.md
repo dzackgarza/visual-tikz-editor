@@ -76,7 +76,7 @@ passes `just test-desktop` and is installed.
 | Kind | Tasks | Open issues |
 | --- | --- | --- |
 | Surface | T048, T056, T057, T060–T071, T073–T075, T084–T087, T090, T091, T099 | [#27](https://github.com/dzackgarza/visual-tikz-editor/issues/27), [#28](https://github.com/dzackgarza/visual-tikz-editor/issues/28), [#29](https://github.com/dzackgarza/visual-tikz-editor/issues/29), [#31](https://github.com/dzackgarza/visual-tikz-editor/issues/31), [#34](https://github.com/dzackgarza/visual-tikz-editor/issues/34), [#35](https://github.com/dzackgarza/visual-tikz-editor/issues/35), [#38](https://github.com/dzackgarza/visual-tikz-editor/issues/38)–[#40](https://github.com/dzackgarza/visual-tikz-editor/issues/40), [#42](https://github.com/dzackgarza/visual-tikz-editor/issues/42)–[#44](https://github.com/dzackgarza/visual-tikz-editor/issues/44), [#47](https://github.com/dzackgarza/visual-tikz-editor/issues/47), [#55](https://github.com/dzackgarza/visual-tikz-editor/issues/55)–[#57](https://github.com/dzackgarza/visual-tikz-editor/issues/57), [#59](https://github.com/dzackgarza/visual-tikz-editor/issues/59), [#60](https://github.com/dzackgarza/visual-tikz-editor/issues/60), [#65](https://github.com/dzackgarza/visual-tikz-editor/issues/65) |
-| Feature | T045 and T144 (a held stroke becomes a shape), T058 (status line), T104 and T105 (Figures panel), T106 and T107 (one template for Render and Quiver), T114 (a Pen colour as its `xcolor` expression) | [#48](https://github.com/dzackgarza/visual-tikz-editor/issues/48) (Compare and Overwrite), [#52](https://github.com/dzackgarza/visual-tikz-editor/issues/52), [#58](https://github.com/dzackgarza/visual-tikz-editor/issues/58), [#63](https://github.com/dzackgarza/visual-tikz-editor/issues/63) (display calibration), [#64](https://github.com/dzackgarza/visual-tikz-editor/issues/64) (Zoom to Fit as a mode) |
+| Feature | T045 and T144 (a held stroke becomes a shape), T058 (status line), T104 and T105 (Figures panel), T106 and T107 (one template for Render and Quiver), T114 (a Pen colour as its `xcolor` expression) | [#48](https://github.com/dzackgarza/visual-tikz-editor/issues/48) (Compare and Overwrite), [#52](https://github.com/dzackgarza/visual-tikz-editor/issues/52), [#58](https://github.com/dzackgarza/visual-tikz-editor/issues/58), [#63](https://github.com/dzackgarza/visual-tikz-editor/issues/63) (display calibration) |
 | QC | T043, T044, T059, T092–T095, T098, T108, T110, the pen checks of T129 | [#67](https://github.com/dzackgarza/visual-tikz-editor/issues/67), [#68](https://github.com/dzackgarza/visual-tikz-editor/issues/68), [#69](https://github.com/dzackgarza/visual-tikz-editor/issues/69) |
 
 Notes on the assignment:
@@ -90,16 +90,19 @@ Notes on the assignment:
   `$XDG_STATE_HOME/visual-tikz-editor/recovery.json`, and the story "keeps both sources intact
   when an existing file changes on disk before the source editor Save shortcut"
   (`test/workbench-files.spec.ts`) covers it. What remains is the wording of T062 and T065.
-- The existing stories cover the data of T061, T104, and T108: the exact bytes after a restart,
-  the second figure of a two-figure document, and the recovery of an untitled diagram. Those tasks
-  add the title menu's wording, the Figures panel, and the XDG path.
+- Present stories, by their titles, cover the data of T061, T104, and T108: "saves through the
+  native chooser and reopens exact authored bytes after restarting", "carries one two-figure
+  document through edits in each figure, the whole history, and a TeX compile", and "recovers an
+  untitled authored diagram after a server interruption". Those tasks add the title menu's
+  wording, the Figures panel, and the XDG path. Step 3 shows whether these stories pass.
 - The implementation issues #27–#65 were written from the per-surface specifications of
   2026-11-12, before this specification. Where one disagrees with it, the specification holds
   ([spec.md](spec.md), Assumptions); each such issue carries a comment of 2026-11-15 that names
   the items the specification replaces.
 - Issues #63, #64, and #70–#87 were closed by the closing words of commits on 2026-11-15, before
-  any gate run. #63 and #64 each have an item that is not built and are open again as tail work.
-  The others were not compared with their bodies item by item; step 3 checks their stories.
+  any gate run. #63 has an item that is not built, "Display calibration" in Settings › Canvas, and
+  is open again as tail work. #70–#87 were not compared with their bodies item by item; step 3
+  checks their stories.
 
 ---
 
@@ -458,4 +461,4 @@ Each repair has a red story committed before it. The stories ran in Chromium, by
 ## Phase 15: Scope of 2026-11-15
 
 - [ ] T143 [US2] Make File, Export, and More open their lists under their own buttons (audit, report "File, Export, and other menus are not attached to their buttons"; FR-002). From the code they do not: `.file-menu-items` of `standalone/StandaloneApp.vue` is placed against `.document-bar` (`position: absolute; right: 12px`), so each list opens at the trailing end of the bar. Check it in the running app first. Red story: the box of each list starts under the box of its button, in portrait and landscape. The repair anchors the present lists; T064 and T086 later replace File and Export with the title menu and Share and Export, which keep the anchor **[Core]**
-- [ ] T144 [US4] Build FR-026 (#58): a Pen stroke that ends with the pen held still becomes a line, rectangle, circle, or ellipse as its own step, and Undo returns the stroke. T045 is its story. No task built it, and since T113 no stroke becomes a shape **[Tail: feature]**
+- [ ] T144 [US4] Build FR-026 (#58): a Pen stroke that ends with the pen held still becomes a line, rectangle, circle, or ellipse as its own step, and Undo returns the stroke. T045 is its story, and no task builds it **[Tail: feature]**
