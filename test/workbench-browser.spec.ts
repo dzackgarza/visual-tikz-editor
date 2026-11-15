@@ -780,6 +780,52 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  story(
+    { initialPage: "blank", document: "" },
+    "the first stroke on an empty file, its Undo and its Redo keep the view",
+    async function () {
+      await page.goto(url);
+      const frame = page.frameLocator('iframe[title="TikZ visual editor"]');
+      const viewport = frame.locator('[data-canvas-viewport="true"]');
+      await expect(viewport, "The canvas did not open on the empty file").toBeVisible({ timeout: 30_000 });
+      await editorReady(page);
+      const zoom = zoomControl(frame);
+      await expect(zoom, "The empty file does not open at printed size").toHaveText("100%");
+      await chooseTool(frame, "mouse", "Pen");
+      const box = await layoutBox(viewport);
+      const from = { x: box.x + box.width * 0.55, y: box.y + box.height * 0.3 };
+      const to = { x: from.x + 90, y: from.y + 25 };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(to.x, to.y, { steps: 12 });
+      await page.mouse.up();
+      await expect
+        .poll(() => readFile(documentPath!, "utf8"), { message: "The stroke did not reach the file" })
+        .toContain(String.raw`\begin{tikzpicture}`);
+      await editorReady(page);
+      await expect(zoom, "The first stroke changed the zoom").toHaveText("100%");
+      // The stroke is where the pen drew it: its box on the screen is the box of the gesture.
+      const drawn = await layoutBox(lastPath(frame));
+      expect(Math.abs(drawn.x - from.x), "The stroke moved away from the pen across the screen").toBeLessThan(6);
+      expect(Math.abs(drawn.y - from.y), "The stroke moved away from the pen down the screen").toBeLessThan(6);
+      expect(Math.abs(drawn.width - 90), "The stroke on the screen is not as wide as the gesture").toBeLessThan(6);
+      const bar = page.locator(".document-bar");
+      await bar.getByRole("button", { name: "Undo", exact: true }).click();
+      await expect.poll(() => readFile(documentPath!, "utf8"), { message: "Undo did not empty the file" }).toBe("");
+      await editorReady(page);
+      await expect(zoom, "Undo of the first stroke changed the zoom").toHaveText("100%");
+      await bar.getByRole("button", { name: "Redo", exact: true }).click();
+      await expect
+        .poll(() => readFile(documentPath!, "utf8"), { message: "Redo did not bring the stroke back" })
+        .toContain(String.raw`\begin{tikzpicture}`);
+      await editorReady(page);
+      await expect(zoom, "Redo of the first stroke changed the zoom").toHaveText("100%");
+      const redone = await layoutBox(lastPath(frame));
+      expect(Math.abs(redone.x - drawn.x), "Redo put the stroke at another place across the screen").toBeLessThan(2);
+      expect(Math.abs(redone.y - drawn.y), "Redo put the stroke at another place down the screen").toBeLessThan(2);
+    },
+  );
+
   for (const [object, statement] of [
     ["shape", String.raw`\\draw[^;\n]+;`],
     ["text", String.raw`\\node at \([^)]*\) \{first\};`],
