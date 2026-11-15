@@ -59,7 +59,7 @@ must change the same code.
 
 | Order | Tasks | Issue | Subject | State at `e88486c` |
 | --- | --- | --- | --- | --- |
-| 1 | T097, with the wheel and pinch of T129 | [#18](https://github.com/dzackgarza/visual-tikz-editor/issues/18) | Zooming makes the renderer fail | Not reproduced. No run used the reporter's conditions (desktop package, drawing canvas, Ctrl+wheel, trackpad pinch, zoom keys): the runs on the issue used Playwright's browsers, and T128 used wheel events made in the page |
+| 1 | T097, with the wheel and pinch of T129; T145 | [#18](https://github.com/dzackgarza/visual-tikz-editor/issues/18), [#71](https://github.com/dzackgarza/visual-tikz-editor/issues/71) | Zooming makes the renderer fail; the launch log that is its evidence | Not reproduced. No run used the reporter's conditions (desktop package, drawing canvas, Ctrl+wheel, trackpad pinch, zoom keys): the runs on the issue used Playwright's browsers, and T128 used wheel events made in the page. No story reads the launch log (#71, "Done when") |
 | 2 | T142 | [#88](https://github.com/dzackgarza/visual-tikz-editor/issues/88) | The first object on an empty file refits the view, and a text placed first is not in edit | Cause known. Two stories are red by commit (`d18e610`, `e88486c`) |
 | 3 | T127, and the story runs of T041, T049, and T113 | [#67](https://github.com/dzackgarza/visual-tikz-editor/issues/67) for a story that fails on the runner only | Read the gate of the head: name each failing story, assign it to its task, and repair each one that belongs to a step of the loop | No Development diagnostics run completed on any of the 151 commits from `8fa9d62` (red) to `e88486c`. T113 records six stories that failed on their first run. T046 and T047 are built and wait for this run |
 | 4 | T100, T101 | — | Undo during a construction removes the last placed point, not a step of the document (FR-034) | Not built: the embed has no `construction` message, so the document bar's Undo steps the document history. Read from the code; T100 is its red story |
@@ -100,9 +100,12 @@ Notes on the assignment:
   ([spec.md](spec.md), Assumptions); each such issue carries a comment of 2026-11-15 that names
   the items the specification replaces.
 - Issues #63, #64, and #70–#87 were closed by the closing words of commits on 2026-11-15, before
-  any gate run. #63 has an item that is not built, "Display calibration" in Settings › Canvas, and
-  is open again as tail work. #70–#87 were not compared with their bodies item by item; step 3
-  checks their stories.
+  any gate run. Each body was compared with the story titles and the code at `e88486c`; no story
+  was run. Two issues are open again. #63 has an item that is not built, "Display calibration" in
+  Settings › Canvas (tail). #71 lacks the story of its "Done when", which reads the launch log
+  (core, T145). Each item of the others has a story or code, with these not shown by a story
+  title: a bordered node under a colour tap (#78), an unreadable `recovery.json` at the start
+  (#80), and Export and More under a press in Quiver (#82). Step 3 reads their stories.
 
 ---
 
@@ -462,3 +465,4 @@ Each repair has a red story committed before it. The stories ran in Chromium, by
 
 - [ ] T143 [US2] Make File, Export, and More open their lists under their own buttons (audit, report "File, Export, and other menus are not attached to their buttons"; FR-002). From the code they do not: `.file-menu-items` of `standalone/StandaloneApp.vue` is placed against `.document-bar` (`position: absolute; right: 12px`), so each list opens at the trailing end of the bar. Check it in the running app first. Red story: the box of each list starts under the box of its button, in portrait and landscape. The repair anchors the present lists; T064 and T086 later replace File and Export with the title menu and Share and Export, which keep the anchor **[Core]**
 - [ ] T144 [US4] Build FR-026 (#58): a Pen stroke that ends with the pen held still becomes a line, rectangle, circle, or ellipse as its own step, and Undo returns the stroke. T045 is its story, and no task builds it **[Tail: feature]**
+- [ ] T145 [US8] Story in `test/desktop/desktop.spec.ts` for the "Done when" of #71: the launch log of the built package holds an uncaught error thrown in the editor frame, with the frame and the stack, and the end of the web process, with WebKit's reason. `be22a80` checked both by hand; no story reads the log. T097 reads this log on the reporter's machine **[Core]**
