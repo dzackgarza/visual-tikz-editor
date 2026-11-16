@@ -82,6 +82,11 @@ None is core by the rule above. Each has its issue and its task.
 | [#97](https://github.com/dzackgarza/visual-tikz-editor/issues/97) | T155 | No story places a Node shape, a Matrix, or an Image by pen |
 | [#98](https://github.com/dzackgarza/visual-tikz-editor/issues/98) | T156 | The kept ink needs the Pen tool; an added node skips the TeX check once (read from the code) |
 | [#99](https://github.com/dzackgarza/visual-tikz-editor/issues/99) | T157 | The lessons of these sessions are not in the agent memory vault |
+| [#100](https://github.com/dzackgarza/visual-tikz-editor/issues/100) | T158 | Two observations of the first reproduction of #18, never filed: the render view's zoom range, and page zoom read as a keyboard |
+| [#101](https://github.com/dzackgarza/visual-tikz-editor/issues/101) | T159 | A line drawn off the lattice is written with twelve decimals |
+| [#102](https://github.com/dzackgarza/visual-tikz-editor/issues/102) | T160 | The canvas frame holds the layout library's text "FindBorderBarSize" off screen, readable by a screen reader |
+
+The probes and measurements of that work, which are not stories, are in [docs/research/desktop-probes-and-stroke-timing.md](docs/research/desktop-probes-and-stroke-timing.md).
 
 ## How the work goes
 

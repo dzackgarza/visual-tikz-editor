@@ -55,6 +55,8 @@ bunx playwright show-trace test-results-*/workbench/failed-*.zip
 
 `bun run coverage` (`scripts/coverage.mjs`) runs the suite with V8 coverage for Mocha and for every story page, and merges both into `coverage/lcov.info`. `standalone/server.ts` runs under Bun, which reports coverage only inside `bun test` ([oven-sh/bun#17867](https://github.com/oven-sh/bun/issues/17867)), so the report omits it.
 
+Probes and measurements that are not stories are kept, whole, in [docs/research/desktop-probes-and-stroke-timing.md](research/desktop-probes-and-stroke-timing.md): a Debian sid image that runs `test/desktop` on WebKitGTK 2.54, input sent at the level of the X server, a touchpad pinch under Wayland, and the benchmark of a pen stroke's time with the way its causes were found.
+
 ### Reviewing what the stories show
 
 A passing story is not evidence that a surface looks right. Each story writes its last state as `test-results/workbench/<story>.png` and its whole run as `test-results/workbench/<story>.webm`. A contact sheet of one frame per second shows the run as one image:
