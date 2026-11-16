@@ -125,6 +125,22 @@ describe("standalone workbench host boundary", function () {
   /** A control of the document bar, by its accessible name in contracts/surfaces.md. */
   const documentBarButton = (name: string) =>
     page.locator(".document-bar").getByRole("button", { name, exact: true });
+  /**
+   * A menu of the document bar: the title menu, Share and Export, or More. Its button and its list
+   * (contracts/surfaces.md, Document bar).
+   */
+  const barMenu = (name: "title" | "share" | "more") => {
+    const root = page.locator(`.document-bar [data-menu="${name}"]`);
+    return { button: root.locator(":scope > button"), list: root.getByRole("menu") };
+  };
+  /** A choice of an open menu of the document bar. */
+  const barMenuItem = (name: string) =>
+    page.locator(".document-bar").getByRole("menuitem", { name, exact: true });
+  /** Copies the document's TikZ from Share and Export. */
+  const copyTikz = async () => {
+    await barMenu("share").button.click();
+    await barMenuItem("Copy TikZ").click();
+  };
   /** A history control of the document bar (FR-012). */
   const documentHistory = (name: "Undo" | "Redo") => documentBarButton(name);
   /** A panel control of the document bar (contracts/surfaces.md, FR-060). */
@@ -2191,6 +2207,78 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `the ink of a pen stroke stays on the canvas after the pen lifts, and the thirtieth stroke is written as fast as the first, in ${tablet.name}`,
+      async function () {
+        // #89. The pen's mark left the canvas at the lift, and the stroke came 150 ms later in an empty
+        // figure and half a second later in a figure of forty strokes. The lift itself took 80 ms for the
+        // first stroke and 512 ms for the fortieth: each lift read the whole source again, each action of
+        // the store read every statement four times, and every point was compared with every other point.
+        // A stroke of 62 samples added 20 kB to the source.
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const source = async () => (await editorDebug(page)).source;
+        const area = await canvasFreeArea(frame);
+        await chooseTool(frame, input, "Pen");
+        // Each frame of the canvas: whether the pen's mark is shown and how many strokes are drawn; and for
+        // each lift of the pen, the time to the next frame, which the work of the lift holds back.
+        await frame.locator("body").evaluate(`(() => {
+          window.inkStates = [];
+          window.liftTimes = [];
+          let last = "";
+          const frameOfCanvas = () => {
+            const state = JSON.stringify({
+              mark: document.querySelector('[data-tool-preview="freehand"]') !== null,
+              strokes: new Set([...document.querySelectorAll('svg [data-source-id^="path:"]')].map((path) => path.getAttribute("data-source-id"))).size,
+            });
+            if (state !== last) { window.inkStates.push(JSON.parse(state)); last = state; }
+            requestAnimationFrame(frameOfCanvas);
+          };
+          requestAnimationFrame(frameOfCanvas);
+          window.addEventListener("pointerup", (event) => {
+            if (event.pointerType !== "pen") return;
+            const lifted = performance.now();
+            requestAnimationFrame(() => window.liftTimes.push(performance.now() - lifted));
+          }, true);
+        })()`);
+        const drawn = () =>
+          frame.locator("body").evaluate(
+            () => new Set([...document.querySelectorAll('svg [data-source-id^="path:"]')].map((path) => path.getAttribute("data-source-id"))).size,
+          );
+        const STROKES = 30, SAMPLES = 16, COLUMNS = 3, ROWS = STROKES / COLUMNS;
+        const width = area.right - area.left, height = area.bottom - area.top;
+        for (let stroke = 0; stroke < STROKES; stroke += 1) {
+          const left = area.left + width * (0.06 + (0.3 * (stroke % COLUMNS))), top = area.top + height * (0.08 + (0.84 * Math.floor(stroke / COLUMNS)) / ROWS);
+          await input.penStroke(
+            Array.from({ length: SAMPLES }, (_, i) => ({ x: left + (i * width * 0.22) / (SAMPLES - 1), y: top + Math.sin(i) * height * 0.012 })),
+          );
+          // The next stroke starts when the canvas has drawn this one, so each lift is timed alone.
+          await expect.poll(drawn, { message: `The canvas did not draw stroke ${stroke + 1}` }).toBe(stroke + 1);
+        }
+        const { states, lifts } = await frame.locator("body").evaluate(() => {
+          const page = window as unknown as { inkStates: { mark: boolean; strokes: number }[]; liftTimes: number[] };
+          return { states: page.inkStates, lifts: page.liftTimes };
+        });
+        // No frame between a stroke's mark and the stroke itself shows neither.
+        const gaps = states.filter((state, index) => index > 0 && !state.mark && states[index - 1].mark && state.strokes === states[index - 1].strokes);
+        assert.deepEqual(gaps, [], `The ink left the canvas after a lift: ${JSON.stringify(states)}`);
+        assert.equal(lifts.length, STROKES, "A lift of the pen was not timed");
+        const median = (times: number[]) => [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
+        const first = median(lifts.slice(0, 5)), last = median(lifts.slice(-5));
+        assert.ok(
+          last <= 3 * first + 50,
+          `The lift of the pen takes ${Math.round(last)} ms after ${STROKES} strokes and ${Math.round(first)} ms at the start: ${lifts.map(Math.round).join(", ")}`,
+        );
+        // The record holds the name of each reading once and the values of each sample in a row.
+        const perSample = (await source()).length / (STROKES * SAMPLES);
+        assert.ok(perSample <= 200, `A sample takes ${Math.round(perSample)} bytes of the source`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `a zoom step with a pen stroke selected takes no longer than with nothing selected, in ${tablet.name}`,
       async function () {
         // With a curve selected, each change of the view tried Smooth on every point of the curve, and each
@@ -2467,6 +2555,212 @@ describe("standalone workbench host boundary", function () {
           Math.abs(end - start - 270) < 1e-6,
           `The arc sweeps ${end - start} degrees, not 270 counterclockwise: ${arc}`,
         );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `an open path ends with Finish, Cancel drops a construction, and neither shows before a point is placed, in ${tablet.name}`,
+      async function () {
+        // FR-032: Cancel and Finish are in the Active Tool Menu while a construction is in progress, and a
+        // construction is in progress from its first placed point (FR-034). The menu showed Cancel as soon as a
+        // shape was chosen, and no story finished an open path (T042).
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const source = async () => (await editorDebug(page)).source;
+        const draws = async () =>
+          (await source())
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("\\draw"));
+        const shapes = toolbarItem(frame, "Shapes");
+        const menu = activeToolMenu(frame);
+        const command = (name: "Finish" | "Cancel") => menu.getByRole("button", { name, exact: true });
+        const openMenu = async (when: string) => {
+          await input.touch([await stableCenter(shapes)]);
+          await expect(menu, `A tap on Shapes did not open its menu ${when}`).toBeVisible();
+        };
+        await setSnapRule(frame, input, "Lattice", true);
+        await chooseShape(frame, input, "Path");
+        const authored = await source();
+
+        // A chosen construction with no point placed is not in progress.
+        await openMenu("before a point is placed");
+        await expect(command("Finish"), "Finish shows before a point is placed").toHaveCount(0);
+        await expect(command("Cancel"), "Cancel shows before a point is placed").toHaveCount(0);
+        await input.touch([await stableCenter(shapes)]);
+        await expect(menu).toHaveCount(0);
+
+        // Three points of an open path; the source stays until Finish.
+        for (const point of [at(2, 2), at(6, 2), at(6, 5)]) await input.penStroke([point]);
+        assert.equal(await source(), authored, "The source changed before Finish");
+        await openMenu("with three points placed");
+        await expect(command("Cancel")).toBeVisible();
+        await input.touch([await stableCenter(command("Finish"))]);
+        await expect(menu, "Finish left the menu open").toHaveCount(0);
+        await expect.poll(async () => (await draws()).length, { message: "Finish did not write the path" }).toBe(3);
+        const path = (await draws())[2];
+        assert.match(path, /\(2,2\)\s*--\s*\(6,2\)\s*--\s*\(6,5\)\s*;$/, path);
+        const withPath = await source();
+        await editorReady(page);
+
+        // Cancel drops the placed points and writes nothing; the next taps start a new path.
+        for (const point of [at(2, 7), at(5, 7)]) await input.penStroke([point]);
+        await openMenu("with two points placed");
+        await input.touch([await stableCenter(command("Cancel"))]);
+        await expect(menu, "Cancel left the menu open").toHaveCount(0);
+        await openMenu("after Cancel");
+        await expect(command("Cancel"), "Cancel shows after the construction was dropped").toHaveCount(0);
+        await input.touch([await stableCenter(shapes)]);
+        await expect(menu).toHaveCount(0);
+        assert.equal(await source(), withPath, "Cancel changed the source");
+        for (const point of [at(8, 6), at(8, 9)]) await input.penStroke([point]);
+        await openMenu("with the second path placed");
+        await input.touch([await stableCenter(command("Finish"))]);
+        await expect.poll(async () => (await draws()).length, { message: "Finish did not write the second path" }).toBe(4);
+        const second = (await draws())[3];
+        assert.match(second, /\(8,6\)\s*--\s*\(8,9\)\s*;$/, second);
+        // One Undo takes back the path.
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+        await expect.poll(source, { message: "Undo did not take back the path" }).toBe(withPath);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `Undo during a construction takes back its last point and leaves the document, in ${tablet.name}`,
+      async function () {
+        // FR-034, US4/AC3: with points of a construction placed, the document bar's Undo removes the last
+        // placed point and the source stays; with no point left the construction has ended, and Undo acts on
+        // the document again.
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const source = async () => (await editorDebug(page)).source;
+        const draws = async () =>
+          (await source())
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("\\draw"));
+        const angle = (raw: string) => {
+          const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
+          return pair
+            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + Number(pair[3] ?? 0)
+            : Number(raw.replace(/[{}]/g, ""));
+        };
+        const sweep = (arc: string) =>
+          angle(/end angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]) -
+          angle(/start angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
+        const undo = page.getByRole("button", { name: "Undo", exact: true });
+
+        // A circle is in the document, so the document has a step that Undo could take back.
+        await chooseShape(frame, input, "Circle on a diameter");
+        await input.penStroke([at(-6, -2)]);
+        await input.penStroke([at(-2, -2)]);
+        await expect.poll(async () => (await draws()).length, { message: "The circle is not in the source" }).toBe(3);
+        const withCircle = await source();
+
+        // Two points of the arc through three points; Undo removes the second, and the source stays.
+        await chooseShape(frame, input, "Arc through three points");
+        await input.penStroke([at(6, 0)]);
+        await input.penStroke([at(8, 2)]);
+        await expect(undo, "Undo is disabled during a construction").toBeEnabled();
+        await undo.click();
+        await page.waitForTimeout(300);
+        assert.equal(await source(), withCircle, "Undo during the construction changed the source");
+        // The construction still has its first point: two more taps complete the arc, through the new second point.
+        await input.penStroke([at(8, -2)]);
+        assert.equal(await source(), withCircle, "The tap after Undo was not taken as the second point");
+        await input.penStroke([at(10, 0)]);
+        await expect.poll(async () => (await draws()).length, { message: "The arc is not in the source" }).toBe(4);
+        const arc = (await draws())[3];
+        assert.match(arc, /\(6,0\) arc\[/, arc);
+        assert.ok(
+          Math.abs(sweep(arc) - 180) < 1e-6,
+          `The arc sweeps ${sweep(arc)} degrees, not 180 through (8,-2): ${arc}`,
+        );
+        const withArc = await source();
+
+        // Two points again; two Undos remove both, the construction ends, and the source stays.
+        await input.penStroke([at(2, 6)]);
+        await input.penStroke([at(4, 8)]);
+        await undo.click();
+        await undo.click();
+        await page.waitForTimeout(300);
+        assert.equal(await source(), withArc, "Two Undos during the construction changed the source");
+        // The next Undo acts on the document: it takes back the arc.
+        await undo.click();
+        await expect.poll(source, { message: "Undo after the construction ended did not take back the arc" }).toBe(withCircle);
+        await editorReady(page);
+        // No point of the ended construction is left: three taps make an arc from the first of them.
+        await input.penStroke([at(6, 0)]);
+        await input.penStroke([at(8, 2)]);
+        await input.penStroke([at(10, 0)]);
+        await expect.poll(async () => (await draws()).length, { message: "The arc after the ended construction is not in the source" }).toBe(4);
+        const fresh = (await draws())[3];
+        assert.match(fresh, /\(6,0\) arc\[/, fresh);
+        assert.ok(Math.abs(sweep(fresh) + 180) < 1e-6, `The arc sweeps ${sweep(fresh)} degrees, not -180: ${fresh}`);
       },
     );
   }
@@ -5393,6 +5687,69 @@ describe("standalone workbench host boundary", function () {
           );
         }
         await expect(toolbarItem(frame, "Lasso").locator("svg.lucide-lasso")).toHaveCount(1);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `each menu of the document bar opens under its own button and holds its commands, in ${tablet.name}`,
+      async function () {
+        // The lists of File, Export, and More opened at the trailing end of the bar, away from their
+        // buttons (audit, "File, Export, and other menus are not attached to their buttons"; FR-002).
+        // The document bar holds the title menu, Share and Export, and More (contracts/surfaces.md).
+        await editorReady(page);
+        const input = await TabletInput.attach(page);
+        const names = (list: Locator) => list.getByRole("menuitem").allInnerTexts();
+        const window = page.viewportSize()!;
+        const menus = [
+          ["title", ["New tikzpicture", "New tikzcd", "Open…", "Save", "Save As…"]],
+          ["share", ["Copy TikZ", "PDF…", "SVG…", "PNG…"]],
+          ["more", ["Settings…"]],
+        ] as const;
+        await expect(barMenu("title").button, "The title is not the file name").toHaveText("Unsaved Document");
+        await expect(barMenu("share").button).toHaveAccessibleName("Share and Export");
+        await expect(barMenu("more").button).toHaveAccessibleName("More");
+        for (const [key, commands] of menus) {
+          const menu = barMenu(key);
+          await input.touch([await stableCenter(menu.button)]);
+          await expect(menu.list, `A tap on the button of ${key} did not open its list`).toBeVisible();
+          await expect(menu.button).toHaveAttribute("aria-expanded", "true");
+          assert.deepEqual(await names(menu.list), [...commands], `The commands of ${key}`);
+          const button = (await menu.button.boundingBox())!;
+          const list = (await menu.list.boundingBox())!;
+          assert.ok(
+            list.y >= button.y + button.height && list.y - (button.y + button.height) <= 12,
+            `The list of ${key} does not start under its button: ${JSON.stringify({ button, list })}`,
+          );
+          assert.ok(
+            Math.abs(list.x - button.x) <= 1 || Math.abs(list.x + list.width - (button.x + button.width)) <= 1,
+            `The list of ${key} shares no side with its button: ${JSON.stringify({ button, list })}`,
+          );
+          assert.ok(
+            list.x >= 0 && list.x + list.width <= window.width && list.y + list.height <= window.height,
+            `The list of ${key} leaves the window: ${JSON.stringify(list)}`,
+          );
+          for (const item of await menu.list.getByRole("menuitem").all()) {
+            const box = (await item.boundingBox())!;
+            assert.ok(box.height >= 44, `A command of ${key} is ${box.height} px high`);
+          }
+          await storyScreenshot(page, `document-bar-menu-${key}-${tablet.name}`);
+          // A second tap on the button closes the list.
+          await input.touch([await stableCenter(menu.button)]);
+          await expect(menu.list, `A second tap on the button of ${key} did not close its list`).toHaveCount(0);
+          await expect(menu.button).toHaveAttribute("aria-expanded", "false");
+        }
+        // Opening one menu closes the other.
+        await input.touch([await stableCenter(barMenu("title").button)]);
+        await input.touch([await stableCenter(barMenu("more").button)]);
+        await expect(barMenu("more").list).toBeVisible();
+        await expect(barMenu("title").list, "The title menu stayed open beside More").toHaveCount(0);
+        // A choice closes the list.
+        await input.touch([await stableCenter(barMenuItem("Settings…"))]);
+        await expect(barMenu("more").list, "The choice left More open").toHaveCount(0);
+        await expect(settingsDialog()).toBeVisible();
       },
     );
   }
