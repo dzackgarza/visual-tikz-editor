@@ -22,6 +22,10 @@ The fork boundary is intentionally narrow:
   bridge keeps every event of a press on the diagram from Quiver, so that
   press makes no vertex and changes no selection. A press on a control of
   Quiver reaches that control.
+- `zettlr-quiver:zoom` (`factor`) multiplies Quiver's scale, within its own
+  limits, and zooms about the centre of its view, as Quiver's wheel with
+  Shift does. The host sends it for each step of a pinch on a touchpad in
+  the desktop app, where WebKitGTK gives a page no event of the pinch.
 - Diagram changes are emitted from Quiver's own history/autosave mutation
   boundary. Zettlr does not infer edits from Quiver's DOM. A source request is
   answered after the pending change is posted, so only `zettlr-quiver:change`

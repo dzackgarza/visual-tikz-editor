@@ -69,6 +69,7 @@ Settings window.
 | to Quiver | `zettlr-quiver:theme` | Sets the appearance (FR-005) |
 | to Quiver | `zettlr-quiver:display` | Fills the window |
 | to Quiver | `zettlr-quiver:host-popover` (`open`) | A menu of the shell opened or closed. While one is open, the next press in the frame is a closing press: the frame sends `zettlr-quiver:host-popover-dismissed`. A closing press on the diagram has no other effect; a closing press on a control of Quiver also acts on that control |
+| to Quiver | `zettlr-quiver:zoom` (`factor`) | One step of a pinch on a touchpad in the desktop app, where WebKitGTK gives the page no event of the pinch. Quiver multiplies its scale by `factor` and zooms about the centre of its view, as its own wheel with Shift does |
 | from Quiver | `zettlr-quiver:ready`, `zettlr-quiver:loaded` | The frame is ready; the diagram is shown |
 | from Quiver | `zettlr-quiver:change` | An edit, with the source: one step of the document history |
 | from Quiver | `zettlr-quiver:undo-request`, `zettlr-quiver:redo-request` | The Undo or Redo shortcut inside Quiver; the shell acts on the document history (FR-012b) |

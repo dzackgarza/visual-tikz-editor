@@ -4,9 +4,11 @@
 
 window.__ZETTLR_QUIVER_HOST__ = true;
 
-const [{ DOM }, { UI, load_katex }] = await Promise.all([
+const [{ DOM }, { UI, load_katex }, { CONSTANTS }, { clamp }] = await Promise.all([
     import("./dom.mjs"),
     import("./ui.mjs"),
+    import("./arrow.mjs"),
+    import("./ds.mjs"),
 ]);
 
 await load_katex();
@@ -216,6 +218,13 @@ window.addEventListener("message", (event) => {
         document.body.classList.toggle("zettlr-fullscreen", fullscreen);
     } else if (message.type === "zettlr-quiver:host-popover") {
         host_popover_open = message.open === true;
+    } else if (message.type === "zettlr-quiver:zoom") {
+        // One step of a pinch on a touchpad, which the host reports because WebKitGTK gives a page
+        // no event of it. Quiver's scale is a power of two, and Quiver zooms about its view, as
+        // its own wheel with Shift does.
+        if (typeof message.factor !== "number" || !(message.factor > 0)) return;
+        ui.pan_to(ui.view, clamp(CONSTANTS.MIN_ZOOM, ui.scale + Math.log2(message.factor), CONSTANTS.MAX_ZOOM));
+        ui.toolbar.update(ui);
     }
 });
 

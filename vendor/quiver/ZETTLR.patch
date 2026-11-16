@@ -606,19 +606,21 @@ index 0000000..3780c0b
 +</html>
 diff --git a/src/zettlr-host.mjs b/src/zettlr-host.mjs
 new file mode 100644
-index 0000000..9bba788
+index 0000000..334763c
 --- /dev/null
 +++ b/src/zettlr-host.mjs
-@@ -0,0 +1,301 @@
+@@ -0,0 +1,310 @@
 +// Zettlr host bridge for the vendored Quiver fork. This file deliberately
 +// contains no diagram-editing implementation: Quiver owns that. It only maps
 +// parent-window messages to Quiver's public import/export/macro/theme surfaces.
 +
 +window.__ZETTLR_QUIVER_HOST__ = true;
 +
-+const [{ DOM }, { UI, load_katex }] = await Promise.all([
++const [{ DOM }, { UI, load_katex }, { CONSTANTS }, { clamp }] = await Promise.all([
 +    import("./dom.mjs"),
 +    import("./ui.mjs"),
++    import("./arrow.mjs"),
++    import("./ds.mjs"),
 +]);
 +
 +await load_katex();
@@ -828,6 +830,13 @@ index 0000000..9bba788
 +        document.body.classList.toggle("zettlr-fullscreen", fullscreen);
 +    } else if (message.type === "zettlr-quiver:host-popover") {
 +        host_popover_open = message.open === true;
++    } else if (message.type === "zettlr-quiver:zoom") {
++        // One step of a pinch on a touchpad, which the host reports because WebKitGTK gives a page
++        // no event of it. Quiver's scale is a power of two, and Quiver zooms about its view, as
++        // its own wheel with Shift does.
++        if (typeof message.factor !== "number" || !(message.factor > 0)) return;
++        ui.pan_to(ui.view, clamp(CONSTANTS.MIN_ZOOM, ui.scale + Math.log2(message.factor), CONSTANTS.MAX_ZOOM));
++        ui.toolbar.update(ui);
 +    }
 +});
 +

@@ -35,7 +35,7 @@ The dock holds these controls in this order: Select, Lasso, Pen, Eraser, Geometr
 | Color | Sets the colour of its named target: new strokes, the selected stroke, the selected fill, or the bucket fill. |
 | Properties | Opens the fields of the selected object, or of the active tool when nothing is selected. A side panel in landscape; a bottom sheet in portrait. |
 
-The zoom readout opens Fit diagram, zoom presets, and the grid, ruler, guide, and output-bounds settings. With a mouse or a touchpad, the wheel with Ctrl and a two-finger pinch zoom about the pointer; Ctrl+= and Ctrl+− zoom about the centre of the canvas, and Ctrl+0 shows 100 %. The rulers measure whole centimetres from the figure's origin, and their label step and ticks follow the zoom as Inkscape's rulers do.
+The zoom readout opens Fit diagram, zoom presets, and the grid, ruler, guide, and output-bounds settings. With a mouse or a touchpad, the wheel with Ctrl and a two-finger pinch zoom about the pointer; Ctrl+= and Ctrl+− zoom about the centre of the canvas, and Ctrl+0 shows 100 %. A pinch also zooms the render view, about the pointer, and Quiver, about the centre of its view. The rulers measure whole centimetres from the figure's origin, and their label step and ticks follow the zoom as Inkscape's rulers do.
 
 ## Touch and pen
 

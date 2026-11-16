@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="viewerElement"
     class="tikz-figure-viewer"
     :class="{ dark: props.theme === 'dark' }"
   >
@@ -34,6 +35,7 @@ import Viewer from "viewerjs";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import "viewerjs/dist/viewer.css";
 import type { TikzWorkbenchTheme } from "../host";
+import { TOUCHPAD_PINCH, touchpadPinchOver } from "../touchpad-pinch";
 
 const props = withDefaults(
   defineProps<{
@@ -46,6 +48,7 @@ const props = withDefaults(
   },
 );
 
+const viewerElement = ref<HTMLDivElement | null>(null);
 const imageElement = ref<HTMLImageElement | null>(null);
 const sourceUri = ref(props.src);
 let viewer: Viewer | null = null;
@@ -235,6 +238,7 @@ onMounted(() => {
   if (image === null) {
     throw new Error("TikzFigureViewer mounted without its source image element");
   }
+  window.addEventListener(TOUCHPAD_PINCH, onTouchpadPinch);
 
   viewer = new Viewer(image, {
     // There is deliberately only one viewer mode in the workbench. Viewer.js' inline
@@ -322,7 +326,18 @@ watch(
   },
 );
 
+// A step of a pinch on a touchpad over the figure zooms it by the step's ratio, about the pointer.
+// Viewer.js takes a ratio above zero as that much more than 1 and one below zero as the inverse,
+// as its own pinch does, and a pivot in the pixels of its container (`zoom` and `zoomTo` in
+// viewerjs/dist/viewer.js).
+function onTouchpadPinch(event: Event): void {
+  const step = touchpadPinchOver(event, viewerElement.value?.querySelector(".viewer-container") ?? null);
+  if (viewer === null || step === null) return;
+  viewer.zoom(step.ratio >= 1 ? step.ratio - 1 : 1 - 1 / step.ratio, false, step.place);
+}
+
 onBeforeUnmount(() => {
+  window.removeEventListener(TOUCHPAD_PINCH, onTouchpadPinch);
   if (fitAnimationFrame !== null) {
     cancelAnimationFrame(fitAnimationFrame);
     fitAnimationFrame = null;
