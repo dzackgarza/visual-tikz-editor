@@ -320,7 +320,9 @@ describe("desktop package", function () {
     // "Zooming in or out makes the renderer fail": the keys zoom in and out, and the canvas draws.
     await app.enterEditor();
     await app.contact([{ x: 200, y: 100 }]);
-    for (const key of ["=", "=", "=", "-", "-", "-", "-", "-"]) await app.keys([key], KEY.control);
+    for (const key of ["=", "=", "=", "-", "-", "-", "-", "-"]) {
+      await app.keys([key], KEY.control);
+    }
     await expect.poll(zoomReadout, { message: "the zoom keys did not zoom" }).not.toBe("100%");
     assert.ok(await rendersCanvas(), "the canvas failed after the zoom keys");
   });

@@ -332,7 +332,9 @@ watch(
 // viewerjs/dist/viewer.js).
 function onTouchpadPinch(event: Event): void {
   const step = touchpadPinchOver(event, viewerElement.value?.querySelector(".viewer-container") ?? null);
-  if (viewer === null || step === null) return;
+  if (viewer === null || step === null) {
+    return;
+  }
   viewer.zoom(step.ratio >= 1 ? step.ratio - 1 : 1 - 1 / step.ratio, false, step.place);
 }
 

@@ -7,9 +7,13 @@
  * source pane during typing, keeps it.
  */
 export function focusLoadedFrame(frame: HTMLIFrameElement | null): void {
-  if (frame === null || !frame.checkVisibility({ visibilityProperty: true })) return;
+  if (frame === null || !frame.checkVisibility({ visibilityProperty: true })) {
+    return;
+  }
   const focused = document.activeElement;
-  if (focused !== null && focused !== document.body) return;
+  if (focused !== null && focused !== document.body) {
+    return;
+  }
   focusFrame(frame);
 }
 

@@ -32,9 +32,13 @@ export type TouchpadPinchStep = {
  * of the window. An element that is not shown has an empty box, so no step is over it.
  */
 export function touchpadPinchOver(event: Event, element: Element | null): TouchpadPinchStep | null {
-  if (element === null) return null;
+  if (element === null) {
+    return null;
+  }
   const { ratio, x, y } = touchpadPinchSchema.parse((event as CustomEvent<unknown>).detail);
   const box = element.getBoundingClientRect();
-  if (x < box.left || x >= box.right || y < box.top || y >= box.bottom) return null;
+  if (x < box.left || x >= box.right || y < box.top || y >= box.bottom) {
+    return null;
+  }
   return { ratio, place: { x: x - box.left, y: y - box.top } };
 }

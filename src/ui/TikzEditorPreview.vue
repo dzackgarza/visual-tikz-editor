@@ -175,14 +175,20 @@ function zoom(direction: "in" | "out" | "fit" | "selection" | "normal"): void {
 
 // The shell's Undo while a construction is in progress takes back its last placed point (FR-034).
 function undoConstruction(): void {
-  if (loaded.value) postToEditor({ action: "undo-construction" });
+  if (loaded.value) {
+    postToEditor({ action: "undo-construction" });
+  }
 }
 
 // A step of a pinch on a touchpad over the canvas zooms the figure by its ratio, about the pointer.
 function onTouchpadPinch(event: Event): void {
-  if (!loaded.value) return;
+  if (!loaded.value) {
+    return;
+  }
   const step = touchpadPinchOver(event, frame.value);
-  if (step !== null) postToEditor({ action: "zoom", factor: step.ratio, at: step.place });
+  if (step !== null) {
+    postToEditor({ action: "zoom", factor: step.ratio, at: step.place });
+  }
 }
 
 // One popover at a time across shell and canvas (FR-004): the shell's menu closes the canvas's.
@@ -197,7 +203,9 @@ function hostPopover(open: boolean): void {
 
 // Keyboard focus goes back to the canvas after a window over it closes (FR-062).
 function focus(): void {
-  if (frame.value) focusFrame(frame.value);
+  if (frame.value) {
+    focusFrame(frame.value);
+  }
 }
 
 defineExpose({ snapshot, currentSource, zoom, undoConstruction, dismissPopover, hostPopover, focus });

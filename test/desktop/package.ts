@@ -49,7 +49,9 @@ const PINCH_ENDED = /^touchpad: a pinch of \d+ updates ended$/gm;
 let touchpadLibrary: string | undefined;
 /** Builds `touchpad.c` against the GTK of this machine, once for a run. */
 function buildTouchpad(): string {
-  if (touchpadLibrary !== undefined) return touchpadLibrary;
+  if (touchpadLibrary !== undefined) {
+    return touchpadLibrary;
+  }
   const library = join(mkdtempSync(join(tmpdir(), "desktop-touchpad-")), "touchpad.so");
   const gtk = execFileSync("pkg-config", ["--cflags", "--libs", "gtk+-3.0"], { encoding: "utf8" }).trim().split(/\s+/);
   execFileSync("cc", ["-shared", "-fPIC", "-Wall", "-Wno-deprecated-declarations", "-o", library, resolve("test/desktop/touchpad.c"), ...gtk], {
@@ -243,7 +245,7 @@ export class DesktopApp {
        return { x: box.x, y: box.y };`,
     );
     await this.enterEditor();
-    const ended = async () => ((await this.launchLog()).match(PINCH_ENDED) ?? []).length;
+    const ended = async () => [...(await this.launchLog()).matchAll(PINCH_ENDED)].length;
     const before = await ended();
     await writeFile(this.touchpadFile, `${frame.x + centre.x + at.x} ${frame.y + centre.y + at.y} ${scales.join(" ")}\n`);
     await expect.poll(ended, { message: "the application did not take the pinch" }).toBe(before + 1);

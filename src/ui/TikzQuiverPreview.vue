@@ -233,14 +233,18 @@ async function currentSource(signal: AbortSignal): Promise<string> {
 }
 // Keyboard focus goes back to Quiver after a window over it closes (FR-062).
 function focus(): void {
-  if (frame.value) focusFrame(frame.value);
+  if (frame.value) {
+    focusFrame(frame.value);
+  }
 }
 // A menu of the shell opened or closed: while one is open, the next press in Quiver closes it.
 // A step of a pinch on a touchpad over Quiver zooms its grid by the step's ratio. Quiver zooms
 // about the centre of its view, as for its own wheel with Shift.
 function onTouchpadPinch(event: Event): void {
   const step = touchpadPinchOver(event, frame.value);
-  if (hostReady.value && step !== null) postToQuiver({ type: "zettlr-quiver:zoom", factor: step.ratio });
+  if (hostReady.value && step !== null) {
+    postToQuiver({ type: "zettlr-quiver:zoom", factor: step.ratio });
+  }
 }
 
 function hostPopover(open: boolean): void {

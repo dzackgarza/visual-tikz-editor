@@ -58,6 +58,10 @@ declare global {
   interface Window {
     canvasProtocol: CanvasProtocol;
     receivedPen: PenChannels[];
+    /** Each state of the pen's mark and the count of drawn strokes, one entry for each change, in the canvas frame. */
+    inkStates: { mark: boolean; strokes: number }[];
+    /** The time from each lift of the pen to the next frame, in ms, in the canvas frame. */
+    liftTimes: number[];
   }
 }
 
@@ -927,7 +931,9 @@ describe("standalone workbench host boundary", function () {
       const opened = await layoutBox(figure);
       // The pointer is on a place of the figure a quarter across and three quarters down.
       const place = { x: opened.x + opened.width / 4, y: opened.y + (opened.height * 3) / 4 };
-      for (const ratio of [1.25, 1.2, 4 / 3]) await touchpadPinch({ ratio, ...place });
+      for (const ratio of [1.25, 1.2, 4 / 3]) {
+        await touchpadPinch({ ratio, ...place });
+      }
       await expect
         .poll(async () => (await layoutBox(figure)).width / opened.width, {
           message: "The pinch did not zoom the rendered figure to twice its size",
@@ -966,7 +972,9 @@ describe("standalone workbench host boundary", function () {
       return second - first;
     };
     const opened = await gap();
-    for (const ratio of [1.25, 1.2, 4 / 3]) await touchpadPinch({ ratio, ...place });
+    for (const ratio of [1.25, 1.2, 4 / 3]) {
+      await touchpadPinch({ ratio, ...place });
+    }
     await expect
       .poll(async () => (await gap()) / opened, { message: "The pinch did not zoom Quiver to twice its size" })
       .toBeCloseTo(2, 2);
@@ -2178,7 +2186,9 @@ describe("standalone workbench host boundary", function () {
         const opened = { scale: await scale(), circle: await circle() };
 
         // Three steps of a pinch whose fingers end at twice their distance, with the pointer on the circle's centre.
-        for (const ratio of [1.25, 1.2, 4 / 3]) await pinch({ ratio, x: opened.circle.x, y: opened.circle.y });
+        for (const ratio of [1.25, 1.2, 4 / 3]) {
+          await pinch({ ratio, x: opened.circle.x, y: opened.circle.y });
+        }
         await expect
           .poll(async () => (await scale()) / opened.scale, { message: "The pinch did not zoom the figure to twice its size" })
           .toBeCloseTo(2, 5);
@@ -2255,10 +2265,9 @@ describe("standalone workbench host boundary", function () {
           // The next stroke starts when the canvas has drawn this one, so each lift is timed alone.
           await expect.poll(drawn, { message: `The canvas did not draw stroke ${stroke + 1}` }).toBe(stroke + 1);
         }
-        const { states, lifts } = await frame.locator("body").evaluate(() => {
-          const page = window as unknown as { inkStates: { mark: boolean; strokes: number }[]; liftTimes: number[] };
-          return { states: page.inkStates, lifts: page.liftTimes };
-        });
+        const { states, lifts } = await frame
+          .locator("body")
+          .evaluate(() => ({ states: window.inkStates, lifts: window.liftTimes }));
         // No frame between a stroke's mark and the stroke itself shows neither.
         const gaps = states.filter((state, index) => index > 0 && !state.mark && states[index - 1].mark && state.strokes === states[index - 1].strokes);
         assert.deepEqual(gaps, [], `The ink left the canvas after a lift: ${JSON.stringify(states)}`);
@@ -2656,7 +2665,9 @@ describe("standalone workbench host boundary", function () {
             await input.penDown(from);
             for (let step = 1; step <= 6; step += 1) {
               await input.penMove({ x: from.x + ((to.x - from.x) * step) / 6, y: from.y + ((to.y - from.y) * step) / 6 });
-              if (step === 3) assert.deepEqual(await sentences(), [], `${name} shows a sentence during its gesture`);
+              if (step === 3) {
+                assert.deepEqual(await sentences(), [], `${name} shows a sentence during its gesture`);
+              }
             }
             await input.penUp(to);
           }
@@ -2748,7 +2759,9 @@ describe("standalone workbench host boundary", function () {
         await expect(menu).toHaveCount(0);
 
         // Three points of an open path; the source stays until Finish.
-        for (const point of [at(2, 2), at(6, 2), at(6, 5)]) await input.penStroke([point]);
+        for (const point of [at(2, 2), at(6, 2), at(6, 5)]) {
+          await input.penStroke([point]);
+        }
         assert.equal(await source(), authored, "The source changed before Finish");
         await openMenu("with three points placed");
         await expect(command("Cancel")).toBeVisible();
@@ -2761,7 +2774,9 @@ describe("standalone workbench host boundary", function () {
         await editorReady(page);
 
         // Cancel drops the placed points and writes nothing; the next taps start a new path.
-        for (const point of [at(2, 7), at(5, 7)]) await input.penStroke([point]);
+        for (const point of [at(2, 7), at(5, 7)]) {
+          await input.penStroke([point]);
+        }
         await openMenu("with two points placed");
         await input.touch([await stableCenter(command("Cancel"))]);
         await expect(menu, "Cancel left the menu open").toHaveCount(0);
@@ -2770,7 +2785,9 @@ describe("standalone workbench host boundary", function () {
         await input.touch([await stableCenter(shapes)]);
         await expect(menu).toHaveCount(0);
         assert.equal(await source(), withPath, "Cancel changed the source");
-        for (const point of [at(8, 6), at(8, 9)]) await input.penStroke([point]);
+        for (const point of [at(8, 6), at(8, 9)]) {
+          await input.penStroke([point]);
+        }
         await openMenu("with the second path placed");
         await input.touch([await stableCenter(command("Finish"))]);
         await expect.poll(async () => (await draws()).length, { message: "Finish did not write the second path" }).toBe(4);
@@ -2831,7 +2848,7 @@ describe("standalone workbench host boundary", function () {
         const angle = (raw: string) => {
           const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
           return pair
-            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + Number(pair[3] ?? 0)
+            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + (pair[3] === undefined ? 0 : Number(pair[3]))
             : Number(raw.replace(/[{}]/g, ""));
         };
         const sweep = (arc: string) =>
@@ -10723,14 +10740,11 @@ describe("standalone workbench host boundary", function () {
         await expect(menu).toHaveCount(0);
         const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
         await penTap(await stableCenter(strip.getByRole("button", { name: "Duplicate", exact: true })));
-        await expect
-          .poll(async () => ((await editorDebug(page)).source.match(/circle/g) ?? []).length)
-          .toBe(2);
+        const circles = async () => [...(await editorDebug(page)).source.matchAll(/circle/g)].length;
+        await expect.poll(circles).toBe(2);
         await penTap(await stableCenter(strip.getByRole("button", { name: "More", exact: true })));
         await penTap(await stableCenter(menu.getByRole("menuitem", { name: "Delete", exact: true })));
-        await expect
-          .poll(async () => ((await editorDebug(page)).source.match(/circle/g) ?? []).length)
-          .toBe(1);
+        await expect.poll(circles).toBe(1);
       },
     );
   }
