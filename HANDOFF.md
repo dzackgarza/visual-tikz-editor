@@ -67,6 +67,22 @@ No stub is permitted. The user's use of the editor on a physical tablet is conti
 
 The rules behind A–J and the product decisions are in the [specification](specs/001-product-design/spec.md); [the interaction model](docs/interaction-model.md) and the [prior-art specifications](docs/prior-art/) hold where they agree with it. [COMPLAINTS.md](COMPLAINTS.md) holds the user's original complaints and two audits; a new report of one of them is a defect, whatever an earlier story showed.
 
+## Found in the core work and filed, 2026-11-16
+
+None is core by the rule above. Each has its issue and its task.
+
+| Issue | Task | Subject |
+| --- | --- | --- |
+| [#91](https://github.com/dzackgarza/visual-tikz-editor/issues/91) | T150 | The time from the pen's lift to the drawn stroke still grows by about 1 ms a stroke (61 ms to 138 ms over eighty strokes) |
+| [#92](https://github.com/dzackgarza/visual-tikz-editor/issues/92) | T151 | Exit left the title menu; decide whether the app has a quit command |
+| [#93](https://github.com/dzackgarza/visual-tikz-editor/issues/93) | T152 | The desktop story of the usability report failed once at the zoom readout, unexplained |
+| [#94](https://github.com/dzackgarza/visual-tikz-editor/issues/94) | T153 | The file stories and the desktop stories do not run unmodified on Ubuntu 24.04 |
+| [#95](https://github.com/dzackgarza/visual-tikz-editor/issues/95) | T154 | A figure that opens fitted is fitted a second time, about 8 % apart |
+| [#96](https://github.com/dzackgarza/visual-tikz-editor/issues/96) | T147 | A two-finger pinch on a touch screen is not verified |
+| [#97](https://github.com/dzackgarza/visual-tikz-editor/issues/97) | T155 | No story places a Node shape, a Matrix, or an Image by pen |
+| [#98](https://github.com/dzackgarza/visual-tikz-editor/issues/98) | T156 | The kept ink needs the Pen tool; an added node skips the TeX check once (read from the code) |
+| [#99](https://github.com/dzackgarza/visual-tikz-editor/issues/99) | T157 | The lessons of these sessions are not in the agent memory vault |
+
 ## How the work goes
 
 1. Take the core work in its order. Work 1 and work 2 touch different code and can run together. Work 3 starts when a run of the head has completed (`gh run list --workflow development.yml --branch main --limit 1`); read each failed story's trace from the run's `test-results` artifact ([Development](docs/development.md#tests)).
@@ -87,4 +103,4 @@ This file is the handoff. A handoff kept under `.tmp/` is not in the repository 
 | Pencil double tap and squeeze | They do nothing on the canvas, as the platform limit predicts ([research](docs/research/pencil-hardware-gestures.md)) | Open an issue for the observed action. |
 | A real pen in the desktop app (T129) | The hold on a point of a selected stroke moves the point; a double tap by pen or finger enters point editing | Open an issue with the contact and the timing. |
 | A pinch on a touchpad in the desktop app | The view under the pointer zooms by the ratio of the fingers, and the window keeps its size. The stories give the pinch as GDK's touchpad events, on X11 and on Wayland | Open an issue with the session type and the launch log. |
-| A two-finger pinch on a touch screen in the desktop app (T147) | The canvas zooms by its own touch pinch, and the window keeps its size. Not verified: no touch device exists in the stories' display | Open an issue: WebKitGTK's zoom gesture also takes touch sequences. |
+| A two-finger pinch on a touch screen in the desktop app (T147, [#96](https://github.com/dzackgarza/visual-tikz-editor/issues/96)) | The canvas zooms by its own touch pinch, and the window keeps its size. Not verified: no touch device exists in the stories' display | Open an issue: WebKitGTK's zoom gesture also takes touch sequences. |
