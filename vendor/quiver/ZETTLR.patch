@@ -606,10 +606,10 @@ index 0000000..3780c0b
 +</html>
 diff --git a/src/zettlr-host.mjs b/src/zettlr-host.mjs
 new file mode 100644
-index 0000000..334763c
+index 0000000..ad6271e
 --- /dev/null
 +++ b/src/zettlr-host.mjs
-@@ -0,0 +1,310 @@
+@@ -0,0 +1,318 @@
 +// Zettlr host bridge for the vendored Quiver fork. This file deliberately
 +// contains no diagram-editing implementation: Quiver owns that. It only maps
 +// parent-window messages to Quiver's public import/export/macro/theme surfaces.
@@ -896,6 +896,14 @@ index 0000000..334763c
 +// Escape must work while focus is inside the iframe; keyboard events do not
 +// bubble across frame boundaries.
 +window.addEventListener("keydown", (event) => {
++    // Escape closes an open menu of the host, as it does with the focus in the host.
++    if (event.key === "Escape" && host_popover_open) {
++        host_popover_open = false;
++        event.preventDefault();
++        event.stopImmediatePropagation();
++        post({ type: "zettlr-quiver:host-popover-dismissed" });
++        return;
++    }
 +    if (event.key === "Escape" && fullscreen) {
 +        event.preventDefault();
 +        event.stopImmediatePropagation();

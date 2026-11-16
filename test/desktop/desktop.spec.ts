@@ -200,6 +200,131 @@ describe("desktop package", function () {
       .toBe(4);
   });
 
+  it("shows none of the observations of the usability report of 2026-11-12", async function () {
+    // specs/001-product-design/audit.md, "The report": eleven observations of the running app that a
+    // predicate can read (SC-001). The twelfth, that the interface departs from the patterns of notebook
+    // applications, is the subject of the specification as a whole.
+    app = await DesktopApp.start();
+    await editorReady();
+    /** The accessible names of the visible controls of the current frame that match `selector`. */
+    const names = (selector: string) =>
+      app.script(
+        z.array(z.string()),
+        `return [...document.querySelectorAll(arguments[0])].filter((control) => control.getClientRects().length > 0)
+           .map((control) => (control.getAttribute('aria-label') ?? control.textContent ?? '').trim());`,
+        [selector],
+      );
+    /** The visible lines of text of the current frame. */
+    const lines = () =>
+      app.script(z.array(z.string()), "return document.body.innerText.split('\\n').map((line) => line.trim()).filter(Boolean);");
+    /** A line that teaches is a sentence; a label is short and has no full stop. */
+    const sentences = async () => (await lines()).filter((line) => line.length > 30 || /[.!?]$/.test(line));
+    const count = (selector: string) =>
+      app.script(z.number(), "return [...document.querySelectorAll(arguments[0])].filter((item) => item.getClientRects().length > 0).length;", [selector]);
+    const box = (selector: string) =>
+      app.script(
+        z.object({ left: z.number(), right: z.number(), top: z.number(), bottom: z.number() }),
+        "const box = document.querySelector(arguments[0]).getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };",
+        [selector],
+      );
+
+    // "The drawing toolbar holds a Layers button"; "Settings is a word, not an icon"; "'New strokes' beside a
+    // colour selector": the toolbar holds the tools and the colours, each by its symbol, and no word.
+    const toolbar = await names("[data-diagram-tools] button, [data-diagram-tools] [role=radio]");
+    assert.deepEqual(
+      toolbar.map((name) => name.replace(/:.*$/, "")),
+      ["Lasso", "Pen", "Eraser", "Shapes", "Text", "Fill", "Colour 1", "Colour 2", "Colour 3", "Add colour"],
+    );
+    assert.equal(
+      await app.script(z.string(), "return document.querySelector('[data-diagram-tools]').innerText.trim();"),
+      "",
+      "the drawing toolbar shows a word",
+    );
+    // "The lasso icon is a rectangle": the symbol is a loop with its tail, drawn as paths, and holds no rectangle.
+    assert.deepEqual(
+      await app.script(
+        z.object({ rectangles: z.number(), paths: z.number() }),
+        `const icon = document.querySelector('[data-diagram-tools] [aria-label="Lasso"] svg');
+         return { rectangles: icon.querySelectorAll('rect').length, paths: icon.querySelectorAll('path').length };`,
+      ),
+      { rectangles: 0, paths: 2 },
+    );
+    // "The default zoom is 15 %": an untitled figure opens at printed size.
+    assert.equal(await zoomReadout(), "100%");
+    // "The app teaches at every step; the eraser has help text": no surface shows a sentence.
+    assert.deepEqual(await sentences(), [], "the canvas shows a sentence");
+    await app.press("Eraser");
+    await app.press("Eraser");
+    await expect.poll(toolOptions, { message: "the Eraser's menu did not open" }).toBe(1);
+    assert.deepEqual(await sentences(), [], "the Eraser's menu shows a sentence");
+    // "Buttons open a popup but a second press does not close it".
+    await app.press("Eraser");
+    await expect.poll(toolOptions, { message: "a second press on the Eraser did not close its menu" }).toBe(0);
+    const zoomOpen = () =>
+      app.script(z.string().nullable(), "return document.querySelector('button[aria-label=\"Zoom and display\"]').getAttribute('aria-expanded');");
+    await app.press("Zoom and display");
+    await expect.poll(zoomOpen, { message: "the zoom readout did not open its popover" }).toBe("true");
+    await app.press("Zoom and display");
+    await expect.poll(zoomOpen, { message: "a second press on the zoom readout did not close its popover" }).toBe("false");
+
+    // "Properties and Layers open in one popup": each is a panel of its own, one at a time.
+    const panels = async () => {
+      await app.enterEditor();
+      // A panel is an aside that its title names.
+      const open = await app.script(
+        z.array(z.string()),
+        `return [...document.querySelectorAll('aside')].filter((panel) => panel.getClientRects().length > 0)
+           .map((panel) => document.getElementById(panel.getAttribute('aria-labelledby')).textContent.trim());`,
+      );
+      await app.enterWindow();
+      return open;
+    };
+    await app.enterWindow();
+    await app.press("Layers");
+    await expect.poll(panels, { message: "Layers did not open its panel" }).toEqual(["Layers"]);
+    await app.press("Properties");
+    await expect.poll(panels, { message: "Properties did not replace Layers" }).toEqual(["Properties"]);
+    await app.press("Properties");
+    await expect.poll(panels, { message: "a second press on Properties did not close its panel" }).toEqual([]);
+
+    // "A Dark Theme button": the document bar holds the title, the history, the panels, and the two menus.
+    assert.deepEqual(await names(".document-bar button"), [
+      "Unsaved Document",
+      "Undo",
+      "Redo",
+      "Layers",
+      "Properties",
+      "Share and Export",
+      "More",
+    ]);
+    // "File, Export, and other menus are not attached to their buttons": each list opens under its button,
+    // and a second press closes it.
+    for (const [menu, button] of [["title", "Unsaved Document"], ["share", "Share and Export"], ["more", "More"]] as const) {
+      const list = `.document-bar [data-menu="${menu}"] [role="menu"]`;
+      await app.press(button);
+      await expect.poll(() => count(list), { message: `${button} did not open its list` }).toBe(1);
+      const anchor = await box(`.document-bar [data-menu="${menu}"] > button`);
+      const opened = await box(list);
+      assert.ok(
+        opened.top >= anchor.bottom && opened.top - anchor.bottom <= 12 &&
+          (Math.abs(opened.left - anchor.left) <= 1 || Math.abs(opened.right - anchor.right) <= 1),
+        `the list of ${button} is not under its button: ${JSON.stringify({ anchor, opened })}`,
+      );
+      await app.press(button);
+      await expect.poll(() => count(list), { message: `a second press on ${button} did not close its list` }).toBe(0);
+    }
+    // "A tikzpicture document can switch to Quiver, and long text explains why Quiver is unavailable".
+    assert.deepEqual(await names(".view-rail button"), ["Code: left sidebar", "Preview: right sidebar", "Canvas: right sidebar"]);
+    assert.deepEqual(await sentences(), [], "the window shows a sentence");
+
+    // "Zooming in or out makes the renderer fail": the keys zoom in and out, and the canvas draws.
+    await app.enterEditor();
+    await app.contact([{ x: 200, y: 100 }]);
+    for (const key of ["=", "=", "=", "-", "-", "-", "-", "-"]) await app.keys([key], KEY.control);
+    await expect.poll(zoomReadout, { message: "the zoom keys did not zoom" }).not.toBe("100%");
+    assert.ok(await rendersCanvas(), "the canvas failed after the zoom keys");
+  });
+
   it("zooms the figure by a touchpad pinch, about the place of the pinch, and keeps the window at its size", async function () {
     // WebKitGTK answers a touchpad pinch itself: it magnifies the page, up to three times, and the page
     // gets no event of it (ViewGestureController::setMagnification; issue #18).
@@ -224,6 +349,18 @@ describe("desktop package", function () {
          return { x: box.x + box.width / 2 - (canvas.x + canvas.width / 2), y: box.y + box.height / 2 - (canvas.y + canvas.height / 2), width: box.width };`,
       );
     await expect.poll(async () => (await circle()).width, { message: "the canvas does not show the figure" }).toBeGreaterThan(100);
+    // The figure opens fitted to the canvas, and the fit follows the canvas until its layout has settled.
+    let read = Number.NaN;
+    await expect
+      .poll(
+        async () => {
+          const before = read;
+          read = await canvasScale();
+          return read === before;
+        },
+        { intervals: [400], message: "the opening view did not settle" },
+      )
+      .toBe(true);
     const opened = { scale: await canvasScale(), circle: await circle() };
 
     // The fingers move apart to twice their distance, with the pointer on the centre of the first circle.

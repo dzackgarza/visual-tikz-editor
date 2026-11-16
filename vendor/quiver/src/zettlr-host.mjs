@@ -284,6 +284,14 @@ window.addEventListener("zettlr-quiver-redo-request", () => post({ type: "zettlr
 // Escape must work while focus is inside the iframe; keyboard events do not
 // bubble across frame boundaries.
 window.addEventListener("keydown", (event) => {
+    // Escape closes an open menu of the host, as it does with the focus in the host.
+    if (event.key === "Escape" && host_popover_open) {
+        host_popover_open = false;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        post({ type: "zettlr-quiver:host-popover-dismissed" });
+        return;
+    }
     if (event.key === "Escape" && fullscreen) {
         event.preventDefault();
         event.stopImmediatePropagation();

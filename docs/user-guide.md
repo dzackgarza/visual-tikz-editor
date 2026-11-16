@@ -4,7 +4,7 @@ This guide describes the standalone editor's controls. The [interaction model](i
 
 ## Documents
 
-The **File** menu holds New tikzpicture, New tikzcd, Open, Save, and Save As. A launch without a file opens an untitled tikzpicture. Each kind opens its own view:
+The document bar shows the file name. A press on the name opens the title menu: New tikzpicture, New tikzcd, Open…, Save, and Save As…. A launch without a file opens an untitled tikzpicture. Each kind opens its own view:
 
 | Item | View that opens |
 | --- | --- |
@@ -15,7 +15,7 @@ Each accepted edit to a saved file writes the file. An untitled diagram keeps a 
 
 **Properties** in the document bar shows the selected objects. With nothing selected, it shows the figure: its X and Y scale, the size of one lattice step, and its bounds.
 
-**Copy source** copies the TikZ source to the clipboard without saving the file. **More › Settings…** › Appearance sets light, dark, or the system's appearance. In the dark appearance, the canvas shows lines and text in the default colour as light; the source does not change.
+**Share and Export › Copy TikZ** copies the TikZ source to the clipboard without saving the file. **More › Settings…** › Appearance sets light, dark, or the system's appearance. In the dark appearance, the canvas shows lines and text in the default colour as light; the source does not change.
 
 ## Views
 
@@ -93,7 +93,7 @@ A layer is a named top-level TikZ `scope`. In **Layers**, you can create and ren
 Settings has three categories: canvas settings, named colour collections, and keyboard shortcuts. **Keyboard shortcuts** lists every command under its menu ("Align: Left", "View: Grid") with its keys. Type in **Find command** to filter by name or key, or turn on **Record keys** and press keys to find the command that has them. Press a row and then the new shortcut; the row shows "Press the new shortcut" while it records, and Escape cancels. When another command has the keys, an alert names it, and Enter moves the keys to this command and removes them from that one. Right-click or hold a row for **Remove Shortcut** and, on a changed row, **Reset Shortcut**; **Reset all shortcuts** restores the whole set. Settings and shortcuts persist across restarts.
 ## Export
 
-**Export** compiles each figure in the source with TeX:
+**Share and Export** holds PDF…, SVG…, and PNG…. Each compiles each figure in the source with TeX:
 
 | Format | Output |
 | --- | --- |

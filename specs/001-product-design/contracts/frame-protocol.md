@@ -20,6 +20,7 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `replace-source` | `source`, `changed` | Shows the source that Undo, Redo, or another view wrote; keeps the viewport and the tool (research R3). After Undo or Redo, `changed` holds the ranges of `source` that the step wrote, and the selection becomes the objects, and in Edit Points the points, that they touch (FR-054). After an edit in another view, `changed` is null; the selection keeps the objects that the figure still holds, and the point selection clears |
 | `dismiss-popover` | — | Closes the canvas popover, because the shell opened one (research R16) |
 | `host-popover` | `open` | A menu of the shell opened or closed. While one is open, the next press in the frame is a closing press: the frame sends `host-popover-dismissed`, and the canvas gives that press no other effect, except ink with the Pen or the Eraser |
+| `undo-construction` | — | The shell's Undo while the canvas reports a construction in progress: the canvas takes back the last placed point and leaves the source; with no point left the construction has ended (FR-034) |
 | `zoom` | `direction`: `in` \| `out` \| `fit` \| `selection` \| `normal`, or `scale`, or `factor` with `at` | The zoom commands of the readout ([surfaces](surfaces.md), Canvas controls; research R8). `factor` multiplies the present scale and keeps the point `at` of the frame in its place: a pinch on a touchpad in the desktop app, where WebKitGTK gives the page no event of the pinch |
 | `source`, `snapshot` | — | Reads the source or a rendered snapshot |
 | `keyboard` | `bottom` | The height of the on-screen keyboard over the frame |
@@ -38,7 +39,8 @@ Every canvas command carries `sessionId`, `revision`, and `requestId`, and gets 
 | `selection` | `empty` | Properties shows the figure when the selection is empty (FR-060a) |
 | `panel` | `panel`: `layers` \| `properties` \| `null` | The panel that is open, after any change, including its own close button |
 | `popover-opened` | — | The canvas opened a popover; the shell closes its own (research R16) |
-| `host-popover-dismissed` | — | A press in the frame while a menu of the shell is open; the shell closes that menu |
+| `host-popover-dismissed` | — | A press in the frame, or Escape with the focus in the frame, while a menu of the shell is open; the shell closes that menu |
+| `construction` | `active` | Whether a construction has a placed point. While it has, the shell's Undo sends `undo-construction` and is enabled; otherwise Undo acts on the document history (FR-034, FR-012b) |
 | `settings-request` | — | The Settings shortcut inside the canvas; the shell opens the Settings window (FR-062) |
 | `persistence-save` | `key`, `value` | A preference to keep outside the source, among them Settings › Appearance (FR-062) |
 | `view-state` | `state`: figure, selection, tool, view (the scale and the figure point at the centre of the canvas, as Inkscape keeps a document's zoom and centre), Zoom to Fit, geometry interpretation, and the locked and hidden statements (each its span and text; data-model Layer) | The settled view of the loaded file; the workbench keeps it in `$XDG_STATE_HOME/visual-tikz-editor/view-state.json`, keyed by file path, and sends it in the next `load` of that file (FR-040, FR-063) |
@@ -74,6 +76,6 @@ Settings window.
 | from Quiver | `zettlr-quiver:change` | An edit, with the source: one step of the document history |
 | from Quiver | `zettlr-quiver:undo-request`, `zettlr-quiver:redo-request` | The Undo or Redo shortcut inside Quiver; the shell acts on the document history (FR-012b) |
 | from Quiver | `zettlr-quiver:save`, `zettlr-quiver:close-request`, `zettlr-quiver:error` | Save, close, and failure |
-| from Quiver | `zettlr-quiver:host-popover-dismissed` | A press in the frame while a menu of the shell is open; the shell closes that menu |
+| from Quiver | `zettlr-quiver:host-popover-dismissed` | A press in the frame, or Escape with the focus in the frame, while a menu of the shell is open; the shell closes that menu |
 
 Inside the shell, Quiver's toolbar shows no Undo, Redo, Save, autosave, theme, or About (research R3).

@@ -1,6 +1,20 @@
 import { z } from 'zod';
 
 const coordinate = z.number();
+const sampleSchema = z.object({
+  x: coordinate, y: coordinate, time: coordinate,
+  pressure: coordinate.optional(), altitude: coordinate.optional(),
+  azimuth: coordinate.optional(), roll: coordinate.optional(),
+  hoverHeight: coordinate.optional(), tiltX: coordinate.optional(), tiltY: coordinate.optional(),
+  buttons: z.number().int().nonnegative().optional(),
+  capabilities: z.number().int().nonnegative().optional(),
+  id: z.number().int().nonnegative().optional(),
+  tool: z.number().int().nonnegative().optional(),
+  phase: z.number().int().nonnegative().optional(), predicted: z.boolean().optional(),
+}).strict();
+type Sample = z.infer<typeof sampleSchema>;
+const SAMPLE_FIELDS = Object.keys(sampleSchema.shape) as (keyof Sample)[];
+
 export const originalStrokeSchema = z.object({
   key: z.string().regex(/^[A-Za-z0-9_-]+$/),
   /** The Pen preset as the toolbar holds it: an xcolor expression such as `red!50!blue`, or a picker colour (data-model Colour). */
@@ -13,17 +27,7 @@ export const originalStrokeSchema = z.object({
   lineStyle: z.enum(['dashed', 'dotted']).optional(),
   /** The pen's smoothing in centimetres, present only when positive; the drawing smooths the samples by it. */
   smoothing: z.number().positive().optional(),
-  samples: z.array(z.object({
-    x: coordinate, y: coordinate, time: coordinate,
-    pressure: coordinate.optional(), altitude: coordinate.optional(),
-    azimuth: coordinate.optional(), roll: coordinate.optional(),
-    hoverHeight: coordinate.optional(), tiltX: coordinate.optional(), tiltY: coordinate.optional(),
-    buttons: z.number().int().nonnegative().optional(),
-    capabilities: z.number().int().nonnegative().optional(),
-    id: z.number().int().nonnegative().optional(),
-    tool: z.number().int().nonnegative().optional(),
-    phase: z.number().int().nonnegative().optional(), predicted: z.boolean().optional(),
-  }).strict()).min(2),
+  samples: z.array(sampleSchema).min(2),
   outline: z.object({ path: z.string(), fill: z.string() }).strict().optional(),
   /** Named points the first and last samples are attached to, written as TikZ references so the stroke follows them. */
   ends: z.object({ start: z.string().optional(), end: z.string().optional() }).strict().optional(),
@@ -57,9 +61,32 @@ export const originalAssociationSchema = z.object({
   sourceIds: z.array(z.string()),
 });
 
+/**
+ * The samples of a stroke as its record holds them: the names of the readings once, then one row
+ * of values for each sample, with null for a reading that a sample lacks. A record that names
+ * each reading in each sample is three times as long, and a figure keeps a record for each
+ * stroke (#89). A record of an older build holds the samples as objects; both are read.
+ */
+const packedSamplesSchema = z.object({
+  fields: z.array(z.enum(SAMPLE_FIELDS as [keyof Sample, ...(keyof Sample)[]])),
+  rows: z.array(z.array(z.union([z.number(), z.boolean(), z.null()]))),
+}).strict();
+
+function packSamples(samples: readonly Sample[]): z.infer<typeof packedSamplesSchema> {
+  const fields = SAMPLE_FIELDS.filter((field) => samples.some((sample) => sample[field] !== undefined));
+  return { fields, rows: samples.map((sample) => fields.map((field) => sample[field] ?? null)) };
+}
+
+function unpackSamples(packed: z.infer<typeof packedSamplesSchema>): Record<string, number | boolean>[] {
+  return packed.rows.map((row) => Object.fromEntries(
+    packed.fields.flatMap((field, index) => (row[index] === null || row[index] === undefined ? [] : [[field, row[index]]])),
+  ));
+}
+
 /** Source comments travel through the existing source history and file storage. */
 export function strokeEnvelope(stroke: OriginalStroke, source: string): string {
-  return `% workbench-ink:${encodeURIComponent(JSON.stringify(stroke))}\n\\begin{scope}\n${source}\n\\end{scope}\n% workbench-ink-end:${stroke.key}\n`;
+  const record = JSON.stringify({ ...stroke, samples: packSamples(stroke.samples) });
+  return `% workbench-ink:${encodeURIComponent(record)}\n\\begin{scope}\n${source}\n\\end{scope}\n% workbench-ink-end:${stroke.key}\n`;
 }
 
 /**
@@ -76,13 +103,31 @@ export function withoutEmptyEnvelopes(source: string): string {
  * (Zod, "json(schema)": a JSON.parse failure becomes an issue; https://zod.dev/codecs).
  */
 const strokeRecordSchema = z.string().transform((text, context) => {
+  let value: z.core.util.JSONType;
   try {
-    return JSON.parse(decodeURIComponent(text)) as z.core.util.JSONType;
+    value = JSON.parse(decodeURIComponent(text)) as z.core.util.JSONType;
   } catch {
     context.issues.push({ code: 'custom', message: 'The record is not URI-encoded JSON', input: text });
     return z.NEVER;
   }
+  const packed = z.looseObject({ samples: packedSamplesSchema }).safeParse(value);
+  return packed.success ? { ...packed.data, samples: unpackSamples(packed.data.samples) } : value;
 }).pipe(originalStrokeSchema);
+
+/**
+ * The reading of each record text. The source keeps the text of a stroke's record unchanged while
+ * the stroke lives, and every render and gesture reads the records of the whole source, so a text
+ * is read once (#89).
+ */
+const readRecordTexts = new Map<string, ReturnType<typeof strokeRecordSchema.safeParse>>();
+function readRecordText(text: string): ReturnType<typeof strokeRecordSchema.safeParse> {
+  let read = readRecordTexts.get(text);
+  if (read === undefined) {
+    read = strokeRecordSchema.safeParse(text);
+    readRecordTexts.set(text, read);
+  }
+  return read;
+}
 
 type StrokeRecords = {
   entries: { stroke: OriginalStroke; from: number; to: number; drawingFrom: number; drawingTo: number }[];
@@ -90,11 +135,15 @@ type StrokeRecords = {
   unreadable: { from: number; reason: string }[];
 };
 
+/** The records of the last source that was read: the callers of one render read the same source. */
+let lastRecords: { source: string; records: StrokeRecords } | null = null;
+
 function strokeRecords(source: string): StrokeRecords {
+  if (lastRecords?.source === source) return lastRecords.records;
   const records: StrokeRecords = { entries: [], unreadable: [] };
   const keys = new Set<string>();
   for (const match of source.matchAll(/^[ \t]*% workbench-ink:([^\r\n]+)\r?\n/gm)) {
-    const read = strokeRecordSchema.safeParse(match[1]);
+    const read = readRecordText(match[1]);
     if (!read.success) { records.unreadable.push({ from: match.index, reason: read.error.issues[0].message }); continue; }
     const stroke = read.data;
     if (keys.has(stroke.key)) { records.unreadable.push({ from: match.index, reason: `A record before this one has the key ${stroke.key}` }); continue; }
@@ -109,6 +158,7 @@ function strokeRecords(source: string): StrokeRecords {
     const drawingTo = drawingFrom + end.index;
     records.entries.push({ stroke, from: match.index, to: drawingTo + end[0].length, drawingFrom, drawingTo });
   }
+  lastRecords = { source, records };
   return records;
 }
 

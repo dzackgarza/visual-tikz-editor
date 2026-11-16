@@ -46,6 +46,7 @@ import {
 } from "../quiver-bridge";
 import type { QuiverMacroProjection } from "../quiver-macros";
 import { TOUCHPAD_PINCH, touchpadPinchOver } from "../touchpad-pinch";
+import { focusFrame, focusLoadedFrame } from "../keyboard-focus";
 
 interface PreviewSession {
   id: string;
@@ -232,7 +233,7 @@ async function currentSource(signal: AbortSignal): Promise<string> {
 }
 // Keyboard focus goes back to Quiver after a window over it closes (FR-062).
 function focus(): void {
-  frame.value?.focus();
+  if (frame.value) focusFrame(frame.value);
 }
 // A menu of the shell opened or closed: while one is open, the next press in Quiver closes it.
 // A step of a pinch on a touchpad over Quiver zooms its grid by the step's ratio. Quiver zooms
@@ -255,6 +256,7 @@ function onMessage(event: MessageEvent<QuiverHostMessage>): void {
   if (message.type === "zettlr-quiver:ready") {
     hostReady.value = true;
     sendFullLoad();
+    focusLoadedFrame(frame.value);
     return;
   }
   if (message.sessionId !== session.value.id || message.revision !== session.value.revision) return;

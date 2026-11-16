@@ -27,6 +27,8 @@ export const hostCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...identity, action: z.literal('dismiss-popover') }),
   // A menu of the shell opened or closed. While one is open, the next press in the canvas closes it.
   z.object({ ...identity, action: z.literal('host-popover'), open: z.boolean() }),
+  // The shell's Undo while a construction is in progress: the canvas takes back its last placed point.
+  z.object({ ...identity, action: z.literal('undo-construction') }),
   z.object({ ...identity, action: z.literal('source') }),
   // A zoom command names one of: a direction; a scale, where 1 is printed size; or a factor of the
   // present scale with the point of the frame, in CSS pixels, that stays in its place.

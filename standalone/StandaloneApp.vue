@@ -1,28 +1,27 @@
 <template>
   <div class="tikz-standalone" :class="theme">
     <header class="document-bar">
-      <strong>{{ fileName }}</strong>
+      <div class="bar-menu title-menu" data-menu="title">
+        <button type="button" class="title-button" aria-haspopup="menu" :aria-expanded="openMenu === 'title'"
+          @click="toggleMenu('title')">{{ fileName }}</button>
+        <div v-if="openMenu === 'title'" class="bar-menu-items" role="menu" :aria-label="fileName" @click="closeMenuAtChoice">
+          <button type="button" role="menuitem" :disabled="document === null" @click="newDocument('tikzpicture')">New tikzpicture</button>
+          <button type="button" role="menuitem" :disabled="document === null" @click="newDocument('tikzcd')">New tikzcd</button>
+          <button type="button" role="menuitem" :disabled="document === null" @click="openDocument">Open…</button>
+          <button type="button" role="menuitem" :disabled="document === null || !dirty" @click="save">Save</button>
+          <button type="button" role="menuitem" :disabled="document === null" @click="saveAs">Save As…</button>
+        </div>
+      </div>
       <span class="tikz-standalone-status" role="status">{{ status }}</span>
       <span v-if="editorStatus !== ''" class="tikz-view-status">{{ editorStatus }}</span>
       <div class="history-controls">
-        <button type="button" aria-label="Undo" title="Undo" :disabled="!canUndo" @click="undoDocument">
+        <button type="button" aria-label="Undo" title="Undo" :disabled="!canUndo && !constructing" @click="undoDocument">
           <RiArrowGoBackLine aria-hidden="true" size="22" />
         </button>
         <button type="button" aria-label="Redo" title="Redo" :disabled="!canRedo" @click="redoDocument">
           <RiArrowGoForwardLine aria-hidden="true" size="22" />
         </button>
       </div>
-      <details class="file-menu" aria-label="File" @click="closeFileMenu" @toggle="onShellMenuToggle">
-        <summary>File</summary>
-        <div class="file-menu-items">
-          <button type="button" :disabled="document === null" @click="newDocument('tikzpicture')">New tikzpicture</button>
-          <button type="button" :disabled="document === null" @click="newDocument('tikzcd')">New tikzcd</button>
-          <button type="button" :disabled="document === null" @click="openDocument">Open…</button>
-          <button type="button" :disabled="document === null || !dirty" @click="save">Save</button>
-          <button type="button" :disabled="document === null" @click="saveAs">Save As…</button>
-          <button v-if="nativeWindow" type="button" @click="requestExit">Exit</button>
-        </div>
-      </details>
       <div class="panel-controls">
         <button type="button" aria-label="Layers" title="Layers" :disabled="target?.language !== 'tikz'"
           :aria-pressed="canvasPanel === 'layers'" @click="toggleCanvasPanel('layers')">
@@ -32,22 +31,28 @@
           :aria-pressed="canvasPanel === 'properties'" @click="toggleCanvasPanel('properties')">
           <RiEqualizerLine aria-hidden="true" size="22" />
         </button>
+        <div class="bar-menu trailing" data-menu="share">
+          <button type="button" aria-label="Share and Export" title="Share and Export" aria-haspopup="menu"
+            :aria-expanded="openMenu === 'share'" @click="toggleMenu('share')">
+            <RiShareBoxLine aria-hidden="true" size="22" />
+          </button>
+          <div v-if="openMenu === 'share'" class="bar-menu-items" role="menu" aria-label="Share and Export" @click="closeMenuAtChoice">
+            <button type="button" role="menuitem" :disabled="document === null" @click="copySource">Copy TikZ</button>
+            <button type="button" role="menuitem" :disabled="document === null" @click="exportDiagram('pdf')">PDF…</button>
+            <button type="button" role="menuitem" :disabled="document === null" @click="exportDiagram('svg')">SVG…</button>
+            <button type="button" role="menuitem" :disabled="document === null" @click="exportDiagram('png')">PNG…</button>
+          </div>
+        </div>
+        <div class="bar-menu trailing" data-menu="more">
+          <button type="button" aria-label="More" title="More" aria-haspopup="menu"
+            :aria-expanded="openMenu === 'more'" @click="toggleMenu('more')">
+            <RiMoreLine aria-hidden="true" size="22" />
+          </button>
+          <div v-if="openMenu === 'more'" class="bar-menu-items" role="menu" aria-label="More" @click="closeMenuAtChoice">
+            <button type="button" role="menuitem" @click="openSettings">Settings…</button>
+          </div>
+        </div>
       </div>
-      <details class="file-menu export-menu" aria-label="Export" @click="closeFileMenu" @toggle="onShellMenuToggle">
-        <summary>Export</summary>
-        <div class="file-menu-items">
-          <button type="button" :disabled="document === null" @click="exportDiagram('pdf')">PDF</button>
-          <button type="button" :disabled="document === null" @click="exportDiagram('svg')">SVG</button>
-          <button type="button" :disabled="document === null" @click="exportDiagram('png')">PNG</button>
-        </div>
-      </details>
-      <button type="button" :disabled="document === null" @click="copySource">Copy source</button>
-      <details class="file-menu more-menu" aria-label="More" @click="closeFileMenu" @toggle="onShellMenuToggle">
-        <summary aria-label="More" title="More"><RiMoreLine aria-hidden="true" size="22" /></summary>
-        <div class="file-menu-items">
-          <button type="button" @click="openSettings">Settings…</button>
-        </div>
-      </details>
     </header>
     <SettingsWindow v-if="settingsUrl !== null" :url="settingsUrl" :host="host" :theme="theme" @close="closeSettings" />
     <div v-if="unsavedPrompt" class="dialog-backdrop">
@@ -83,6 +88,7 @@
             :initial-mode="modeForView(view)" :panel="view === 'editor' ? canvasPanel : null"
             @panel="canvasPanel = $event" @status="onEditorStatus(view, $event)"
             @undo-request="undoDocument" @redo-request="redoDocument" @popover-opened="closeShellMenus"
+            @construction="constructing = view === 'editor' && $event"
             @host-popover-dismissed="closeShellMenus"
             @settings-request="openSettings" />
         </div>
@@ -114,7 +120,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { RiArrowGoBackLine, RiArrowGoForwardLine, RiEqualizerLine, RiMoreLine, RiStackLine } from "@remixicon/vue";
+import { RiArrowGoBackLine, RiArrowGoForwardLine, RiEqualizerLine, RiMoreLine, RiShareBoxLine, RiStackLine } from "@remixicon/vue";
 import { z } from "zod";
 import SettingsWindow from "./SettingsWindow.vue";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -127,6 +133,7 @@ import { contiguousSourceLineRanges, isTikzcdSource } from "../src/source-block"
 import type { TikzRenderResult } from "../src/tikz-render";
 import { tikzEditorMode, type TikzPreviewModeId } from "../src/preview-modes";
 import { keepFocusAtButtonPress } from "../vendor/tikz-editor/embed/src/button-focus";
+import { focusFrame } from "../src/keyboard-focus";
 import type { Panel } from "../vendor/tikz-editor/embed/src/commands";
 import TikzWorkbench from "../src/ui/TikzWorkbench.vue";
 import SourceEditor from "./SourceEditor.vue";
@@ -174,7 +181,8 @@ async function closeSettings(): Promise<void> {
   await nextTick();
   const opener = settingsOpener;
   if (opener instanceof HTMLElement && opener !== window.document.body) {
-    opener.focus();
+    if (opener instanceof HTMLIFrameElement) focusFrame(opener);
+    else opener.focus();
     if (window.document.activeElement === opener) return;
   }
   const view = active.right ?? active.left;
@@ -221,41 +229,35 @@ const workbenchViews: readonly Exclude<ViewId, "code">[] = ["preview", "editor"]
 const placements = reactive<Record<Side, ViewId[]>>({ left: ["code"], right: ["preview", "editor"] });
 const active = reactive<Record<Side, ViewId | null>>({ left: null, right: "editor" });
 const visited = reactive(new Set<ViewId>());
-function closeFileMenu(event: MouseEvent): void {
-  if (event.target instanceof Element && event.target.closest("button") &&
-      event.currentTarget instanceof HTMLDetailsElement) {
-    event.currentTarget.open = false;
-  }
+// The menus of the document bar: the title menu, Share and Export, and More (contracts/surfaces.md).
+// Each opens under its own button; a second tap on the button, a choice, a press elsewhere, and
+// Escape close it. One popover is open at a time across shell and canvas (FR-004).
+type BarMenu = "title" | "share" | "more";
+const openMenu = ref<BarMenu | null>(null);
+function toggleMenu(menu: BarMenu): void {
+  openMenu.value = openMenu.value === menu ? null : menu;
 }
-const shellMenus = (): HTMLDetailsElement[] => [...window.document.querySelectorAll<HTMLDetailsElement>("details.file-menu")];
-// One popover at a time across shell and canvas (FR-004).
-function onShellMenuToggle(event: Event): void {
-  const menu = event.currentTarget as HTMLDetailsElement;
-  if (!menu.open) return;
-  for (const other of shellMenus()) {
-    if (other !== menu) other.open = false;
-  }
-  for (const editor of workbenches.values()) editor.dismissPopover();
+function closeMenuAtChoice(event: MouseEvent): void {
+  if (event.target instanceof Element && event.target.closest('[role="menuitem"]')) openMenu.value = null;
 }
 function closeShellMenus(): void {
-  for (const menu of shellMenus()) menu.open = false;
+  openMenu.value = null;
 }
 // A press on another control of the shell closes the open menu, and the control still acts (FR-003).
 function closeShellMenusNotPressed(event: PointerEvent): void {
-  for (const menu of shellMenus()) {
-    if (!(event.target instanceof Node && menu.contains(event.target))) menu.open = false;
-  }
+  if (openMenu.value === null) return;
+  const pressed = event.target instanceof Element ? event.target.closest<HTMLElement>(".bar-menu") : null;
+  if (pressed?.dataset.menu !== openMenu.value) openMenu.value = null;
 }
 // A press in a canvas frame does not reach the shell, so each frame learns when a menu of the shell opens or
-// closes: the frame reports the next press, and the canvas gives that press no other effect. The observer
-// reads the menus' own state, because the toggle event comes after later input.
-let shellMenuOpen = false;
-const shellMenuObserver = new MutationObserver(() => {
-  const open = shellMenus().some((menu) => menu.open);
-  if (open === shellMenuOpen) return;
-  shellMenuOpen = open;
-  for (const editor of workbenches.values()) editor.hostPopover(open);
-});
+// closes: the frame reports the next press, and the canvas gives that press no other effect.
+watch(openMenu, (menu, before) => {
+  if ((menu === null) === (before === null)) return;
+  for (const editor of workbenches.values()) {
+    if (menu !== null) editor.dismissPopover();
+    editor.hostPopover(menu !== null);
+  }
+}, { flush: "sync" });
 const nativeWindow = isTauri();
 const unsavedPrompt = ref<"closing" | "continuing" | null>(null);
 let resolvePrompt: ((choice: "save" | "discard" | "cancel") => void) | null = null;
@@ -375,8 +377,12 @@ documentHistory.subscribe((change) => {
   canUndo.value = documentHistory.canUndo;
   canRedo.value = documentHistory.canRedo;
 });
+// Whether the canvas has a construction with a placed point. Undo then takes back that point and
+// leaves the document; it acts on the document's history when no construction is in progress (FR-034).
+const constructing = ref(false);
 function undoDocument(): void {
-  documentHistory.undo();
+  if (constructing.value) workbenches.get("editor")?.undoConstruction();
+  else documentHistory.undo();
 }
 function redoDocument(): void {
   documentHistory.redo();
@@ -594,28 +600,23 @@ function resolveUnsaved(choice: "save" | "discard" | "cancel"): void {
 }
 
 async function mayLeaveDocument(action: "closing" | "continuing"): Promise<boolean> {
+  // A menu item is gone once its menu closes, so the invoking control is read before the first wait.
+  const opener = window.document.activeElement;
+  const invoker = opener instanceof HTMLElement ? opener.closest(".bar-menu")?.querySelector<HTMLElement>(":scope > button") ?? opener : null;
   await documentWrite;
   if (!dirty.value) return true;
   if (unsavedPrompt.value !== null) return false;
-  const opener = window.document.activeElement;
   const choice = await new Promise<"save" | "discard" | "cancel">((resolve) => {
     resolvePrompt = resolve;
     unsavedPrompt.value = action;
     void nextTick(() => window.document.querySelector<HTMLButtonElement>(".unsaved-actions button:last-child")?.focus());
   });
-  // The APG dialog pattern returns focus to the invoking control unless it no longer exists. A menu item
-  // is gone once its menu closes, so focus goes to the menu's title, as the APG menu button example
-  // sets focus on the menu button after a choice.
-  const invoker = opener instanceof HTMLElement ? opener.closest("details")?.querySelector("summary") ?? opener : null;
+  // The APG dialog pattern returns focus to the invoking control unless it no longer exists. After a
+  // choice in a menu that is the menu's button, as the APG menu button example sets focus.
   invoker?.focus();
   if (choice === "cancel") return false;
   if (choice === "discard") return true;
   return await save() && !dirty.value;
-}
-
-async function requestExit(): Promise<void> {
-  await Promise.all([preferenceWrite, viewWrite]);
-  if (nativeWindow) await getCurrentWindow().close();
 }
 
 async function newDocument(kind: "tikzpicture" | "tikzcd"): Promise<void> {
@@ -700,7 +701,7 @@ async function exportDiagram(format: "pdf" | "svg" | "png"): Promise<void> {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape" && shellMenus().some((menu) => menu.open)) {
+  if (event.key === "Escape" && openMenu.value !== null) {
     closeShellMenus();
     return;
   }
@@ -746,7 +747,6 @@ onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("pointerdown", closeShellMenusNotPressed, true);
   window.addEventListener("mousedown", keepFocusAtButtonPress, true);
-  for (const menu of shellMenus()) shellMenuObserver.observe(menu, { attributes: true, attributeFilter: ["open"] });
   window.addEventListener("beforeunload", onBeforeUnload);
   systemDark.addEventListener("change", followSystemAppearance);
   if (nativeWindow) {
@@ -773,7 +773,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("pointerdown", closeShellMenusNotPressed, true);
   window.removeEventListener("mousedown", keepFocusAtButtonPress, true);
-  shellMenuObserver.disconnect();
   window.removeEventListener("beforeunload", onBeforeUnload);
   systemDark.removeEventListener("change", followSystemAppearance);
   unlistenClose?.();
@@ -830,10 +829,51 @@ body,
   box-shadow: 0 3px 12px color-mix(in srgb, var(--ink) 15%, transparent);
 }
 
-.document-bar strong {
+/* A menu of the document bar: its list opens under its own button. */
+.bar-menu {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.document-bar .title-button {
+  display: block;
+  max-width: 40vw;
   overflow: hidden;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.bar-menu-items {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  border-radius: 12px;
+  background: var(--leaf);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 20%, transparent);
+}
+
+/* A menu at the trailing end of the bar keeps its list inside the window. */
+.bar-menu.trailing .bar-menu-items {
+  right: 0;
+  left: auto;
+}
+
+.document-bar .bar-menu-items button {
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+.document-bar button[aria-expanded="true"] {
+  border-color: var(--ribbon);
+  color: var(--ribbon);
 }
 
 .document-views {
@@ -858,8 +898,7 @@ body,
   color: #fff;
 }
 
-.document-bar button,
-.file-menu summary {
+.document-bar button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -873,38 +912,13 @@ body,
   cursor: pointer;
 }
 
-.file-menu summary {
-  list-style: none;
-}
-
-.file-menu summary::-webkit-details-marker {
-  display: none;
-}
-
-.file-menu-items {
-  position: absolute;
-  top: calc(100% - 4px);
-  right: 12px;
-  display: grid;
-  gap: 6px;
-  min-width: 180px;
-  padding: 8px;
-  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
-  border-radius: 12px;
-  background: var(--leaf);
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 20%, transparent);
-}
-
-.file-menu-items button {
-  justify-content: flex-start;
-}
-
 .panel-controls {
   display: flex;
   gap: 4px;
 }
 
-.panel-controls button {
+.panel-controls > button,
+.panel-controls .bar-menu > button {
   display: inline-grid;
   place-items: center;
   min-width: 44px;
@@ -945,15 +959,6 @@ body,
 .tikz-view-status {
   color: var(--graphite);
   overflow-wrap: anywhere;
-}
-
-.file-menu {
-  margin-left: auto;
-}
-
-.export-menu,
-.more-menu {
-  margin-left: 0;
 }
 
 .dialog-backdrop {
@@ -1075,13 +1080,11 @@ body,
     gap: 6px;
   }
 
-  .document-bar strong {
+  .document-bar .title-button {
     max-width: 25vw;
-    font-size: 14px;
   }
 
-  .document-bar button,
-  .file-menu summary {
+  .document-bar button {
     padding: 0 8px;
     font-size: 14px;
   }

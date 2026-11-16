@@ -40,7 +40,7 @@ The toolbar moves by its grip only and docks to any screen edge (FR-010).
 ## Active Tool Menu
 
 Anchored beside the toolbar at the active tool. Contents per tool: [data model](../data-model.md),
-Tool. During a construction it also holds Cancel and, for an open path, Finish (FR-032).
+Tool. During a construction, from its first placed point, it also holds Cancel and, for an open path, Finish (FR-032); each ends the construction and closes the menu.
 
 ## Colour options
 
