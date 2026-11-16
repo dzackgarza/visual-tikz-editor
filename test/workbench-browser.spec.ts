@@ -5891,6 +5891,61 @@ describe("standalone workbench host boundary", function () {
     );
   }
 
+  story(
+    { viewport: { width: 800, height: 1024 } },
+    "the canvas keeps its place while the status line changes, and the document bar is one row, at window widths from 560 to 800 px",
+    async function () {
+      // Development diagnostics run 43821818615, 768 px wide: the bar held "Saving recovery…" in one row and
+      // "Recovery saved · not saved as file" in two, so the canvas moved 40 px under the pen after each stroke.
+      await editorReady(page);
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await chooseTool(frame, input, "Pen");
+      const status = page.locator(".tikz-standalone-status");
+      const source = async () => (await editorDebug(page)).source;
+      const widths = [560, 590, 620, 650, 680, 710, 740, 770, 800];
+      const oneRow = async (width: number) => {
+        const rows = await page
+          .locator(".document-bar > .bar-menu > button, .document-bar > div:not(.bar-menu) > button, .document-bar > div > .bar-menu > button")
+          .evaluateAll((buttons) => buttons.map((button) => Math.round(button.getBoundingClientRect().top)));
+        assert.equal(rows.length, 7, "The document bar does not hold its seven buttons");
+        assert.equal(
+          new Set(rows).size,
+          1,
+          `At ${width} px and "${await status.innerText()}" the buttons of the document bar are in rows at ${[...new Set(rows)]}`,
+        );
+      };
+      for (const [index, width] of widths.entries()) {
+        await page.setViewportSize({ width, height: 1024 });
+        await oneRow(width);
+        // Each change of the bar records the status line and the top of the canvas.
+        await page.evaluate(`(() => {
+          const seen = { tops: new Set(), texts: new Set() };
+          const canvas = document.querySelector('iframe[title="TikZ visual editor"]');
+          const line = document.querySelector(".tikz-standalone-status");
+          const read = () => { seen.tops.add(Math.round(canvas.getBoundingClientRect().top)); seen.texts.add(line.textContent); };
+          read();
+          new MutationObserver(read).observe(document.querySelector(".document-bar"), { subtree: true, childList: true, characterData: true });
+          window.__barWatch = seen;
+        })()`);
+        const before = await source();
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await input.penStroke(waveAcross(viewport, 0.3, 0.15 + index * 0.06, 100));
+        await expect.poll(source, { message: `At ${width} px the stroke was not written` }).not.toBe(before);
+        await expect(status).toHaveText("Recovery saved · not saved as file");
+        await oneRow(width);
+        if (width === 560 || width === 740) {
+          await storyScreenshot(page, `document-bar-${width}-px`);
+        }
+        const seen = (await page.evaluate(
+          "({ tops: [...window.__barWatch.tops], texts: [...window.__barWatch.texts] })",
+        )) as { tops: number[]; texts: string[] };
+        assert.ok(seen.texts.length > 1, `At ${width} px the status line did not change: ${seen.texts}`);
+        assert.equal(seen.tops.length, 1, `At ${width} px the canvas moved between ${seen.tops} as the status line read ${seen.texts.join(" | ")}`);
+      }
+    },
+  );
+
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
