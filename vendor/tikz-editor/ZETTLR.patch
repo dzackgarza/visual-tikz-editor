@@ -410,6 +410,186 @@ index af9d6c30..88725f49 100644
    TOGGLE_SNAP_HAPTICS: "view.toggle-snap-haptics",
    TOGGLE_RULERS: "view.toggle-rulers",
    TOGGLE_GUIDES: "view.toggle-guides",
+diff --git a/packages/app/src/compute.ts b/packages/app/src/compute.ts
+index f72897e2..61667246 100644
+--- a/packages/app/src/compute.ts
++++ b/packages/app/src/compute.ts
+@@ -20,7 +20,7 @@ import { renderTikzToSvgAsync, type RenderDiagnostic } from "tikz-editor/render/
+ import type { NodeTextEngine } from "tikz-editor/text/types";
+ import type { MathJaxFont } from "tikz-editor/text/mathjax-engine";
+ import type { SourcePatch } from "tikz-editor/edit/types";
+-import { resolveFigureBoundsState } from "tikz-editor/edit/figure-bounds";
++import { resolveFigureBoundsStateOfFigure } from "tikz-editor/edit/figure-bounds";
+ import { recordProfilingComputeTiming } from "tikz-editor/profiling";
+ import { buildSourceRevisionFingerprint } from "./source-identity";
+ 
+@@ -90,9 +90,10 @@ let textEnginePromise: Promise<NodeTextEngine | null> | null = null;
+ let hasResolvedTextEngine = false;
+ let resolvedTextEngine: NodeTextEngine | null = null;
+ 
+-function resolveSvgPadding(source: string, activeFigureId: string | null | undefined): number {
++/** The padding of the SVG: none for a figure with fixed bounds. It reads the parsed figure; a parse of the source for it alone took as long as the parse itself. */
++function resolveSvgPadding(parse: ParseTikzResult): number {
+   try {
+-    return resolveFigureBoundsState(source, { activeFigureId }).mode === "fixed" ? 0 : 18;
++    return resolveFigureBoundsStateOfFigure(parse.figure).mode === "fixed" ? 0 : 18;
+   } catch {
+     return 18;
+   }
+@@ -145,6 +146,49 @@ export async function computeSnapshot(request: ComputeRequest): Promise<ComputeR
+         diagnostics: []
+       };
+     }
++    if (trigger === "append" && requestKind === "render") {
++      const result = await computeSnapshotAppended(
++        request.source,
++        request.sourceRevision ?? null,
++        request.activeFigureId,
++        sourceFingerprint
++      );
++      if (result) {
++        recordProfilingComputeTiming({
++          requestId: request.id,
++          kind: requestKind,
++          trigger,
++          durationMs: performance.now() - computeStartedAt,
++          changedSourceCount: result.parseStats.reparsedStatementCount,
++          incremental: true,
++          parseStrategy: result.parseStats.strategy,
++          semanticStrategy: result.semanticStats.strategy,
++          semanticFallbackReason: result.semanticStats.fallbackReason ?? null,
++          recomputedStatementCount: result.semanticStats.recomputedStatementCount,
++          reusedStatementCount: result.semanticStats.reusedStatementCount,
++          phaseDurationsMs: result.phaseDurationsMs
++        });
++        return {
++          id: request.id,
++          documentId: request.documentId,
++          snapshot: {
++            source: request.source,
++            revision,
++            figures: result.parse.figures,
++            activeFigureId: result.parse.activeFigureId,
++            editHandles: result.semantic.editHandles,
++            scene: result.semantic.scene,
++            svg: result.svg,
++            svgModel: result.svg.model,
++            parseResult: result.parse,
++            semanticResult: result.semantic,
++            incremental: null
++          },
++          diagnostics: []
++        };
++      }
++    }
++
+     if (isDragTrigger && changedSourceIds.length > 0) {
+       const result = await computeSnapshotIncremental(
+         request.source,
+@@ -225,7 +269,7 @@ export async function computeSnapshot(request: ComputeRequest): Promise<ComputeR
+         includeContextDefinitions: true
+       },
+       evaluate: { sourceFingerprint },
+-      svg: { padding: resolveSvgPadding(request.source, request.activeFigureId) },
++      resolveSvg: (parse) => ({ padding: resolveSvgPadding(parse) }),
+       textEngine
+     });
+     phases.render = performance.now() - phaseStartedAt;
+@@ -238,7 +282,8 @@ export async function computeSnapshot(request: ComputeRequest): Promise<ComputeR
+     parseSession.prime(result.parse, {
+       activeFigureId: request.activeFigureId ?? result.parse.activeFigureId,
+       includeContextDefinitions: true,
+-      sourceRevision: request.sourceRevision ?? null
++      sourceRevision: request.sourceRevision ?? null,
++      shareFigure: true
+     });
+     phases.primeParse = performance.now() - phaseStartedAt;
+     phaseStartedAt = performance.now();
+@@ -315,6 +360,75 @@ export async function computeSnapshot(request: ComputeRequest): Promise<ComputeR
+   }
+ }
+ 
++/**
++ * The snapshot of a source that is the last computed source with statements added at the end of the
++ * active figure, as a pen stroke or a placed shape adds them; null when the source is anything else,
++ * with nothing computed. Only the added statements are parsed and evaluated, from the state that the
++ * last computed figure ended in, so the time does not grow with the figure as a whole parse and a whole
++ * evaluation do (#90).
++ */
++async function computeSnapshotAppended(
++  source: string,
++  sourceRevision: number | null,
++  activeFigureId: string | null | undefined,
++  sourceFingerprint: string | undefined
++): Promise<{
++  parse: ParseTikzResult;
++  semantic: EvaluateTikzResult;
++  svg: EmitSvgResult;
++  parseStats: IncrementalParseStats;
++  semanticStats: IncrementalSemanticStats;
++  phaseDurationsMs: Record<string, number>;
++} | null> {
++  const phases: Record<string, number> = {};
++  const maybeTextEngine = getOptionalTextEngine();
++  const textEngine = maybeTextEngine instanceof Promise ? await maybeTextEngine : maybeTextEngine;
++  let phaseStartedAt = performance.now();
++  const appended = getIncrementalParseSession().append({ source, sourceRevision, activeFigureId, includeContextDefinitions: true });
++  phases.parse = performance.now() - phaseStartedAt;
++  if (!appended) {
++    return null;
++  }
++  const session = getIncrementalSemanticSession();
++  const svgOptions = { padding: resolveSvgPadding(appended.parse), textEngine };
++  phaseStartedAt = performance.now();
++  let evaluated = session.evaluate({
++    figure: appended.parse.figure,
++    source,
++    options: { sourceFingerprint, textEngine },
++    hints: { trigger: "append" }
++  });
++  phases.semantic = performance.now() - phaseStartedAt;
++  phaseStartedAt = performance.now();
++  let svg = emitSvg(evaluated.semantic.scene, svgOptions);
++  phases.emitSvg = performance.now() - phaseStartedAt;
++  phaseStartedAt = performance.now();
++  const flushedPendingTextKeys = await textEngine?.flushPending?.();
++  phases.flushText = performance.now() - phaseStartedAt;
++  if (flushedPendingTextKeys && flushedPendingTextKeys.length > 0) {
++    // The size of a text has arrived; the whole figure is evaluated with it, as after a whole parse.
++    phaseStartedAt = performance.now();
++    evaluated = session.evaluate({
++      figure: appended.parse.figure,
++      source,
++      options: { sourceFingerprint, textEngine },
++      hints: { trigger: "other" }
++    });
++    svg = emitSvg(evaluated.semantic.scene, svgOptions);
++    phases.semanticAfterTextFlush = performance.now() - phaseStartedAt;
++  }
++  previousSvgModel = svg.model;
++  incrementalWarmSource = source;
++  return {
++    parse: appended.parse,
++    semantic: evaluated.semantic,
++    svg,
++    parseStats: appended.stats,
++    semanticStats: evaluated.stats,
++    phaseDurationsMs: phases
++  };
++}
++
+ async function computeSnapshotIncremental(
+   source: string,
+   sourceRevision: number | null,
+@@ -353,7 +467,7 @@ async function computeSnapshotIncremental(
+   });
+   phases.parse = performance.now() - phaseStartedAt;
+   const parseResult = parseIncremental.parse;
+-  const svgPadding = resolveSvgPadding(parseResult.source, parseResult.activeFigureId);
++  const svgPadding = resolveSvgPadding(parseResult);
+   phaseStartedAt = performance.now();
+   const session = getIncrementalSemanticSession();
+   phases.getSemanticSession = performance.now() - phaseStartedAt;
 diff --git a/packages/app/src/context-menu/canvas-context-menu.ts b/packages/app/src/context-menu/canvas-context-menu.ts
 index bc368718..a32ad9bf 100644
 --- a/packages/app/src/context-menu/canvas-context-menu.ts
@@ -1411,7 +1591,7 @@ index 00000000..bbd74249
 +    lastEditWarningToken: next.lastEditWarningToken + (released ? 1 : 0) };
 +}
 diff --git a/packages/app/src/store/reducer.ts b/packages/app/src/store/reducer.ts
-index e0845d6e..b020a3c4 100644
+index e0845d6e..b9bd6718 100644
 --- a/packages/app/src/store/reducer.ts
 +++ b/packages/app/src/store/reducer.ts
 @@ -1,3 +1,5 @@
@@ -1790,7 +1970,7 @@ index e0845d6e..b020a3c4 100644
          lastEditWarningMessage: actionWarning,
          lastEditWarningToken:
            actionWarning != null || doc.lastEditWarningMessage != null
-@@ -927,13 +876,53 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -927,13 +876,55 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
          selectedElementIds: nextSelection,
          focusedScopeId: nextFocusedScopeId,
          activeHandleId: null,
@@ -1832,8 +2012,10 @@ index e0845d6e..b020a3c4 100644
 +        sourceRevision: current.sourceRevision + 1,
 +        lastEditChangedSourceIds: null,
 +        lastEditChangeToken: current.lastEditChangeToken + 1,
-+        lastEditPatches: null,
-+        lastEditPatchBaseRevision: null,
++        // The stroke as a patch: an edit of the canvas with a patch is computed at once, and one that adds
++        // statements at the end of the figure is computed from those statements alone (#90).
++        lastEditPatches: [{ oldSpan: { from: index, to: index + action.before.length }, newSpan: { from: index, to: index + action.after.length }, replacement: action.after }],
++        lastEditPatchBaseRevision: current.sourceRevision,
 +        lastEditWarningMessage: null,
 +        lastStep: merge ? { ...entry, sourceBefore: previous.sourceBefore, selectedElementIdsBefore: previous.selectedElementIdsBefore } : entry,
 +        historyStep: merge ? current.historyStep : current.historyStep + 1,
@@ -1846,7 +2028,7 @@ index e0845d6e..b020a3c4 100644
      case "SET_SOURCE_TRANSIENT": {
        const documentId = activeDocumentIdFromAction(state, action.documentId);
        workspace = updateDocument(workspace, documentId, (doc) => {
-@@ -963,67 +952,26 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -963,67 +954,26 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        break;
      }
  
@@ -1931,7 +2113,7 @@ index e0845d6e..b020a3c4 100644
        break;
      }
  
-@@ -1094,10 +1042,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1094,10 +1044,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, toolMode: action.mode };
        break;
  
@@ -1950,7 +2132,7 @@ index e0845d6e..b020a3c4 100644
      case "SET_HOVERED_ELEMENT":
        if (ui.hoveredElementId === action.id) return state;
        ui = { ...ui, hoveredElementId: action.id };
-@@ -1108,16 +1064,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1108,16 +1066,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        ui = { ...ui, activeCanvasDragKind: action.kind };
        break;
  
@@ -1967,7 +2149,7 @@ index e0845d6e..b020a3c4 100644
      case "SET_BUCKET_FILL_COLOR": {
        const nextValue = action.value.trim().toLowerCase();
        if (nextValue.length === 0 || ui.bucketFillColor === nextValue) return state;
-@@ -1182,16 +1128,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1182,16 +1130,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        }
        break;
  
@@ -1984,7 +2166,7 @@ index e0845d6e..b020a3c4 100644
      case "REQUEST_FIT_TO_CONTENT":
        ui = { ...ui, fitToContentRequestToken: ui.fitToContentRequestToken + 1 };
        break;
-@@ -1227,11 +1163,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
+@@ -1227,11 +1165,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
        };
        break;
  
@@ -2417,7 +2599,7 @@ index 758bd611..c813de75 100644
      showInspectorPanel: state.showInspectorPanel,
      showObjectsPanel: state.showObjectsPanel,
 diff --git a/packages/app/src/ui/App.tsx b/packages/app/src/ui/App.tsx
-index 5818d92b..e126956c 100644
+index 5818d92b..e5f785a3 100644
 --- a/packages/app/src/ui/App.tsx
 +++ b/packages/app/src/ui/App.tsx
 @@ -12,7 +12,8 @@ import { computeSnapshot, makeEmptySnapshot, setMathJaxFont, type ComputeRequest
@@ -2541,7 +2723,20 @@ index 5818d92b..e126956c 100644
  
    useEffect(() => {
      if (!platform.updates || startupUpdateCheckStarted) {
-@@ -1534,7 +1509,6 @@ export function App() {
+@@ -937,7 +912,11 @@ export function App() {
+     () => lastEditChangedSourceIds ?? (activeSourceScrubSourceId ? [activeSourceScrubSourceId] : null),
+     [activeSourceScrubSourceId, lastEditChangedSourceIds]
+   );
+-  const trigger = computeTrigger(activeCanvasDragKind, activeSourceScrubSourceId);
++  const dragTrigger = computeTrigger(activeCanvasDragKind, activeSourceScrubSourceId);
++  // An edit of the canvas that is no drag carries its patch. It may have added statements at the end of the
++  // figure, as a stroke or a placed shape does; the compute then reads only those, and reads the whole source
++  // when the edit was anything else. Typing in the source carries no patch and waits for a pause.
++  const trigger = dragTrigger === "other" && lastEditPatches != null ? "append" : dragTrigger;
+   const isDragComputeTrigger = trigger === "drag-element" || trigger === "drag-handle";
+   if (isDragComputeTrigger && !dragRenderViewBoxRef.current && snapshot.svg?.viewBox) {
+     dragRenderViewBoxRef.current = snapshot.svg.viewBox;
+@@ -1534,7 +1513,6 @@ export function App() {
          };
        },
        setCanvasTransform: (transform) => {
@@ -2549,7 +2744,7 @@ index 5818d92b..e126956c 100644
          requestAnimationFrame(() => {
            dispatch({ type: "SET_CANVAS_TRANSFORM", transform });
          });
-@@ -1596,17 +1570,6 @@ export function App() {
+@@ -1596,17 +1574,6 @@ export function App() {
      });
    }, [platform.id, snapshot.source, source]);
  
@@ -2567,7 +2762,7 @@ index 5818d92b..e126956c 100644
    const nativeMenuCommandState = useMemo(() => {
      const entries = Object.entries(commandRuntime.bindings).map(([commandId, binding]) => {
        const state = { enabled: binding.enabled, checked: binding.checked };
-@@ -1648,216 +1611,48 @@ export function App() {
+@@ -1648,216 +1615,48 @@ export function App() {
        }
  
        const runtime = commandRuntimeRef.current;
@@ -2815,7 +3010,7 @@ index 5818d92b..e126956c 100644
      }
  
      window.addEventListener("keydown", onKeyDown);
-@@ -1872,7 +1667,6 @@ export function App() {
+@@ -1872,7 +1671,6 @@ export function App() {
    const loadExampleIntoEditor = (example: TikzOpenExample) => {
      dispatch({ type: "NEW_DOCUMENT", source: example.source, title: example.title });
      setShowOpenExampleModal(false);
@@ -2823,7 +3018,7 @@ index 5818d92b..e126956c 100644
    };
  
    const loadArxivCandidateIntoEditor = (candidate: ArxivTikzCandidate) => {
-@@ -1891,7 +1685,6 @@ export function App() {
+@@ -1891,7 +1689,6 @@ export function App() {
        }
      });
      setShowOpenFromArxivModal(false);
@@ -2831,7 +3026,7 @@ index 5818d92b..e126956c 100644
    };
  
    async function handleUnsavedDecision(
-@@ -2030,13 +1823,14 @@ export function App() {
+@@ -2030,13 +1827,14 @@ export function App() {
        onDragLeave={onAppDragLeave}
        onDrop={(e) => { void onAppDrop(e); }}
      >
@@ -2847,7 +3042,7 @@ index 5818d92b..e126956c 100644
          updateChip={
            availableUpdate && !showUpdateModal && !updateDismissedForSession
              ? {
-@@ -2049,22 +1843,23 @@ export function App() {
+@@ -2049,22 +1847,23 @@ export function App() {
              : null
          }
        />
@@ -2875,7 +3070,7 @@ index 5818d92b..e126956c 100644
        </Suspense>
        {showOpenExampleModal ? (
          <Suspense fallback={null}>
-@@ -2097,11 +1892,6 @@ export function App() {
+@@ -2097,11 +1896,6 @@ export function App() {
            />
          </Suspense>
        ) : null}
@@ -2887,7 +3082,7 @@ index 5818d92b..e126956c 100644
        {equationModalState ? (
          <Suspense fallback={null}>
            <EquationModal
-@@ -2150,12 +1940,11 @@ export function App() {
+@@ -2150,12 +1944,11 @@ export function App() {
            <RepeatModal
              columns={repeatModalState.columns}
              rows={repeatModalState.rows}
@@ -2905,7 +3100,7 @@ index 5818d92b..e126956c 100644
              onColumnsChange={(columns) => {
                setRepeatModalState((current) => current == null ? current : {
                  ...current,
-@@ -2168,17 +1957,11 @@ export function App() {
+@@ -2168,17 +1961,11 @@ export function App() {
                  rows: clampRepeatCount(rows)
                });
              }}
@@ -2927,7 +3122,7 @@ index 5818d92b..e126956c 100644
              }}
              onClose={() => {
                setRepeatModalState(null);
-@@ -2345,13 +2128,6 @@ function clampRepeatCount(value: number): number {
+@@ -2345,13 +2132,6 @@ function clampRepeatCount(value: number): number {
    return Math.max(1, Math.floor(value));
  }
  
@@ -22399,6 +22594,107 @@ index 56e1001d..c7f6f578 100644
    }
    const rewritten = applyOptionMutationsToTarget(source, resolved.target, mutations);
    if (!rewritten) {
+diff --git a/packages/core/src/edit/analysis.ts b/packages/core/src/edit/analysis.ts
+index c8dc8ec4..f26511f0 100644
+--- a/packages/core/src/edit/analysis.ts
++++ b/packages/core/src/edit/analysis.ts
+@@ -1,5 +1,5 @@
+ import type { PathStatement, Statement } from "../ast/types.js";
+-import { parseTikz, type ParseTikzResult } from "../parser/index.js";
++import { createIncrementalParseSession, parseTikz, type ParseTikzResult } from "../parser/index.js";
+ import {
+   resolveFigurePropertyTargetFromParseResult,
+   resolvePropertyTargetFromParseResult,
+@@ -28,7 +28,8 @@ type EditAnalysisCache = {
+   source: string;
+   activeFigureId: string | null | undefined;
+   parseResult: ParseTikzResult;
+-  statementSnapshot: StatementSnapshot;
++  /** Read when first asked for: most parses of an edit never ask. */
++  statementSnapshot: StatementSnapshot | null;
+   propertyTargetCache: Map<string, PropertyTargetResolution>;
+   pathStatementCache: Map<string, PathStatement | null>;
+   figureTargetCache: PropertyTargetResolution | null;
+@@ -51,6 +52,18 @@ export function createEditAnalysisSession(): EditAnalysisSession {
+   // (e.g. snapshot.source that hasn't caught up to the latest edit) still
+   // get a cache hit instead of triggering a redundant full parse.
+   let previous: EditAnalysisCache | null = null;
++  // The last parse, kept so that a source with statements added at the end of its figure, as a pen stroke or a
++  // placed shape adds them, is parsed from the added statements alone. An edit asks for the parse of the new
++  // source before the canvas has computed it, and a parse of a whole figure of pen strokes at each such
++  // question made the time of an edit grow with the figure (#90).
++  const appendable = createIncrementalParseSession();
++  const keepForAppend = (parseResult: ParseTikzResult, activeFigureId: string | null | undefined): void => {
++    appendable.prime(parseResult, {
++      activeFigureId: activeFigureId ?? parseResult.activeFigureId,
++      includeContextDefinitions: true,
++      shareFigure: true
++    });
++  };
+ 
+   const lookup = (source: string, activeFigureId: string | null | undefined): EditAnalysisCache | null => {
+     if (cached?.source === source && cached.activeFigureId === activeFigureId) {
+@@ -75,11 +88,15 @@ export function createEditAnalysisSession(): EditAnalysisSession {
+     if (hit) {
+       return hit.view;
+     }
+-    const parseResult = parseTikz(source, {
++    const appended = appendable.append({ source, activeFigureId, includeContextDefinitions: true });
++    const parseResult = appended?.parse ?? parseTikz(source, {
+       recover: true,
+       activeFigureId,
+       includeContextDefinitions: true
+     });
++    if (!appended) {
++      keepForAppend(parseResult, activeFigureId);
++    }
+     const entry = createCache(source, parseResult, activeFigureId);
+     store(entry);
+     return entry.view;
+@@ -95,12 +112,14 @@ export function createEditAnalysisSession(): EditAnalysisSession {
+       }
+       const entry = createCache(source, parse, activeFigureId);
+       store(entry);
++      keepForAppend(parse, activeFigureId);
+       return entry.view;
+     },
+     ensure,
+     reset() {
+       cached = null;
+       previous = null;
++      appendable.reset();
+     }
+   };
+ }
+@@ -110,7 +129,6 @@ function createCache(
+   parseResult: ParseTikzResult,
+   activeFigureId: string | null | undefined
+ ): EditAnalysisCache {
+-  const statementSnapshot = buildStatementSnapshotFromStatements(source, parseResult.figure.body);
+   const propertyTargetCache = new Map<string, PropertyTargetResolution>();
+   const pathStatementCache = new Map<string, PathStatement | null>();
+ 
+@@ -118,7 +136,7 @@ function createCache(
+     source,
+     activeFigureId,
+     parseResult,
+-    statementSnapshot,
++    statementSnapshot: null,
+     propertyTargetCache,
+     pathStatementCache,
+     figureTargetCache: null,
+@@ -129,7 +147,10 @@ function createCache(
+     source,
+     activeFigureId,
+     parseResult,
+-    statementSnapshot,
++    get statementSnapshot(): StatementSnapshot {
++      cache.statementSnapshot ??= buildStatementSnapshotFromStatements(source, parseResult.figure.body);
++      return cache.statementSnapshot;
++    },
+     resolvePropertyTarget(elementId: string): PropertyTargetResolution {
+       const cachedResolution = propertyTargetCache.get(elementId);
+       if (cachedResolution) {
 diff --git a/packages/core/src/edit/color-value.ts b/packages/core/src/edit/color-value.ts
 new file mode 100644
 index 00000000..ecb954c1
@@ -22640,6 +22936,25 @@ index 3f807ed2..300ce5ef 100644
 +  const expression = `atan2(${formatNumber(y, { fractionDigits: 12 })},${formatNumber(x, { fractionDigits: 12 })})`;
 +  return turns === 0 ? expression : `${expression}${turns > 0 ? "+" : ""}${turns * 360}`;
 +}
+diff --git a/packages/core/src/edit/figure-bounds.ts b/packages/core/src/edit/figure-bounds.ts
+index e99358ee..0a5fabe8 100644
+--- a/packages/core/src/edit/figure-bounds.ts
++++ b/packages/core/src/edit/figure-bounds.ts
+@@ -23,8 +23,12 @@ export type SetFigureBoundsAction =
+   | { kind: "setFigureBounds"; mode: "fixed"; x: number; y: number; width: number; height: number };
+ 
+ export function resolveFigureBoundsState(source: string, parseOptions: EditParseOptions = {}): FigureBoundsState {
+-  const parsed = parseTikzForEdit(source, parseOptions);
+-  const statement = firstGeometryStatement(parsed.figure.body);
++  return resolveFigureBoundsStateOfFigure(parseTikzForEdit(source, parseOptions).figure);
++}
++
++/** The bounds of a figure that is parsed already. */
++export function resolveFigureBoundsStateOfFigure(figure: TikzFigure): FigureBoundsState {
++  const statement = firstGeometryStatement(figure.body);
+   if (statement?.kind !== "Path") {
+     return { mode: "auto" };
+   }
 diff --git a/packages/core/src/edit/inspector.ts b/packages/core/src/edit/inspector.ts
 index 2746595a..61af7c0a 100644
 --- a/packages/core/src/edit/inspector.ts
@@ -25216,8 +25531,301 @@ index e9ab7758..a232458b 100644
      {
        kind: "number",
        id: "xscale",
+diff --git a/packages/core/src/parser/incremental.ts b/packages/core/src/parser/incremental.ts
+index 61884c17..5136d205 100644
+--- a/packages/core/src/parser/incremental.ts
++++ b/packages/core/src/parser/incremental.ts
+@@ -55,9 +55,25 @@ export type IncrementalParseEvaluateResult = {
+   stats: IncrementalParseStats;
+ };
+ 
++export type IncrementalParseAppendInput = Pick<
++  IncrementalParseEvaluateInput,
++  "source" | "sourceRevision" | "activeFigureId" | "includeContextDefinitions"
++>;
++
+ export type IncrementalParseSession = {
+   evaluate: (input: IncrementalParseEvaluateInput) => IncrementalParseEvaluateResult;
+-  prime: (parse: ParseTikzResult, options?: Pick<ParseTikzOptions, "activeFigureId" | "includeContextDefinitions"> & { sourceRevision?: number | null }) => void;
++  /**
++   * The parse of a source that is the cached source with statements added at the end of the active
++   * figure, as a pen stroke or a placed shape adds them: only the added statements are parsed. Null,
++   * with the cache as it was, when the source is anything else.
++   */
++  append: (input: IncrementalParseAppendInput) => IncrementalParseEvaluateResult | null;
++  /**
++   * `shareFigure`: the session keeps the parse's figure itself and not a copy. The session never changes a
++   * figure it was given (a patch is applied to a copy, and an append makes a new body of the same
++   * statements), so the copy only guards against a caller that changes the figure afterwards.
++   */
++  prime: (parse: ParseTikzResult, options?: Pick<ParseTikzOptions, "activeFigureId" | "includeContextDefinitions"> & { sourceRevision?: number | null; shareFigure?: boolean }) => void;
+   reset: () => void;
+ };
+ 
+@@ -86,6 +102,8 @@ type CachedIncrementalParseState = {
+   diagnosticPartition: ParseDiagnosticPartition;
+   tree: Tree;
+   treeFresh: boolean;
++  /** The index that the next statement of the active figure takes; unknown after a parse that did not report it. */
++  nextStatementIndex: number | null;
+ };
+ 
+ const SNIPPET_PREFIX = "\\begin{tikzpicture}\n";
+@@ -98,13 +116,14 @@ export function createIncrementalParseSession(): IncrementalParseSession {
+ 
+   const prime = (
+     parse: ParseTikzResult,
+-    options: Pick<ParseTikzOptions, "activeFigureId" | "includeContextDefinitions"> & { sourceRevision?: number | null } = {}
++    options: Pick<ParseTikzOptions, "activeFigureId" | "includeContextDefinitions"> & { sourceRevision?: number | null; shareFigure?: boolean } = {}
+   ): void => {
+     cached = buildCache(parse, {
+       activeFigureId: options.activeFigureId ?? parse.activeFigureId,
+       includeContextDefinitions: options.includeContextDefinitions ?? false,
+       sourceRevision: options.sourceRevision ?? null,
+-      treeFresh: true
++      treeFresh: true,
++      shareFigure: options.shareFigure
+     });
+   };
+ 
+@@ -300,7 +319,8 @@ export function createIncrementalParseSession(): IncrementalParseSession {
+         statementRefsBySourceId: nextIndex,
+         diagnosticPartition: nextDiagnosticPartition,
+         tree: cached.tree,
+-        treeFresh: false
++        treeFresh: false,
++        nextStatementIndex: cached.nextStatementIndex
+       };
+       cached = nextCache;
+       return {
+@@ -348,8 +368,33 @@ export function createIncrementalParseSession(): IncrementalParseSession {
+     };
+   }
+ 
++  const append = (input: IncrementalParseAppendInput): IncrementalParseEvaluateResult | null => {
++    if (!cached) {
++      return null;
++    }
++    const appended = appendStatementsToCache(cached, input.source, {
++      activeFigureId: input.activeFigureId,
++      includeContextDefinitions: input.includeContextDefinitions ?? false,
++      sourceRevision: input.sourceRevision ?? null
++    });
++    if (!appended) {
++      return null;
++    }
++    const reusedStatementCount = cached.statementRefsBySourceId.size;
++    cached = appended;
++    return {
++      parse: createParseResultFromCache(appended, input.source),
++      stats: {
++        strategy: "incremental",
++        reparsedStatementCount: appended.statementRefsBySourceId.size - reusedStatementCount,
++        reusedStatementCount
++      }
++    };
++  };
++
+   return {
+     evaluate,
++    append,
+     prime,
+     reset: () => {
+       cached = null;
+@@ -357,6 +402,116 @@ export function createIncrementalParseSession(): IncrementalParseSession {
+   };
+ }
+ 
++/**
++ * The cache for a source that is the cached source with text added between the last statement of the
++ * active figure and the figure's end, or null when the source is anything else. Only the text from the
++ * last statement to the figure's end is parsed; its statements take the indices that follow the cached
++ * ones, as a parse of the whole source numbers them, and the cached statements are kept as they are.
++ * The mapping of a statement reads the statement's own text and the running index and nothing before
++ * it, so the added statements parse apart as they parse in place.
++ */
++function appendStatementsToCache(
++  cached: CachedIncrementalParseState,
++  source: string,
++  options: { activeFigureId: string | null | undefined; includeContextDefinitions: boolean; sourceRevision: number | null }
++): CachedIncrementalParseState | null {
++  const figureSpan = cached.activeFigureSpan;
++  if (
++    !figureSpan ||
++    cached.nextStatementIndex === null ||
++    options.activeFigureId === null ||
++    (options.activeFigureId ?? cached.activeFigureId) !== cached.activeFigureId ||
++    options.includeContextDefinitions !== cached.includeContextDefinitions ||
++    cached.diagnosticPartition.global.length > 0 ||
++    source.length <= cached.source.length
++  ) {
++    return null;
++  }
++  // The added text is where the two sources differ: nothing of the cached source may be gone.
++  const added = source.length - cached.source.length;
++  let prefix = 0;
++  while (prefix < cached.source.length && cached.source.charCodeAt(prefix) === source.charCodeAt(prefix)) prefix += 1;
++  let suffix = 0;
++  while (
++    suffix < cached.source.length - prefix &&
++    cached.source.charCodeAt(cached.source.length - 1 - suffix) === source.charCodeAt(source.length - 1 - suffix)
++  ) suffix += 1;
++  if (prefix + suffix !== cached.source.length) {
++    return null;
++  }
++  // The statements of the figure itself; definitions before the figure lead the body and stay as they are.
++  let lastStatementEnd = -1;
++  for (const statement of cached.figure.body) {
++    if (statement.span.from >= figureSpan.from && statement.span.to <= figureSpan.to) {
++      lastStatementEnd = Math.max(lastStatementEnd, statement.span.to);
++    }
++  }
++  const endDelimiter = resolveFigureDelimiterSpans(cached.source, figureSpan).end;
++  if (lastStatementEnd < 0 || prefix < lastStatementEnd || prefix > endDelimiter.from) {
++    return null;
++  }
++
++  const tail = source.slice(lastStatementEnd, endDelimiter.from + added);
++  const snippetSource = `${SNIPPET_PREFIX}${tail}\n${SNIPPET_SUFFIX.slice(1)}`;
++  const snippet = parseTikz(snippetSource, { recover: true, firstStatementIndex: cached.nextStatementIndex });
++  const statements = snippet.figure.body;
++  if (
++    statements.length === 0 ||
++    snippet.nextStatementIndex === undefined ||
++    snippet.diagnostics.some((diagnostic) => diagnostic.severity === "error")
++  ) {
++    return null;
++  }
++  const partition = partitionDiagnostics(snippet.diagnostics, statements);
++  if (partition.global.length > 0) {
++    return null;
++  }
++  const delta = lastStatementEnd - SNIPPET_PREFIX.length;
++  const addedStatements = statements.map((statement) => shiftSpansDeep(statement, delta));
++  const localBySourceId = new Map(cached.diagnosticPartition.localBySourceId);
++  for (const [sourceId, diagnostics] of partition.localBySourceId) {
++    for (const diagnostic of diagnostics) shiftDiagnosticInPlace(diagnostic, delta);
++    localBySourceId.set(sourceId, diagnostics);
++  }
++
++  const insertion: SourcePatch = {
++    oldSpan: { from: prefix, to: prefix },
++    newSpan: { from: prefix, to: prefix + added },
++    replacement: source.slice(prefix, prefix + added)
++  };
++  // A figure's lines move with the lines of the added text when the text is before them.
++  let addedLines = 0;
++  for (let index = 0; index < insertion.replacement.length; index += 1) {
++    if (insertion.replacement.charCodeAt(index) === 10) addedLines += 1;
++  }
++  const figures = cached.figures.map((previous) => {
++    const figure = shiftSpansDeep(structuredClone(previous), [insertion]);
++    if (previous.span.from >= prefix) figure.startLine += addedLines;
++    if (previous.endSpan.from >= prefix) figure.endLine += addedLines;
++    return figure;
++  });
++  const nextFigureSpan = resolveActiveFigureSpan(figures.map((figure) => figure.span), cached.activeFigureId);
++  if (!nextFigureSpan || nextFigureSpan.from !== figureSpan.from || nextFigureSpan.to !== figureSpan.to + added) {
++    return null;
++  }
++  const figure: TikzFigure = { ...cached.figure, span: nextFigureSpan, body: [...cached.figure.body, ...addedStatements] };
++  return {
++    source,
++    sourceRevision: options.sourceRevision,
++    activeFigureId: cached.activeFigureId,
++    includeContextDefinitions: cached.includeContextDefinitions,
++    figures,
++    activeFigureSpan: nextFigureSpan,
++    contextDefinitions: cached.contextDefinitions,
++    figure,
++    statementRefsBySourceId: buildStatementIndex(figure.body),
++    diagnosticPartition: { localBySourceId, global: [] },
++    tree: cached.tree,
++    treeFresh: false,
++    nextStatementIndex: snippet.nextStatementIndex
++  };
++}
++
+ function alignStatementIds(previous: Statement, next: Statement): void {
+   next.id = previous.id;
+ 
+@@ -541,7 +696,8 @@ function createParseResultFromCache(cache: CachedIncrementalParseState, source:
+     figures: cache.figures,
+     activeFigureId: cache.activeFigureId,
+     diagnostics: collectDiagnostics(cache.diagnosticPartition),
+-    features: FeatureFlags
++    features: FeatureFlags,
++    nextStatementIndex: cache.nextStatementIndex ?? undefined
+   };
+ }
+ 
+@@ -552,6 +708,7 @@ function buildCache(
+     includeContextDefinitions: boolean;
+     sourceRevision: number | null;
+     treeFresh: boolean;
++    shareFigure?: boolean;
+   }
+ ): CachedIncrementalParseState {
+   const activeFigureSpan = resolveActiveFigureSpan(
+@@ -570,11 +727,12 @@ function buildCache(
+       options.includeContextDefinitions && activeFigureSpan
+         ? getCachedContextDefinitions(parse.source.slice(0, activeFigureSpan.from), collectContextDefinitions)
+         : [],
+-    figure: structuredClone(parse.figure),
++    figure: options.shareFigure ? parse.figure : structuredClone(parse.figure),
+     statementRefsBySourceId: buildStatementIndex(parse.figure.body),
+     diagnosticPartition: partition,
+     tree: parse.tree,
+-    treeFresh: options.treeFresh
++    treeFresh: options.treeFresh,
++    nextStatementIndex: parse.nextStatementIndex ?? null
+   };
+ }
+ 
+diff --git a/packages/core/src/parser/index.ts b/packages/core/src/parser/index.ts
+index 42d343a4..c07f92c1 100644
+--- a/packages/core/src/parser/index.ts
++++ b/packages/core/src/parser/index.ts
+@@ -30,6 +30,8 @@ export type ParseTikzOptions = {
+   activeFigureId?: string | null;
+   includeContextDefinitions?: boolean;
+   nodeTextValidator?: (context: NodeTextValidationContext) => NodeTextValidationIssue | null;
++  /** The index of the first statement, for statements parsed apart from the figure they continue. Not with `includeContextDefinitions`. */
++  firstStatementIndex?: number;
+ };
+ 
+ export type ParseTikzResult = {
+@@ -40,6 +42,8 @@ export type ParseTikzResult = {
+   activeFigureId: string | null;
+   diagnostics: Diagnostic[];
+   features: typeof FeatureFlags;
++  /** The index that the next statement of the active figure would take. */
++  nextStatementIndex?: number;
+ };
+ 
+ export function parseTikz(input: string, opts: ParseTikzOptions = {}): ParseTikzResult {
+@@ -61,7 +65,8 @@ export function parseTikz(input: string, opts: ParseTikzOptions = {}): ParseTikz
+     activeFigureId: opts.activeFigureId,
+     includeContextDefinitions: opts.includeContextDefinitions ?? false,
+     contextDefinitions,
+-    scannedFigures
++    scannedFigures,
++    firstStatementIndex: opts.firstStatementIndex
+   });
+   const diagnostics = [...mapped.diagnostics];
+ 
+@@ -96,7 +101,8 @@ export function parseTikz(input: string, opts: ParseTikzOptions = {}): ParseTikz
+     figures: mapped.figures,
+     activeFigureId: mapped.activeFigureId,
+     diagnostics,
+-    features: FeatureFlags
++    features: FeatureFlags,
++    nextStatementIndex: mapped.nextStatementIndex
+   };
+ }
+ 
 diff --git a/packages/core/src/render/index.ts b/packages/core/src/render/index.ts
-index 11af4026..20e7e86f 100644
+index 11af4026..a256db61 100644
 --- a/packages/core/src/render/index.ts
 +++ b/packages/core/src/render/index.ts
 @@ -8,6 +8,7 @@ import { createMathJaxNodeTextEngine } from "../text/mathjax-engine.js";
@@ -25228,7 +25836,16 @@ index 11af4026..20e7e86f 100644
  
  let mathJaxEngineUnavailable = false;
  let mathJaxEngineUnavailableReason: string | null = null;
-@@ -99,6 +100,7 @@ export async function renderTikzToSvgAsync(source: string, opts: RenderTikzOptio
+@@ -19,6 +20,8 @@ export type RenderTikzOptions = {
+   svg?: EmitSvgOptions;
+   textEngine?: NodeTextEngine | null;
+   validateNodeText?: boolean;
++  /** Options of the SVG that depend on the parsed figure, such as its padding; they are read after the parse, so the source is parsed once. */
++  resolveSvg?: (parse: ParseTikzResult) => Partial<EmitSvgOptions>;
+ };
+ 
+ export type RenderDiagnostic = {
+@@ -99,6 +102,7 @@ export async function renderTikzToSvgAsync(source: string, opts: RenderTikzOptio
              if (isMatrixNode(node)) {
                return null;
              }
@@ -25236,8 +25853,23 @@ index 11af4026..20e7e86f 100644
              return textEngine?.validate(normalizeNodeTextForValidation(node.text)) ?? null;
            }
          : undefined)
+@@ -109,12 +113,13 @@ export async function renderTikzToSvgAsync(source: string, opts: RenderTikzOptio
+     textEngine: opts.evaluate?.textEngine ?? textEngine
+   };
+ 
+-  const svgOpts: EmitSvgOptions = {
++  const baseSvgOpts: EmitSvgOptions = {
+     ...opts.svg,
+     textEngine: opts.svg?.textEngine ?? textEngine
+   };
+ 
+   const parseResult = parseTikz(source, parseOpts);
++  const svgOpts: EmitSvgOptions = opts.resolveSvg ? { ...baseSvgOpts, ...opts.resolveSvg(parseResult) } : baseSvgOpts;
+   let semanticResult = evaluateTikzFigure(parseResult.figure, parseResult.source, evaluateOpts);
+   let svgResult = emitSvg(semanticResult.scene, svgOpts);
+ 
 diff --git a/packages/core/src/semantic/evaluate.ts b/packages/core/src/semantic/evaluate.ts
-index f322a21d..70962270 100644
+index f322a21d..7e013118 100644
 --- a/packages/core/src/semantic/evaluate.ts
 +++ b/packages/core/src/semantic/evaluate.ts
 @@ -40,7 +40,7 @@ import {
@@ -25249,7 +25881,18 @@ index f322a21d..70962270 100644
  import {
    beginStatementEffectTracking,
    readContextMacroBinding,
-@@ -263,9 +263,7 @@ export function createSemanticEvaluationRun(
+@@ -239,7 +239,9 @@ export function createSemanticEvaluationRun(
+   const parent = currentFrame(context);
+   const rootCustomStyles = cloneCustomStyleRegistry(parent.customStyles);
+   const figureSourceRef: StyleSourceRef = {
+-    sourceId: `figure:${figure.span.from}:${figure.span.to}`,
++    // The figure's start names it: its end moves with each statement that is added, and the statements
++    // that are kept through such an addition keep this reference (#90).
++    sourceId: `figure:${figure.span.from}:options`,
+     sourceSpan: figure.options?.span ?? figure.span,
+     sourceKind: "figure-options",
+     label: "figure"
+@@ -263,9 +265,7 @@ export function createSemanticEvaluationRun(
        parent.styleChain,
        (raw) => resolveContextColorAliasValue(context, raw)
      );
@@ -25260,7 +25903,7 @@ index f322a21d..70962270 100644
      const rootMeta = resolveFrameMeta(parent, rootDelta.expandedOptionLists, figureSourceRef);
      if (collectBackgroundOptionEffects(context, rootDelta.expandedOptionLists, figureSourceRef)) {
        markFeature(featureUsage, "backgrounds_library", "supported");
-@@ -911,9 +909,7 @@ function evaluateStatement(
+@@ -911,9 +911,7 @@ function evaluateStatement(
      );
      if (optionLists.length > 0) {
        markFeature(featureUsage, "options_structured", "supported");
@@ -25271,7 +25914,7 @@ index f322a21d..70962270 100644
      }
      const scopedCustomStyles = cloneCustomStyleRegistry(parent.customStyles);
      const scopedPicDefinitions = clonePicDefinitionRegistry(parent.picDefinitions);
-@@ -1090,9 +1086,7 @@ function evaluateStatement(
+@@ -1090,9 +1088,7 @@ function evaluateStatement(
      );
      if (optionLists.length > 0) {
        markFeature(featureUsage, "options_structured", "supported");
@@ -25282,7 +25925,7 @@ index f322a21d..70962270 100644
      }
      const scopedCustomStyles = cloneCustomStyleRegistry(parent.customStyles);
      const scopedPicDefinitions = clonePicDefinitionRegistry(parent.picDefinitions);
-@@ -1400,9 +1394,7 @@ function evaluatePicOperationInStatement(
+@@ -1400,9 +1396,7 @@ function evaluatePicOperationInStatement(
    }
  
    pushStyleDiagnostics(diagnostics, resolvedPicStyle.diagnostics, "Pic option issue", item.optionsSpan ?? item.span);
@@ -25293,7 +25936,7 @@ index f322a21d..70962270 100644
  
    const parsed = parseStatementsFromBodyWithMapping(
      resolvedCode.codeRaw,
-@@ -2665,20 +2657,14 @@ function angleOnArc(angle: number, start: number, end: number, sweep: boolean):
+@@ -2665,20 +2659,14 @@ function angleOnArc(angle: number, start: number, end: number, sweep: boolean):
    return aa <= s + epsilon && aa >= e - epsilon;
  }
  
@@ -25321,6 +25964,103 @@ index f322a21d..70962270 100644
  }
  
  export function initializeFeatureUsage(): FeatureUsage {
+diff --git a/packages/core/src/semantic/incremental.ts b/packages/core/src/semantic/incremental.ts
+index aac17783..10edd6c4 100644
+--- a/packages/core/src/semantic/incremental.ts
++++ b/packages/core/src/semantic/incremental.ts
+@@ -32,7 +32,11 @@ import type {
+ } from "./types.js";
+ import { MAIN_SCENE_LAYER } from "./types.js";
+ 
+-export type IncrementalSemanticTrigger = "drag-element" | "drag-handle" | "other";
++/**
++ * `append`: the figure may be the cached figure with statements added after its last one. The session then
++ * evaluates only the added statements, from the state that the cached run ended in.
++ */
++export type IncrementalSemanticTrigger = "drag-element" | "drag-handle" | "append" | "other";
+ export type IncrementalSemanticReplayMode = "full" | "suffix" | "selective";
+ 
+ export type IncrementalSemanticHints = {
+@@ -143,6 +147,36 @@ export function createIncrementalSemanticSession(
+       return full.output;
+     }
+ 
++    if (hints.trigger === "append" && cached) {
++      const appendFrom = resolveAppendedStatementStart(cached, run, statementIds, input.figure.span.from);
++      const startCheckpoint = appendFrom === null ? undefined : cached.checkpointsBeforeStatement.get(appendFrom);
++      const startFeatureUsage = appendFrom === null ? undefined : cached.featureUsageBeforeStatement.get(appendFrom);
++      if (appendFrom !== null && startCheckpoint && startFeatureUsage) {
++        try {
++          const suffix = evaluateIncrementalSuffix({
++            run,
++            previous: cached,
++            statementIds,
++            restoreIndex: appendFrom,
++            checkpointInterval: cached.checkpointInterval,
++            startCheckpoint,
++            startFeatureUsage,
++            affectedStatementCount: statementCount - appendFrom
++          });
++          cached = suffix.cached;
++          return suffix.output;
++        } catch {
++          const full = evaluateFullyAndCache(
++            createSemanticEvaluationRun(input.figure, input.source, options),
++            statementIds,
++            "runtime-error"
++          );
++          cached = full.cached;
++          return full.output;
++        }
++      }
++    }
++
+     const fallback = decideFallbackReason(hints, cached, statementIds);
+     if (fallback) {
+       const full = evaluateFullyAndCache(run, statementIds, fallback);
+@@ -710,6 +744,42 @@ function countFragmentEditHandles(
+   return count;
+ }
+ 
++/**
++ * The index of the first added statement when the run's statements are the cached statements, unchanged,
++ * followed by new ones; null otherwise. The cached statements are unchanged when their ids are the same and
++ * the source up to the end of the last of them is the same text: a statement reads nothing after itself.
++ * That text holds the figure's own options when one of the cached statements is inside the figure.
++ */
++function resolveAppendedStatementStart(
++  cached: CachedSemanticRun,
++  run: ReturnType<typeof createSemanticEvaluationRun>,
++  statementIds: readonly string[],
++  figureFrom: number
++): number | null {
++  const count = cached.statementIds.length;
++  if (count === 0 || statementIds.length <= count) {
++    return null;
++  }
++  for (let index = 0; index < count; index += 1) {
++    if (cached.statementIds[index] !== statementIds[index]) {
++      return null;
++    }
++  }
++  let keptEnd = 0;
++  for (let index = 0; index < count; index += 1) {
++    keptEnd = Math.max(keptEnd, run.expandedFigureBody[index].span.to);
++  }
++  for (let index = count; index < statementIds.length; index += 1) {
++    if (run.expandedFigureBody[index].span.from < keptEnd) {
++      return null;
++    }
++  }
++  if (keptEnd <= figureFrom || cached.source.length < keptEnd || !run.source.startsWith(cached.source.slice(0, keptEnd))) {
++    return null;
++  }
++  return count;
++}
++
+ function decideFallbackReason(
+   hints: IncrementalSemanticHints,
+   cached: CachedSemanticRun | null,
 diff --git a/packages/core/src/semantic/nodes/layout.ts b/packages/core/src/semantic/nodes/layout.ts
 index 1d9b4910..2475471c 100644
 --- a/packages/core/src/semantic/nodes/layout.ts
@@ -25597,6 +26337,47 @@ index 1be8c49a..cfe86d66 100644
    | {
        mode: "mathjax";
        cacheKey: string;
+diff --git a/packages/core/src/transform/cst-to-ast.ts b/packages/core/src/transform/cst-to-ast.ts
+index 9b988015..24421344 100644
+--- a/packages/core/src/transform/cst-to-ast.ts
++++ b/packages/core/src/transform/cst-to-ast.ts
+@@ -31,6 +31,8 @@ export type CstToAstResult = {
+   figures: TikzFigureInventoryItem[];
+   activeFigureId: string | null;
+   diagnostics: Diagnostic[];
++  /** The index that the next statement of the active figure would take: statement ids are numbered in source order. */
++  nextStatementIndex?: number;
+ };
+ 
+ export type CstToIrResult = CstToAstResult;
+@@ -40,6 +42,8 @@ export type CstToAstOptions = {
+   includeContextDefinitions?: boolean;
+   contextDefinitions?: Statement[];
+   scannedFigures?: readonly ScannedFigure[];
++  /** The index of the first statement of the active figure, for statements that are parsed apart from the figure they continue. */
++  firstStatementIndex?: number;
+ };
+ 
+ type FigureNodeEntry = {
+@@ -116,6 +120,8 @@ export function fromCst(tree: Tree, source: string, opts: CstToAstOptions = {}):
+     : [];
+   if (opts.includeContextDefinitions) {
+     activeState.nextStatementIndex = priorDefinitions.filter((statement) => !isMacroContextStatement(statement)).length;
++  } else if (opts.firstStatementIndex !== undefined) {
++    activeState.nextStatementIndex = opts.firstStatementIndex;
+   }
+   const activeBody = mapBodyStatements(activeSyntax.node, activeSyntax.parseSource, activeState);
+   const body = [...priorDefinitions, ...activeBody];
+@@ -136,7 +142,8 @@ export function fromCst(tree: Tree, source: string, opts: CstToAstOptions = {}):
+     },
+     figures: figureEntries.map((entry) => entry.inventory),
+     activeFigureId: activeFigureEntry.id,
+-    diagnostics
++    diagnostics,
++    nextStatementIndex: activeState.nextStatementIndex
+   };
+ }
+ 
 diff --git a/test/app-menu.spec.ts b/test/app-menu.spec.ts
 index 44a6636c..00fc325c 100644
 --- a/test/app-menu.spec.ts
@@ -26876,6 +27657,294 @@ index 36c1dfd9..f3303c3a 100644
      );
      expect(generateElementSource(
        { kind: "bezier", to: wp(cm(3), cm(0)), control1: wp(cm(1), cm(1)) },
+diff --git a/test/incremental-append.spec.ts b/test/incremental-append.spec.ts
+new file mode 100644
+index 00000000..82a167cc
+--- /dev/null
++++ b/test/incremental-append.spec.ts
+@@ -0,0 +1,282 @@
++import { describe, expect, it } from "vitest";
++
++import { computeSnapshot } from "../packages/app/src/compute.js";
++import { createIncrementalParseSession, parseTikz } from "../packages/core/src/parser/index.js";
++import { evaluateTikzFigure } from "../packages/core/src/semantic/evaluate.js";
++import { createIncrementalSemanticSession } from "../packages/core/src/semantic/incremental.js";
++
++// A source with statements added at the end of the active figure, as a pen stroke or a placed shape adds
++// them, is parsed and evaluated from the added statements alone. The result is the result of the whole
++// source: the same statements with the same ids and spans, the same scene, the same handles.
++
++const stroke = (key: string, draw: string): string =>
++  `% workbench-ink:%7B%22key%22%3A%22${key}%22%7D\n\\begin{scope}\n${draw}\n\\end{scope}\n% workbench-ink-end:${key}\n`;
++
++const insertBeforeEnd = (source: string, text: string, figure = 0): string => {
++  let at = -1;
++  for (let index = 0; index <= figure; index += 1) at = source.indexOf("\\end{tikzpicture}", at + 1);
++  const lineStart = source.lastIndexOf("\n", at - 1) + 1;
++  const offset = /^[ \t]*$/.test(source.slice(lineStart, at)) ? lineStart : at;
++  return source.slice(0, offset) + text + source.slice(offset);
++};
++
++const parseWhole = (source: string, activeFigureId?: string) =>
++  parseTikz(source, { recover: true, includeContextDefinitions: true, activeFigureId });
++
++function expectAppendsEquivalent(
++  base: string,
++  additions: readonly string[],
++  figure = 0,
++  evaluation: "incremental" | "full" = "incremental"
++): void {
++  const activeFigureId = `figure:${figure}`;
++  const parseSession = createIncrementalParseSession();
++  const seeded = parseWhole(base, activeFigureId);
++  parseSession.prime(seeded, { activeFigureId, includeContextDefinitions: true, sourceRevision: 0 });
++  const semanticSession = createIncrementalSemanticSession();
++  semanticSession.evaluate({ figure: seeded.figure, source: base, hints: { trigger: "other" } });
++
++  let source = base;
++  additions.forEach((addition, index) => {
++    source = insertBeforeEnd(source, addition, figure);
++    const whole = parseWhole(source, activeFigureId);
++    const appended = parseSession.append({ source, sourceRevision: index + 1, activeFigureId, includeContextDefinitions: true });
++    expect(appended, `addition ${index} was not taken as an append`).not.toBeNull();
++    expect(appended!.stats.strategy).toBe("incremental");
++    expect(appended!.stats.reparsedStatementCount).toBeGreaterThan(0);
++    expect(appended!.parse.figure).toEqual(whole.figure);
++    expect(appended!.parse.figures).toEqual(whole.figures);
++    expect(appended!.parse.diagnostics).toEqual(whole.diagnostics);
++    expect(appended!.parse.activeFigureId).toBe(whole.activeFigureId);
++    // A session that is given this parse can take the next addition from it.
++    expect(appended!.parse.nextStatementIndex).toBe(whole.nextStatementIndex);
++
++    const evaluated = semanticSession.evaluate({ figure: appended!.parse.figure, source, hints: { trigger: "append" } });
++    expect(evaluated.stats.strategy).toBe(evaluation);
++    if (evaluation === "incremental") {
++      expect(evaluated.stats.replayMode).toBe("suffix");
++      expect(evaluated.stats.reusedStatementCount).toBeGreaterThan(0);
++      expect(evaluated.stats.recomputedStatementCount).toBeLessThan(evaluated.stats.reusedStatementCount + evaluated.stats.recomputedStatementCount);
++    }
++    expect(evaluated.semantic).toEqual(evaluateTikzFigure(whole.figure, source));
++  });
++}
++
++describe("statements added at the end of the figure", () => {
++  it("a drawn line after a line", () => {
++    expectAppendsEquivalent(String.raw`\begin{tikzpicture}
++  \draw (0,0) -- (1,0);
++\end{tikzpicture}
++`, ["  \\draw (2,2) -- (5,4);\n"]);
++  });
++
++  it("three pen strokes, one after another, each in its record and scope", () => {
++    expectAppendsEquivalent(String.raw`\begin{tikzpicture}
++  \draw[blue] (0,0) rectangle (2,1);
++` + stroke("a", "\\draw (0pt,0pt) -- (3.25pt,4.5pt) -- (7pt,2pt);") + String.raw`\end{tikzpicture}
++`, [
++      stroke("b", "\\draw[red] (10pt,0pt) -- (13.25pt,4.5pt);"),
++      stroke("c", "\\draw (20pt,0pt) -- (23.25pt,4.5pt) -- (30pt,1pt);"),
++      stroke("d", "\\draw[line width=1.2pt] (0pt,20pt) -- (3pt,24pt);")
++    ]);
++  });
++
++  it("two strokes in one step, as when the canvas computes after a second stroke", () => {
++    expectAppendsEquivalent(String.raw`\begin{tikzpicture}
++  \draw (0,0) -- (1,0);
++\end{tikzpicture}
++`, [stroke("b", "\\draw (10pt,0pt) -- (13pt,4pt);") + stroke("c", "\\draw (20pt,0pt) -- (23pt,4pt);")]);
++  });
++
++  it("a named point, a node, and a line through both", () => {
++    expectAppendsEquivalent(String.raw`\begin{tikzpicture}[scale=2]
++  \coordinate (A) at (0,0);
++  \draw (A) -- (1,1);
++\end{tikzpicture}
++`, [
++      "  \\coordinate (B) at (2,1);\n",
++      "  \\node[draw] (N) at (3,0) {x};\n",
++      "  \\draw[->] (A) -- (B) -- (N);\n"
++    ]);
++  });
++
++  it("a figure with definitions before it and a second figure after it", () => {
++    expectAppendsEquivalent(String.raw`\tikzset{thick line/.style={line width=2pt}}
++\definecolor{mine}{rgb}{0.2,0.4,0.6}
++\begin{tikzpicture}
++  \draw[thick line, mine] (0,0) -- (1,0);
++\end{tikzpicture}
++
++\begin{tikzpicture}
++  \draw (0,0) circle (1);
++\end{tikzpicture}
++`, ["  \\draw[thick line] (0,1) -- (1,1);\n", stroke("b", "\\draw[mine] (10pt,0pt) -- (13pt,4pt);")]);
++  });
++
++  it("the second figure of two", () => {
++    expectAppendsEquivalent(String.raw`\begin{tikzpicture}
++  \draw (0,0) -- (1,0);
++\end{tikzpicture}
++
++\begin{tikzpicture}
++  \draw (0,0) circle (1);
++  \begin{scope}[xshift=1cm]
++    \draw (0,0) -- (1,1);
++  \end{scope}
++\end{tikzpicture}
++`, ["  \\draw (2,2) rectangle (3,3);\n", stroke("b", "\\draw (10pt,0pt) -- (13pt,4pt);")], 1);
++  });
++
++  it("after a nested scope", () => {
++    expectAppendsEquivalent(String.raw`\begin{tikzpicture}
++  \draw (0,0) -- (0,1);
++  \begin{scope}[rotate=30]
++    \draw (0,0) rectangle (1,1);
++    \begin{scope}[red]
++      \fill (0.5,0.5) circle (0.1);
++    \end{scope}
++  \end{scope}
++\end{tikzpicture}
++`, ["  \\draw (4,0) -- (5,1);\n", "  \\begin{scope}[blue]\n    \\draw (6,0) -- (7,1);\n  \\end{scope}\n"]);
++  });
++
++  it("after a foreach: its repetitions are numbered after every statement, so the figure is evaluated whole", () => {
++    expectAppendsEquivalent(String.raw`\begin{tikzpicture}
++  \foreach \x in {0,1,2} { \draw (\x,0) -- (\x,1); }
++  \draw (3,0) -- (3,1);
++\end{tikzpicture}
++`, ["  \\draw (4,0) -- (5,1);\n", stroke("b", "\\draw (10pt,0pt) -- (13pt,4pt);")], 0, "full");
++  });
++});
++
++describe("a source that is not the cached source with statements added at its figure's end", () => {
++  const base = String.raw`\begin{tikzpicture}
++  \draw (0,0) -- (1,0);
++  \draw (0,1) -- (1,1);
++\end{tikzpicture}
++`;
++  const primed = () => {
++    const session = createIncrementalParseSession();
++    session.prime(parseWhole(base, "figure:0"), { activeFigureId: "figure:0", includeContextDefinitions: true, sourceRevision: 0 });
++    return session;
++  };
++  const refused = (source: string) =>
++    primed().append({ source, sourceRevision: 1, activeFigureId: "figure:0", includeContextDefinitions: true });
++
++  it("is refused when a statement changed", () => {
++    expect(refused(base.replace("(1,1)", "(2,2)"))).toBeNull();
++  });
++  it("is refused when a statement changed and another was added", () => {
++    expect(refused(insertBeforeEnd(base.replace("(1,0)", "(3,0)"), "  \\draw (2,2) -- (3,3);\n"))).toBeNull();
++  });
++  it("is refused when the statement was added before the last one", () => {
++    expect(refused(base.replace("  \\draw (0,1)", "  \\draw (5,5) -- (6,6);\n  \\draw (0,1)"))).toBeNull();
++  });
++  it("is refused when the text was added after the figure", () => {
++    expect(refused(base + "\\begin{tikzpicture}\n\\draw (0,0) -- (1,1);\n\\end{tikzpicture}\n")).toBeNull();
++  });
++  it("is refused when a statement was removed", () => {
++    expect(refused(base.replace("  \\draw (0,1) -- (1,1);\n", ""))).toBeNull();
++  });
++  it("is refused when the added text does not parse", () => {
++    expect(refused(insertBeforeEnd(base, "  \\draw (2,2) -- (3,3\n"))).toBeNull();
++  });
++  it("is refused for the first statement of an empty figure, and keeps the cache for the next source", () => {
++    const session = createIncrementalParseSession();
++    const empty = "\\begin{tikzpicture}\n\\end{tikzpicture}\n";
++    session.prime(parseWhole(empty, "figure:0"), { activeFigureId: "figure:0", includeContextDefinitions: true, sourceRevision: 0 });
++    expect(session.append({ source: insertBeforeEnd(empty, "  \\draw (0,0) -- (1,1);\n"), sourceRevision: 1, activeFigureId: "figure:0", includeContextDefinitions: true })).toBeNull();
++    expect(session.evaluate({ source: empty, activeFigureId: "figure:0", includeContextDefinitions: true }).stats.strategy).toBe("reused");
++  });
++
++  it("is evaluated whole when the statements before the added ones changed", () => {
++    const session = createIncrementalSemanticSession();
++    session.evaluate({ figure: parseWhole(base, "figure:0").figure, source: base, hints: { trigger: "other" } });
++    const next = insertBeforeEnd(base.replace("(1,0)", "(3,0)"), "  \\draw (2,2) -- (3,3);\n");
++    const whole = parseWhole(next, "figure:0");
++    const evaluated = session.evaluate({ figure: whole.figure, source: next, hints: { trigger: "append" } });
++    expect(evaluated.stats.strategy).toBe("full");
++    expect(evaluated.semantic).toEqual(evaluateTikzFigure(whole.figure, next));
++  });
++
++  it("is evaluated whole when the figure clips", () => {
++    const clipped = base.replace("  \\draw (0,0)", "  \\clip (0,0) rectangle (2,2);\n  \\draw (0,0)");
++    const session = createIncrementalSemanticSession();
++    session.evaluate({ figure: parseWhole(clipped, "figure:0").figure, source: clipped, hints: { trigger: "other" } });
++    const next = insertBeforeEnd(clipped, "  \\draw (2,2) -- (3,3);\n");
++    const whole = parseWhole(next, "figure:0");
++    const evaluated = session.evaluate({ figure: whole.figure, source: next, hints: { trigger: "append" } });
++    expect(evaluated.stats.strategy).toBe("full");
++    expect(evaluated.semantic).toEqual(evaluateTikzFigure(whole.figure, next));
++  });
++});
++
++describe("the parse that an edit asks for", () => {
++  it("reads only the added statements when the source is the last parsed source with a stroke added", async () => {
++    const { createEditAnalysisSession } = await import("../packages/core/src/edit/analysis.js");
++    let source = String.raw`\begin{tikzpicture}
++  \draw (0,0) -- (1,0);
++\end{tikzpicture}
++`;
++    const session = createEditAnalysisSession();
++    // The parse of the canvas's last snapshot, which itself came from an append.
++    const parseSession = createIncrementalParseSession();
++    parseSession.prime(parseWhole(source, "figure:0"), { activeFigureId: "figure:0", includeContextDefinitions: true });
++    source = insertBeforeEnd(source, stroke("a", "\\draw (0pt,0pt) -- (3pt,4pt);"));
++    const snapshotParse = parseSession.append({ source, activeFigureId: "figure:0", includeContextDefinitions: true })!.parse;
++    session.primeFromParse(snapshotParse, source, { activeFigureId: "figure:0" });
++
++    // The whole source is parsed by the syntax parser once for each call of parseTikz; a call for the added
++    // statements reads some hundred characters.
++    const parsedLengths: number[] = [];
++    globalThis.__TIKZ_EDITOR_PROFILING_RECORDER__ = {
++      incrementCounter: (counter) => { if (counter === "parseTikzCalls") parsedLengths.push(-1); },
++      recordComputeTiming: () => {},
++      recordSvgPatchTiming: () => {},
++      recordSourcePanelSyncTiming: () => {}
++    };
++    try {
++      for (const key of ["b", "c", "d"]) {
++        source = insertBeforeEnd(source, stroke(key, "\\draw (10pt,0pt) -- (13pt,4pt);"));
++        parsedLengths.length = 0;
++        const view = session.ensure(source, { activeFigureId: "figure:0" });
++        // One parse, of the added statements; the comparison below parses the whole source apart from it.
++        expect(parsedLengths.length).toBe(1);
++        const whole = parseWhole(source, "figure:0");
++        expect(view.parseResult.figure).toEqual(whole.figure);
++        expect(view.parseResult.figure.body.length).toBe(whole.figure.body.length);
++        expect(view.statementSnapshot.all.length).toBeGreaterThan(0);
++        // The same source again is no parse at all.
++        parsedLengths.length = 0;
++        session.ensure(source, { activeFigureId: "figure:0" });
++        expect(parsedLengths.length).toBe(0);
++      }
++    } finally {
++      globalThis.__TIKZ_EDITOR_PROFILING_RECORDER__ = undefined;
++    }
++  });
++});
++
++describe("the snapshot of a source with a stroke added", () => {
++  it("is the snapshot of the whole source", async () => {
++    let source = String.raw`\begin{tikzpicture}
++  \draw[blue] (0,0) rectangle (2,1);
++  \node at (1,2) {$x^2$};
++\end{tikzpicture}
++`;
++    await computeSnapshot({ id: "append-seed", kind: "render", source, sourceRevision: 0, activeFigureId: "figure:0" });
++    for (const [index, key] of ["a", "b", "c"].entries()) {
++      source = insertBeforeEnd(source, stroke(key, `\\draw (${index * 10}pt,0pt) -- (${index * 10 + 3}pt,4pt) -- (${index * 10 + 7}pt,1pt);`));
++      const appended = await computeSnapshot({ id: `append-${key}`, kind: "render", source, sourceRevision: index + 1, activeFigureId: "figure:0", trigger: "append" });
++      const whole = await computeSnapshot({ id: `append-whole-${key}`, kind: "render", source, sourceRevision: index + 1, activeFigureId: "figure:0", trigger: "other" });
++      expect(appended.diagnostics).toEqual(whole.diagnostics);
++      expect(appended.snapshot.svg?.svg).toBe(whole.snapshot.svg?.svg);
++      expect(appended.snapshot.svg?.viewBox).toEqual(whole.snapshot.svg?.viewBox);
++      expect(appended.snapshot.scene).toEqual(whole.snapshot.scene);
++      expect(appended.snapshot.editHandles).toEqual(whole.snapshot.editHandles);
++      expect(appended.snapshot.parseResult?.figure).toEqual(whole.snapshot.parseResult?.figure);
++      expect(appended.snapshot.figures).toEqual(whole.snapshot.figures);
++      expect(appended.snapshot.activeFigureId).toBe(whole.snapshot.activeFigureId);
++    }
++  });
++});
 diff --git a/test/objects-panel-model.spec.ts b/test/objects-panel-model.spec.ts
 index 5e2d6e99..c55a9748 100644
 --- a/test/objects-panel-model.spec.ts
