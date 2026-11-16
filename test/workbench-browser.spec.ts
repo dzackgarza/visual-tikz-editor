@@ -893,6 +893,71 @@ describe("standalone workbench host boundary", function () {
     },
   );
 
+  /** One step of a pinch on a touchpad, as the desktop shell reports it to the window (src/touchpad-pinch.ts). */
+  const touchpadPinch = (step: { ratio: number; x: number; y: number }) =>
+    page.evaluate((detail) => {
+      window.dispatchEvent(new CustomEvent("touchpad-pinch", { detail }));
+    }, step);
+
+  story(
+    { document: String.raw`\begin{tikzpicture}\draw (0,0) circle (1);\draw (3,0) circle (1);\end{tikzpicture}` },
+    "a touchpad pinch that the desktop shell reports zooms the render view by its ratio, about its place",
+    async function () {
+      // In the desktop app a pinch over the render view magnified the whole window (issue #18).
+      await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+      await expect(page.locator(".tikz-view-status")).toContainText("Up to date", { timeout: 40_000 });
+      const figure = page.locator(".tikz-figure-viewer .viewer-canvas img");
+      await expect(figure).toBeVisible();
+      const opened = await layoutBox(figure);
+      // The pointer is on a place of the figure a quarter across and three quarters down.
+      const place = { x: opened.x + opened.width / 4, y: opened.y + (opened.height * 3) / 4 };
+      for (const ratio of [1.25, 1.2, 4 / 3]) await touchpadPinch({ ratio, ...place });
+      await expect
+        .poll(async () => (await layoutBox(figure)).width / opened.width, {
+          message: "The pinch did not zoom the rendered figure to twice its size",
+        })
+        .toBeCloseTo(2, 2);
+      const zoomed = await layoutBox(figure);
+      assert.ok(
+        Math.abs(zoomed.x + zoomed.width / 4 - place.x) <= 1 && Math.abs(zoomed.y + (zoomed.height * 3) / 4 - place.y) <= 1,
+        `The place under the pinch moved: ${JSON.stringify({ opened, zoomed })}`,
+      );
+      // A pinch with the pointer on the document bar is not a pinch on the figure.
+      const bar = await layoutBox(page.locator(".document-bar"));
+      await touchpadPinch({ ratio: 2, x: bar.x + bar.width / 2, y: bar.y + bar.height / 2 });
+      await touchpadPinch({ ratio: 0.5, ...place });
+      await expect
+        .poll(async () => (await layoutBox(figure)).width / opened.width, {
+          message: "The pinch did not zoom the rendered figure back",
+        })
+        .toBeCloseTo(1, 2);
+    },
+  );
+
+  story({}, "a touchpad pinch that the desktop shell reports zooms Quiver by its ratio", async function () {
+    // In the desktop app a pinch over Quiver magnified the whole window (issue #18). Quiver zooms about
+    // the centre of its view, as its own wheel with Shift does.
+    await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+    await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
+    const frame = await layoutBox(page.locator('iframe[title="Quiver diagram editor"]'));
+    const place = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+    /** The distance between the two vertices, in the window. */
+    const gap = async () => {
+      const [first, second] = await quiver
+        .locator(".vertex")
+        .evaluateAll((vertices) => vertices.map((vertex) => vertex.getBoundingClientRect().x));
+      return second - first;
+    };
+    const opened = await gap();
+    for (const ratio of [1.25, 1.2, 4 / 3]) await touchpadPinch({ ratio, ...place });
+    await expect
+      .poll(async () => (await gap()) / opened, { message: "The pinch did not zoom Quiver to twice its size" })
+      .toBeCloseTo(2, 2);
+    await touchpadPinch({ ratio: 0.5, ...place });
+    await expect.poll(async () => (await gap()) / opened, { message: "The pinch did not zoom Quiver back" }).toBeCloseTo(1, 2);
+  });
+
   /** Two presses on an empty cell of Quiver: the first shows the focus point there, and the second makes a vertex. */
   async function addQuiverVertex(at: { x: number; y: number }): Promise<void> {
     const focusPoint = page.frameLocator('iframe[title="Quiver diagram editor"]').locator(".focus-point");
