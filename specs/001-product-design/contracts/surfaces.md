@@ -20,6 +20,8 @@ least 44 × 44 pt (Principle II).
 | Trailing | Share and Export | "Share and Export" | `RiShareBoxLine` | Opens Copy TikZ, then PDF…, SVG…, PNG… |
 | Trailing | More | "More" | `RiMoreLine` | Opens Settings… |
 
+The bar is one row at every window width and every save state. The save state takes the width the buttons leave, on at most two lines inside the row, and ends in "…" when it does not fit; its whole text is its tooltip. The title gives up width only after the save state has none. The bar's height never changes, so the canvas keeps its place while the save state changes ([#103](https://github.com/dzackgarza/visual-tikz-editor/issues/103)).
+
 ## Drawing toolbar
 
 Order: Lasso, Pen, Eraser, Shapes, Text, Fill, a separator, the active tool's presets, the + slot.

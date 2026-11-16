@@ -12,8 +12,8 @@
           <button type="button" role="menuitem" :disabled="document === null" @click="saveAs">Save As…</button>
         </div>
       </div>
-      <span class="tikz-standalone-status" role="status">{{ status }}</span>
-      <span v-if="editorStatus !== ''" class="tikz-view-status">{{ editorStatus }}</span>
+      <span class="tikz-standalone-status" role="status" :title="status">{{ status }}</span>
+      <span v-if="editorStatus !== ''" class="tikz-view-status" :title="editorStatus">{{ editorStatus }}</span>
       <div class="history-controls">
         <button type="button" aria-label="Undo" title="Undo" :disabled="!canUndo && !constructing" @click="undoDocument">
           <RiArrowGoBackLine aria-hidden="true" size="22" />
@@ -818,7 +818,8 @@ body,
   position: relative;
   z-index: 20;
   display: flex;
-  flex-wrap: wrap;
+  /* One row at every width and status line: a second row would move the canvas under the pen. */
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
   margin: 8px;
@@ -914,6 +915,7 @@ body,
 
 .panel-controls {
   display: flex;
+  flex: 0 0 auto;
   gap: 4px;
 }
 
@@ -928,6 +930,7 @@ body,
 
 .history-controls {
   display: flex;
+  flex: 0 0 auto;
   gap: 4px;
   margin-inline: auto;
 }
@@ -950,15 +953,21 @@ body,
   cursor: default;
 }
 
-.tikz-standalone-status {
-  min-width: 0;
-  color: var(--graphite);
-  overflow-wrap: anywhere;
-}
-
+/* The status line takes the width the buttons leave and at most two lines, which the row of buttons holds.
+   Its shrink factor makes it give up its whole width before the title gives up any. */
+.tikz-standalone-status,
 .tikz-view-status {
+  display: -webkit-box;
+  flex: 0 1000000 auto;
+  min-width: 0;
+  max-height: 2.4em;
+  overflow: hidden;
   color: var(--graphite);
+  line-height: 1.2;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .dialog-backdrop {
