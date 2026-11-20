@@ -29,6 +29,13 @@ A failed story keeps its Playwright trace in `test-results/workbench/`
 | Each surface | It holds exactly the controls of [surfaces](contracts/surfaces.md), in order, found by accessible name (SC-002) | User Stories 1–8 |
 | Any reached state | No instruction sentence is visible (SC-003) | FR-070 |
 | Every command | Reached by pen taps alone, with no hover, right-click, or modifier key (SC-004) | Principle II |
+| Any reached state, light and dark | The axe-core scan for WCAG 2.2 Levels A and AA finds zero violations (SC-007) | FR-080 to FR-083 |
+| One edit on each surface with no pointer | The keyboard does it; the focus indicator shows at each step; Escape closes each menu, sheet, and dialog and returns the focus to its button (SC-008) | FR-084, FR-085 |
+| Zoom, toolbar edge, selection position and size, layer order, panel width, with taps only | Each is done with no drag (SC-008) | FR-086 |
+| Save, a change on disk, a Render compile, a Render error, an export | Each text arrives in a `status` or `alert` region while the focus stays | FR-087 |
+| A field with a refused value | The field is marked invalid and the text beside it says what is wrong | FR-088 |
+| The system asks for reduced motion | No surface moves when it opens, and the Render progress mark does not turn | FR-089 |
+| Text at 200 % and with the WCAG text spacing | No text of the bar, menus, panels, Settings, and dialogs is cut or overlaps | FR-090 |
 | Popovers | A second tap on a button closes its popover; a tap on another button closes it and opens its own, across the document bar and the canvas | FR-003, FR-004 |
 | Open a figure with content | All content visible, fitted with the margin (SC-005); reopen restores the last view | FR-040 |
 | Open an empty figure | 100 % is printed size; the origin is centred | FR-041 |

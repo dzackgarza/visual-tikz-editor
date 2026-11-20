@@ -170,6 +170,43 @@ change that replaces the rule.
 Requirement: [docs/development.md](../../docs/development.md), Writing a browser story;
 [HANDOFF](../../HANDOFF.md), Next work, item 1.
 
+### IX. Every Control Is Perceivable and Operable
+
+The interface MUST NOT depend on one sense or on one kind of input. Every control MUST have a
+name, a role, and a state that assistive technology can read. A state MUST show by more than its
+hue. Interface text MUST have a contrast ratio of at least 4.5:1 against its background, and the
+marks that identify a control, a state, the selection, the snap target, and the keyboard focus
+MUST have at least 3:1, in the light and in the dark appearance. Every command MUST be operable
+by the keyboard alone, except input whose subject is the path of the movement: a pen stroke, an
+eraser sweep, a freehand lasso. The keyboard focus MUST be visible, MUST move in the order of the
+surface, MUST leave every surface by the Tab key or Escape, and MUST NOT be fully covered by a
+panel, sheet, or popover. Every function that a drag or a gesture of more than one finger
+operates MUST also be operable by taps of a single pointer, with the same exception for path
+input. A change of status MUST reach
+assistive technology without a move of the focus. When the system asks for reduced motion, the
+interface MUST NOT animate movement.
+
+The measures are the success criteria of WCAG 2.2 at Levels A and AA. A specification MUST cite
+the criterion for each rule under this principle. Where Principle II sets a larger measure, as
+for the hit region, Principle II applies. A name that assistive technology reads is not
+instructional text under Principle IV.
+
+Prior art: Apple HIG,
+[Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+("Your interface doesn't rely on any single method to convey information"; "Convey information
+with more than color alone"; contrast of 4.5:1 for text up to 17 pt, from WCAG Level AA, checked
+"in both light and dark appearances"; "Offer alternatives to gestures"; "Let people use the
+keyboard alone to navigate and interact with your app"; with Reduce Motion on, "ensure your app
+or game responds by reducing automatic and repetitive animations"). W3C,
+[Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/2024/REC-WCAG22-20241212/),
+Recommendation of 2024-12-12: 1.1.1, 1.3.1, 1.4.1, 1.4.3, 1.4.11, 2.1.1, 2.1.2, 2.4.3, 2.4.7,
+2.4.11, 2.5.1, 2.5.7, 2.5.8, 4.1.2, 4.1.3. The editor's page is web content in a browser and in the
+desktop window's web view, so the criteria apply to it as written. Requirement: the user's
+direction of 2026-11-20 that the WCAG 2.2 accessibility rules become part of the Spec Kit
+documents and workflow; Principle II (a keyboard and mouse reach the same commands);
+[contracts/surfaces.md](../../specs/001-product-design/contracts/surfaces.md) (a story finds each
+control by its accessible name).
+
 ## Architecture and Boundaries
 
 - The `tikzpicture` canvas is the pinned TikZ Editor fork; `tikzcd` diagrams use the pinned
@@ -190,9 +227,10 @@ Requirement: [docs/development.md](../../docs/development.md), Writing a browser
 ## Development Workflow
 
 - Work follows Spec Kit: specify, clarify, plan, tasks, implement. Each plan MUST pass the
-  Constitution Check against Principles I–VIII before research and again after design.
+  Constitution Check against Principles I–IX before research and again after design.
 - An interface issue MUST carry its Prior art section and name the specification items it
-  implements.
+  implements. Its acceptance MUST include the accessibility requirements of the specification
+  that apply to the surface it changes (Principle IX).
 - The user reports needs and defects as an end user. The maintainer MUST derive the order of the
   work from the dependencies between stories and from the user's reports, MUST record the
   evidence with each priority, and MUST NOT ask the user to rank the work. Requirement: the
@@ -212,4 +250,4 @@ repository or an issue, or a repository fact. Versions follow semantic versionin
 removed or redefined principle, MINOR for a new principle or section, PATCH for wording. Each
 specification and plan MUST record its compliance with the version in force.
 
-**Version**: 2.3.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-13
+**Version**: 2.4.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-20 (principle IX added on the user's direction of that date; its wording waits for the user's review)

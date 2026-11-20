@@ -48,12 +48,12 @@ touch, and mouse helpers of `test/tablet.ts`, in portrait and landscape; the for
 **Constraints**: The page is served on `127.0.0.1` and makes no requests to other hosts. Fork
 code changes go through `.cache/tikz-editor` and `ZETTLR.patch`, never `vendor/` in place.
 
-**Scale/Scope**: Eight user stories; the surfaces of the surfaces contract; two document kinds.
+**Scale/Scope**: Nine user stories; the surfaces of the surfaces contract; two document kinds.
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.* Constitution version
-2.3.0.
+2.4.0.
 
 | Principle | Before research | After design |
 | --- | --- | --- |
@@ -65,6 +65,7 @@ code changes go through `.cache/tikz-editor` and `ZETTLR.patch`, never `vendor/`
 | VI. One coordinate system | Pass: FR-042 | Pass: rulers and the status line in figure coordinates (R9, R10); 100 % is printed size (FR-041) |
 | VII. Design before implementation | Pass: this plan follows the spec | Pass: every surface and message traces to a spec item |
 | VIII. Behaviour is proven on the real page | Pass | Pass: the [quickstart](quickstart.md) lists the stories that accept each story; replaced stories are rewritten with their rules |
+| IX. Every control is perceivable and operable | Open: FR-080 to FR-092 state the rules by WCAG 2.2 criterion; four functions of FR-086 have no tap mechanism chosen (R18) | Open: the surfaces contract gives each control its role and state, the focus rules, and the status messages; the gaps of R18 are tasks T143 to T162, and the principle passes when their stories pass |
 
 The Architecture and Boundaries rules hold: each fork owns its interaction, a `tikzpicture`
 never offers Quiver (FR-014), the frame protocol is typed and versioned, and the editor keeps its files in the XDG base directories.

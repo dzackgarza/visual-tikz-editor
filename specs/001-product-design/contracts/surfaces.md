@@ -83,3 +83,54 @@ detents in portrait; each has its title and a close button.
 
 No surface shows a sentence (FR-070). A tooltip shows on pointer hover only and holds the
 control's name and shortcut (research R11).
+
+## Roles, states, and focus
+
+Constitution Principle IX and FR-080 to FR-092. A story finds each control by its role and its
+accessible name together, and reads its state from the attribute below.
+
+| Surface or control | Role | State that assistive technology reads |
+| --- | --- | --- |
+| Document bar | `toolbar`, name "Document" | — |
+| Title | `button` | expanded while the title menu is open |
+| Save state | `status` | its text; a change is a status message (FR-087) |
+| Undo, Redo | `button` | disabled when the history has no step |
+| View, Share and Export, More | `button` | expanded while its menu is open |
+| Code, Layers, Properties | `button` | pressed while its panel is open |
+| Title menu, View, Share and Export, More, object menu More | `menu` with `menuitem`; `menuitemradio` for the views, `menuitemcheckbox` for Grid, Rulers, Guides, Output Bounds | checked |
+| Drawing toolbar | `toolbar`, name "Drawing" | orientation of its edge |
+| Lasso, Pen, Eraser, Shapes, Text, Fill | `radio` in one `radiogroup`, name "Tool" | checked for the active tool; expanded while its Active Tool Menu is open |
+| Preset *n* | `radio` in one `radiogroup`, name "Colour" | checked for the active preset |
+| Active Tool Menu, colour options, zoom menu, snap rules | `dialog`, not modal, named by its tool or control | — |
+| Object menu | `toolbar`, name "Selection" | — |
+| Snap | `button` | pressed |
+| Lattice, Objects, Alignment, Angle | `switch` | checked |
+| Zoom readout | `button` | expanded while its menu is open |
+| Canvas | `application`, name "Canvas" | — |
+| Status line | plain text, name "Pointer position"; not a live region, because the position changes at each pointer move | — |
+| Code, Layers, Properties, Figures | `region` with the panel's title as its name; a sheet in portrait is a `dialog` | — |
+| Figure thumbnail | `option` in a `listbox`, name "Figures"; each named "Figure *n*" | selected |
+| Layer row | `option` in a `listbox`, name "Layers" | selected; its visibility and lock buttons pressed |
+| Settings, the unsaved-changes dialog | `dialog`, modal, named by its title | — |
+| Render progress and result, export result, conflict | `status`; a Render error and a conflict are `alert` | its text (FR-087) |
+
+The role names are those of [WAI-ARIA 1.2](https://www.w3.org/TR/wai-aria-1.2/); the toolbar,
+menu, radio group, listbox, switch, and modal dialog follow the keyboard rules of the
+[WAI-ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/patterns/).
+
+**Focus** (FR-085). Tab moves through the surfaces in this order: document bar, drawing toolbar,
+canvas, canvas controls, the open panel. Inside a toolbar, a menu, a radio group, and a listbox,
+the arrow keys move the focus and Tab leaves, as the Authoring Practices state for each. A menu,
+a popover, a sheet, and a dialog take the focus when they open; Escape closes them and returns
+the focus to the control that opened them. The focus indicator is an outline of at least 2 CSS px
+with a contrast of 3:1, the same on every surface. No open surface fully covers the control with
+the focus.
+
+**Keyboard on the canvas** (FR-084, research R18). Tab and Shift+Tab select the next and the
+previous object; after the last object Tab moves the focus on. The arrow keys move the selection.
+Escape clears the selection.
+
+**Taps for each drag** (FR-086): research R18 lists each function and its alternative.
+
+**Motion** (FR-089). While the system asks for reduced motion, a surface opens and closes with no
+movement, and the Render progress mark does not turn.

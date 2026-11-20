@@ -4,13 +4,13 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft. The user has decided FR-005, FR-006a, FR-012a, FR-012b, FR-015, FR-017 (the Figures panel), FR-034, FR-041, FR-044, FR-054, FR-060a, FR-063, FR-064 (the editor is standalone), and FR-065 (2026-11-13), and FR-062 (2026-11-14). Every other requirement is the
+**Status**: Draft. The user has decided FR-005, FR-006a, FR-012a, FR-012b, FR-015, FR-017 (the Figures panel), FR-034, FR-041, FR-044, FR-054, FR-060a, FR-063, FR-064 (the editor is standalone), and FR-065 (2026-11-13), and FR-062 (2026-11-14). The user directed on 2026-11-20 that the WCAG 2.2 accessibility rules enter this specification; FR-080 to FR-092 are the maintainer's statement of them. Every other requirement is the
 maintainer's proposal from the cited prior art and waits for the user's review.
 
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
 about the app's design and to write a design specification. The audit is
 [audit.md](audit.md). This specification states the editor's users, workflows, and information
-architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 2.3.0.
+architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 2.4.0.
 
 ## Users and purpose
 
@@ -55,6 +55,10 @@ The editor has these surfaces. Each control appears on exactly one of them.
 ### Session 2026-11-14
 
 - Q: Which Settings window does More › Settings… open? → A: The canvas editor's Settings window, extended with Appearance. For a tikzcd document it opens over Quiver. Its Canvas, Colours, and Keyboard shortcuts pages apply to tikzpicture documents only.
+
+### Session 2026-11-20
+
+- Q: Which accessibility rules bind the editor? → A: The user directed that the WCAG 2.2 rules of the surveyed checklist enter the Spec Kit documents and workflow. The maintainer proposes the success criteria of Levels A and AA as the measure (constitution Principle IX); [research](research.md) R18 gives each criterion its subject in the editor. The level, and the mechanisms that R18 proposes, wait for the user's review.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -219,8 +223,33 @@ reference, and holds the pen over a lattice point and reads the status line.
 2. **Given** an empty figure, **When** it opens, **Then** it is at 100 % with the origin centred and the axes visible (FR-041, FR-042).
 3. **Given** the pen over the lattice point (1, 2), **When** the user looks at the status line, **Then** it reads 1 and 2 (FR-044).
 
+### User Story 9 - Operate the editor by keyboard, by taps, and with a screen reader (Priority: P9)
+
+The user who cannot drag, who works by keyboard, who does not tell hues apart, or who uses a
+screen reader reaches every command of the editor. Only the path of a pen stroke, an eraser sweep,
+and a freehand lasso needs the pen's movement.
+
+**Why this priority**: It reads the finished surfaces of User Stories 1 to 8: a name, a contrast,
+or a focus order is checked on the control that those stories build. The evidence is the user's
+direction of 2026-11-20 and the gaps that research R18 found in the source.
+
+**Independent Test**: A story opens a figure and scans every state it reaches with the WCAG 2.2
+Level A and AA rules of axe-core; a second story does one edit of each surface by keyboard alone
+and follows the focus; a third does each drag function by taps alone.
+
+**Acceptance Scenarios**:
+
+1. **Given** any state that a browser story reaches, in the light and in the dark appearance, **When** the page is scanned, **Then** each control has its name, role, and state, and text and marks have their contrast (FR-080 to FR-083).
+2. **Given** a figure with two objects and no pointer, **When** the user works by keyboard, **Then** the user chooses a tool, selects each object, moves it, changes its colour, undoes, and exports, and the focus is visible at each step (FR-084, FR-085).
+3. **Given** an open sheet or dialog, **When** the user presses Escape, **Then** it closes and the focus is on the control that opened it (FR-085).
+4. **Given** a pointer that only taps, **When** the user zooms, moves the toolbar to another edge, moves and resizes a selection, and reorders two layers, **Then** each is done with no drag (FR-086).
+5. **Given** a screen reader, **When** an edit is saved, the file changes on disk, or Render fails, **Then** the screen reader announces the status with no move of the focus (FR-087).
+6. **Given** a system that asks for reduced motion, **When** a panel opens or Render compiles, **Then** nothing moves or turns (FR-089).
+
 ### Edge Cases
 
+- The system starts to ask for reduced motion while the editor runs: the editor follows it at once (FR-089).
+- A colour of the figure is close to the canvas colour: the figure's colours are the author's, and the contrast rules cover the interface only (FR-082).
 - An empty untitled figure has no content to fit (see FR-041).
 - A file holds a `tikzpicture` and a `tikzcd`: each figure opens in the editor of its own kind (FR-013, FR-017).
 - The system appearance changes while the editor runs: with the default appearance, the editor follows it (FR-005).
@@ -308,6 +337,22 @@ reference, and holds the pen over a lattice point and reads the status line.
 
 - **FR-070**: No surface MUST show persistent instructional text or a tooltip that explains a standard control.
 
+**Accessibility** (prior art: [WCAG 2.2](https://www.w3.org/TR/2024/REC-WCAG22-20241212/) at Levels A and AA, cited by criterion number; HIG [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility); constitution Principle IX; [research](research.md) R18 gives each criterion its subject and each drag its alternative)
+
+- **FR-080**: Every control MUST give assistive technology its name, its role, and its state: pressed for a toggle; selected for a tool, a preset, a view, and a figure; expanded for a button that opens a menu, a popover, or a panel; disabled; and the value of a field or a slider. The name of a symbol button MUST be its command, as [contracts/surfaces.md](contracts/surfaces.md) gives it. Each toolbar, menu, panel, sheet, and dialog MUST have the role of its kind and a name (WCAG 1.1.1, 1.3.1, 4.1.2).
+- **FR-081**: Each field MUST have a visible label that assistive technology reads with the field. A label is not instructional text under FR-070 (WCAG 1.3.1, 2.4.6, 3.3.2; constitution Principle IX).
+- **FR-082**: In the light and in the dark appearance, interface text MUST have a contrast ratio of at least 4.5:1 against its background, or 3:1 for text of at least 24 CSS px, or 18.66 CSS px in bold. A symbol, the boundary that identifies a field, the mark of a state, the selection highlight, the snap marker, and the focus indicator MUST have at least 3:1 against the colours beside them. A dimmed control that is not available is outside this rule, and so are the colours of the figure, which are the author's (WCAG 1.4.3, 1.4.11; HIG Accessibility, "check the minimum contrast in both light and dark appearances").
+- **FR-083**: The active tool, the active preset, a pressed toggle, the selected view, the save state, a conflict, and an error MUST each show by a shape, a symbol, or text, and not by hue alone (WCAG 1.4.1; HIG Accessibility, "Convey information with more than color alone").
+- **FR-084**: The keyboard alone MUST operate every command of the document bar, the drawing toolbar, the Active Tool Menu, the colour options, the object menu, the canvas controls, the panels, Settings, and the dialogs; MUST select each object of the figure; and MUST move the selection. A pen stroke, an eraser sweep, and a freehand lasso are outside this rule, because their path is the input. A shortcut of one character key MUST be changeable in Settings › Keyboard shortcuts (FR-062) (WCAG 2.1.1, 2.1.4; HIG Accessibility, "Let people use the keyboard alone to navigate and interact with your app"; [Inkscape keys](https://inkscape.org/doc/keys.html): Tab selects the next object, the arrow keys move the selection).
+- **FR-085**: The control with the keyboard focus MUST show an indicator at least 2 CSS px thick around it, with a contrast of at least 3:1 between its focused and unfocused states; this is the measure of WCAG 2.4.13, taken as the test of 2.4.7. The focus MUST move in the order of the surface. Tab or Escape MUST move the focus out of every surface, the canvas and the Code panel included. A sheet or a dialog MUST take the focus when it opens, keep it until it closes, close on Escape, and return the focus to the control that opened it; a menu and a popover MUST return the focus the same way. No open panel, sheet, or popover MUST fully cover the control with the focus (WCAG 2.1.2, 2.4.3, 2.4.7, 2.4.11; WAI-ARIA Authoring Practices, [Dialog (Modal)](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)).
+- **FR-086**: Taps of one pointer MUST operate each function that a drag or a two-finger gesture operates: zoom and pan; the edge of the drawing toolbar; the position and the size of a selection; the position of a point in Edit Points; the order of layers and of colour presets; and the width of a panel. A pen stroke, an eraser sweep, and a freehand lasso are outside this rule (WCAG 2.5.1, 2.5.7; HIG Accessibility, "Offer alternatives to gestures").
+- **FR-087**: A change of the save state, a conflict with the disk, the start and the result of a Render compile, a Render error, and the result of an export MUST reach assistive technology as a status message, with no move of the focus (WCAG 4.1.3).
+- **FR-088**: A field that refuses its value (a number, a hex code, an `xcolor` expression, a file name) MUST be marked invalid for assistive technology and MUST show, in text beside it, what is wrong (WCAG 3.3.1, 3.3.3). FR-065 already states this for the missing template.
+- **FR-089**: While the system asks for reduced motion, no transition or animation MUST move, scale, or turn an element; a change MUST be instant or a fade, and the progress mark of Render MUST NOT turn. The editor MUST follow a change of the system setting while it runs (HIG Accessibility, Reduce Motion: "ensure your app or game responds by reducing automatic and repetitive animations … Replacing transitions in x-, y-, and z-axes with fades"; the measure is WCAG 2.3.3).
+- **FR-090**: With the text enlarged to 200 % and with the text spacing of WCAG 1.4.12, no text of the document bar, the menus, the panels, Settings, and the dialogs MUST be cut or overlap, and every command MUST stay reachable. The canvas and the toolbars keep their two-dimensional layout, as the exception of WCAG 1.4.10 allows for "interfaces where it is necessary to keep toolbars in view while manipulating content" (WCAG 1.4.4, 1.4.10, 1.4.12).
+- **FR-091**: A tooltip that hover or focus shows MUST close on Escape, MUST stay while the pointer is over it, and MUST stay until the hover or the focus leaves (WCAG 1.4.13). FR-070 limits which controls have a tooltip.
+- **FR-092**: A button, a menu item, and a preset MUST act on the release of the pointer, so that a release off the control does nothing. A drawing tool acts on the press, because the stroke starts there, and Undo reverses it (WCAG 2.5.2).
+
 ### Key Entities
 
 - **Document**: one TikZ file; its kind is `tikzpicture` or `tikzcd`; its source is the only document state.
@@ -328,6 +373,8 @@ reference, and holds the pen over a lattice point and reads the status line.
 - **SC-004**: Every command can be reached with the pen alone, with no hover, right-click, or modifier key.
 - **SC-005**: A figure with content opens with all its content visible, filling the canvas up to the fit margin in the dimension that limits it.
 - **SC-006**: Each rule in the specifications under `specs/` cites a source; a review finds zero rules without one.
+- **SC-007**: In every state reached by the browser stories, in the light and in the dark appearance, a scan with the axe-core rules for WCAG 2.2 Levels A and AA finds zero violations.
+- **SC-008**: Every command outside the path-input exception is done in a story by keyboard alone, and every function of FR-086 by taps alone.
 
 ## Assumptions
 

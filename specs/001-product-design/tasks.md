@@ -3,7 +3,7 @@
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md),
 [data-model.md](data-model.md), [contracts/surfaces.md](contracts/surfaces.md),
 [contracts/frame-protocol.md](contracts/frame-protocol.md), [quickstart.md](quickstart.md),
-constitution 2.3.0.
+constitution 2.4.0.
 
 **Tests**: Required. Principle VIII accepts each story by browser stories on the real page. In each
 story phase the stories come first: write them, run them against the present code with
@@ -22,7 +22,7 @@ and `just update-quiver-vendor`. Nothing under `vendor/*/src/` is edited in plac
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: can run in parallel (different files, no dependency on an incomplete task)
-- **[Story]**: the user story of the task (US1–US8)
+- **[Story]**: the user story of the task (US1–US9)
 
 ---
 
@@ -292,6 +292,7 @@ without a selection.
 | US6 (P7) | US3 (selection), US2 (reopen) |
 | US7 (P8) | US2 (saved source) |
 | Polish | all stories |
+| US9 (P9) | US1 to US8 (the surfaces it reads) |
 
 Inside a story phase: the stories, then the fork and shell changes, then the rewrite of replaced
 stories and the green run.
@@ -377,3 +378,39 @@ Each repair has a red story committed before it. The stories ran in Chromium, by
 - [X] T140 [US1] Fix #86: the canvas opens on a source that has no text, and the first stroke writes its `tikzpicture` to the source and to the file. `sourceError` of the `visual` mode (`src/preview-modes.ts`) gives its failure text only for a source with text and no environment, the condition of tikz-editor's own `missing-tikzpicture` diagnostic. Story "a stroke on the canvas of an empty file makes its tikzpicture" A shape on an empty file also makes the environment: `insertElementIntoSource` of tikz-editor (`packages/core/src/edit/element-templates.ts`) makes it for a source with no text before it checks the closing token of the placeholder figure that the parse gives such a source. Story "a shape on the canvas of an empty file makes its tikzpicture".
 - [X] T141 [US5] Fix #87: a `tikzcd` with a comment, white space, or `\[` before `\begin{tikzcd}` has the kind `tikzcd`, as Quiver's own parser accepts it (`parse_diagram`): `isTikzcdSource` of `src/source-block.ts`. Story "a tikzcd that Quiver exported, with its link comment and its display-math brackets, opens in Quiver and renders"
 - [ ] T142 [US1] Fix #88: the first object on an empty file keeps the view, and a text placed first is in edit. tikz-editor keys the view (`useCanvasViewportPersistence.ts`, `makeFigureViewportKey`), the reset of drafts and of the text edit (`CanvasPanel.tsx`, the layout effect on `canvasFigureContextKey`) and the guides (`guidesByFigureKey`) by the active figure, so the change from no figure to `figure:0` reads as a visit to another figure. Give a source with no figure and the first figure of a document one key in the three places; then a load with no kept view must install the opening view itself (Zoom to Fit, or the origin centred at 100 % for no content), because `load` of `vendor/tikz-editor/embed/src/main.tsx` keeps the document and so keeps the key. Red story for the view first (zoom readout stays 100 % after the first stroke, after Undo and after Redo). Story "a text on the canvas of an empty file makes its tikzpicture" is red until this task is done.
+
+## Phase 15: User Story 9 - Operate the editor by keyboard, by taps, and with a screen reader (P9)
+
+**Goal**: constitution Principle IX and FR-080 to FR-092: every control has its name, role, and
+state; text and marks have their contrast; the keyboard and taps of one pointer reach every
+command outside the path-input exception; status reaches assistive technology; reduced motion is
+followed.
+
+**Order**: this phase reads the surfaces of User Stories 1 to 8, so it starts after the open tasks
+of Phases 3 to 14. Its stories are written and run red at the start of the phase, not before.
+Each red commit names the open issue of its gap; the maintainer files the issue with its Prior
+art section (WCAG 2.2 criterion, HIG Accessibility) when none exists.
+
+**Independent Test**: the stories of T144, T150, T152, and T154 pass in portrait and in landscape,
+in the light and in the dark appearance.
+
+- [ ] T143 [P] [US9] Add `@axe-core/playwright` with `bun add -d @axe-core/playwright` in `package.json`, and a helper `scanAccessibility` in `test/tablet.ts` that scans the page and its canvas and Quiver frames with the tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa` and fails with each violation's rule, criterion, and element (research R18, SC-007)
+- [ ] T144 [US9] Story "every surface passes the WCAG 2.2 Level A and AA scan, light and dark" in `test/workbench-browser.spec.ts`: scan the document bar with each menu open, the drawing toolbar with each Active Tool Menu, the colour options, the object menu of each selection kind, the canvas controls with the zoom menu and the snap rules, each panel, each Settings page, and each dialog, for a `tikzpicture` and for a `tikzcd`; run it red and commit it (FR-080 to FR-082)
+- [ ] T145 [US9] Give each shell control the role and state of contracts/surfaces.md, Roles, states, and focus, in `standalone/StandaloneApp.vue` and `src/ui/*.vue`: toolbar and menu roles, expanded on menu buttons, pressed on panel buttons, the `status` and `alert` regions (FR-080, FR-081)
+- [ ] T146 [US9] Give each fork control the role and state of the same contract in `.cache/tikz-editor/packages/app/src/ui/` (`Toolbar.tsx`, `canvas-panel/`, `inspector-panel/`, `objects-panel/`, `SettingsModal.tsx`, `Modal.tsx`): the tool and preset radio groups, the non-modal dialogs of the popovers, the listboxes, a visible label tied to each field, and `lang` on the frame's document; carry it by `just tikz-editor-patch && just update-tikz-editor-vendor` (FR-080, FR-081)
+- [ ] T147 [US9] Clear the scan's findings in the Quiver view through `vendor/quiver/ZETTLR.patch` and `just update-quiver-vendor`: `lang` on the frame's document and a name on each of Quiver's own controls (FR-080)
+- [ ] T148 [US9] Story "interface text has 4.5:1 and state marks, the selection highlight, the snap marker, and the focus indicator have 3:1, light and dark", which reads the computed colours and the pixels beside each mark; then set the colour tokens of `standalone/StandaloneApp.vue`, `src/ui/TikzWorkbench.vue`, and the fork's theme to pass it (FR-082)
+- [ ] T149 [US9] Story "the active tool, the active preset, a pressed toggle, the selected view, the save state, a conflict, and an error show with the page in greyscale": with `filter: grayscale(1)` on the root, the active and the inactive control differ by a shape, a symbol, or text; then add the missing marks (FR-083)
+- [ ] T150 [US9] Story "a session by keyboard alone" in `test/workbench-browser.spec.ts`, with no pointer event: choose a tool, select each of two objects, move one, change its colour, open and close each panel, change a setting, undo, and export; run it red and commit it (FR-084, SC-008)
+- [ ] T151 [US9] Make the story of T150 pass: arrow-key focus inside each toolbar, menu, radio group, and listbox (WAI-ARIA Authoring Practices), Tab and Shift+Tab on the canvas to select the next and the previous object and Tab after the last to move on (research R18, Inkscape keys), in the shell and in the fork (FR-084)
+- [ ] T152 [US9] Story "the focus is visible, in order, returned, and never trapped or covered": Tab through every surface and check the order of contracts/surfaces.md; at each stop measure an outline of at least 2 CSS px with 3:1; open each menu, popover, sheet, and dialog by keyboard, close it with Escape, and check the focus is on its button; leave the canvas and the Code panel by keyboard; with each panel open, check that the focused control is not fully covered; run it red and commit it (FR-085)
+- [ ] T153 [US9] Make the story of T152 pass: one focus-indicator rule for the shell and one for the fork, in place of the background tints of `.dialog button`, `.view-rail button`, and `.pane-divider`; focus kept inside each modal dialog and sheet and returned on close; an Escape path out of the CodeMirror editor of `src/ui/` (FR-085)
+- [ ] T154 [US9] Story "each drag function is done by taps": zoom from the readout, pan, the toolbar to each edge, the position and the size of a selection, a point in Edit Points, the order of two layers and of two presets, and the width of a panel, each with pen taps only; run it red and commit it (FR-086, SC-008)
+- [ ] T155 [US9] Make the story of T154 pass. For each function that research R18 marks open (pan, a point in Edit Points, the order of layers, the width of a panel by taps), first record in R18 the documented behaviour of a named application and the mechanism it gives (Principle III), then build that mechanism (FR-086)
+- [ ] T156 [US9] Story "a save, a change on disk, a Render compile, a Render error, and an export are announced while the focus stays": each text arrives in a `status` or `alert` region and `document.activeElement` does not change; then repair the regions (FR-087)
+- [ ] T157 [US9] Story "a field that refuses its value is marked invalid and says what is wrong", for a number field of Properties, the hex and `xcolor` fields of the colour options, and a file name: `aria-invalid`, and a text tied by `aria-describedby`; then repair the fields (FR-088)
+- [ ] T158 [US9] Story "with reduced motion nothing moves", under Playwright `emulateMedia({ reducedMotion: 'reduce' })`: no element of the shell or the frames has a running animation or a transition of `transform`, `top`, `left`, `width`, or `height` while a panel opens, a menu opens, and Render compiles, and a change of the setting while the page runs is followed; then add the `prefers-reduced-motion` rules to the shell (`src/ui/TikzWorkbench.vue`, `src/ui/TikzCompilerPreview.vue`, `standalone/StandaloneApp.vue`) and to the fork's style sheets outside `canvas-panel/` (FR-089)
+- [ ] T159 [US9] Story "text at 200 % and with the WCAG text spacing is whole": with the root font size doubled, and again with line height 1.5, paragraph spacing 2, letter spacing 0.12, and word spacing 0.16 times the font size, no text box of the document bar, menus, panels, Settings, and dialogs is cut or overlaps another, and each command stays reachable; then repair the fixed sizes (FR-090)
+- [ ] T160 [US9] Story "a tooltip closes on Escape and stays under the pointer; a release off a button does nothing": then repair the tooltip of research R11 and any control that acts on the press (FR-091, FR-092)
+- [ ] T161 [US9] Run the scan of T143 in the desktop package: add it to the drawing loop of `test/desktop/desktop.spec.ts` for the light and the dark appearance, so WebKitGTK is checked as Chromium is (SC-007)
+- [ ] T162 Run, in the final story pass, the stories of T144 to T160 in portrait and in landscape, and view their screenshots against contracts/surfaces.md
