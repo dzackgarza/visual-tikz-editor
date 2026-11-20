@@ -58,7 +58,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 
 ### Session 2026-11-20
 
-- Q: Which setup does the editor serve? → A: A touch screen with a pen. A mouse or touchpad and a keyboard are optional: each command has its route by pen and touch (constitution Principle II, SC-004), and a requirement is stated for the person who works that way.
+- Q: Which setup does the editor serve? → A: A touch screen with a pen. The editor runs on Linux now and is planned for an iPad; iPadOS design is the source of its interface conventions (constitution Principles II and III). A mouse or touchpad and a keyboard are optional: each command has its route by pen and touch (constitution Principle II, SC-004), and a requirement is stated for the person who works that way.
 
 ## User Scenarios & Testing *(mandatory)*
 

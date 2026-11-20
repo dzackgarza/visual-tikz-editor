@@ -39,7 +39,7 @@ for the Code panel; zod 4 for the protocol schemas. Research R6 and R7 add
 touch, and mouse helpers of `test/tablet.ts`, in portrait and landscape; the fork's Vitest specs
 (`bun run test:logic`).
 
-**Target Platform**: Linux: the Tauri desktop window, and the local page in Chromium on a pen tablet and on a desktop.
+**Target Platform**: Linux: the Tauri desktop window, and the local page in Chromium on a pen tablet and on a desktop. Planned (user, 2026-11-20): an iPad. No task builds the iPad form yet; the device rows of [HANDOFF](../../HANDOFF.md) for iPadOS Safari and the Apple Pencil are kept for it.
 
 **Project Type**: A standalone desktop and local web application.
 
