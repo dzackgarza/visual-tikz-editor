@@ -212,7 +212,6 @@ export async function emptyCanvasGesture(
 
 /** The part of `visualTikzEditorDebug()` the stories read; the iframe exposes more. */
 export type EditorDebug = {
-  historyIndex: number;
   tool: string;
   source: string;
   selection: string[];

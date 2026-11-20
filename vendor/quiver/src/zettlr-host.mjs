@@ -4,9 +4,11 @@
 
 window.__ZETTLR_QUIVER_HOST__ = true;
 
-const [{ DOM }, { UI, load_katex }] = await Promise.all([
+const [{ DOM }, { UI, load_katex }, { CONSTANTS }, { clamp }] = await Promise.all([
     import("./dom.mjs"),
     import("./ui.mjs"),
+    import("./arrow.mjs"),
+    import("./ds.mjs"),
 ]);
 
 await load_katex();
@@ -216,6 +218,13 @@ window.addEventListener("message", (event) => {
         document.body.classList.toggle("zettlr-fullscreen", fullscreen);
     } else if (message.type === "zettlr-quiver:host-popover") {
         host_popover_open = message.open === true;
+    } else if (message.type === "zettlr-quiver:zoom") {
+        // One step of a pinch on a touchpad, which the host reports because WebKitGTK gives a page
+        // no event of it. Quiver's scale is a power of two, and Quiver zooms about its view, as
+        // its own wheel with Shift does.
+        if (typeof message.factor !== "number" || !(message.factor > 0)) return;
+        ui.pan_to(ui.view, clamp(CONSTANTS.MIN_ZOOM, ui.scale + Math.log2(message.factor), CONSTANTS.MAX_ZOOM));
+        ui.toolbar.update(ui);
     }
 });
 
@@ -275,6 +284,14 @@ window.addEventListener("zettlr-quiver-redo-request", () => post({ type: "zettlr
 // Escape must work while focus is inside the iframe; keyboard events do not
 // bubble across frame boundaries.
 window.addEventListener("keydown", (event) => {
+    // Escape closes an open menu of the host, as it does with the focus in the host.
+    if (event.key === "Escape" && host_popover_open) {
+        host_popover_open = false;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        post({ type: "zettlr-quiver:host-popover-dismissed" });
+        return;
+    }
     if (event.key === "Escape" && fullscreen) {
         event.preventDefault();
         event.stopImmediatePropagation();

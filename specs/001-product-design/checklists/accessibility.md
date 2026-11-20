@@ -1,6 +1,6 @@
 # Accessibility Requirements Checklist: Product design of the Visual TikZ Editor
 
-**Purpose**: Review the quality of the accessibility requirements (FR-080 to FR-092, SC-007, SC-008, User Story 9, research R18, and the Roles, states, and focus section of the surfaces contract) before Phase 15 starts
+**Purpose**: Review the quality of the accessibility requirements (FR-080 to FR-092, SC-007, SC-008, User Story 9, research R18, and the Roles, states, and focus section of the surfaces contract) before Phase 16 starts
 **Created**: 2026-11-20
 **Feature**: [spec.md](../spec.md)
 

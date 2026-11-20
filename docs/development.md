@@ -33,7 +33,7 @@ just install-desktop            # package, then install it for this user
 | --- | --- |
 | `bun run test:logic` | The fork's Vitest specs, in the fork checkout `.cache/tikz-editor` (made on first use) |
 | `bun run test:browser --grep '<story>'` | Matching Mocha browser stories, in Playwright Chromium |
-| `just test-desktop` | The stories of the desktop package (`test/desktop/`): `just package`, then the built application on an Xvfb display, driven through WebKitWebDriver. `just release-assets` runs it first |
+| `just test-desktop` | The stories of the desktop package (`test/desktop/`): `just package`, then the built application on an Xvfb display, driven through WebKitWebDriver. The stories load `test/desktop/touchpad.c` into the application to give it a pinch on a touchpad, so the machine needs `cc` and the GTK 3 development files (`pkg-config gtk+-3.0`). The harness reads the application's process from the driver's `webkit:processID`; WebKitWebDriver 2.54 gives it and 2.52.6 does not. `just release-assets` runs it first |
 | `just test-commit` | The syntax check of staged files; the pre-commit hook runs it |
 | `just test-push` | The syntax check of outgoing commits; the pre-push hook runs it |
 | `just test-ci` | The commit check, the logic tests and the browser suite under coverage, diff coverage, and the lint and debt checks |
@@ -54,6 +54,8 @@ bunx playwright show-trace test-results-*/workbench/failed-*.zip
 ```
 
 `bun run coverage` (`scripts/coverage.mjs`) runs the suite with V8 coverage for Mocha and for every story page, and merges both into `coverage/lcov.info`. `standalone/server.ts` runs under Bun, which reports coverage only inside `bun test` ([oven-sh/bun#17867](https://github.com/oven-sh/bun/issues/17867)), so the report omits it.
+
+Probes and measurements that are not stories are kept, whole, in [docs/research/desktop-probes-and-stroke-timing.md](research/desktop-probes-and-stroke-timing.md): a Debian sid image that runs `test/desktop` on WebKitGTK 2.54, input sent at the level of the X server, a touchpad pinch under Wayland, and the benchmark of a pen stroke's time with the way its causes were found.
 
 ### Reviewing what the stories show
 

@@ -46,6 +46,8 @@ import {
   tikzEditorReplacement,
   tikzEditorSessionForBlock,
 } from "../editor-bridge";
+import { TOUCHPAD_PINCH, touchpadPinchOver } from "../touchpad-pinch";
+import { focusFrame, focusLoadedFrame } from "../keyboard-focus";
 import {
   requestEditorSnapshot,
   requestEditorSource,
@@ -74,6 +76,7 @@ const emit = defineEmits<{
   (e: "undoRequest"): void;
   (e: "redoRequest"): void;
   (e: "popoverOpened"): void;
+  (e: "construction", active: boolean): void;
   (e: "hostPopoverDismissed"): void;
   (e: "settingsRequest"): void;
   (e: "status", text: string): void;
@@ -170,6 +173,24 @@ function zoom(direction: "in" | "out" | "fit" | "selection" | "normal"): void {
   if (loaded.value) postToEditor({ action: "zoom", direction });
 }
 
+// The shell's Undo while a construction is in progress takes back its last placed point (FR-034).
+function undoConstruction(): void {
+  if (loaded.value) {
+    postToEditor({ action: "undo-construction" });
+  }
+}
+
+// A step of a pinch on a touchpad over the canvas zooms the figure by its ratio, about the pointer.
+function onTouchpadPinch(event: Event): void {
+  if (!loaded.value) {
+    return;
+  }
+  const step = touchpadPinchOver(event, frame.value);
+  if (step !== null) {
+    postToEditor({ action: "zoom", factor: step.ratio, at: step.place });
+  }
+}
+
 // One popover at a time across shell and canvas (FR-004): the shell's menu closes the canvas's.
 function dismissPopover(): void {
   if (loaded.value) postToEditor({ action: "dismiss-popover" });
@@ -182,10 +203,12 @@ function hostPopover(open: boolean): void {
 
 // Keyboard focus goes back to the canvas after a window over it closes (FR-062).
 function focus(): void {
-  frame.value?.focus();
+  if (frame.value) {
+    focusFrame(frame.value);
+  }
 }
 
-defineExpose({ snapshot, currentSource, zoom, dismissPopover, hostPopover, focus });
+defineExpose({ snapshot, currentSource, zoom, undoConstruction, dismissPopover, hostPopover, focus });
 
 function sendFullLoad(): void {
   // A load selects nothing, so the changes before it are spent.
@@ -372,6 +395,7 @@ function onMessage(event: MessageEvent): void {
       loaded.value = true;
       errorMessage.value = "";
       reportKeyboard(true);
+      focusLoadedFrame(frame.value);
       break;
     case "change": {
       applyEditorSource(message.source, message.revision, message.step);
@@ -407,6 +431,9 @@ function onMessage(event: MessageEvent): void {
       break;
     case "popover-opened":
       emit("popoverOpened");
+      break;
+    case "construction":
+      emit("construction", message.active);
       break;
     case "host-popover-dismissed":
       emit("hostPopoverDismissed");
@@ -458,6 +485,7 @@ onMounted(() => {
   window.addEventListener("message", onMessage);
   window.visualViewport?.addEventListener("resize", reportKeyboardChange);
   window.visualViewport?.addEventListener("scroll", reportKeyboardChange);
+  window.addEventListener(TOUCHPAD_PINCH, onTouchpadPinch);
 });
 
 onBeforeUnmount(() => {
@@ -465,6 +493,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("message", onMessage);
   window.visualViewport?.removeEventListener("resize", reportKeyboardChange);
   window.visualViewport?.removeEventListener("scroll", reportKeyboardChange);
+  window.removeEventListener(TOUCHPAD_PINCH, onTouchpadPinch);
 });
 </script>
 

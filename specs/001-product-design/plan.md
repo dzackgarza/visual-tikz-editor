@@ -65,7 +65,7 @@ code changes go through `.cache/tikz-editor` and `ZETTLR.patch`, never `vendor/`
 | VI. One coordinate system | Pass: FR-042 | Pass: rulers and the status line in figure coordinates (R9, R10); 100 % is printed size (FR-041) |
 | VII. Design before implementation | Pass: this plan follows the spec | Pass: every surface and message traces to a spec item |
 | VIII. Behaviour is proven on the real page | Pass | Pass: the [quickstart](quickstart.md) lists the stories that accept each story; replaced stories are rewritten with their rules |
-| IX. Every control is perceivable and operable | Open: FR-080 to FR-092 state the rules by WCAG 2.2 criterion; four functions of FR-086 have no tap mechanism chosen (R18) | Open: the surfaces contract gives each control its role and state, the focus rules, and the status messages; the gaps of R18 are tasks T143 to T162, and the principle passes when their stories pass |
+| IX. Every control is perceivable and operable | Open: FR-080 to FR-092 state the rules by WCAG 2.2 criterion; four functions of FR-086 have no tap mechanism chosen (R18) | Open: the surfaces contract gives each control its role and state, the focus rules, and the status messages; the gaps of R18 are tasks T163 to T182, and the principle passes when their stories pass |
 
 The Architecture and Boundaries rules hold: each fork owns its interaction, a `tikzpicture`
 never offers Quiver (FR-014), the frame protocol is typed and versioned, and the editor keeps its files in the XDG base directories.

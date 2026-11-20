@@ -45,6 +45,8 @@ import {
   type TikzQuiverSourceSession,
 } from "../quiver-bridge";
 import type { QuiverMacroProjection } from "../quiver-macros";
+import { TOUCHPAD_PINCH, touchpadPinchOver } from "../touchpad-pinch";
+import { focusFrame, focusLoadedFrame } from "../keyboard-focus";
 
 interface PreviewSession {
   id: string;
@@ -231,9 +233,20 @@ async function currentSource(signal: AbortSignal): Promise<string> {
 }
 // Keyboard focus goes back to Quiver after a window over it closes (FR-062).
 function focus(): void {
-  frame.value?.focus();
+  if (frame.value) {
+    focusFrame(frame.value);
+  }
 }
 // A menu of the shell opened or closed: while one is open, the next press in Quiver closes it.
+// A step of a pinch on a touchpad over Quiver zooms its grid by the step's ratio. Quiver zooms
+// about the centre of its view, as for its own wheel with Shift.
+function onTouchpadPinch(event: Event): void {
+  const step = touchpadPinchOver(event, frame.value);
+  if (hostReady.value && step !== null) {
+    postToQuiver({ type: "zettlr-quiver:zoom", factor: step.ratio });
+  }
+}
+
 function hostPopover(open: boolean): void {
   if (hostReady.value) postToQuiver({ type: "zettlr-quiver:host-popover", open });
 }
@@ -247,6 +260,7 @@ function onMessage(event: MessageEvent<QuiverHostMessage>): void {
   if (message.type === "zettlr-quiver:ready") {
     hostReady.value = true;
     sendFullLoad();
+    focusLoadedFrame(frame.value);
     return;
   }
   if (message.sessionId !== session.value.id || message.revision !== session.value.revision) return;
@@ -309,6 +323,7 @@ watch(
 
 onMounted(async () => {
   window.addEventListener("message", onMessage);
+  window.addEventListener(TOUCHPAD_PINCH, onTouchpadPinch);
 
   try {
     macroProjection.value = await quiver.macros();
@@ -322,6 +337,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   lifetime.abort("disposed");
   window.removeEventListener("message", onMessage);
+  window.removeEventListener(TOUCHPAD_PINCH, onTouchpadPinch);
 });
 </script>
 

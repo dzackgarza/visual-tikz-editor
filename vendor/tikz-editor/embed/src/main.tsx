@@ -400,7 +400,7 @@ function HostBridge() {
 					nativeClipboard = command.nativeClipboard === true;
 					imageBaseUrl = command.imageBaseUrl ?? '';
 					imageBaseErrorReported = false;
-					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: restoredState ? { source: command.source, view: restoredState.viewport, fitToContent: restoredState.fitToContent } : null });
+					useEditorStore.getState().dispatch({ type: 'RESTORE_CANVAS_VIEWPORT', restore: restoredState ? { source: command.source, view: restoredState.viewport, fitToContent: restoredState.fitToContent } : { source: command.source, view: null, fitToContent: false } });
 					loadIntoEditor(command.source, command.fileName);
 					const finishLoad = () => {
 						const state = useEditorStore.getState();
@@ -454,7 +454,17 @@ function HostBridge() {
 					reply(command); return;
 				case 'zoom': {
 					const dispatch = useEditorStore.getState().dispatch;
-					if (command.scale !== undefined) dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: command.scale * PRINTED_SIZE_SCALE });
+					if (command.factor !== undefined && command.at !== undefined) {
+						// The canvas zooms about the pointer at a wheel event with Ctrl, by exp(-deltaY × zoom speed).
+						// This is that event for the factor, so one rule places the view for the wheel and for the pinch.
+						const viewport = document.querySelector<HTMLElement>('[data-canvas-viewport="true"]');
+						if (!viewport) { reply(command, 'busy'); return; }
+						viewport.dispatchEvent(new WheelEvent('wheel', {
+							deltaY: -Math.log(command.factor) / getEditorSettings().canvas.zoomSpeed, ctrlKey: true,
+							clientX: command.at.x, clientY: command.at.y, bubbles: true, cancelable: true,
+						}));
+					}
+					else if (command.scale !== undefined) dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: command.scale * PRINTED_SIZE_SCALE });
 					else if (command.direction === 'normal') dispatch({ type: 'REQUEST_ZOOM_SCALE', scale: PRINTED_SIZE_SCALE });
 					else if (command.direction === 'fit') dispatch({ type: 'REQUEST_FIT_TO_CONTENT' });
 					else if (command.direction === 'in' || command.direction === 'out') dispatch({ type: 'REQUEST_ZOOM', direction: command.direction });
@@ -479,6 +489,10 @@ function HostBridge() {
 					hostPopoverOpen = command.open;
 					reply(command);
 					return;
+				case 'undo-construction':
+					window.dispatchEvent(new Event('tikz-embed-undo-construction'));
+					reply(command);
+					return;
 			}
 		};
 
@@ -492,6 +506,15 @@ function HostBridge() {
 		};
 
 		const handleKeydown = (event: KeyboardEvent) => {
+			// Escape closes an open menu of the shell, as it does with the focus in the shell; a key
+			// pressed here does not reach the shell's window.
+			if (event.key === 'Escape' && hostPopoverOpen) {
+				hostPopoverOpen = false;
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				postToHost({ event: 'host-popover-dismissed' });
+				return;
+			}
 			// An open dialog takes Escape first (WAI-ARIA APG, Dialog (Modal) pattern).
 			if (event.key !== 'Escape' || !fullscreenRef.current || document.querySelector('dialog[open]')) return;
 			event.preventDefault();
@@ -505,6 +528,7 @@ function HostBridge() {
 		const redoRequested = () => postToHost({ event: 'redo-request' });
 		const popoverOpened = () => postToHost({ event: 'popover-opened' });
 		const settingsRequested = () => postToHost({ event: 'settings-request' });
+		const constructionChanged = (event: Event) => postToHost({ event: 'construction', active: (event as CustomEvent<{ active: boolean }>).detail.active });
 		const forkEvents: [string, () => void][] = [
 			['tikz-embed-panel-changed', panelChanged],
 			['tikz-embed-undo-request', undoRequested],
@@ -513,6 +537,7 @@ function HostBridge() {
 			['tikz-embed-settings-request', settingsRequested],
 		];
 		for (const [name, listener] of forkEvents) window.addEventListener(name, listener);
+		window.addEventListener('tikz-embed-construction', constructionChanged);
 		window.addEventListener('message', handleMessage);
 		const imageObserver = new MutationObserver(() => {
 			const images = document.querySelectorAll<SVGImageElement>('image[data-image-file]');
@@ -541,6 +566,7 @@ function HostBridge() {
 			imageObserver.disconnect();
 			unsubscribe();
 			for (const [name, listener] of forkEvents) window.removeEventListener(name, listener);
+			window.removeEventListener('tikz-embed-construction', constructionChanged);
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('pointerdown', closeHostPopoverByPress, true);
 			window.removeEventListener('mousedown', keepFocusAtButtonPress, true);

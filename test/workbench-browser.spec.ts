@@ -58,6 +58,10 @@ declare global {
   interface Window {
     canvasProtocol: CanvasProtocol;
     receivedPen: PenChannels[];
+    /** Each state of the pen's mark and the count of drawn strokes, one entry for each change, in the canvas frame. */
+    inkStates: { mark: boolean; strokes: number }[];
+    /** The time from each lift of the pen to the next frame, in ms, in the canvas frame. */
+    liftTimes: number[];
   }
 }
 
@@ -125,6 +129,22 @@ describe("standalone workbench host boundary", function () {
   /** A control of the document bar, by its accessible name in contracts/surfaces.md. */
   const documentBarButton = (name: string) =>
     page.locator(".document-bar").getByRole("button", { name, exact: true });
+  /**
+   * A menu of the document bar: the title menu, Share and Export, or More. Its button and its list
+   * (contracts/surfaces.md, Document bar).
+   */
+  const barMenu = (name: "title" | "share" | "more") => {
+    const root = page.locator(`.document-bar [data-menu="${name}"]`);
+    return { button: root.locator(":scope > button"), list: root.getByRole("menu") };
+  };
+  /** A choice of an open menu of the document bar. */
+  const barMenuItem = (name: string) =>
+    page.locator(".document-bar").getByRole("menuitem", { name, exact: true });
+  /** Copies the document's TikZ from Share and Export. */
+  const copyTikz = async () => {
+    await barMenu("share").button.click();
+    await barMenuItem("Copy TikZ").click();
+  };
   /** A history control of the document bar (FR-012). */
   const documentHistory = (name: "Undo" | "Redo") => documentBarButton(name);
   /** A panel control of the document bar (contracts/surfaces.md, FR-060). */
@@ -207,8 +227,8 @@ describe("standalone workbench host boundary", function () {
 
   /** Opens Settings from More, over the whole window (FR-005), and returns its dialog. */
   async function openSettings(): Promise<Locator> {
-    await page.getByRole("group", { name: "More" }).locator("summary").click();
-    await page.getByRole("button", { name: "Settings…", exact: true }).click();
+    await barMenu("more").button.click();
+    await barMenuItem("Settings…").click();
     const settings = settingsDialog();
     await expect(settings).toBeVisible({ timeout: 30_000 });
     return settings;
@@ -562,23 +582,23 @@ describe("standalone workbench host boundary", function () {
 
   story(
     { initialPage: "blank" },
-    "opens an untitled tikzpicture at launch, starts each kind from File, and closes Save changes on Escape",
+    "opens an untitled tikzpicture at launch, starts each kind from the title menu, and closes Save changes on Escape",
     async function () {
       await page.goto(url);
-      await expect(page.locator(".document-bar strong")).toHaveText("Unsaved Document");
+      await expect(barMenu("title").button).toHaveText("Unsaved Document");
       await expect(page.locator('iframe[title="TikZ visual editor"]')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await editorReady(page);
-      const fileMenu = page.getByRole("group", { name: "File" }).locator("summary");
+      const fileMenu = barMenu("title").button;
       await fileMenu.click();
-      await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
-      await expect(page.locator(".document-bar strong")).toHaveText("Unsaved Document");
+      await barMenuItem("New tikzcd").click();
+      await expect(barMenu("title").button).toHaveText("Unsaved Document");
       await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible({ timeout: 30_000 });
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       const edited = String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`;
       await pasteCode(page, edited);
       await fileMenu.click();
-      await page.getByRole("button", { name: "New tikzpicture", exact: true }).click();
+      await barMenuItem("New tikzpicture").click();
       const prompt = page.getByRole("dialog", { name: "Save changes?" });
       await expect(prompt).toBeVisible();
       await expect(page.locator(".workspace")).toBeVisible();
@@ -722,8 +742,8 @@ describe("standalone workbench host boundary", function () {
       await page.goto(url);
       await editorReady(page);
       assert.deepEqual(await viewControls(), ["Code: left sidebar", "Preview: right sidebar", "Canvas: right sidebar"]);
-      await page.getByRole("group", { name: "File" }).locator("summary").click();
-      await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
+      await barMenu("title").button.click();
+      await barMenuItem("New tikzcd").click();
       await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible({ timeout: 30_000 });
       assert.deepEqual(await viewControls(), ["Code: left sidebar", "Preview: right sidebar", "Quiver: right sidebar"]);
     },
@@ -892,6 +912,75 @@ describe("standalone workbench host boundary", function () {
       await page.screenshot({ path: "test-results/workbench/quiver-export-rendered.png" });
     },
   );
+
+  /** One step of a pinch on a touchpad, as the desktop shell reports it to the window (src/touchpad-pinch.ts). */
+  const touchpadPinch = (step: { ratio: number; x: number; y: number }) =>
+    page.evaluate((detail) => {
+      window.dispatchEvent(new CustomEvent("touchpad-pinch", { detail }));
+    }, step);
+
+  story(
+    { document: String.raw`\begin{tikzpicture}\draw (0,0) circle (1);\draw (3,0) circle (1);\end{tikzpicture}` },
+    "a touchpad pinch that the desktop shell reports zooms the render view by its ratio, about its place",
+    async function () {
+      // In the desktop app a pinch over the render view magnified the whole window (issue #18).
+      await page.getByRole("button", { name: "Preview: right sidebar", exact: true }).click();
+      await expect(page.locator(".tikz-view-status")).toContainText("Up to date", { timeout: 40_000 });
+      const figure = page.locator(".tikz-figure-viewer .viewer-canvas img");
+      await expect(figure).toBeVisible();
+      const opened = await layoutBox(figure);
+      // The pointer is on a place of the figure a quarter across and three quarters down.
+      const place = { x: opened.x + opened.width / 4, y: opened.y + (opened.height * 3) / 4 };
+      for (const ratio of [1.25, 1.2, 4 / 3]) {
+        await touchpadPinch({ ratio, ...place });
+      }
+      await expect
+        .poll(async () => (await layoutBox(figure)).width / opened.width, {
+          message: "The pinch did not zoom the rendered figure to twice its size",
+        })
+        .toBeCloseTo(2, 2);
+      const zoomed = await layoutBox(figure);
+      assert.ok(
+        Math.abs(zoomed.x + zoomed.width / 4 - place.x) <= 1 && Math.abs(zoomed.y + (zoomed.height * 3) / 4 - place.y) <= 1,
+        `The place under the pinch moved: ${JSON.stringify({ opened, zoomed })}`,
+      );
+      // A pinch with the pointer on the document bar is not a pinch on the figure.
+      const bar = await layoutBox(page.locator(".document-bar"));
+      await touchpadPinch({ ratio: 2, x: bar.x + bar.width / 2, y: bar.y + bar.height / 2 });
+      await touchpadPinch({ ratio: 0.5, ...place });
+      await expect
+        .poll(async () => (await layoutBox(figure)).width / opened.width, {
+          message: "The pinch did not zoom the rendered figure back",
+        })
+        .toBeCloseTo(1, 2);
+    },
+  );
+
+  story({}, "a touchpad pinch that the desktop shell reports zooms Quiver by its ratio", async function () {
+    // In the desktop app a pinch over Quiver magnified the whole window (issue #18). Quiver zooms about
+    // the centre of its view, as its own wheel with Shift does.
+    await page.locator(".cm-content").fill(String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
+    const quiver = page.frameLocator('iframe[title="Quiver diagram editor"]');
+    await expect(quiver.locator(".vertex")).toHaveCount(2, { timeout: 30_000 });
+    const frame = await layoutBox(page.locator('iframe[title="Quiver diagram editor"]'));
+    const place = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+    /** The distance between the two vertices, in the window. */
+    const gap = async () => {
+      const [first, second] = await quiver
+        .locator(".vertex")
+        .evaluateAll((vertices) => vertices.map((vertex) => vertex.getBoundingClientRect().x));
+      return second - first;
+    };
+    const opened = await gap();
+    for (const ratio of [1.25, 1.2, 4 / 3]) {
+      await touchpadPinch({ ratio, ...place });
+    }
+    await expect
+      .poll(async () => (await gap()) / opened, { message: "The pinch did not zoom Quiver to twice its size" })
+      .toBeCloseTo(2, 2);
+    await touchpadPinch({ ratio: 0.5, ...place });
+    await expect.poll(async () => (await gap()) / opened, { message: "The pinch did not zoom Quiver back" }).toBeCloseTo(1, 2);
+  });
 
   /** Two presses on an empty cell of Quiver: the first shows the focus point there, and the second makes a vertex. */
   async function addQuiverVertex(at: { x: number; y: number }): Promise<void> {
@@ -2073,6 +2162,202 @@ describe("standalone workbench host boundary", function () {
 
   for (const tablet of TABLET_VIEWPORTS) {
     story(
+      {
+        viewport: tablet,
+        document: String.raw`\begin{tikzpicture}\draw (0,0) circle (1);\draw (3,0) circle (1);\end{tikzpicture}`,
+      },
+      `a touchpad pinch that the desktop shell reports zooms the figure by its ratio, about its place, in ${tablet.name}`,
+      async function () {
+        // WebKitGTK gives a page no event of a pinch on a touchpad, so the desktop shell reports each step
+        // of the pinch as a `touchpad-pinch` event of the window (src-tauri/src/main.rs; issue #18).
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const pinch = (detail: { ratio: number; x: number; y: number }) =>
+          page.evaluate((step) => {
+            window.dispatchEvent(new CustomEvent("touchpad-pinch", { detail: step }));
+          }, detail);
+        const scale = async () => Number((await shownTransform(frame)).scale);
+        /** The centre and the width of the first circle, in the window. */
+        const circle = async () => {
+          const box = (await frame.locator("svg [data-source-id]").first().boundingBox())!;
+          return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width };
+        };
+        await settledCenter(frame.locator("svg [data-source-id]").first());
+        const opened = { scale: await scale(), circle: await circle() };
+
+        // Three steps of a pinch whose fingers end at twice their distance, with the pointer on the circle's centre.
+        for (const ratio of [1.25, 1.2, 4 / 3]) {
+          await pinch({ ratio, x: opened.circle.x, y: opened.circle.y });
+        }
+        await expect
+          .poll(async () => (await scale()) / opened.scale, { message: "The pinch did not zoom the figure to twice its size" })
+          .toBeCloseTo(2, 5);
+        const zoomed = await circle();
+        assert.ok(
+          Math.abs(zoomed.width / opened.circle.width - 2) < 0.02,
+          `The circle is ${zoomed.width} px wide after the pinch, from ${opened.circle.width} px`,
+        );
+        assert.ok(
+          Math.hypot(zoomed.x - opened.circle.x, zoomed.y - opened.circle.y) <= 1,
+          `The place under the pinch moved: ${JSON.stringify({ opened: opened.circle, zoomed })}`,
+        );
+
+        // A pinch with the pointer on the document bar is not a pinch on the canvas.
+        const bar = (await page.locator(".document-bar").boundingBox())!;
+        await pinch({ ratio: 2, x: bar.x + bar.width / 2, y: bar.y + bar.height / 2 });
+        await pinch({ ratio: 0.5, x: zoomed.x, y: zoomed.y });
+        await expect
+          .poll(async () => (await scale()) / opened.scale, { message: "The pinch did not zoom the figure back" })
+          .toBeCloseTo(1, 5);
+        assert.equal(await page.evaluate(() => window.visualViewport!.scale), 1);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `the ink of a pen stroke stays on the canvas after the pen lifts, and the thirtieth stroke is written as fast as the first, in ${tablet.name}`,
+      async function () {
+        // #89. The pen's mark left the canvas at the lift, and the stroke came 150 ms later in an empty
+        // figure and half a second later in a figure of forty strokes. The lift itself took 80 ms for the
+        // first stroke and 512 ms for the fortieth: each lift read the whole source again, each action of
+        // the store read every statement four times, and every point was compared with every other point.
+        // A stroke of 62 samples added 20 kB to the source.
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const source = async () => (await editorDebug(page)).source;
+        const area = await canvasFreeArea(frame);
+        await chooseTool(frame, input, "Pen");
+        // Each frame of the canvas: whether the pen's mark is shown and how many strokes are drawn; and for
+        // each lift of the pen, the time to the next frame, which the work of the lift holds back.
+        await frame.locator("body").evaluate(`(() => {
+          window.inkStates = [];
+          window.liftTimes = [];
+          let last = "";
+          const frameOfCanvas = () => {
+            const state = JSON.stringify({
+              mark: document.querySelector('[data-tool-preview="freehand"]') !== null,
+              strokes: new Set([...document.querySelectorAll('svg [data-source-id^="path:"]')].map((path) => path.getAttribute("data-source-id"))).size,
+            });
+            if (state !== last) { window.inkStates.push(JSON.parse(state)); last = state; }
+            requestAnimationFrame(frameOfCanvas);
+          };
+          requestAnimationFrame(frameOfCanvas);
+          window.addEventListener("pointerup", (event) => {
+            if (event.pointerType !== "pen") return;
+            const lifted = performance.now();
+            requestAnimationFrame(() => window.liftTimes.push(performance.now() - lifted));
+          }, true);
+        })()`);
+        const drawn = () =>
+          frame.locator("body").evaluate(
+            () => new Set([...document.querySelectorAll('svg [data-source-id^="path:"]')].map((path) => path.getAttribute("data-source-id"))).size,
+          );
+        const STROKES = 30, SAMPLES = 16, COLUMNS = 3, ROWS = STROKES / COLUMNS;
+        const width = area.right - area.left, height = area.bottom - area.top;
+        for (let stroke = 0; stroke < STROKES; stroke += 1) {
+          const left = area.left + width * (0.06 + (0.3 * (stroke % COLUMNS))), top = area.top + height * (0.08 + (0.84 * Math.floor(stroke / COLUMNS)) / ROWS);
+          await input.penStroke(
+            Array.from({ length: SAMPLES }, (_, i) => ({ x: left + (i * width * 0.22) / (SAMPLES - 1), y: top + Math.sin(i) * height * 0.012 })),
+          );
+          // The next stroke starts when the canvas has drawn this one, so each lift is timed alone.
+          await expect.poll(drawn, { message: `The canvas did not draw stroke ${stroke + 1}` }).toBe(stroke + 1);
+        }
+        const { states, lifts } = await frame
+          .locator("body")
+          .evaluate(() => ({ states: window.inkStates, lifts: window.liftTimes }));
+        // No frame between a stroke's mark and the stroke itself shows neither.
+        const gaps = states.filter((state, index) => index > 0 && !state.mark && states[index - 1].mark && state.strokes === states[index - 1].strokes);
+        assert.deepEqual(gaps, [], `The ink left the canvas after a lift: ${JSON.stringify(states)}`);
+        assert.equal(lifts.length, STROKES, "A lift of the pen was not timed");
+        const median = (times: number[]) => [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
+        const first = median(lifts.slice(0, 5)), last = median(lifts.slice(-5));
+        assert.ok(
+          last <= 3 * first + 50,
+          `The lift of the pen takes ${Math.round(last)} ms after ${STROKES} strokes and ${Math.round(first)} ms at the start: ${lifts.map(Math.round).join(", ")}`,
+        );
+        // The record holds the name of each reading once and the values of each sample in a row.
+        const perSample = (await source()).length / (STROKES * SAMPLES);
+        assert.ok(perSample <= 200, `A sample takes ${Math.round(perSample)} bytes of the source`);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a zoom step with a pen stroke selected takes no longer than with nothing selected, in ${tablet.name}`,
+      async function () {
+        // With a curve selected, each change of the view tried Smooth on every point of the curve, and each
+        // trial parsed the whole source. A zoom step then took 1.2 s in a figure of twelve strokes, against
+        // 33 ms with nothing selected; a turn of the wheel stopped the canvas for many seconds (issue #18).
+        await editorReady(page);
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        const source = async () => (await editorDebug(page)).source;
+        const selection = async () => (await editorDebug(page)).selection.length;
+        const area = await canvasFreeArea(frame);
+        const point = (fx: number, fy: number) => ({
+          x: area.left + (area.right - area.left) * fx,
+          y: area.top + (area.bottom - area.top) * fy,
+        });
+        await chooseTool(frame, input, "Pen");
+        for (let stroke = 0; stroke < 8; stroke += 1) {
+          const before = await source();
+          await input.penStroke(
+            Array.from({ length: 16 }, (_, i) => point(0.2 + (i * 0.6) / 15, 0.2 + stroke * 0.07 + Math.sin(i) * 0.01)),
+          );
+          await expect.poll(source, { message: "A pen stroke changed nothing" }).not.toBe(before);
+        }
+        /**
+         * The median time of five zoom steps by the wheel with Ctrl, in ms. A step runs from the wheel event
+         * to the second frame after the canvas shows the new scale.
+         */
+        const zoomStep = () =>
+          frame.locator('[data-canvas-viewport="true"]').evaluate(async (viewport) => {
+            const box = viewport.getBoundingClientRect();
+            const times: number[] = [];
+            for (let step = 0; step < 5; step += 1) {
+              const before = document.querySelector<HTMLElement>("[data-canvas-scale]")!.dataset.canvasScale;
+              const started = performance.now();
+              viewport.dispatchEvent(
+                new WheelEvent("wheel", {
+                  deltaY: step % 2 === 0 ? -60 : 60,
+                  ctrlKey: true,
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: box.left + box.width / 2,
+                  clientY: box.top + box.height / 2,
+                }),
+              );
+              while (document.querySelector<HTMLElement>("[data-canvas-scale]")!.dataset.canvasScale === before) {
+                await new Promise((resolve) => setTimeout(resolve, 4));
+              }
+              await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              times.push(performance.now() - started);
+            }
+            return times.sort((left, right) => left - right)[2];
+          });
+
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([await strokePoint(page, frame.locator("svg [data-source-id]").last(), 0.5)]);
+        await expect.poll(selection, { message: "The pen tap did not select the stroke" }).toBe(1);
+        const selected = await zoomStep();
+        await input.penStroke([point(0.9, 0.92)]);
+        await expect.poll(selection, { message: "The pen tap on the empty canvas kept the selection" }).toBe(0);
+        const unselected = await zoomStep();
+        assert.ok(
+          selected <= 3 * unselected + 50,
+          `A zoom step takes ${Math.round(selected)} ms with a stroke selected and ${Math.round(unselected)} ms with nothing selected`,
+        );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
       { viewport: tablet },
       `keeps the rail and its popups off the rulers, and the popups off the rail, docked bottom by default, docked left, and floating in ${tablet.name}`,
       async function () {
@@ -2279,6 +2564,345 @@ describe("standalone workbench host boundary", function () {
           Math.abs(end - start - 270) < 1e-6,
           `The arc sweeps ${end - start} degrees, not 270 counterclockwise: ${arc}`,
         );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `each construction on lattice points emits its TikZ and shows no sentence at any stage, in ${tablet.name}`,
+      async function () {
+        // FR-030, FR-031, SC-003 (T042). The constructions of several stages have stories of their own: the
+        // open path, the curve, the circles on a diameter and through three points, and the arcs.
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const source = async () => (await editorDebug(page)).source;
+        // A line of text that teaches is a sentence; a label is short and has no full stop (FR-031).
+        const sentences = () =>
+          frame.locator("body").evaluate((body) =>
+            (body as HTMLElement).innerText
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.length > 30 || /[.!?]$/.test(line)),
+          );
+        const shapes = toolbarItem(frame, "Shapes");
+        const menu = activeToolMenu(frame);
+        await setSnapRule(frame, input, "Lattice", true);
+
+        // The Shapes menu groups its choices by family, and each choice is drawn.
+        await chooseTool(frame, input, "Shapes");
+        await input.touch([await stableCenter(shapes)]);
+        await expect(menu).toBeVisible();
+        const families = await menu.getByRole("group").evaluateAll((groups) =>
+          groups.map((group) => ({
+            family: group.getAttribute("aria-label"),
+            // A choice shows its picture over its name; the Matrix's picture is its four entries.
+            choices: [...group.querySelectorAll<HTMLElement>('[role="option"]')].map((choice) => ({
+              name: choice.innerText.split("\n").at(-1),
+              drawn: choice.querySelector("svg") !== null || choice.innerText.split("\n").length > 1,
+            })),
+          })),
+        );
+        const drawn = (...names: string[]) => names.map((name) => ({ name, drawn: true }));
+        assert.deepEqual(families, [
+          { family: "Lines and arrows", choices: drawn("Point", "Line", "Arrow", "Path") },
+          { family: "Curves", choices: drawn("Curve") },
+          { family: "Circles and arcs", choices: drawn("Circle", "Circle on a diameter", "Circle through three points", "Arc", "Arc through three points") },
+          { family: "Shapes", choices: drawn("Rectangle", "Ellipse", "Node shape") },
+          { family: "Diagrams", choices: drawn("Grid", "Matrix", "Image") },
+        ]);
+        assert.deepEqual(await sentences(), [], "The Shapes menu shows a sentence");
+        await input.touch([await stableCenter(shapes)]);
+        await expect(menu).toHaveCount(0);
+
+        // Each construction of one gesture, from (2,2) to (5,4) or at (3,3): its statement, and one Undo removes it.
+        const constructions: [string, "tap" | "drag", string][] = [
+          ["Point", "tap", String.raw`\fill (3,3) circle (0.04cm);`],
+          ["Line", "drag", String.raw`\draw (2,2) -- (5,4);`],
+          ["Arrow", "drag", String.raw`\draw[->] (2,2) -- (5,4);`],
+          ["Circle", "drag", String.raw`\draw (2,2) circle ({sqrt(13)*1cm});`],
+          ["Rectangle", "drag", String.raw`\draw (2,2) rectangle (5,4);`],
+          ["Ellipse", "drag", String.raw`\draw (3.5,3) ellipse [x radius=1.5cm, y radius=1cm];`],
+          ["Grid", "drag", String.raw`\draw (2,2) grid (5,4);`],
+        ];
+        for (const [name, gesture, statement] of constructions) {
+          await chooseShape(frame, input, name);
+          const before = await source();
+          if (gesture === "tap") {
+            await input.penStroke([at(3, 3)]);
+          } else {
+            const from = at(2, 2), to = at(5, 4);
+            await input.penDown(from);
+            for (let step = 1; step <= 6; step += 1) {
+              await input.penMove({ x: from.x + ((to.x - from.x) * step) / 6, y: from.y + ((to.y - from.y) * step) / 6 });
+              if (step === 3) {
+                assert.deepEqual(await sentences(), [], `${name} shows a sentence during its gesture`);
+              }
+            }
+            await input.penUp(to);
+          }
+          await expect.poll(source, { message: `${name} wrote nothing` }).not.toBe(before);
+          const added = (await source()).split("\n").filter((line) => !before.split("\n").includes(line)).map((line) => line.trim());
+          assert.deepEqual(added, [statement], name);
+          assert.deepEqual(await sentences(), [], `${name} shows a sentence after its gesture`);
+          await page.getByRole("button", { name: "Undo", exact: true }).click();
+          await expect.poll(source, { message: `One Undo did not remove the ${name}` }).toBe(before);
+          await editorReady(page);
+        }
+
+        // The Text menu offers Text and Equation, and Equation opens the equation editor.
+        const text = toolbarItem(frame, "Text");
+        await chooseTool(frame, input, "Text");
+        await input.touch([await stableCenter(text)]);
+        await expect(menu).toBeVisible();
+        assert.deepEqual(
+          await menu.getByRole("option").evaluateAll((choices) => choices.map((choice) => (choice as HTMLElement).innerText.split("\n").at(-1))),
+          ["Text", "Equation"],
+        );
+        await input.touch([await stableCenter(menu.getByRole("option", { name: "Equation", exact: true }))]);
+        await expect(frame.getByTestId("equation-modal"), "Equation did not open the equation editor").toBeVisible();
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `an open path ends with Finish, Cancel drops a construction, and neither shows before a point is placed, in ${tablet.name}`,
+      async function () {
+        // FR-032: Cancel and Finish are in the Active Tool Menu while a construction is in progress, and a
+        // construction is in progress from its first placed point (FR-034). The menu showed Cancel as soon as a
+        // shape was chosen, and no story finished an open path (T042).
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const source = async () => (await editorDebug(page)).source;
+        const draws = async () =>
+          (await source())
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("\\draw"));
+        const shapes = toolbarItem(frame, "Shapes");
+        const menu = activeToolMenu(frame);
+        const command = (name: "Finish" | "Cancel") => menu.getByRole("button", { name, exact: true });
+        const openMenu = async (when: string) => {
+          await input.touch([await stableCenter(shapes)]);
+          await expect(menu, `A tap on Shapes did not open its menu ${when}`).toBeVisible();
+        };
+        await setSnapRule(frame, input, "Lattice", true);
+        await chooseShape(frame, input, "Path");
+        const authored = await source();
+
+        // A chosen construction with no point placed is not in progress.
+        await openMenu("before a point is placed");
+        await expect(command("Finish"), "Finish shows before a point is placed").toHaveCount(0);
+        await expect(command("Cancel"), "Cancel shows before a point is placed").toHaveCount(0);
+        await input.touch([await stableCenter(shapes)]);
+        await expect(menu).toHaveCount(0);
+
+        // Three points of an open path; the source stays until Finish.
+        for (const point of [at(2, 2), at(6, 2), at(6, 5)]) {
+          await input.penStroke([point]);
+        }
+        assert.equal(await source(), authored, "The source changed before Finish");
+        await openMenu("with three points placed");
+        await expect(command("Cancel")).toBeVisible();
+        await input.touch([await stableCenter(command("Finish"))]);
+        await expect(menu, "Finish left the menu open").toHaveCount(0);
+        await expect.poll(async () => (await draws()).length, { message: "Finish did not write the path" }).toBe(3);
+        const path = (await draws())[2];
+        assert.match(path, /\(2,2\)\s*--\s*\(6,2\)\s*--\s*\(6,5\)\s*;$/, path);
+        const withPath = await source();
+        await editorReady(page);
+
+        // Cancel drops the placed points and writes nothing; the next taps start a new path.
+        for (const point of [at(2, 7), at(5, 7)]) {
+          await input.penStroke([point]);
+        }
+        await openMenu("with two points placed");
+        await input.touch([await stableCenter(command("Cancel"))]);
+        await expect(menu, "Cancel left the menu open").toHaveCount(0);
+        await openMenu("after Cancel");
+        await expect(command("Cancel"), "Cancel shows after the construction was dropped").toHaveCount(0);
+        await input.touch([await stableCenter(shapes)]);
+        await expect(menu).toHaveCount(0);
+        assert.equal(await source(), withPath, "Cancel changed the source");
+        for (const point of [at(8, 6), at(8, 9)]) {
+          await input.penStroke([point]);
+        }
+        await openMenu("with the second path placed");
+        await input.touch([await stableCenter(command("Finish"))]);
+        await expect.poll(async () => (await draws()).length, { message: "Finish did not write the second path" }).toBe(4);
+        const second = (await draws())[3];
+        assert.match(second, /\(8,6\)\s*--\s*\(8,9\)\s*;$/, second);
+        // One Undo takes back the path.
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+        await expect.poll(source, { message: "Undo did not take back the path" }).toBe(withPath);
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `Undo during a construction takes back its last point and leaves the document, in ${tablet.name}`,
+      async function () {
+        // FR-034, US4/AC3: with points of a construction placed, the document bar's Undo removes the last
+        // placed point and the source stays; with no point left the construction has ended, and Undo acts on
+        // the document again.
+        await editorReady(page);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        await pasteCode(page, String.raw`\begin{tikzpicture}
+        \draw (0,0) -- (10,0);
+        \draw (0,0) -- (0,10);
+        \path[use as bounding box] (-10,-10) rectangle (15,15);
+        \end{tikzpicture}`);
+        await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
+        const frame = editorFrame(page);
+        await expect(frame.locator('svg [data-source-id="path:1"]').first()).toBeAttached();
+        const input = await TabletInput.attach(page);
+        await fitDiagram(frame, input);
+        const frameBox = (await page.locator('iframe[title="TikZ visual editor"]').boundingBox())!;
+        const ends = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGeometryElement) => {
+              const m = path.getScreenCTM()!;
+              return [0, path.getTotalLength()].map((length) => {
+                const p = path.getPointAtLength(length);
+                return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+              });
+            });
+        const [[origin, xTen], [, yTen]] = [await ends("path:0"), await ends("path:1")];
+        const at = (x: number, y: number) => ({
+          x:
+            frameBox.x + origin.x + ((xTen.x - origin.x) * x) / 10 + ((yTen.x - origin.x) * y) / 10,
+          y:
+            frameBox.y + origin.y + ((xTen.y - origin.y) * x) / 10 + ((yTen.y - origin.y) * y) / 10,
+        });
+        const source = async () => (await editorDebug(page)).source;
+        const draws = async () =>
+          (await source())
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("\\draw"));
+        const angle = (raw: string) => {
+          const pair = /atan2\(([-\d.]+),([-\d.]+)\)([+-]\d+)?/.exec(raw);
+          return pair
+            ? (Math.atan2(Number(pair[1]), Number(pair[2])) * 180) / Math.PI + (pair[3] === undefined ? 0 : Number(pair[3]))
+            : Number(raw.replace(/[{}]/g, ""));
+        };
+        const sweep = (arc: string) =>
+          angle(/end angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]) -
+          angle(/start angle=(\{[^}]*\}|[-\d.]+)/.exec(arc)![1]);
+        const undo = page.getByRole("button", { name: "Undo", exact: true });
+
+        // A circle is in the document, so the document has a step that Undo could take back.
+        await chooseShape(frame, input, "Circle on a diameter");
+        await input.penStroke([at(-6, -2)]);
+        await input.penStroke([at(-2, -2)]);
+        await expect.poll(async () => (await draws()).length, { message: "The circle is not in the source" }).toBe(3);
+        const withCircle = await source();
+
+        // Two points of the arc through three points; Undo removes the second, and the source stays.
+        await chooseShape(frame, input, "Arc through three points");
+        await input.penStroke([at(6, 0)]);
+        await input.penStroke([at(8, 2)]);
+        await expect(undo, "Undo is disabled during a construction").toBeEnabled();
+        await undo.click();
+        await page.waitForTimeout(300);
+        assert.equal(await source(), withCircle, "Undo during the construction changed the source");
+        // The construction still has its first point: two more taps complete the arc, through the new second point.
+        await input.penStroke([at(8, -2)]);
+        assert.equal(await source(), withCircle, "The tap after Undo was not taken as the second point");
+        await input.penStroke([at(10, 0)]);
+        await expect.poll(async () => (await draws()).length, { message: "The arc is not in the source" }).toBe(4);
+        const arc = (await draws())[3];
+        assert.match(arc, /\(6,0\) arc\[/, arc);
+        assert.ok(
+          Math.abs(sweep(arc) - 180) < 1e-6,
+          `The arc sweeps ${sweep(arc)} degrees, not 180 through (8,-2): ${arc}`,
+        );
+        const withArc = await source();
+
+        // Two points again; two Undos remove both, the construction ends, and the source stays.
+        await input.penStroke([at(2, 6)]);
+        await input.penStroke([at(4, 8)]);
+        await undo.click();
+        await undo.click();
+        await page.waitForTimeout(300);
+        assert.equal(await source(), withArc, "Two Undos during the construction changed the source");
+        // The next Undo acts on the document: it takes back the arc.
+        await undo.click();
+        await expect.poll(source, { message: "Undo after the construction ended did not take back the arc" }).toBe(withCircle);
+        await editorReady(page);
+        // No point of the ended construction is left: three taps make an arc from the first of them.
+        await input.penStroke([at(6, 0)]);
+        await input.penStroke([at(8, 2)]);
+        await input.penStroke([at(10, 0)]);
+        await expect.poll(async () => (await draws()).length, { message: "The arc after the ended construction is not in the source" }).toBe(4);
+        const fresh = (await draws())[3];
+        assert.match(fresh, /\(6,0\) arc\[/, fresh);
+        assert.ok(Math.abs(sweep(fresh) + 180) < 1e-6, `The arc sweeps ${sweep(fresh)} degrees, not -180: ${fresh}`);
       },
     );
   }
@@ -2543,10 +3167,20 @@ describe("standalone workbench host boundary", function () {
         await input.penUp(target);
         // The rendered circles: centres at (3,3) and (11,3), each 4 units across.
         const unit = Math.hypot(at(1, 0).x - at(0, 0).x, at(1, 0).y - at(0, 0).y);
-        const circle = async (id: string) => {
-          const box = (await frame.locator(`svg [data-source-id="${id}"]`).first().boundingBox())!;
-          return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width };
-        };
+        // The box of the circle's geometry, without its stroke: at this zoom the stroke is a twentieth of a unit wide.
+        const circle = async (id: string) =>
+          frame
+            .locator(`svg [data-source-id="${id}"]`)
+            .first()
+            .evaluate((path: SVGGraphicsElement, offset) => {
+              const box = path.getBBox();
+              const m = path.getScreenCTM()!;
+              const left = box.x * m.a + box.y * m.c + m.e;
+              const right = (box.x + box.width) * m.a + (box.y + box.height) * m.c + m.e;
+              const top = box.x * m.b + box.y * m.d + m.f;
+              const bottom = (box.x + box.width) * m.b + (box.y + box.height) * m.d + m.f;
+              return { x: offset.x + (left + right) / 2, y: offset.y + (top + bottom) / 2, width: Math.abs(right - left) };
+            }, { x: frameBox.x, y: frameBox.y });
         for (const [id, x, y] of [
           ["path:2", 3, 3],
           ["path:3", 11, 3],
@@ -2615,6 +3249,8 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke([at(2, 4)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
         // A second tap on the selected square switches its frame to rotate-and-shear handles, as in Inkscape.
+        // A tap within half a second of the first is the second tap of a double tap, which switches nothing.
+        await page.waitForTimeout(600);
         await input.penStroke([at(2, 4.2)]);
         await expect.poll(async () => (await editorDebug(page)).selection).toEqual(["path:2"]);
         // The switch waits out the double-tap window; the author sees the edge handles appear.
@@ -3047,7 +3683,7 @@ describe("standalone workbench host boundary", function () {
         const strokeRecords = (text: string) => (text.match(/^% workbench-ink:/gm) ?? []).length;
         const fitShown = (text: string) => text.includes(".. controls");
         const press = async (name: "Undo" | "Redo", message: string, expected: string) => {
-          await tap(rail.getByRole("button", { name, exact: true }));
+          await tap(documentHistory(name));
           await expect.poll(source, { message }).toBe(expected);
         };
 
@@ -3113,7 +3749,7 @@ describe("standalone workbench host boundary", function () {
         }
         await expect(frame.locator("svg [data-source-id]")).toHaveCount(finalPicture);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.getByRole("button", { name: "Copy source", exact: true }).click();
+        await copyTikz();
         await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(final);
         assert.deepEqual(external, [], "The session asked for an external asset");
       },
@@ -3201,7 +3837,7 @@ describe("standalone workbench host boundary", function () {
         }
         await expect(frame.locator("svg [data-source-id]")).toHaveCount(finalPicture);
         await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
-        await page.getByRole("button", { name: "Copy source", exact: true }).click();
+        await copyTikz();
         await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(final);
       },
     );
@@ -5212,14 +5848,132 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `a second tap on the Pen closes its Active Tool Menu; opening File closes it, and opening it closes File, in ${tablet.name}`,
+      `each menu of the document bar opens under its own button and holds its commands, in ${tablet.name}`,
+      async function () {
+        // The lists of File, Export, and More opened at the trailing end of the bar, away from their
+        // buttons (audit, "File, Export, and other menus are not attached to their buttons"; FR-002).
+        // The document bar holds the title menu, Share and Export, and More (contracts/surfaces.md).
+        await editorReady(page);
+        const input = await TabletInput.attach(page);
+        const names = (list: Locator) => list.getByRole("menuitem").allInnerTexts();
+        const window = page.viewportSize()!;
+        const menus = [
+          ["title", ["New tikzpicture", "New tikzcd", "Open…", "Save", "Save As…"]],
+          ["share", ["Copy TikZ", "PDF…", "SVG…", "PNG…"]],
+          ["more", ["Settings…"]],
+        ] as const;
+        await expect(barMenu("title").button, "The title is not the file name").toHaveText("Unsaved Document");
+        await expect(barMenu("share").button).toHaveAccessibleName("Share and Export");
+        await expect(barMenu("more").button).toHaveAccessibleName("More");
+        for (const [key, commands] of menus) {
+          const menu = barMenu(key);
+          await input.touch([await stableCenter(menu.button)]);
+          await expect(menu.list, `A tap on the button of ${key} did not open its list`).toBeVisible();
+          await expect(menu.button).toHaveAttribute("aria-expanded", "true");
+          assert.deepEqual(await names(menu.list), [...commands], `The commands of ${key}`);
+          const button = (await menu.button.boundingBox())!;
+          const list = (await menu.list.boundingBox())!;
+          assert.ok(
+            list.y >= button.y + button.height && list.y - (button.y + button.height) <= 12,
+            `The list of ${key} does not start under its button: ${JSON.stringify({ button, list })}`,
+          );
+          assert.ok(
+            Math.abs(list.x - button.x) <= 1 || Math.abs(list.x + list.width - (button.x + button.width)) <= 1,
+            `The list of ${key} shares no side with its button: ${JSON.stringify({ button, list })}`,
+          );
+          assert.ok(
+            list.x >= 0 && list.x + list.width <= window.width && list.y + list.height <= window.height,
+            `The list of ${key} leaves the window: ${JSON.stringify(list)}`,
+          );
+          for (const item of await menu.list.getByRole("menuitem").all()) {
+            const box = (await item.boundingBox())!;
+            assert.ok(box.height >= 44, `A command of ${key} is ${box.height} px high`);
+          }
+          await storyScreenshot(page, `document-bar-menu-${key}-${tablet.name}`);
+          // A second tap on the button closes the list.
+          await input.touch([await stableCenter(menu.button)]);
+          await expect(menu.list, `A second tap on the button of ${key} did not close its list`).toHaveCount(0);
+          await expect(menu.button).toHaveAttribute("aria-expanded", "false");
+        }
+        // Opening one menu closes the other.
+        await input.touch([await stableCenter(barMenu("title").button)]);
+        await input.touch([await stableCenter(barMenu("more").button)]);
+        await expect(barMenu("more").list).toBeVisible();
+        await expect(barMenu("title").list, "The title menu stayed open beside More").toHaveCount(0);
+        // A choice closes the list.
+        await input.touch([await stableCenter(barMenuItem("Settings…"))]);
+        await expect(barMenu("more").list, "The choice left More open").toHaveCount(0);
+        await expect(settingsDialog()).toBeVisible();
+      },
+    );
+  }
+
+  story(
+    { viewport: { width: 800, height: 1024 } },
+    "the canvas keeps its place while the status line changes, and the document bar is one row, at window widths from 560 to 800 px",
+    async function () {
+      // Development diagnostics run 43821818615, 768 px wide: the bar held "Saving recovery…" in one row and
+      // "Recovery saved · not saved as file" in two, so the canvas moved 40 px under the pen after each stroke.
+      await editorReady(page);
+      const frame = editorFrame(page);
+      const input = await TabletInput.attach(page);
+      await chooseTool(frame, input, "Pen");
+      const status = page.locator(".tikz-standalone-status");
+      const source = async () => (await editorDebug(page)).source;
+      const widths = [560, 590, 620, 650, 680, 710, 740, 770, 800];
+      const oneRow = async (width: number) => {
+        const rows = await page
+          .locator(".document-bar > .bar-menu > button, .document-bar > div:not(.bar-menu) > button, .document-bar > div > .bar-menu > button")
+          .evaluateAll((buttons) => buttons.map((button) => Math.round(button.getBoundingClientRect().top)));
+        assert.equal(rows.length, 7, "The document bar does not hold its seven buttons");
+        assert.equal(
+          new Set(rows).size,
+          1,
+          `At ${width} px and "${await status.innerText()}" the buttons of the document bar are in rows at ${[...new Set(rows)]}`,
+        );
+      };
+      for (const [index, width] of widths.entries()) {
+        await page.setViewportSize({ width, height: 1024 });
+        await oneRow(width);
+        // Each change of the bar records the status line and the top of the canvas.
+        await page.evaluate(`(() => {
+          const seen = { tops: new Set(), texts: new Set() };
+          const canvas = document.querySelector('iframe[title="TikZ visual editor"]');
+          const line = document.querySelector(".tikz-standalone-status");
+          const read = () => { seen.tops.add(Math.round(canvas.getBoundingClientRect().top)); seen.texts.add(line.textContent); };
+          read();
+          new MutationObserver(read).observe(document.querySelector(".document-bar"), { subtree: true, childList: true, characterData: true });
+          window.__barWatch = seen;
+        })()`);
+        const before = await source();
+        const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
+        await input.penStroke(waveAcross(viewport, 0.3, 0.15 + index * 0.06, 100));
+        await expect.poll(source, { message: `At ${width} px the stroke was not written` }).not.toBe(before);
+        await expect(status).toHaveText("Recovery saved · not saved as file");
+        await oneRow(width);
+        if (width === 560 || width === 740) {
+          await storyScreenshot(page, `document-bar-${width}-px`);
+        }
+        const seen = (await page.evaluate(
+          "({ tops: [...window.__barWatch.tops], texts: [...window.__barWatch.texts] })",
+        )) as { tops: number[]; texts: string[] };
+        assert.ok(seen.texts.length > 1, `At ${width} px the status line did not change: ${seen.texts}`);
+        assert.equal(seen.tops.length, 1, `At ${width} px the canvas moved between ${seen.tops} as the status line read ${seen.texts.join(" | ")}`);
+      }
+    },
+  );
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
+      `a second tap on the Pen closes its Active Tool Menu; opening the title menu closes it, and opening it closes the title menu, in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
         const pen = toolbarItem(frame, "Pen");
         const menu = activeToolMenu(frame);
-        const file = page.locator('details.file-menu[aria-label="File"]');
+        const file = barMenu("title");
         await chooseTool(frame, input, "Lasso");
         await input.touch([await stableCenter(pen)]);
         await expect(menu).toHaveCount(0);
@@ -5229,12 +5983,12 @@ describe("standalone workbench host boundary", function () {
         await expect(menu).toHaveCount(0);
         await input.touch([await stableCenter(pen)]);
         await expect(menu).toBeVisible();
-        await input.touch([await stableCenter(file.locator("summary"))]);
-        await expect(file).toHaveAttribute("open", "");
-        await expect(menu, "The Active Tool Menu stayed open beside File").toHaveCount(0);
+        await input.touch([await stableCenter(file.button)]);
+        await expect(file.list).toBeVisible();
+        await expect(menu, "The Active Tool Menu stayed open beside the title menu").toHaveCount(0);
         await input.touch([await stableCenter(pen)]);
         await expect(menu).toBeVisible();
-        await expect(file, "File stayed open beside the Active Tool Menu").not.toHaveAttribute("open");
+        await expect(file.list, "The title menu stayed open beside the Active Tool Menu").toHaveCount(0);
       },
     );
   }
@@ -5398,7 +6152,7 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `a press on the canvas closes File, Export, and More and places nothing, and Escape closes them, in ${tablet.name}`,
+      `a press on the canvas closes the title menu, Share and Export, and More and places nothing, and Escape closes them, in ${tablet.name}`,
       async function () {
         await author(axesFigure);
         const frame = editorFrame(page);
@@ -5416,19 +6170,19 @@ describe("standalone workbench host boundary", function () {
           ["mouse", (point) => page.mouse.click(point.x, point.y)],
         ];
         await chooseTool(frame, input, "Shapes");
-        for (const name of ["File", "Export", "More"]) {
-          const shellMenu = page.locator(`details.file-menu[aria-label="${name}"]`);
+        for (const [name, key] of [["the title menu", "title"], ["Share and Export", "share"], ["More", "more"]] as const) {
+          const shellMenu = barMenu(key);
           const open = () =>
             shellMenuChange(async () => {
-              await input.touch([await stableCenter(shellMenu.locator("summary"))]);
-              await expect(shellMenu).toHaveAttribute("open", "");
+              await input.touch([await stableCenter(shellMenu.button)]);
+              await expect(shellMenu.list).toBeVisible();
             });
           for (const [contact, press] of contacts) {
             await open();
-            const point = await pointOutside(shellMenu.locator(".file-menu-items"), empty);
+            const point = await pointOutside(shellMenu.list, empty);
             await shellMenuChange(async () => {
               await press(point);
-              await expect(shellMenu, `A ${contact} press on the canvas did not close ${name}`).not.toHaveAttribute("open");
+              await expect(shellMenu.list, `A ${contact} press on the canvas did not close ${name}`).toHaveCount(0);
             });
             // The press's own effect is complete before the next tap opens the Shapes menu.
             await input.touch([await stableCenter(shapes)]);
@@ -5440,7 +6194,7 @@ describe("standalone workbench host boundary", function () {
           await open();
           await shellMenuChange(async () => {
             await page.keyboard.press("Escape");
-            await expect(shellMenu, `Escape did not close ${name}`).not.toHaveAttribute("open");
+            await expect(shellMenu.list, `Escape did not close ${name}`).toHaveCount(0);
           });
         }
         // With no menu open the same press draws.
@@ -5524,41 +6278,41 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
-      `a tap on another control of the shell closes File, and the control still acts, in ${tablet.name}`,
+      `a tap on another control of the shell closes the title menu, and the control still acts, in ${tablet.name}`,
       async function () {
         await editorReady(page);
         const frame = editorFrame(page);
         const input = await TabletInput.attach(page);
-        const file = page.locator('details.file-menu[aria-label="File"]');
-        await input.touch([await stableCenter(file.locator("summary"))]);
-        await expect(file).toHaveAttribute("open", "");
+        const file = barMenu("title");
+        await input.touch([await stableCenter(file.button)]);
+        await expect(file.list).toBeVisible();
         await input.touch([await stableCenter(documentPanelButton("Layers"))]);
         await expect(sidePanel(frame, "Layers"), "The tap on Layers did not open it").toBeVisible();
-        await expect(file, "File stayed open after a tap on Layers").not.toHaveAttribute("open");
+        await expect(file.list, "The title menu stayed open after a tap on Layers").toHaveCount(0);
       },
     );
   }
 
   story(
     { initialPage: "blank" },
-    "a press in the Quiver view closes File and places nothing",
+    "a press in the Quiver view closes the title menu and places nothing",
     async function () {
       await page.goto(url);
       await editorReady(page);
-      const file = page.locator('details.file-menu[aria-label="File"]');
-      await file.locator("summary").click();
-      await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
+      const file = barMenu("title");
+      await file.button.click();
+      await barMenuItem("New tikzcd").click();
       const quiver = page.locator('iframe[title="Quiver diagram editor"]');
       await expect(quiver).toBeVisible({ timeout: 30_000 });
       // A press on an empty cell of Quiver shows the focus point there; a second press on it makes a vertex.
       const focusPoint = page.frameLocator('iframe[title="Quiver diagram editor"]').locator(".focus-point");
       await expect(focusPoint).not.toHaveClass(/revealed/);
-      await file.locator("summary").click();
-      await expect(file).toHaveAttribute("open", "");
+      await file.button.click();
+      await expect(file.list).toBeVisible();
       const box = await layoutBox(quiver);
       const cell = { x: box.x + box.width * 0.75, y: box.y + box.height * 0.75 };
       await page.mouse.click(cell.x, cell.y);
-      await expect(file, "File stayed open after a press in the Quiver view").not.toHaveAttribute("open");
+      await expect(file.list, "The title menu stayed open after a press in the Quiver view").toHaveCount(0);
       await expect(focusPoint, "The press that closed File also showed Quiver's focus point").not.toHaveClass(
         /revealed/,
       );
@@ -5570,22 +6324,22 @@ describe("standalone workbench host boundary", function () {
 
   story(
     { initialPage: "blank" },
-    "a press on a control of Quiver closes File, and the control acts",
+    "a press on a control of Quiver closes the title menu, and the control acts",
     async function () {
       await page.goto(url);
       await editorReady(page);
-      const file = page.locator('details.file-menu[aria-label="File"]');
-      await file.locator("summary").click();
-      await page.getByRole("button", { name: "New tikzcd", exact: true }).click();
+      const file = barMenu("title");
+      await file.button.click();
+      await barMenuItem("New tikzcd").click();
       await expect(page.locator('iframe[title="Quiver diagram editor"]')).toBeVisible({ timeout: 30_000 });
       const grid = page
         .frameLocator('iframe[title="Quiver diagram editor"]')
         .locator('button.action[data-name="hide-grid"]');
       await expect(grid.locator(".name")).toHaveText("Hide grid");
-      await file.locator("summary").click();
-      await expect(file).toHaveAttribute("open", "");
+      await file.button.click();
+      await expect(file.list).toBeVisible();
       await grid.click();
-      await expect(file, "File stayed open after a press on a control of Quiver").not.toHaveAttribute("open");
+      await expect(file.list, "The title menu stayed open after a press on a control of Quiver").toHaveCount(0);
       await expect(grid.locator(".name"), "The control that took the closing press did not act").toHaveText(
         "Show grid",
       );
@@ -5670,7 +6424,8 @@ describe("standalone workbench host boundary", function () {
         await input.penStroke([from, { x: (from.x + to.x) / 2, y: from.y }, to]);
         await expect.poll(source, { message: "The line was not drawn" }).toMatch(/\\draw \([^)]*\) -- \([^)]*\);/);
         await chooseTool(frame, input, "Text");
-        await input.penStroke([{ x: (from.x + to.x) / 2, y: from.y }]);
+        // The tap is on the line as it is drawn: the lattice moved the line from the pen's path.
+        await input.penStroke([await strokePoint(page, lastPath(frame), 0.5)]);
         await expect.poll(source, { message: "The tap on the line placed no label" }).toMatch(/ node\[/);
         await expect(textBox, "The label is not in edit").toBeFocused();
         await page.keyboard.type("w");
@@ -6915,7 +7670,6 @@ describe("standalone workbench host boundary", function () {
           "Zoom Speed",
           "Toolbar Position",
           "Generated Source Indent",
-          "Reset to Defaults",
         ]);
         // VS Code prompts for the keys only once recording starts (item 6).
         await tap(settings.getByRole("button", { name: "Keyboard shortcuts", exact: true }));
@@ -7832,7 +8586,7 @@ describe("standalone workbench host boundary", function () {
         await showsFigure();
 
         // No other surface holds the figure's attributes.
-        await page.getByRole("group", { name: "File" }).locator("summary").click();
+        await barMenu("title").button.click();
         await expect(page.getByRole("button", { name: "Document Properties…", exact: true })).toHaveCount(0);
         await page.keyboard.press("Escape");
         await page.keyboard.press("Control+Shift+D");
@@ -8638,8 +9392,8 @@ describe("standalone workbench host boundary", function () {
           await input.touch([await stableCenter(locator)]);
         };
         for (const kind of ["tikzcd", "tikzpicture"] as const) {
-          await tap(page.getByRole("group", { name: "File" }).locator("summary"));
-          await tap(page.getByRole("button", { name: `New ${kind}`, exact: true }));
+          await tap(barMenu("title").button);
+          await tap(barMenuItem(`New ${kind}`));
           await expect(
             page.getByRole("dialog", { name: "Save changes?" }),
             "An untouched new diagram has no changes to save",
@@ -9917,6 +10671,8 @@ describe("standalone workbench host boundary", function () {
         const viewport = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
         await input.penStroke(waveAcross(viewport, 0.45, 0.4, 120));
         await expect.poll(async () => (await editorDebug(page)).source).toMatch(/\\draw/);
+        // The source has the stroke before the canvas has drawn it.
+        await expect(frame.locator("svg [data-source-id]").first()).toBeAttached();
         const drawn = await frame
           .locator("svg [data-source-id]")
           .evaluateAll((nodes) => [
@@ -9975,16 +10731,20 @@ describe("standalone workbench host boundary", function () {
         await penTap(
           await stableCenter(frame.getByRole("button", { name: "More", exact: true })),
         );
+        // More holds Cut, Copy, Paste, and Delete; Duplicate is on the Object menu itself (contracts/surfaces.md).
         const menu = frame.getByRole("menu").first();
-        for (const name of ["Cut", "Copy", "Duplicate", "Delete"]) {
+        for (const name of ["Cut", "Copy", "Paste", "Delete"]) {
           await expect(menu.getByRole("menuitem", { name, exact: true })).toBeVisible();
         }
-        await penTap(
-          await stableCenter(menu.getByRole("menuitem", { name: "Duplicate", exact: true })),
-        );
-        await expect
-          .poll(async () => ((await editorDebug(page)).source.match(/circle/g) ?? []).length)
-          .toBe(2);
+        await penTap(await stableCenter(menu.getByRole("menuitem", { name: "Copy", exact: true })));
+        await expect(menu).toHaveCount(0);
+        const strip = frame.getByRole("toolbar", { name: "Selection", exact: true });
+        await penTap(await stableCenter(strip.getByRole("button", { name: "Duplicate", exact: true })));
+        const circles = async () => [...(await editorDebug(page)).source.matchAll(/circle/g)].length;
+        await expect.poll(circles).toBe(2);
+        await penTap(await stableCenter(strip.getByRole("button", { name: "More", exact: true })));
+        await penTap(await stableCenter(menu.getByRole("menuitem", { name: "Delete", exact: true })));
+        await expect.poll(circles).toBe(1);
       },
     );
   }
@@ -10002,20 +10762,23 @@ describe("standalone workbench host boundary", function () {
     const render = (await page
       .getByRole("button", { name: "Preview: right sidebar", exact: true })
       .boundingBox())!;
-    const copy = (await page
-      .getByRole("button", { name: "Copy source", exact: true })
-      .boundingBox())!;
+    const share = (await barMenu("share").button.boundingBox())!;
     await page.mouse.up();
     // Use the observed button positions: locator stability waits can let the
     // editor's throttled change notification arrive before this rapid sequence.
     await page.mouse.click(render.x + render.width / 2, render.y + render.height / 2);
-    await page.mouse.click(copy.x + copy.width / 2, copy.y + copy.height / 2);
+    await page.mouse.click(share.x + share.width / 2, share.y + share.height / 2);
+    await page.evaluate(() => {
+      [...document.querySelectorAll<HTMLElement>('.document-bar [role="menuitem"]')]
+        .find((item) => item.textContent?.trim() === "Copy TikZ")!
+        .click();
+    });
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("workbench-ink:");
     const authored = String.raw`\begin{tikzpicture}\draw[red] (0,0) rectangle (4,3);\end{tikzpicture}`;
     await pasteCode(page, authored);
-    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await copyTikz();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(authored);
   });
 
@@ -10024,21 +10787,25 @@ describe("standalone workbench host boundary", function () {
     await pasteCode(page, String.raw`\begin{tikzcd}A \arrow[r] & B\end{tikzcd}`);
     const frame = page.frameLocator('iframe[title="Quiver diagram editor"]');
     await frame.locator(".vertex").nth(1).click();
-    await frame.locator(".label-input").evaluate((input: HTMLInputElement) => {
+    await frame.locator(".label-input").evaluate(async (input: HTMLInputElement) => {
       input.value = "ClipboardFinal";
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      const buttons = [...window.parent.document.querySelectorAll("button")];
-      buttons
-        .find((button) => button.getAttribute("aria-label") === "Preview: right sidebar")!
+      const shell = window.parent.document;
+      const buttons = [...shell.querySelectorAll("button")];
+      buttons.find((button) => button.getAttribute("aria-label") === "Preview: right sidebar")!.click();
+      // The list of Share and Export is in the page one task after the press on its button.
+      buttons.find((button) => button.getAttribute("aria-label") === "Share and Export")!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      [...shell.querySelectorAll<HTMLElement>('.document-bar [role="menuitem"]')]
+        .find((item) => item.textContent?.trim() === "Copy TikZ")!
         .click();
-      buttons.find((button) => button.textContent?.trim() === "Copy source")!.click();
     });
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("ClipboardFinal");
     const newer = String.raw`\begin{tikzcd}NewerAuthored \arrow[r] & Source\end{tikzcd}`;
     await pasteCode(page, newer);
-    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await copyTikz();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(newer);
   });
 
@@ -10182,11 +10949,12 @@ describe("standalone workbench host boundary", function () {
         await author(String.raw`\begin{tikzpicture}
 % corpus authored comment
 \end{tikzpicture}`);
-        // A view of 50% puts a few screen pixels on each point and the whole trace on the canvas.
+        // 100% is the printed size, 96/72 px to the point. A view of 200% puts a few screen pixels on each
+        // point and the whole trace, at most 140 pt across, on the canvas.
         const zoom = zoomControl(frame);
         await input.touch([await stableCenter(zoom)]);
         await input.touch([
-          await stableCenter(frame.getByRole("button", { name: "50%", exact: true })),
+          await stableCenter(frame.getByRole("button", { name: "200%", exact: true })),
         ]);
         await input.touch([await stableCenter(zoom)]);
         await expect(frame.getByRole("dialog", { name: "Tool options" })).toHaveCount(0);
@@ -10394,7 +11162,7 @@ describe("standalone workbench host boundary", function () {
       authored,
     );
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await copyTikz();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(authored);
     assert.equal(
       await page
@@ -10436,7 +11204,7 @@ describe("standalone workbench host boundary", function () {
       });
       await page.mouse.up();
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-      await page.getByRole("button", { name: "Copy source", exact: true }).click();
+      await copyTikz();
       await expect
         .poll(() => page.evaluate(() => navigator.clipboard.readText()))
         .toMatch(/workbench-ink:/);
@@ -10516,7 +11284,7 @@ describe("standalone workbench host boundary", function () {
 
   story(
     { viewport: { width: 768, height: 1024 } },
-    "opens a tablet canvas and independently toggles source and properties before copying",
+    "opens a tablet canvas, shows Code and Properties one at a time, and copies the source",
     async function () {
       await editorReady(page);
       const sourcePane = page.locator(".cm-content");
@@ -10533,11 +11301,16 @@ describe("standalone workbench host boundary", function () {
       await expect(frame.getByRole("complementary", { name: "Properties" })).toBeVisible();
       await page.screenshot({ path: "test-results/workbench/tablet-properties.png" });
       await expect(sourcePane).toBeHidden();
+      // Code and Properties are panels, one open at a time (FR-060).
       await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       assert.equal(await sourcePane.innerText(), source);
+      await expect(frame.getByRole("complementary", { name: "Properties" }), "Properties stayed open beside Code").toHaveCount(0);
+      await documentPanelButton("Properties").click();
       await expect(frame.getByRole("complementary", { name: "Properties" })).toBeVisible();
-      await page.screenshot({ path: "test-results/workbench/tablet-both-panels.png" });
+      await expect(sourcePane, "Code stayed open beside Properties").toBeHidden();
       await frame.getByRole("button", { name: "Close properties", exact: true }).click();
+      await expect(frame.getByRole("complementary", { name: "Properties" })).toHaveCount(0);
+      await page.getByRole("button", { name: "Code: left sidebar", exact: true }).click();
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);
       const writes: string[] = [];
       page.on("request", (request) => {
@@ -10545,9 +11318,14 @@ describe("standalone workbench host boundary", function () {
           writes.push(request.url());
         }
       });
-      await page.getByRole("button", { name: "Copy source", exact: true }).click();
+      await copyTikz();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(source);
-      assert.deepEqual(writes, []);
+      // Copy TikZ writes no file of the document. The panels opened above write the preferences and the
+      // view state a moment after, and a page reports its console to the launch log; none is the document.
+      assert.deepEqual(
+        writes.filter((url) => !/\/api\/(preferences|view-state|log)$/.test(new URL(url).pathname)),
+        [],
+      );
       await sourcePane.press("Control+z");
       await expect(sourcePane).not.toHaveText(source);
     },
@@ -10598,7 +11376,7 @@ describe("standalone workbench host boundary", function () {
     });
     assert.deepEqual(await canvasSnapshotReply(accepted.requestId), accepted);
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await copyTikz();
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(accepted.source);
@@ -10800,14 +11578,18 @@ describe("standalone workbench host boundary", function () {
       clickCount: 1,
       pointerType: "pen",
     });
-    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await copyTikz();
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain("workbench-ink-end:");
     const source = await page.evaluate(() => navigator.clipboard.readText());
     const record = /% workbench-ink:([^\r\n]+)/.exec(source);
     assert.ok(record);
-    const original = JSON.parse(decodeURIComponent(record[1]));
+    // The record names the readings once and holds one row of values for each sample.
+    const packed = JSON.parse(decodeURIComponent(record[1])).samples as { fields: string[]; rows: (number | null)[][] };
+    const original = {
+      samples: packed.rows.map((row) => Object.fromEntries(packed.fields.map((field, index) => [field, row[index]]))),
+    };
     assert.ok(original.samples.length >= 42);
     const received = await frame
       .locator("body")
@@ -10816,7 +11598,7 @@ describe("standalone workbench host boundary", function () {
           (window as unknown as { receivedPen: { time: number; pressure: number }[] }).receivedPen,
       );
     assert.deepEqual(
-      original.samples.map((sample: { time: number; pressure: number }) => ({
+      original.samples.map((sample) => ({
         time: sample.time,
         pressure: sample.pressure,
       })),
@@ -10908,7 +11690,7 @@ describe("standalone workbench host boundary", function () {
         }
         await input.palm({ x: x + 180, y: y + 70 }, "touchEnd");
         await input.penUp({ x: x + 100, y });
-        await page.getByRole("button", { name: "Copy source", exact: true }).click();
+        await copyTikz();
         await expect
           .poll(() => page.evaluate(() => navigator.clipboard.readText()))
           .toMatch(/workbench-ink:/);
@@ -10992,7 +11774,7 @@ describe("standalone workbench host boundary", function () {
         .frameLocator('iframe[title="TikZ visual editor"]')
         .getByRole("menuitem", { name: "File", exact: true }),
     ).toBeHidden();
-    await expect(page.getByRole("group", { name: "File" })).toBeVisible();
+    await expect(barMenu("title").button).toBeVisible();
   });
 
 /** CSS px per figure centimetre at printed size: 96 CSS px per inch (FR-041). */
@@ -11171,7 +11953,8 @@ describe("standalone workbench host boundary", function () {
       await page.mouse.wheel(0, -180);
       await page.keyboard.up("Control");
       await expect.poll(() => shownZoom(frame)).not.toBe(100);
-      await page.locator(".document-bar strong").click();
+      // A press on the document bar, so the key goes to the shell.
+      await page.locator(".document-bar").click({ position: { x: 3, y: 3 } });
       await page.keyboard.press("Control+0");
       await expect.poll(() => shownZoom(frame)).toBe(100);
       const segment = frame.locator('[data-canvas-viewport="true"] [data-source-id="path:0"]').first();
@@ -11423,7 +12206,7 @@ describe("standalone workbench host boundary", function () {
       assert.equal((await canvasSnapshot()).svg, loaded.svg);
       await redo();
       await expect.poll(storedSource).toBe(drawn);
-      await page.getByRole("button", { name: "Copy source", exact: true }).click();
+      await copyTikz();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(drawn);
       const redone = await canvasSnapshot();
       assert.equal(redone.source, drawn);
@@ -11714,7 +12497,7 @@ describe("standalone workbench host boundary", function () {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width / 3 + 110, box.y + box.height / 2 + 25, { steps: 12 });
     await page.mouse.up();
-    await page.getByRole("button", { name: "Copy source", exact: true }).click();
+    await copyTikz();
     await expect(page.locator(".cm-content")).toContainText("workbench-ink:");
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -11858,12 +12641,10 @@ describe("standalone workbench host boundary", function () {
         const input = await TabletInput.attach(page);
         await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
         const bounds = (await frame.locator('[data-canvas-viewport="true"]').boundingBox())!;
-        const before = (await editorDebug(page)).historyIndex;
         await input.penStroke(waveAcross(bounds, 0.45, 0.5, 100));
         await expect(page.locator(".cm-content")).toContainText("workbench-ink:");
         await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
-        // The stroke is one undoable edit.
-        assert.equal((await editorDebug(page)).historyIndex - before, 1);
+        // The stroke is one step of the document's history (FR-012b): one Undo returns the authored source.
         await documentHistory("Undo").click();
         await expect.poll(() => page.locator(".cm-content").innerText()).toBe(renderSwitchAuthored);
       },
