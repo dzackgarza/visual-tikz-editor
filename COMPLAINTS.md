@@ -148,3 +148,44 @@ I inspected fresh screenshots from revision `4e7740c` at tablet portrait and lan
 12. **The visual emphasis works against legibility.** The dense grid and saturated swatches dominate, while tool symbols and ruler labels are small. Dark mode retains a bright white canvas beside very dim rulers. Selection outlines, axes, handles, and geometry compete for attention. The drawing should have the strongest visual priority, with readable controls and quieter construction aids. [Dark screenshot](/tmp/vte-screenshot-review-20261016/dark-properties-portrait.png)
 
 **The first redesign priorities should be preserving usable canvas space, making tool and selection state explicit, and keeping save status trustworthy.** Those changes address ordinary drawing failures before cosmetic refinement.
+
+I viewed 16 of the 469 screenshots, chosen to cover each surface in light and dark, portrait and landscape. The interface has the right skeleton, but it does not read as a premium iPad application.
+
+## The canvas does not have the attention
+
+- **Construction aids dominate.** The grid lines, the blue axes, the blue bounds rectangle, and two rulers with tick marks are all stronger than a drawn stroke. In `rail-landscape-light.png` an empty page already looks busy. GoodNotes and Apple Notes show paper with nothing on it.
+- **The page is grey.** The canvas is mid-grey with darker grey lines, so the drawing surface reads as a CAD viewport and not as paper.
+- **Developer chrome is visible.** A "Canvas" label sits above the ruler, and a `</>` strip and a two-icon strip take the full height at the left and right edges.
+
+## Controls are web forms, not iPad controls
+
+- **Every menu item is a boxed button.** The title menu (`document-bar-menu-title-portrait.png`) is a stack of five bordered buttons. An iPad menu is a list of plain rows with hairline separators.
+- **Unstyled browser controls appear.** The Shapes menu, Settings, and the arc form show default grey buttons ("Insert arc", "Remove", "Record keys"), square text inputs with black borders, and a default range slider.
+- **Toggles are filled blue rectangles.** In the zoom popover, Grid, Ruler guides, and Output bounds are solid blue bars. An iPad uses switches or checkmarks.
+- **Settings is a desktop dialog.** A full-window modal with a left sidebar and rows of "Color 1 … Remove" is a desktop preferences form.
+
+## Three visual languages in one window
+
+- **Shell, canvas editor, and Quiver do not match.** The document bar is one style. The long-press context menu is a square-cornered white list with no shadow depth. Quiver keeps its own toolbar of tiny labelled icons with `ctrl+` hints, and a bright cyan label bar.
+- **The render view has a fourth style.** Its zoom controls are dark grey circles that appear nowhere else.
+- **Two menus overlap for one selection.** In the long-press screenshot, the object menu and the context menu are both open, and both offer Duplicate.
+
+## Colour, type, and finish
+
+- **The accent is inconsistent.** Active tools are dark red, Snap and toggles are blue, the selected swatch has a blue ring, and Settings uses pale blue. An iPad application has one tint.
+- **Swatches are flat squares.** They are pure red, blue, and black. iPad pen colours are round wells.
+- **Type has no hierarchy.** Sizes jump between 11 px ruler labels, 13 px section headings in capitals, and 17 px form labels within one panel.
+- **No material or depth.** Bars and popovers are flat opaque fills with thin borders, not the translucent layered surfaces of iPadOS.
+- **Dark mode recolours and nothing more.** The black swatch is invisible on the dark toolbar, and the grid is still the strongest element.
+
+## Layout defects visible in the stills
+
+- **Layers panel is broken.** In `layers-landscape.png` the row controls are scattered across the panel with large gaps, and the row has no recognisable list structure.
+- **The toolbar wraps to two rows** beside the Code panel in portrait.
+- **The zoom popover covers the toolbar**, and the Shapes menu clips its last row.
+- **The save state wraps** to two lines and collides with "Up to date" in the Quiver render view.
+- **The Properties sheet** is a floating card with capital section headers and four number fields, not a sheet with a grabber and detents.
+
+## What I cannot judge from stills
+
+Motion, response time, and gesture feel are not visible in screenshots; the 343 story videos would show them. I did not open the videos or the other 453 images. I changed nothing in the repository.
