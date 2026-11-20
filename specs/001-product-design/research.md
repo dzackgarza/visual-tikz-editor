@@ -281,138 +281,22 @@ author chooses Light or Dark.
   that the author could not choose a light surface while the system is dark; the Light choice
   covers that.
 
-## R18. Accessibility: the WCAG 2.2 criteria and their subjects in the editor
+## R18. Contrast, refused values, and the release of a tap
 
-**Proposal** (the user directed on 2026-11-20 that the WCAG 2.2 rules enter the specification; the
-level and the mechanisms below are the maintainer's and wait for the user's review): the measure
-is the success criteria of
-[WCAG 2.2](https://www.w3.org/TR/2024/REC-WCAG22-20241212/) (W3C Recommendation, 2024-12-12) at
-Levels A and AA. Two measures come from Level AAA, each as the testable form of a rule that
-Level AA or the HIG states without a number: 2.4.13 Focus Appearance (the size and contrast of
-the focus indicator, for 2.4.7) and 2.3.3 Animation from Interactions (for the HIG's Reduce
-Motion). The requirements are FR-080 to FR-092 and constitution Principle IX.
+**Decision of the user, 2026-11-20**: the editor serves a person at a touch screen with a pen. A
+mouse or touchpad and a keyboard are optional. Each rule below is for that person; each takes its
+measure from a criterion of [WCAG 2.2](https://www.w3.org/TR/2024/REC-WCAG22-20241212/) (W3C
+Recommendation, 2024-12-12), which is cited for that measure only.
 
-**Rationale**:
-
-- The editor's page is web content, in a browser and in the web view of the desktop window, so the
-  criteria apply to it as written and each has a published test.
-- Apple's [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
-  guidance, the platform source of Principle II, takes its contrast numbers "from WCAG Level AA"
-  and states the same rules in prose: "Convey information with more than color alone", "Offer
-  alternatives to gestures", "Let people use the keyboard alone to navigate and interact with your
-  app", and, for Reduce Motion, "ensure your app or game responds by reducing automatic and
-  repetitive animations".
-- The checklist that started this entry is the accessibility rows of `ux-guidelines.csv` in
-  [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) at `2de1134`
-  (MIT licence). It paraphrases WCAG and the HIG and is not cited as a source of any rule; each
-  rule here cites the criterion.
-
-**Each Level A and AA criterion** (55 criteria; 4.1.1 is removed from WCAG 2.2):
-
-| Criterion | Level | Subject in the editor | Requirement |
+| Requirement | Rule | Source of the measure | Why the pen user needs it |
 | --- | --- | --- | --- |
-| 1.1.1 Non-text Content | A | Every symbol button; the figure thumbnails of the Figures panel | FR-080 |
-| 1.2.1 to 1.2.5 (audio and video) | A, AA | None: the editor plays no audio and no video | — |
-| 1.3.1 Info and Relationships | A | Roles of toolbars, menus, panels, dialogs; labels of fields | FR-080, FR-081 |
-| 1.3.2 Meaningful Sequence | A | The order of controls in the page is the order of each surface | FR-085 |
-| 1.3.3 Sensory Characteristics | A | None: FR-070 allows no instruction that could name a shape or a place | — |
-| 1.3.4 Orientation | AA | Landscape and portrait | FR-061 |
-| 1.3.5 Identify Input Purpose | AA | None: no field collects information about the user | — |
-| 1.4.1 Use of Color | A | Active tool, active preset, toggles, save state, conflict, error | FR-083 |
-| 1.4.2 Audio Control | A | None: no audio | — |
-| 1.4.3 Contrast (Minimum) | AA | All interface text, light and dark | FR-082 |
-| 1.4.4 Resize Text | AA | Document bar, menus, panels, Settings, dialogs | FR-090 |
-| 1.4.5 Images of Text | AA | None: interface text is text; the figure's text is the author's content | — |
-| 1.4.10 Reflow | AA | Settings and dialogs reflow; the canvas and toolbars use the exception for content that needs two dimensions | FR-090 |
-| 1.4.11 Non-text Contrast | AA | Symbols, field boundaries, state marks, selection highlight, snap marker, focus indicator | FR-082 |
-| 1.4.12 Text Spacing | AA | The same text as 1.4.4 | FR-090 |
-| 1.4.13 Content on Hover or Focus | AA | Tooltips | FR-091 |
-| 2.1.1 Keyboard | A | Every command; exception for path input (pen stroke, eraser sweep, freehand lasso) | FR-084 |
-| 2.1.2 No Keyboard Trap | A | The canvas, the Code panel (CodeMirror takes Tab), sheets, dialogs | FR-085 |
-| 2.1.4 Character Key Shortcuts | A | The one-key tool shortcuts | FR-084, FR-062 |
-| 2.2.1 Timing Adjustable | A | None: no time limit. The hold of FR-026 is a gesture, and the stroke stays when the hold is missed | — |
-| 2.2.2 Pause, Stop, Hide | A | The progress mark of Render moves only while a compile runs | FR-089 |
-| 2.3.1 Three Flashes | A | None: nothing flashes | — |
-| 2.4.1 Bypass Blocks | A | None: one page with no repeated blocks before content; the roles of FR-080 give the landmarks | — |
-| 2.4.2 Page Titled | A | The window title is the file name (`standalone/StandaloneApp.vue`) | Met in the source |
-| 2.4.3 Focus Order | A | Every surface | FR-085 |
-| 2.4.4 Link Purpose | A | None: the interface has no links | — |
-| 2.4.5 Multiple Ways | AA | None: one page, not a set of pages | — |
-| 2.4.6 Headings and Labels | AA | Settings pages, panel titles, field labels | FR-081 |
-| 2.4.7 Focus Visible | AA | Every focusable control | FR-085 |
-| 2.4.11 Focus Not Obscured (Minimum) | AA | Panels, sheets, popovers over the bars and the canvas | FR-085 |
-| 2.5.1 Pointer Gestures | A | Pinch to zoom, two-finger pan | FR-086 |
-| 2.5.2 Pointer Cancellation | A | Buttons, menu items, presets; drawing on the press is essential | FR-092 |
-| 2.5.3 Label in Name | A | Controls with visible text (menu items, Settings fields, dialog buttons) | FR-080, FR-081 |
-| 2.5.4 Motion Actuation | A | None: no command reads device motion | — |
-| 2.5.7 Dragging Movements | AA | The drags of the table below | FR-086 |
-| 2.5.8 Target Size (Minimum) | AA | 24 × 24 CSS px; Principle II and FR-008 set 44 × 44 pt, which is larger | Principle II |
-| 3.1.1 Language of Page | A | `lang="en"` in `standalone/index.html`; the canvas and Quiver frames need the same | FR-080 story checks each frame |
-| 3.1.2 Language of Parts | AA | None: the interface is in one language | — |
-| 3.2.1 On Focus, 3.2.2 On Input | A | Focus alone opens and changes nothing; a Settings field changes only its own setting | FR-085 |
-| 3.2.3 Consistent Navigation, 3.2.4 Consistent Identification | AA | One document bar in every view; one name per command | FR-001, SC-002 |
-| 3.2.6 Consistent Help | A | None: the editor has no help mechanism | — |
-| 3.3.1 Error Identification, 3.3.3 Error Suggestion | A, AA | Number, hex, `xcolor`, and file-name fields; the Render template error | FR-088, FR-065 |
-| 3.3.2 Labels or Instructions | A | Fields of Properties, Settings, colour options | FR-081 |
-| 3.3.4 Error Prevention (Legal, Financial, Data) | AA | None: no legal or financial transaction; Undo reverses each edit | — |
-| 3.3.7 Redundant Entry | A | None: no process of more than one step asks for information | — |
-| 3.3.8 Accessible Authentication | AA | None: no sign-in | — |
-| 4.1.2 Name, Role, Value | A | Every control | FR-080 |
-| 4.1.3 Status Messages | AA | Save state, conflict, Render compile and error, export result | FR-087 |
+| FR-082 | Interface text has 4.5:1 against its background (3:1 from 24 CSS px, or 18.66 CSS px in bold); symbols, field boundaries, state marks, the selection highlight, and the snap marker have 3:1; light and dark | WCAG 1.4.3 and 1.4.11. Apple's [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility) guidance takes the same 4.5:1 "from WCAG Level AA" and asks for a check "in both light and dark appearances" | A tablet is read at arm's length and in room light; the selection and the snap marker lie over the figure |
+| FR-088 | A field that refuses its value says, in text beside it, what is wrong | WCAG 3.3.1 and 3.3.3 | A number, a hex code, an `xcolor` expression, or a file name is typed on a screen keyboard; a silent refusal costs a second entry |
+| FR-092 | A button, a menu item, and a preset act on the release; a release off the control does nothing | WCAG 2.5.2 | A pen or a finger that lands on the wrong control can leave it without a command |
 
-**Functions that a drag or a two-finger gesture operates** (FR-086), read from the source at
-`e88486c` with the fork checkout of that revision:
+The colours of the figure are the author's and are outside FR-082. A drawing tool acts on the
+press, because the stroke starts there (Principle II), and Undo reverses it.
 
-| Function | Gesture | Alternative by taps | State in the source |
-| --- | --- | --- | --- |
-| Zoom | Pinch | Zoom readout and its menu (FR-040, FR-041) | Present |
-| Pan | Two-finger drag | Open: no mechanism is chosen | To check by the story |
-| Toolbar edge | Drag by the grip (FR-010) | Settings, Toolbar Position (`SettingsModal.tsx`, `setting-toolbar-position`) | Present; FR-062 does not list it yet |
-| Position and size of a selection | Drag the selection or a handle | X, Y, Width, Height fields of Properties (`InspectorPanel.tsx`) | Fields present; the story checks that they act on every selection |
-| Point of a curve in Edit Points | Drag the point | Open: no mechanism is chosen | To check by the story |
-| Order of colour presets | — | Move buttons in the colour options (`Toolbar.tsx`, `movePreset`) | Present |
-| Order of layers and objects | Drag a row | Open: no mechanism is chosen | To check by the story |
-| Width of a panel | Drag the divider | The divider takes the arrow keys (`StandaloneApp.vue`, `resizeWithKeyboard`); for taps, open: no mechanism is chosen | Keyboard present; taps absent |
-| Side of a view button in the shell rails | Drag between rails | None | The rails are in the source and not in the surfaces contract, which gives views and panels to the document bar (FR-001, FR-060) |
-
-A function marked open has no mechanism yet. Principle III needs the documented behaviour of a
-named application before a mechanism is built; the task of that function starts with that
-citation in this entry.
-
-**Gaps found in the source at `e88486c`** (each becomes a red story before its repair, tasks
-Phase 16):
-
-- The shell styles `:focus-visible` on dialog buttons, rail buttons, and the pane divider only,
-  and by a background tint, not by an indicator of 2 CSS px.
-- The shell has no `prefers-reduced-motion` rule; the progress mark of Render turns
-  (`src/ui/TikzWorkbench.vue`) and the preview fades (`src/ui/TikzCompilerPreview.vue`). The fork
-  has the rule in `canvas-panel/` only, against 22 transition and animation declarations.
-- The fork has a live region in four components (Properties, keyboard shortcuts, numeric entry,
-  Code). The shell marks its status text and the preview states with `role="status"` and its
-  errors with `role="alert"`; no story checks the five messages of FR-087.
-- No story scans a state with axe-core; `@axe-core/playwright` is not a dependency.
-
-**Keyboard selection of objects** (FR-084): Inkscape selects the next object with Tab and the
-previous with Shift+Tab. In a page, Tab must also be able to leave the canvas (WCAG 2.1.2). The
-proposal: with the focus on the canvas, Tab and Shift+Tab select the next and the previous object
-in source order; after the last object, Tab moves the focus to the next surface; Escape clears
-the selection. The arrow keys already move the selection (`useCanvasKeyboardClipboard.ts`).
-
-**Automated scan** (SC-007): [`@axe-core/playwright`](https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright)
-4.14 with the tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, and `wcag22aa`
-([axe-core API](https://github.com/dequelabs/axe-core/blob/v4.14.0/doc/API.md)). axe-core finds
-names, roles, states, labels, and text contrast. It does not find focus order, focus return,
-keyboard operation, drag alternatives, status messages, or reduced motion; a story asserts each
-of those by the user's actions.
-
-**Alternatives considered**:
-
-- Level A only: it leaves out contrast (1.4.3, 1.4.11), the visible focus (2.4.7), drag
-  alternatives (2.5.7), and status messages (4.1.3), which are the rules the HIG also states.
-- All of Level AAA: 1.4.6 asks for 7:1 text contrast and 2.5.5 is already below Principle II;
-  W3C does not recommend Level AAA as a general policy "because it is not possible to satisfy all
-  Level AAA Success Criteria for some content" (WCAG 2.2, Conformance).
-- The skill's checklist as the rule: it has no pinned text for each rule and no test, so
-  Principle III does not accept it as a source.
-- Manual review only: SC-007 needs a scan of every state that the stories reach, which a person
-  cannot repeat at each change.
+The story of FR-082 reads the computed colours of each text and the pixels beside each mark, in
+the light and in the dark appearance, and computes the ratio by the formula of WCAG 2.2
+("contrast ratio").

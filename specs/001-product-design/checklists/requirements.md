@@ -35,8 +35,7 @@
   opens at 100 % with the origin centred.
 - FR-005 was resolved by the user on 2026-11-13: the appearance follows the iPad notebook apps,
   which keep it out of the document view; research R17 records their settings.
-- User Story 9, FR-080 to FR-092, SC-007, and SC-008 were added on 2026-11-20 and are not yet
-  reviewed here; their requirements-quality review is [accessibility.md](accessibility.md).
+- FR-082, FR-088, and FR-092 were added on 2026-11-20 and are not yet reviewed here.
 - The user resolved on 2026-11-13: FR-012a (one Lasso), FR-012b (one document history), FR-015
   (Code is a panel), FR-044 (status line with the pointer position), FR-060a (Properties shows the
   figure with nothing selected), FR-063 (XDG directories), and FR-064 (the standalone editor).

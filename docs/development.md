@@ -71,8 +71,6 @@ A task or a phase of `specs/001-product-design/tasks.md` is complete only after 
 
 - A story drives the real page with pen, touch, and mouse events through the helpers in `test/tablet.ts`. Each story runs in portrait and in landscape.
 - A defect gets a failing story before its repair.
-- Find a control by its role and its accessible name together (`getByRole('button', { name: 'Undo' })`), as [contracts/surfaces.md](../specs/001-product-design/contracts/surfaces.md) gives them, and read its state from `aria-pressed`, `aria-checked`, `aria-selected`, `aria-expanded`, or `disabled`. A class name or a test id does not show that assistive technology can find the control (constitution Principle IX, FR-080).
-- A story of a new or changed surface also does its commands by keyboard alone, checks where the focus is after each menu, sheet, or dialog closes (FR-085), and does each drag function by taps (FR-086).
 - Seven combined-session stories carry one drawing through a whole session: drawing, history, view switches, saving, export, and reopening. A new feature adds its step to the session story it belongs to.
 - Tap a control with `stableCenter`, which scrolls the control into view after its box settles. In the frame after a tool or colour choice, read a position with `settledCenter`.
 - Read a layout box inside `expect(...).toPass()` with `layoutBox`. An element that re-renders has no box for a moment; `expect.poll` stops at that error, and `toPass` retries.

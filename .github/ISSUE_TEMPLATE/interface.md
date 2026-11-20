@@ -27,7 +27,3 @@ Issues that must land first, or "—".
 ## Acceptance
 
 Browser stories with mouse, pen, and finger, in the standalone app, that fail on the present build and pass after the change. Name the existing stories that assert the replaced behaviour; they are rewritten in the same change.
-
-## Accessibility
-
-For each control the change adds or alters (constitution Principle IX; specification FR-080 to FR-092): its role, accessible name, and state; how the keyboard reaches and operates it and where the focus goes when it closes; the tap alternative of each drag; each status message; and its motion under reduced motion. Cite the WCAG 2.2 criterion for each. The acceptance stories find the control by role and name and include the keyboard path.
