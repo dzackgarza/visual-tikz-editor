@@ -281,22 +281,22 @@ author chooses Light or Dark.
   that the author could not choose a light surface while the system is dark; the Light choice
   covers that.
 
-## R18. Contrast, refused values, and the release of a tap
+## R18. Contrast of interface text and marks
 
-**Decision of the user, 2026-11-20**: the editor serves a person at a touch screen with a pen. A
-mouse or touchpad and a keyboard are optional. Each rule below is for that person; each takes its
-measure from a criterion of [WCAG 2.2](https://www.w3.org/TR/2024/REC-WCAG22-20241212/) (W3C
-Recommendation, 2024-12-12), which is cited for that measure only.
+**Report**: [COMPLAINTS.md](../../COMPLAINTS.md), item 12: tool symbols and ruler labels are
+small, and the dark appearance has very dim rulers beside a bright canvas; the controls must be
+readable.
 
-| Requirement | Rule | Source of the measure | Why the pen user needs it |
-| --- | --- | --- | --- |
-| FR-082 | Interface text has 4.5:1 against its background (3:1 from 24 CSS px, or 18.66 CSS px in bold); symbols, field boundaries, state marks, the selection highlight, and the snap marker have 3:1; light and dark | WCAG 1.4.3 and 1.4.11. Apple's [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility) guidance takes the same 4.5:1 "from WCAG Level AA" and asks for a check "in both light and dark appearances" | A tablet is read at arm's length and in room light; the selection and the snap marker lie over the figure |
-| FR-088 | A field that refuses its value says, in text beside it, what is wrong | WCAG 3.3.1 and 3.3.3 | A number, a hex code, an `xcolor` expression, or a file name is typed on a screen keyboard; a silent refusal costs a second entry |
-| FR-092 | A button, a menu item, and a preset act on the release; a release off the control does nothing | WCAG 2.5.2 | A pen or a finger that lands on the wrong control can leave it without a command |
+**Rule** (FR-082): interface text has a contrast ratio of at least 4.5:1 against its background,
+or 3:1 from 24 CSS px (18.66 CSS px in bold). Symbols, field boundaries, state marks, the
+selection highlight, and the snap marker have at least 3:1. Both hold in the light and in the
+dark appearance. The colours of the figure are the author's and are outside the rule.
 
-The colours of the figure are the author's and are outside FR-082. A drawing tool acts on the
-press, because the stroke starts there (Principle II), and Undo reverses it.
+**Source of the numbers**: [WCAG 2.2](https://www.w3.org/TR/2024/REC-WCAG22-20241212/), 1.4.3 and
+1.4.11, with its formula for the contrast ratio. Apple's
+[Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+guidance takes the same 4.5:1 and asks for a check "in both light and dark appearances". The
+numbers give the report a test; the editor has no conformance target.
 
-The story of FR-082 reads the computed colours of each text and the pixels beside each mark, in
-the light and in the dark appearance, and computes the ratio by the formula of WCAG 2.2
-("contrast ratio").
+**Test**: a story reads the computed colours of each text and the pixels beside each mark, in the
+light and in the dark appearance, and computes the ratio.

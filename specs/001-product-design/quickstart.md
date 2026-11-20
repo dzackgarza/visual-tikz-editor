@@ -30,8 +30,6 @@ A failed story keeps its Playwright trace in `test-results/workbench/`
 | Any reached state | No instruction sentence is visible (SC-003) | FR-070 |
 | Every command | Reached by pen taps alone, with no hover, right-click, or modifier key (SC-004) | Principle II |
 | Interface text and marks, light and dark | Text has 4.5:1; symbols, state marks, the selection highlight, and the snap marker have 3:1 | FR-082 |
-| A field with a refused value | The text beside it says what is wrong | FR-088 |
-| A press on a button, a menu item, or a preset that is released off the control | No command runs | FR-092 |
 | Popovers | A second tap on a button closes its popover; a tap on another button closes it and opens its own, across the document bar and the canvas | FR-003, FR-004 |
 | Open a figure with content | All content visible, fitted with the margin (SC-005); reopen restores the last view | FR-040 |
 | Open an empty figure | 100 % is printed size; the origin is centred | FR-041 |

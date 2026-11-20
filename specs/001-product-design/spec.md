@@ -58,7 +58,7 @@ The editor has these surfaces. Each control appears on exactly one of them.
 
 ### Session 2026-11-20
 
-- Q: Which setup does the editor serve? → A: A touch screen with a pen, as in a notebook application. A mouse or touchpad and a keyboard are optional: each command has its route by pen and touch (constitution Principle II, SC-004), and a requirement is stated for the person who works that way.
+- Q: Which setup does the editor serve? → A: A touch screen with a pen. A mouse or touchpad and a keyboard are optional: each command has its route by pen and touch (constitution Principle II, SC-004), and a requirement is stated for the person who works that way.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -313,11 +313,9 @@ reference, and holds the pen over a lattice point and reads the status line.
 
 - **FR-070**: No surface MUST show persistent instructional text or a tooltip that explains a standard control.
 
-**Legibility and pointer input** ([research](research.md) R18)
+**Legibility** ([COMPLAINTS.md](../../COMPLAINTS.md), item 12: small tool symbols and ruler labels, very dim rulers in the dark appearance; [research](research.md) R18)
 
 - **FR-082**: In the light and in the dark appearance, interface text MUST have a contrast ratio of at least 4.5:1 against its background, or 3:1 for text of at least 24 CSS px, or 18.66 CSS px in bold. A symbol, the boundary that identifies a field, the mark of a state, the selection highlight, and the snap marker MUST have at least 3:1 against the colours beside them. A dimmed control that is not available is outside this rule, and so are the colours of the figure, which are the author's (the ratios of WCAG 2.2, 1.4.3 and 1.4.11, which the HIG takes for its own contrast rule).
-- **FR-088**: A field that refuses its value (a number, a hex code, an `xcolor` expression, a file name) MUST show, in text beside it, what is wrong (WCAG 2.2, 3.3.1 and 3.3.3). FR-065 already states this for the missing template.
-- **FR-092**: A button, a menu item, and a preset MUST act on the release of the pointer, so that a release off the control does nothing. A drawing tool acts on the press, because the stroke starts there, and Undo reverses it (WCAG 2.2, 2.5.2).
 
 ### Key Entities
 
