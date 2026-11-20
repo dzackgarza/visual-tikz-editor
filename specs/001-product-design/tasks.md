@@ -3,7 +3,7 @@
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md),
 [data-model.md](data-model.md), [contracts/surfaces.md](contracts/surfaces.md),
 [contracts/frame-protocol.md](contracts/frame-protocol.md), [quickstart.md](quickstart.md),
-constitution 3.1.0.
+constitution 3.1.1.
 
 **Tests**: Required. Principle VIII accepts each story by browser stories on the real page. In each
 story phase the stories come first: write them, run them against the present code with

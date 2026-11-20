@@ -7,9 +7,12 @@ A rule that its prior art does not support is a defect in this document.
 ## The User and the Devices
 
 The editor is bespoke software. It is built for one person, its owner: a research mathematician
-who draws diagrams for papers and notes. It is built for that person's devices: a touch screen
-with a pen, on Linux now and on an iPad as planned. A mouse or touchpad and a keyboard are
-optional; no command depends on them. The design of iOS and iPadOS drives the interface.
+who draws diagrams for papers and notes. It is built for that person's device: a Linux computer
+with a touch screen and a pen. A mouse or touchpad and a keyboard are optional; no command
+depends on them. The design of iOS and iPadOS drives the interface: the editor looks and
+behaves as an iPad application does. Compatibility with an iPad is not a requirement. The
+editor may later be used on an iPad, for example in its browser; no rule is written for that
+use until the user asks for it.
 
 - A requirement MUST serve this person on these devices. A requirement whose subject is another
   kind of user, another ability, another input method, or another platform MUST NOT enter a
@@ -231,4 +234,4 @@ repository or an issue, or a repository fact. Versions follow semantic versionin
 removed or redefined principle, MINOR for a new principle or section, PATCH for wording. Each
 specification and plan MUST record its compliance with the version in force.
 
-**Version**: 3.1.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-20
+**Version**: 3.1.1 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-20

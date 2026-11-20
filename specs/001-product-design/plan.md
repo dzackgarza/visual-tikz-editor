@@ -39,7 +39,7 @@ for the Code panel; zod 4 for the protocol schemas. Research R6 and R7 add
 touch, and mouse helpers of `test/tablet.ts`, in portrait and landscape; the fork's Vitest specs
 (`bun run test:logic`).
 
-**Target Platform**: Linux: the Tauri desktop window, and the local page in Chromium on a pen tablet and on a desktop. Planned (user, 2026-11-20): an iPad. No task builds the iPad form yet; the device rows of [HANDOFF](../../HANDOFF.md) for iPadOS Safari and the Apple Pencil are kept for it.
+**Target Platform**: Linux: the Tauri desktop window, and the local page in Chromium on a pen tablet and on a desktop. iPadOS drives the design and is not a target platform; a later use in a browser on an iPad is possible and has no task.
 
 **Project Type**: A standalone desktop and local web application.
 
@@ -53,7 +53,7 @@ code changes go through `.cache/tikz-editor` and `ZETTLR.patch`, never `vendor/`
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.* Constitution version
-3.1.0.
+3.1.1.
 
 | Principle | Before research | After design |
 | --- | --- | --- |

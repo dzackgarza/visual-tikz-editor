@@ -10,13 +10,14 @@ maintainer's proposal from the cited prior art and waits for the user's review.
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
 about the app's design and to write a design specification. The audit is
 [audit.md](audit.md). This specification states the editor's users, workflows, and information
-architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 3.1.0.
+architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 3.1.1.
 
 ## Users and purpose
 
 The editor is built for one person, its owner: a research mathematician who draws diagrams for
-papers and notes at a touch screen with a pen. The device is a Linux computer now and an iPad as
-planned. A mouse or touchpad and a keyboard are optional. Every requirement serves this person
+papers and notes at a touch screen with a pen, on a Linux computer. iPad design drives the
+interface; an iPad is not a platform of this specification. A mouse or touchpad and a keyboard
+are optional. Every requirement serves this person
 on these devices (constitution, The User and the Devices). A diagram is one
 `tikzpicture` or one `tikzcd` figure in a `.tikz` or `.tikzcd` file that a LaTeX document
 includes. The user knows iPad notebook applications (GoodNotes, Notability, Noteful, Apple Notes) and
@@ -62,8 +63,8 @@ The editor has these surfaces. Each control appears on exactly one of them.
 
 - Q: For whom is the editor built? → A: For one person, its owner. It does not serve a range of user types or devices. "Accessible" means easy to reach and to use for this person.
 - Q: Which input does the editor serve? → A: A touch screen with a pen. A mouse or touchpad and a keyboard are optional: each command has its route by pen and touch (constitution Principle II, SC-004). An alternative to a pen gesture for a person who cannot make it is not a requirement.
-- Q: Which devices does the editor run on? → A: Linux now. An iPad is planned; it has the same touch screen and pen.
-- Q: What drives the interface? → A: The design of iOS and iPadOS drives almost all of it (constitution Principles II and III).
+- Q: Which devices does the editor run on? → A: A Linux computer with a touch screen and a pen. The editor is not designed for iPad compatibility. It may later be used on an iPad, for example in the iPad's browser.
+- Q: What drives the interface? → A: The design of iOS and iPadOS drives almost all of it: the look and the behaviour, not the platform (constitution Principles II and III).
 - Q: What admits a requirement? → A: A report by the user or a failure shown in the running app. A standard may give the measure for its test.
 
 ## User Scenarios & Testing *(mandatory)*

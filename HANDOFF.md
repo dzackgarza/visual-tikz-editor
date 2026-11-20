@@ -8,7 +8,7 @@ The [design audit](specs/001-product-design/audit.md) states what the user's rep
 
 On 2026-11-15 the user directed that the work necessary for the core of the editor be kept apart from the long tail of quality control and fine-tuning. The core is finished first.
 
-The editor is built for one person, its owner, at a touch screen with a pen: on Linux now, on an iPad as planned. A mouse or touchpad and a keyboard are optional. A requirement serves this person on these devices and rests on the user's report or on a failure shown in the running app ([constitution](.specify/memory/constitution.md), The User and the Devices).
+The editor is built for one person, its owner, at a touch screen with a pen on a Linux computer. iPad design drives the interface; iPad compatibility is not a requirement. A mouse or touchpad and a keyboard are optional. A requirement serves this person on these devices and rests on the user's report or on a failure shown in the running app ([constitution](.specify/memory/constitution.md), The User and the Devices).
 
 ## Scope: the core and the long tail
 
