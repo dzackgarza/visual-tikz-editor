@@ -25,7 +25,7 @@ and those applications. A surface that works but looks or behaves like a convent
 tool is a defect. The patterns are the subject, and the platform is not: compatibility with an
 iPad is not a requirement. The editor may later be used on an iPad, for example in its browser.
 
-- A requirement MUST serve this person on these devices. A requirement whose subject is another
+- A requirement MUST serve this person on this device. A requirement whose subject is another
   kind of user, another ability, another input method, or another platform MUST NOT enter a
   specification.
 - "Accessible" means easy to reach and to use for this person in this setup. It names no

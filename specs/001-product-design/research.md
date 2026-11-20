@@ -296,7 +296,7 @@ dark appearance. The colours of the figure are the author's and are outside the 
 1.4.11, with its formula for the contrast ratio. Apple's
 [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
 guidance takes the same 4.5:1 and asks for a check "in both light and dark appearances". The
-numbers give the report a test; the editor has no conformance target.
+numbers give the report a test.
 
 **Test**: a story reads the computed colours of each text and the pixels beside each mark, in the
 light and in the dark appearance, and computes the ratio.

@@ -18,7 +18,7 @@ The editor is built for one person, its owner: a research mathematician who draw
 papers and notes at a touch screen with a pen, on a Linux computer. iPad design drives the
 interface; an iPad is not a platform of this specification. A mouse or touchpad and a keyboard
 are optional. Every requirement serves this person
-on these devices (constitution, The User and the Devices). A diagram is one
+on this device (constitution, The User and the Devices). A diagram is one
 `tikzpicture` or one `tikzcd` figure in a `.tikz` or `.tikzcd` file that a LaTeX document
 includes. The user knows iPad notebook applications (GoodNotes, Notability, Noteful, Apple Notes) and
 figure editors (Ipe, Inkscape, Quiver), and expects the editor to behave like them. The editor
