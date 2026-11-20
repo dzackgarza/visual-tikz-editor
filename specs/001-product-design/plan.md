@@ -53,7 +53,7 @@ code changes go through `.cache/tikz-editor` and `ZETTLR.patch`, never `vendor/`
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.* Constitution version
-3.1.1.
+3.1.2.
 
 | Principle | Before research | After design |
 | --- | --- | --- |

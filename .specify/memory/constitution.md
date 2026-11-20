@@ -9,10 +9,21 @@ A rule that its prior art does not support is a defect in this document.
 The editor is bespoke software. It is built for one person, its owner: a research mathematician
 who draws diagrams for papers and notes. It is built for that person's device: a Linux computer
 with a touch screen and a pen. A mouse or touchpad and a keyboard are optional; no command
-depends on them. The design of iOS and iPadOS drives the interface: the editor looks and
-behaves as an iPad application does. Compatibility with an iPad is not a requirement. The
-editor may later be used on an iPad, for example in its browser; no rule is written for that
-use until the user asks for it.
+depends on them. The editor is a Linux application that is designed as a premium iPad application is designed.
+The design of iOS and iPadOS is the standard of quality and the source of the patterns:
+
+- the interaction patterns: direct manipulation by pen and finger, gestures, a mark at the first
+  contact, an immediate response to each touch;
+- the control patterns: a tool picker, popovers anchored to their buttons, sheets with detents,
+  an object menu at the selection, hit regions of 44 × 44 pt;
+- the visual standard: the content has the attention, the controls are few and quiet, and the
+  spacing, type, symbols, and motion have the finish of GoodNotes, Notability, Noteful, and
+  Apple Notes.
+
+Principles II to V state these patterns as rules and cite the Apple Human Interface Guidelines
+and those applications. A surface that works but looks or behaves like a conventional desktop
+tool is a defect. The patterns are the subject, and the platform is not: compatibility with an
+iPad is not a requirement. The editor may later be used on an iPad, for example in its browser.
 
 - A requirement MUST serve this person on these devices. A requirement whose subject is another
   kind of user, another ability, another input method, or another platform MUST NOT enter a
@@ -234,4 +245,4 @@ repository or an issue, or a repository fact. Versions follow semantic versionin
 removed or redefined principle, MINOR for a new principle or section, PATCH for wording. Each
 specification and plan MUST record its compliance with the version in force.
 
-**Version**: 3.1.1 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-20
+**Version**: 3.1.2 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-20

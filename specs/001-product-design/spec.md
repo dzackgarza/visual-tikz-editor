@@ -10,7 +10,7 @@ maintainer's proposal from the cited prior art and waits for the user's review.
 **Input**: The user's usability report of 2026-11-12 and the direction to audit what it implies
 about the app's design and to write a design specification. The audit is
 [audit.md](audit.md). This specification states the editor's users, workflows, and information
-architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 3.1.1.
+architecture. It follows the [constitution](../../.specify/memory/constitution.md), version 3.1.2.
 
 ## Users and purpose
 
