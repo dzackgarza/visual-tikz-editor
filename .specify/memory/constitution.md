@@ -4,6 +4,25 @@ Each principle states its rules, then its prior art: the platform guidelines and
 applications it follows, and the repository records that make it a requirement of this product.
 A rule that its prior art does not support is a defect in this document.
 
+## The User and the Devices
+
+The editor is bespoke software. It is built for one person, its owner: a research mathematician
+who draws diagrams for papers and notes. It is built for that person's devices: a touch screen
+with a pen, on Linux now and on an iPad as planned. A mouse or touchpad and a keyboard are
+optional; no command depends on them. The design of iOS and iPadOS drives the interface.
+
+- A requirement MUST serve this person on these devices. A requirement whose subject is another
+  kind of user, another ability, another input method, or another platform MUST NOT enter a
+  specification.
+- "Accessible" means easy to reach and to use for this person in this setup. It names no
+  conformance to a standard for a range of users.
+- A requirement MUST rest on a report by the user or on a failure shown in the running app. A
+  standard or a checklist MAY give the measure that makes such a report testable. A criterion of
+  a standard is not a reason for a requirement.
+
+Requirement: the user's statements of 2026-11-20, recorded in the Clarifications of the
+[product design specification](../../specs/001-product-design/spec.md).
+
 ## Core Principles
 
 ### I. Authored TikZ Is the Document
@@ -30,8 +49,8 @@ view is incoherent.
 The editor is a tablet application. The pen MUST make a mark the moment it touches the canvas
 when a drawing tool is active, with no button or mode first. Every control MUST respond to the
 pen as well as to a finger, and MUST have a hit region of at least 44 × 44 pt. Every command
-MUST be reachable without hover, right-click, or a modifier key; a keyboard and mouse reach the
-same commands. Where iPadOS and desktop conventions differ, the iPadOS convention applies.
+MUST be reachable without hover, right-click, or a modifier key; a keyboard and a mouse or touchpad are optional and
+reach the same commands. Where iPadOS and desktop conventions differ, the iPadOS convention applies.
 
 Prior art: Apple HIG,
 [Apple Pencil and Scribble](https://developer.apple.com/design/human-interface-guidelines/apple-pencil-and-scribble)
@@ -212,4 +231,4 @@ repository or an issue, or a repository fact. Versions follow semantic versionin
 removed or redefined principle, MINOR for a new principle or section, PATCH for wording. Each
 specification and plan MUST record its compliance with the version in force.
 
-**Version**: 3.0.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-20
+**Version**: 3.1.0 | **Ratified**: 2026-11-13 (principles I–VIII accepted by the user) | **Last Amended**: 2026-11-20
