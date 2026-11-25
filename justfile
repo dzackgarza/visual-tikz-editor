@@ -60,7 +60,7 @@ test-ci:
 ambient:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . ambient
 
-[doc("Provision a bare Ubuntu CI runner for the workbench suite: the locked Playwright")]
+[doc("Provision a bare Ubuntu CI runner for the workbench suite: the locked Playwright chromium, a display and dialog stack for the file stories, the TeX render toolchain, and the hermetic render fixture as the runner's ~/.pandoc data tree.")]
 [private]
 _ci-environment:
     #!/usr/bin/env bash
