@@ -1,10 +1,3 @@
-# Visual TikZ Editor — standalone workbench commands.
-# Bun owns the package build; the pinned vendor scripts rebuild editor assets.
-# QC delegates to ~/ai-review-ci/justfiles/bun.just: `test-commit` and `test-push`
-# run from the git hooks, `test-ci` runs in the Development diagnostics workflow
-# on every push, and `ambient` runs on the daily schedule. The workbench suite
-# (`bun run test`) runs inside `test-ci`; `_ci-environment` provisions its runner.
-
 ai_review_ci_schema_version := "1"
 ai_review_ci_profile := "bun"
 ai_review_ci_ref := "main"
@@ -13,37 +6,37 @@ ai_review_ci_workflow_template_version := "1"
 ai_review_ci_local_delegation := "global-justfile"
 ai_review_ci_default_branch := "main"
 
-# Show available commands.
+[doc("Show available commands.")]
 default:
     @just --list
 
-# Start a new diagram, or open an existing TikZ file.
+[doc("Start a new diagram, or open an existing TikZ file.")]
 [no-cd]
 run file="": build
     bun run "{{justfile_directory()}}/standalone/server.ts" "{{file}}"
 
-# Sync node_modules from the lockfile.
+[doc("Sync node_modules from the lockfile.")]
 [private]
 install:
     bun install
 
-# Build the standalone browser page.
+[doc("Build the standalone browser page.")]
 build: install
     bun run build
 
-# Build a Linux desktop package with an application entry and icon.
+[doc("Build a Linux desktop package with an application entry and icon.")]
 package:
     bun run package
 
-# Run the stories of the desktop package: the built application in WebKitGTK, by WebDriver.
+[doc("Run the stories of the desktop package: the built application in WebKitGTK, by WebDriver.")]
 test-desktop: package
     bun run test:desktop
 
-# Sync the desktop app and menu entry for this user.
+[doc("Sync the desktop app and menu entry for this user.")]
 install-desktop: package
     bash scripts/install-desktop.sh
 
-# Write the release assets of HEAD, qualified by a green Development diagnostics run.
+[doc("Write the release assets of HEAD, qualified by a green Development diagnostics run.")]
 release-assets run: test-desktop
     bash scripts/release-assets.sh "{{run}}"
 
@@ -51,26 +44,23 @@ release-assets run: test-desktop
 build-desktop-assets: build
     bun build --compile standalone/server.ts --outfile "src-tauri/binaries/workbench-host-${TAURI_ENV_TARGET_TRIPLE}"
 
-# Commit gate: the syntax check of staged files, through the global QC justfile.
+[doc("Commit gate: the syntax check of staged files, through the global QC justfile.")]
 test-commit:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-commit
 
-# Push gate: the syntax check of outgoing commits.
+[doc("Push gate: the syntax check of outgoing commits.")]
 test-push:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-push
 
-# CI gate: the commit check, the whole suite under coverage, and the lint and debt checks.
+[doc("CI gate: the commit check, the whole suite under coverage, and the lint and debt checks.")]
 test-ci:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . test-ci
 
-# Scheduled whole-tree audit.
+[doc("Scheduled whole-tree audit.")]
 ambient:
     @just -f ~/ai-review-ci/justfiles/bun.just -d . ambient
 
-# Provision a bare Ubuntu CI runner for the workbench suite: the locked Playwright
-# chromium, a display and dialog stack for the file stories, the TeX render toolchain,
-# and the hermetic render fixture as the runner's ~/.pandoc data tree. Refuses to run
-# outside CI because it writes ~/.pandoc and installs system packages.
+[doc("Provision a bare Ubuntu CI runner for the workbench suite: the locked Playwright")]
 [private]
 _ci-environment:
     #!/usr/bin/env bash
@@ -93,22 +83,22 @@ _ci-environment:
     cp -R test/fixtures/tikz-data/filters test/fixtures/tikz-data/templates "$HOME/.pandoc/"
     kpsewhich standalone.cls tikz.sty tikz-cd.sty amsmath.sty amssymb.sty import.sty graphicx.sty >/dev/null
 
-# Rebuild the pinned TikZ Editor assets.
+[doc("Rebuild the pinned TikZ Editor assets.")]
 update-tikz-editor-vendor:
     bun run scripts/update-tikz-editor-vendor.mjs
 
-# Materialize the tikz-editor fork for editing in .cache/tikz-editor.
+[doc("Materialize the tikz-editor fork for editing in .cache/tikz-editor.")]
 tikz-editor-checkout:
     bun run scripts/tikz-editor-dev.mjs checkout
 
-# Rebuild the editor assets on every save in the fork checkout.
+[doc("Rebuild the editor assets on every save in the fork checkout.")]
 tikz-editor-watch:
     bun run scripts/tikz-editor-dev.mjs watch
 
-# Typecheck the fork checkout and its embed, then write its changes to ZETTLR.patch.
+[doc("Typecheck the fork checkout and its embed, then write its changes to ZETTLR.patch.")]
 tikz-editor-patch:
     bun run scripts/tikz-editor-dev.mjs patch
 
-# Rebuild the pinned Quiver assets.
+[doc("Rebuild the pinned Quiver assets.")]
 update-quiver-vendor:
     bun run scripts/update-quiver-vendor.mjs
