@@ -5799,6 +5799,46 @@ describe("standalone workbench host boundary", function () {
   for (const tablet of TABLET_VIEWPORTS) {
     story(
       { viewport: tablet },
+      `the canvas layout measures its border without exposing its internal text in ${tablet.name}`,
+      async function () {
+        const frame = editorFrame(page);
+        const input = await TabletInput.attach(page);
+        await chooseTool(frame, input, "Lasso");
+        await input.penStroke([await stableCenter(toolbarItem(frame, "Pen"))]);
+        await expect(toolbarItem(frame, "Pen")).toHaveAttribute("aria-pressed", "true");
+        await chooseTool(frame, "mouse", "Eraser");
+        await chooseTool(frame, input, "Pen");
+        await editorReady(page);
+
+        for (const name of ["Lasso", "Pen", "Eraser", "Shapes", "Text", "Fill", "Add colour"]) {
+          await expect(toolbarItem(frame, name)).toBeVisible();
+        }
+        await expect(drawingToolbar(frame).getByRole("button", { name: /^Colour \d+: / })).toHaveCount(3);
+        const body = frame.locator("body");
+        const sizer = frame.locator(".flexlayout__border_sizer");
+        await expect(sizer).toHaveCount(1);
+        const size = await sizer.evaluate((element) => {
+          const { width, height } = element.getBoundingClientRect();
+          return { width, height };
+        });
+        assert.ok(size.width > 0 && size.height > 0, "FlexLayout must still be able to measure the border");
+        const canvas = await layoutBox(frame.locator('[data-canvas-viewport="true"]'));
+        assert.ok(canvas.width > 0 && canvas.height > 0, "The measured layout must hold the canvas");
+        assert.deepEqual(
+          {
+            dom: (await body.innerText()).includes("FindBorderBarSize"),
+            accessibility: (await body.ariaSnapshot()).includes("FindBorderBarSize"),
+          },
+          { dom: false, accessibility: false },
+          "The layout library's measuring text is not a canvas surface",
+        );
+      },
+    );
+  }
+
+  for (const tablet of TABLET_VIEWPORTS) {
+    story(
+      { viewport: tablet },
       `the drawing toolbar holds Lasso, Pen, Eraser, Shapes, Text, Fill, the active tool's presets, and Add colour, all as symbols, and nothing else, in ${tablet.name}`,
       async function () {
         await editorReady(page);
