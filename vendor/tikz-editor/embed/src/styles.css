@@ -34,3 +34,5 @@ html[data-color-scheme="dark"] #root > div > [data-diagram-tools] { border-color
 #root :is(.embed-inspector, dialog, [role="dialog"]) label:has(input:is([type="checkbox"], [type="radio"])) {
   min-height: 44px;
 }
+
+#root .embed-dock-layout .flexlayout__border_sizer { visibility: hidden; }
